@@ -339,6 +339,25 @@ root:
   `after`, an unknown or circular `after`, an end before the start,
   dates mixed with numbers.
 
+## Sankey diagrams
+
+`SankeyDiagram` draws flows between nodes as bands as wide as their
+value. Flows come from the lists `from`, `to` and `values` (so a table
+with one row per flow maps on with `$column`), and from `SankeyFlow`
+children; nodes are made by the flows that name them. `SankeyNode`
+optionally gives a node a label or colour.
+
+```yaml
+root:
+  type: SankeyDiagram
+  from: [Gas, Gas, Coal]
+  to: [Power, Heat, Power]
+  values: [30, 20, 50]
+```
+
+Values must be above 0, no flow may go from a node to itself, and the
+flows may not form a cycle.
+
 ## Errors
 
 Every problem is reported on one line with its position in the file:

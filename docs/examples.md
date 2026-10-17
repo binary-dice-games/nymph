@@ -967,3 +967,38 @@ root:
         - {type: GanttTask, id: qa, name: QA, after: [freeze], end: 2026-03-27}
         - {type: GanttTask, name: Release, after: [qa], milestone: true}
 ```
+
+## Sankey diagram
+
+Flows from a CSV table mapped on with `from: $from`, `to: $to`, `values: $twh`; nodes are placed in columns automatically, and a `SankeyNode` colours the losses grey.
+
+![Sankey diagram](../examples/sankey.png)
+
+[`examples/sankey.yaml`](../examples/sankey.yaml):
+
+```yaml
+nymph: 1
+description: Where the energy of a small grid comes from and where it goes, in TWh per year.
+image: {width: 760, height: 460}
+root:
+  type: SankeyDiagram
+  title: Energy flow (TWh)
+  from: $from
+  to: $to
+  values: $twh
+  value_format: "%.0f"
+  children:
+    - {type: SankeyNode, id: Losses, color: "#4D4D4D"}
+data: |
+  from, to, twh
+  Coal, Electricity, 120
+  Gas, Electricity, 90
+  Gas, Heating, 60
+  Solar, Electricity, 40
+  Wind, Electricity, 55
+  Electricity, Homes, 110
+  Electricity, Industry, 95
+  Electricity, Losses, 100
+  Heating, Homes, 45
+  Heating, Losses, 15
+```

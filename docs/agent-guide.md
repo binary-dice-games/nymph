@@ -416,6 +416,25 @@ time axis. It can be `root` or a layout child.
 - With no `height`, a chart in a `VerticalLayout` is as tall as its rows
   need; as `root` it fills the image.
 
+### Sankey diagrams
+
+`SankeyDiagram` shows quantities flowing between nodes (energy, budget,
+traffic, a funnel) as bands as wide as the amount. Nodes are placed in
+columns automatically, from sources on the left to sinks on the right.
+
+| Type | Fields | Draws |
+|---|---|---|
+| `SankeyDiagram` | `from`, `to`, `values` (one entry per flow: `$source`, `$target`, `$amount` from a table), `title`, `colormap`, `link_color` (`Source`, `Target`, `Gray`), `show_values` (true), `value_format` (`"%g"`), `node_width`, `node_spacing`, `width`, `height` | The diagram. Children: `SankeyFlow`, `SankeyNode`. |
+| `SankeyFlow` | `from`, `to`, `value`, `color` | One more flow, instead of (or besides) the lists. |
+| `SankeyNode` | `id` (the name flows use), `name` (label), `color` | Optional: a node's label or colour; nodes are listed in this order. |
+
+- Nodes are created by the flows that name them (as in mermaid); a
+  misspelt name makes a separate node, so check the labels.
+- Values must be above 0, a flow cannot go from a node to itself, and
+  flows must not loop back (`makes a cycle`).
+- Each label shows the node's total (the larger of what enters and what
+  leaves) unless `show_values: false`.
+
 ### Fonts and text style
 
 Fonts are built into nymph; name one by its file name (`nymph fonts`
@@ -884,6 +903,27 @@ root:
         - {type: GanttTask, name: Launch, after: [dev], milestone: true}
 ```
 
+### Sankey diagram
+
+```yaml
+description: Monthly budget, in euros.
+root:
+  type: SankeyDiagram
+  title: Budget
+  from: $from
+  to: $to
+  values: $eur
+  value_format: "%.0f"
+data: |
+  from, to, eur
+  Salary, Budget, 3000
+  Freelance, Budget, 800
+  Budget, Rent, 1200
+  Budget, Food, 600
+  Budget, Savings, 1000
+  Budget, Other, 1000
+```
+
 ### Class diagram
 
 ```yaml
@@ -1001,7 +1041,9 @@ State, activity and use case diagrams follow the same pattern: see
 | `GanttTask.end is empty: give end, or a duration` | Give `end` or `duration` (or set `milestone: true`). |
 | `is not a date (YYYY-MM-DD ...` | Write dates as `2026-03-02` or `2026-03-02 14:00`, or use plain numbers throughout. |
 | `uses dates; a chart uses one or the other` | Mixed dates and numbers in one `GanttChart`. |
-| `makes a cycle` | Tasks wait for each other in a loop through `after`. |
+| `makes a cycle` | Tasks wait for each other in a loop through `after`, or Sankey flows lead back to where they started. |
+| `has value 0; a flow's value must be above 0` | A Sankey flow of 0, negative or missing; leave such rows out. |
+| `is in no flow` | A `SankeyNode` whose `id` no flow names (often a spelling difference). |
 | `CSV row has N cells, the header has M` | A row is too short or too long, or a value with a comma is not quoted. |
 | `'>' joins the CSV lines` | Write `data: |`, not `data: >`. |
 | `needs 620 px of height, has 484` | The fixed sizes in a layout do not fit. Use `height: -1` on plots, reduce sizes, or enlarge the image. |

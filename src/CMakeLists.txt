@@ -39,6 +39,8 @@ add_library(nymph STATIC
   elements/plot3d.cpp
   elements/gantt.hpp
   elements/gantt.cpp
+  elements/sankey.hpp
+  elements/sankey.cpp
   elements/layout_elements.hpp
   elements/layout_elements.cpp
   elements/uml/uml.hpp
@@ -52,6 +54,8 @@ add_library(nymph STATIC
   elements/uml/flowchart.cpp
   layout/layout.hpp
   layout/layout.cpp
+  layout/sankey_layout.hpp
+  layout/sankey_layout.cpp
   cli/cli.hpp
   cli/cli.cpp
   cli/schema_doc.hpp

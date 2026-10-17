@@ -6,6 +6,7 @@
 #include "elements/layout_elements.hpp"
 #include "elements/plot2d.hpp"
 #include "elements/plot3d.hpp"
+#include "elements/sankey.hpp"
 #include "elements/uml/uml.hpp"
 
 namespace bdg::nymph {
@@ -16,6 +17,7 @@ void register_builtin_elements(registry& reg) {
   register_layout(reg);
   register_uml(reg);
   register_gantt(reg);
+  register_sankey(reg);
 }
 
 const registry& builtin_registry() {

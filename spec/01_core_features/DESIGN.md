@@ -163,8 +163,9 @@ registered element classes (section 4). In the first release:
   `Plot3DTriangle`, `Plot3DQuad`, `Plot3DMesh`, `Plot3DText`.
 - `VerticalLayout` and `HorizontalLayout`, with any of the elements in
   this list except series as children; `Spring`, `Label`, `Separator`,
-  `SeparatorText`; `ColorScale` and `GanttChart` (added later, see
-  "Axes and annotations" and "Gantt charts" below).
+  `SeparatorText`; `ColorScale`, `GanttChart` and `SankeyDiagram`
+  (added later, see "Axes and annotations", "Gantt charts" and "Sankey
+  diagrams" below).
 
 `root` is any element except a series. A series must be a direct child of
 its kind of plot (section 4, slots). Fields, defaults and enum/flag names
@@ -302,6 +303,33 @@ wish drew something silently wrong, nymph reports an error):
 - Natural height: 1.8 text lines per row plus title, axis and legend, so
   a chart in a `VerticalLayout` grows with its tasks; as root it fills.
 - At most `kMaxGanttTasks` (500) tasks.
+
+**Sankey diagrams** (added after the first release, not in wish):
+`SankeyDiagram` (a `figure` element, `src/elements/sankey.cpp`) with
+optional `SankeyFlow` and `SankeyNode` children.
+
+- Flows come from the diagram's `from` / `to` / `values` lists first,
+  then from `SankeyFlow` children: a table of one row per flow maps on
+  with `$column`, the way agents hold such data. Nodes are created by the
+  flows that name them, as in mermaid's sankey (unlike the UML diagrams,
+  where an undeclared id is an error: requiring declarations would make
+  the table form unusable). A `SankeyNode` that no flow names is an
+  error, which catches the common misspelling.
+- The layout (`src/layout/sankey_layout.cpp`, pure, tested on its own)
+  is d3-sankey's, reimplemented: columns by longest path with sinks
+  justified to the last column, one value scale fitting the fullest
+  column, 32 passes of relaxation towards the value-weighted centre of
+  the linked nodes with collisions resolved after each column, then
+  links stacked in each node by the other end's position. Every tie
+  follows submission order, so it is deterministic.
+- Drawn directly on the window's draw list, not through ImPlot (no axes)
+  or ImUml (not a graph of boxes): bands are filled polygons of constant
+  vertical thickness along d3's link curve (`AddConcavePolyFilled`; a
+  thick stroked curve would overlap itself on steep bends and darken
+  there), nodes are bars, labels sit beside them towards the middle.
+- Errors: list lengths, values not above 0, a flow to itself, a cycle
+  (reported at the first flow on it), an unused `SankeyNode`, no flows,
+  more than `kMaxSankeyNodes` / `kMaxSankeyFlows`.
 
 **Axes and annotations** (added after the first release; ImPlot v1.0
 features wish did not expose):
