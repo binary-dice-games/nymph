@@ -7,9 +7,8 @@ code it plugs into.
 
 Steps are ordered so the library's foundations come first (schema type,
 ImUml context, shapes, the dot-style layout engine in two steps, each
-testable alone), then one
-diagram kind per step, simplest graph diagram first, then the sequence
-diagram, then composite states, then documentation. Every step leaves all
+testable alone), then one diagram kind per step, simplest graph diagram
+first, then the sequence diagram, then composite states, then documentation. Every step leaves all
 existing tests passing unmodified and the committed example PNGs
 byte-identical. Every test is a GoogleTest file in `tests/`, added with
 `nymph_add_test()`; ImUml's own tests use only ImGui and ImUml (plus
