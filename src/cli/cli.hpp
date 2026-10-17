@@ -14,7 +14,8 @@ namespace bdg::nymph {
 ///
 /// Commands: `<in> [-o <out>]` (render YAML, or extract from a PNG, chosen
 /// by the input's first bytes), `render`, `extract`, `check`,
-/// `schema [<Type>] [--markdown]`, `--version`, `--help`. `-` as input is
+/// `schema [<Type>] [--markdown]`, `fonts [--licenses]`, `--version`,
+/// `--help`. `-` as input is
 /// `in`; `-o -` writes to `out`. Files are written through a temporary file
 /// and a rename, so a failure never leaves a partial or changed output.
 ///

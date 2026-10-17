@@ -27,6 +27,7 @@ takes well under a second.
 | `nymph check chart.yaml` | Validates without drawing; prints nothing when valid. |
 | `nymph render - -o out.png` | Reads the YAML from standard input. |
 | `nymph schema PlotLine` | Lists one element's fields, defaults and allowed values. |
+| `nymph fonts` | Lists the font names `font:` accepts. |
 
 **Exit code 0** means success. **Exit code 1** means failure: one line on
 standard error says why, and no file is created or changed. **Exit code 2**
@@ -116,6 +117,9 @@ Rules that cause most errors:
 | `scale` | `1` | 1 to 4. The PNG has `width*scale` by `height*scale` pixels with the same layout, only sharper. Use `2` for images shown large. |
 | `theme` | `light` | `light`, `dark` or `classic`. |
 | `padding` | `8` | Empty pixels around the chart. |
+| `font` | `default` | Font of all text, by file name; see "Fonts and text style". |
+| `font_size` | `16` | Text size in pixels, 1 to 96. |
+| `text_color` | theme | Colour of all text, `"#RRGGBB"` in quotes. |
 
 ### `root`
 
@@ -332,6 +336,46 @@ its default `height: 300` unless you change it, so **give plots
 `height: -1`** to fill a row or share a column. If fixed sizes do not
 fit, nymph reports an error with the numbers instead of cutting
 something off.
+
+### Fonts and text style
+
+Fonts are built into nymph; name one by its file name (`nymph fonts`
+lists them):
+
+- `default`: ImGui's built-in font (used when nothing is set).
+- Fira Sans, a clean sans-serif: `FiraSans-Regular.ttf`,
+  `FiraSans-Bold.ttf`, `FiraSans-Italic.ttf`.
+- Fira Mono, for numbers and code: `FiraMono-Regular.ttf`,
+  `FiraMono-Bold.ttf`.
+- PT Serif, for headings and report-style text:
+  `PT_Serif-Web-Regular.ttf`, `PT_Serif-Web-Bold.ttf`,
+  `PT_Serif-Web-Italic.ttf`.
+
+`font`, `font_size` and `text_color` go on `image` (everything), on
+layouts (everything inside), on `Plot` / `Plot3D` (title, ticks, legend),
+on `Label` and `SeparatorText`, and on `PlotText` / `Plot3DText`. Empty or
+0 inherits from the enclosing element.
+
+```yaml
+image: {width: 760, height: 460, font: FiraSans-Regular.ttf, font_size: 15}
+root:
+  type: VerticalLayout
+  spacing: 6
+  children:
+    - {type: Label, text: Quarterly report 2025, font: PT_Serif-Web-Bold.ttf, font_size: 28}
+    - type: Plot
+      title: Costs
+      height: -1
+      font: FiraMono-Regular.ttf
+      children:
+        - {type: PlotBars, label: costs, ys: [96, 101, 108, 112]}
+        - {type: PlotText, text: record, x: 3, y: 116, font: FiraSans-Bold.ttf, text_color: "#C0392B"}
+```
+
+Tips: one sans font for the whole image plus a bold or serif heading
+reads best. Keep `font_size` between 12 and 18 for chart text; small
+images need 12 to 14. File names are exact (case, `.ttf`); a wrong one is
+an error that suggests the closest name.
 
 ## Recipes
 
@@ -657,6 +701,7 @@ data: |
 |---|---|
 | `unknown column 'x'` | `$x` does not match a data header. The message lists the headers and suggests the closest. |
 | `needs a table, as there are several` | With named tables write `$table:column`; the message names the tables that have the column. |
+| `unknown font 'x'` | Use a name from `nymph fonts` exactly, including `.ttf`; the message suggests the closest. |
 | `unknown table 'x'` | The part before `:` is not a table name under `data`. |
 | `data mixes columns and named tables` | Under `data`, use either lists (one table of columns) or CSV text / mappings (named tables). |
 | `interleaved columns need the same number of rows` | `[$a:x, $b:y]` takes columns from tables of different lengths. |

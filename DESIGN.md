@@ -1,6 +1,6 @@
 # nymph — Architecture & Design
 
-**Status: plan steps 1-16 done; builds on MSYS2 and MSVC are not yet
+**Status: plan steps 1-17 done; builds on MSYS2 and MSVC are not yet
 verified.** [PLAN.md](PLAN.md) is the ordered
 implementation plan.
 
@@ -105,7 +105,7 @@ Top-level keys (any other key is an error):
 
 ### `image`
 
-Same keys and defaults as wish nymph:
+wish nymph's keys and defaults, plus the text style:
 
 | Key | Type | Default | Meaning |
 |---|---|---|---|
@@ -113,6 +113,34 @@ Same keys and defaults as wish nymph:
 | `scale` | int | `1` | Supersampling factor 1–4: the PNG is `width*scale` x `height*scale`, same layout, sharper. |
 | `theme` | string | `light` | `light`, `dark` or `classic` (ImGui + ImPlot built-in styles). wish's fourth theme, `wish`, is not ported (section 10). |
 | `padding` | int | `8` | Pixels between the image edge and `root`. |
+| `font` | string | `default` | Font of all text: an embedded font file name (`FiraSans-Regular.ttf`) or `default`, ImGui's built-in font. |
+| `font_size` | number | `16` | Text size in logical pixels, 1–96. |
+| `text_color` | colour | theme | Colour of all text. |
+
+### Text style
+
+Fonts are compiled into the binary from the `fonts/` folder (section 8)
+and named by file name. Every `figure` element that shows or contains
+text (`VerticalLayout`, `HorizontalLayout`, `Plot`, `Plot3D`, `Label`,
+`SeparatorText`) and the text series `PlotText` / `Plot3DText` take three
+fields, `font`, `font_size` and `text_color` (`Label` keeps its own
+`text_color` and theme variants and gains the other two). Empty or 0
+inherits:
+
+```
+image.font / font_size / text_color      (the outermost style)
+  └ VerticalLayout font: PT_Serif-Web-Bold.ttf
+      ├ Label                            → PT Serif Bold, image size and colour
+      └ Plot font_size: 20               → PT Serif Bold at 20 px: title, ticks, legend
+          └ PlotText text_color: "#C0392B" → also red
+```
+
+A plot's style covers everything ImPlot / ImPlot3D draws for it: title,
+axis labels, tick labels, legend and text inside the plot. `text_color`
+does not change grid and tick-mark colours, which ImPlot otherwise
+derives from the text colour. An unknown font name is an error that lists
+the fonts, with a suggestion. `font: default` returns to the built-in
+font inside a subtree that set another one.
 
 ### `root` and elements
 
@@ -559,9 +587,21 @@ as a second line behind `bind()`. Per call:
   both roles (`BackendPlatformName` `nymph`, `BackendRendererName`
   `nymph_soft_rasterizer`, `PlatformIO.DrawCallback_ResetRenderState` set
   to the rasterizer's no-op).
-- Font: `AddFontDefaultVector()` at 16 px (the embedded scalable font;
-  wish uses ImGui's default at 16 px too). ImGui bakes glyphs at the
-  framebuffer scale, so text stays sharp at `scale: 2`.
+- Fonts: `AddFontDefaultVector()` (registered as `default`), then every
+  embedded font with `AddFontFromMemoryTTF` (`FontDataOwnedByAtlas =
+  false`: the data is static), each registered by file name in the
+  `draw_context`. ImGui 1.92's atlas bakes glyphs on first use, per size
+  and at the framebuffer scale, so loading every font costs only their
+  headers (about 20 ms for eight) and text stays sharp at `scale: 2`.
+- Text style: each frame's drawing runs inside the `image` style; then
+  `draw_context::draw_node()` / `measure_node()` / `arrange_node()`,
+  through which every element is drawn, measured and arranged, wrap the
+  call in a `text_style_scope` built from the node's `font`, `font_size`
+  and `text_color` fields (`src/render/text_style`). The scope pushes
+  `PushFont(font, size)` and the ImGui, ImPlot and ImPlot3D text colours
+  (pinning grid and tick colours first) and pops them afterwards, so
+  inheritance is ImGui's own push stack and measuring sees the same font
+  as drawing.
 - Style: the `image.theme` ImGui, ImPlot and ImPlot3D styles
   (`StyleColorsLight` / `Dark` / `Classic`), with
   `AntiAliasedLinesUseTex = false` (see section 7) and window rounding,
@@ -728,6 +768,7 @@ in-process; `app/main.cpp` only forwards `argv` and the standard streams
 | `nymph render <in> [-o <out.png>]` | Render; `<in>` may be `-` (stdin, then `-o` is required) or a nymph PNG (re-render its embedded source). |
 | `nymph extract <in.png> [-o <out.yaml>]` | Extract the embedded YAML. |
 | `nymph check <in>` | Validate only: bind and lay out, no rasterizing. Exit 0 and no output when valid. |
+| `nymph fonts [--licenses]` | List the names `font:` accepts (`default` and every embedded font), or print the embedded licence texts. |
 | `nymph schema [<Type>] [--markdown]` | Print the element reference from the registry: every type, its slot, fields, types, defaults, names and descriptions. `--markdown` prints the form kept in `docs/elements.md`. |
 | `nymph --version`, `nymph --help` | Version, usage. |
 
@@ -815,6 +856,24 @@ it as an invalid source.
   when nothing references their translation unit, and their order is
   unspecified; `register_builtin_elements()` lists the families in one
   place.
+- **Fonts embedded as generated C++ arrays.** The binary must not depend
+  on font files next to it (Goal 6), on every compiler nymph targets.
+  C++26 `#embed` is not available everywhere yet; `ld -b binary`, `.incbin`
+  and resource files differ per toolchain. A byte array in generated C++
+  works with GCC, Clang and MSVC alike (32 bytes per line, because MSVC
+  limits line length), and one file per font keeps rebuilds incremental.
+  The cost is a few seconds of compile time for 2.8 MB of fonts.
+- **Fonts named by file name.** It is what the person adding a font
+  already has, it is unique within the folder, and it makes the source say
+  exactly which file draws it (weight and style are part of the name, no
+  family / weight matching to explain). `nymph fonts` and the schema list
+  the names, and an unknown one gets a suggestion.
+- **Text style inherited through ImGui's own stacks.** Pushing a node's
+  font and colours around its draw, measure and arrange calls, in one
+  place (`draw_context`), gives CSS-like inheritance without passing a
+  style through every element: ImPlot and ImPlot3D already read the
+  current font and colours. The built-in font stays the default, so
+  sources without a `font` look exactly as before.
 - **Strict YAML handling.** Unknown keys, duplicate keys and unknown flag
   names are errors (Goal 5). wish's importer ignores the first two; wish
   nymph already made unknown fields errors for the same reason.
@@ -843,7 +902,8 @@ it as an invalid source.
   declared with `double_format_field()`, whose check allows one
   floating-point conversion.
 - The source never names a file: nymph reads only the input path and writes
-  only the output path given on the command line.
+  only the output path given on the command line. A `font` names an
+  embedded font, never a file on disk.
 - Metadata survives only byte-exact copies; services that re-encode images
   drop it. The README says so.
 
@@ -865,6 +925,20 @@ libyaml is compiled from its C files rather than through its own
 rules). ImGui is built with `IMGUI_DISABLE_WIN32_FUNCTIONS` and
 `IMGUI_DISABLE_DEFAULT_SHELL_FUNCTIONS` (no clipboard, IME or shell calls)
 but not `IMGUI_DISABLE_OBSOLETE_FUNCTIONS`, which ImPlot v1.0 still needs.
+
+**Fonts** are not a submodule: `fonts/` holds unmodified TTF files from
+the Google Fonts repository (Fira Sans, Fira Mono, PT Serif; SIL Open Font
+License 1.1) with their licence texts. `cmake/NymphFonts.cmake`
+(`nymph_embed_fonts(nymph)`) globs `NYMPH_FONTS_DIR` (default `fonts/`)
+for `*.ttf` / `*.otf` and `*.txt` at configure time (`CONFIGURE_DEPENDS`)
+and adds one custom command per file that runs
+`cmake/NymphEmbedFile.cmake` in script mode, writing a `.cpp` with the
+bytes as an `unsigned char` array (32 per line, a trailing 0 byte) and its
+size; a generated table (`embedded_fonts()`, `embedded_licenses()`,
+sorted by name) refers to them. A changed font rebuilds only its own
+file; an added or removed one re-runs the configure step. The OFL asks for
+the licence to travel with the fonts: the texts are embedded too and
+printed by `nymph fonts --licenses`.
 
 ImPlot and ImPlot3D are ImGui extensions, and libyaml and stb are small
 vendored C libraries; none of them is a system or GPU dependency. Pinning
@@ -888,8 +962,13 @@ portable between the two projects.
   `draw.command`) with plot coordinates mapped through
   `ImPlot::PlotToPixels` and drawn on `ImPlot::GetPlotDrawList()`; the
   transform lives in `draw_context`, so the command classes do not change.
-- **More themes or fonts**: `image.theme` and a future `image.font` map to
-  functions applied in `render_figure()`; the rasterizer is unaffected.
+- **More themes**: `image.theme` maps to functions applied in
+  `render_figure()`; the rasterizer is unaffected.
+- **More fonts**: a file dropped into `fonts/` (with its licence text) is
+  embedded on the next build and accepted by every `font` field; nothing
+  else changes. Another set can be built in with `-DNYMPH_FONTS_DIR`.
+- **Text style on a new element**: append `text_style_fields()` to its
+  fields (`with_text_style()`); `draw_context` applies them.
 
 ## 10. Not Ported from wish nymph
 

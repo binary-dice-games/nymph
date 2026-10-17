@@ -4,6 +4,9 @@
 #pragma once
 
 #include <imgui.h>
+#include <map>
+#include <string>
+#include <string_view>
 #include <unordered_map>
 #include "render/image_options.hpp"
 #include "schema/node.hpp"
@@ -43,10 +46,33 @@ class draw_context {
     return static_cast<float>(options_.scale);
   }
 
-  /// @brief Draws each child of `n`, in order, through its class's draw(),
-  ///        each under its own ImGui ID (its index), so two series or plots
-  ///        with the same label do not collide.
+  /// @brief Draws each child of `n`, in order, through draw_node(), each
+  ///        under its own ImGui ID (its index), so two series or plots with
+  ///        the same label do not collide.
   void draw_children(const node& n);
+
+  /// @brief Draws `n` through its class, with its text style applied
+  ///        (render/text_style.hpp), so its children inherit it.
+  void draw_node(const node& n);
+
+  /// @brief Its class's measure(), with `n`'s text style applied.
+  ImVec2 measure_node(const node& n, float width);
+
+  /// @brief Its class's arrange(), with `n`'s text style applied.
+  void arrange_node(const node& n, const rect& r);
+
+  /// @brief Registers the loaded font called `name` (an embedded font file
+  ///        name, or "default").
+  void add_font(std::string name, ImFont* font) {
+    fonts_[std::move(name)] = font;
+  }
+
+  /// @brief The font called `name`, or nullptr (keep the current font) if
+  ///        none was registered.
+  ImFont* font(std::string_view name) const {
+    const auto it = fonts_.find(name);
+    return it == fonts_.end() ? nullptr : it->second;
+  }
 
   /// @brief Sets the rectangle `n` draws in.
   void set_rect(const node& n, const rect& r) {
@@ -75,6 +101,7 @@ class draw_context {
  private:
   const image_options& options_;
   std::unordered_map<const node*, rect> rects_;
+  std::map<std::string, ImFont*, std::less<>> fonts_;
 };
 
 } // namespace bdg::nymph

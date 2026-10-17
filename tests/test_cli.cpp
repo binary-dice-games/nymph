@@ -307,5 +307,19 @@ TEST_F(cli, OutputThatIsNotARegularFileIsNotReplaced) {
   EXPECT_TRUE(fs::is_directory(dir_ / "out.png"));
 }
 
+// ── fonts ────────────────────────────────────────────────────────────────────
+
+TEST_F(cli, FontsListsTheNamesAndPrintsTheLicences) {
+  const run_result names = run({"fonts"});
+  EXPECT_EQ(names.code, 0);
+  EXPECT_EQ(names.out.rfind("default\n", 0), 0u);
+  EXPECT_NE(names.out.find("\nFiraSans-Regular.ttf\n"), std::string::npos);
+  const run_result licenses = run({"fonts", "--licenses"});
+  EXPECT_EQ(licenses.code, 0);
+  EXPECT_NE(licenses.out.find("== FiraSans-OFL.txt =="), std::string::npos);
+  EXPECT_NE(licenses.out.find("SIL OPEN FONT LICENSE"), std::string::npos);
+  EXPECT_EQ(run({"fonts", "x.ttf"}).code, 2);
+}
+
 } // namespace
 } // namespace bdg::nymph

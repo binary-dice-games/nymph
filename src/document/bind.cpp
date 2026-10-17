@@ -11,49 +11,16 @@
 #include <vector>
 #include "core/error.hpp"
 #include "core/limits.hpp"
+#include "core/suggest.hpp"
 #include "document/table.hpp"
 #include "document/yaml_doc.hpp"
+#include "render/text_style.hpp"
 #include "schema/convert.hpp"
 #include "schema/element_class.hpp"
 
 namespace bdg::nymph {
 
 namespace {
-
-// ── Suggestions ──────────────────────────────────────────────────────────────
-
-size_t edit_distance(std::string_view a, std::string_view b) {
-  std::vector<size_t> row(b.size() + 1);
-  for (size_t j = 0; j <= b.size(); ++j) {
-    row[j] = j;
-  }
-  for (size_t i = 1; i <= a.size(); ++i) {
-    size_t diagonal = row[0];
-    row[0] = i;
-    for (size_t j = 1; j <= b.size(); ++j) {
-      const size_t above = row[j];
-      row[j] = std::min({row[j] + 1, row[j - 1] + 1, diagonal + (a[i - 1] == b[j - 1] ? 0u : 1u)});
-      diagonal = above;
-    }
-  }
-  return row[b.size()];
-}
-
-/// " (did you mean 'x'?)" for the closest candidate within two edits, else "".
-template <typename Range>
-std::string did_you_mean(std::string_view word, const Range& candidates) {
-  std::string best;
-  size_t best_distance = 3;
-  for (const auto& candidate : candidates) {
-    const std::string_view c(candidate);
-    const size_t d = edit_distance(word, c);
-    if (d < best_distance && d < c.size()) {
-      best_distance = d;
-      best = std::string(c);
-    }
-  }
-  return best.empty() ? "" : " (did you mean '" + best + "'?)";
-}
 
 [[noreturn]] void fail(const yaml_node& at, const std::string& message) {
   throw error(at.line, at.column, message);
@@ -382,7 +349,8 @@ class binder {
 /// `source` (how the data was made) is accepted as any value and never
 /// looked at (DESIGN.md section 3).
 constexpr std::string_view kTopKeys[] = {"nymph", "description", "image", "root", "data", "source"};
-constexpr std::string_view kImageKeys[] = {"width", "height", "scale", "theme", "padding"};
+constexpr std::string_view kImageKeys[] =
+    {"width", "height", "scale", "theme", "padding", "font", "font_size", "text_color"};
 
 int image_int(const yaml_node& v, const field_desc& f) {
   return static_cast<int>(std::get<int64_t>(convert_value(v, f, "image." + f.name)));
@@ -408,6 +376,15 @@ image_options bind_image(const yaml_node& image) {
       out.scale = image_int(v, scale);
     } else if (key.text == "padding") {
       out.padding = image_int(v, padding);
+    } else if (key.text == "font") {
+      static const field_desc font = text_style_fields()[0];
+      out.font = std::get<std::string>(convert_value(v, font, "image.font"));
+    } else if (key.text == "font_size") {
+      static const field_desc size = number_field("font_size", 16.0, "", value_range{1, kMaxFontSize});
+      out.font_size = std::get<double>(convert_value(v, size, "image.font_size"));
+    } else if (key.text == "text_color") {
+      static const field_desc color = color_field("text_color", "");
+      out.text_color = std::get<std::string>(convert_value(v, color, "image.text_color"));
     } else if (key.text == "theme") {
       if (!v.is_scalar() || !is_known_theme(v.text)) {
         fail(v, "image.theme: unknown theme '" + v.text + "' (one of: light, dark, classic)");
@@ -417,7 +394,7 @@ image_options bind_image(const yaml_node& image) {
       fail(
           key,
           "image has no option '" + key.text + "'" + did_you_mean(key.text, kImageKeys) +
-              " (options: width, height, scale, theme, padding)");
+              " (options: width, height, scale, theme, padding, font, font_size, text_color)");
     }
   }
   const yaml_node& at_scale = image.find("scale") ? *image.find("scale") : image;

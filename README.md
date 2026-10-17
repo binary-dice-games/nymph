@@ -77,6 +77,7 @@ carries its source: `bdg::nymph::extract_source(png)` returns it.
 | `app/` | The `nymph` command-line executable |
 | `tests/` | GoogleTest suite, run with `ctest` |
 | `examples/` | Example sources and the PNGs rendered from them |
+| `fonts/` | Fonts (Google Fonts, OFL) compiled into the binary |
 | `cmake/` | CMake helper modules |
 | `docs/` | Detailed documentation |
 | `extern/` | Third-party dependencies (git submodules) |
@@ -89,6 +90,7 @@ carries its source: `bdg::nymph::extract_source(png)` returns it.
 | **Elements** | `Plot` / `Plot3D` and their series, plus `VerticalLayout` / `HorizontalLayout`, `Spring`, `Label` and separators to combine them. New types register a class; see [DESIGN.md](DESIGN.md#9-extension-points). |
 | **Data** | `data` holds one table, or several named tables, as CSV text or columns. |
 | **Column references** | `$name` / `$2` in a field takes data from a column; `$table:name` from a named table. |
+| **Text style** | `font` (an embedded font by file name), `font_size` and `text_color` on `image`, layouts, plots and labels, inherited down the tree. `nymph fonts` lists the fonts. |
 | **Provenance** | An optional `source` key records the prompt, query or code that made the data; it travels in the PNG for the next edit. |
 | **Round trip** | The PNG carries its YAML; `nymph image.png` prints it back byte for byte. |
 
@@ -110,3 +112,5 @@ carries its source: `bdg::nymph::extract_source(png)` returns it.
 ## License
 
 MIT License © 2026 Binary Dice Games. See [LICENSE](LICENSE) for the full text.
+The embedded fonts in `fonts/` are under the SIL Open Font License 1.1
+(see [fonts/README.md](fonts/README.md); `nymph fonts --licenses`).

@@ -23,6 +23,9 @@ Goes in: root, HorizontalLayout, VerticalLayout. Children: HorizontalLayout, Lab
 | `padding` | number | `12` | Inner margin of a card, in pixels. Ignored unless "card" is true. (0 to 128) |
 | `rounding` | number | `10` | Corner radius of a card, in pixels. Ignored unless "card" is true. (0 to 64) |
 | `align` | name | `left` | Horizontal alignment of the children when they do not fill the row (no stretch child): "left" (default) or "right". (one of: left, right) |
+| `font` | text | `""` | Font of this element's text and of everything inside it: an embedded font file name (default, FiraMono-Bold.ttf, FiraMono-Regular.ttf, FiraSans-Bold.ttf, FiraSans-Italic.ttf, FiraSans-Regular.ttf, PT_Serif-Web-Bold.ttf, PT_Serif-Web-Italic.ttf, PT_Serif-Web-Regular.ttf). Empty (default) inherits the enclosing element's font, or image.font. |
+| `font_size` | number | `0` | Text size in pixels for this element and everything inside it. 0 (default) inherits the enclosing element's size, or image.font_size. (0 to 96) |
+| `text_color` | colour | `""` | Text colour ("#RRGGBB" or "#RRGGBBAA") for this element and everything inside it: titles, axis and tick labels, legends and labels. Empty (default) inherits, or uses the theme's. |
 
 ## Label
 
@@ -37,6 +40,8 @@ Goes in: root, HorizontalLayout, VerticalLayout.
 | `text_color_light` | colour | `""` | Text color used instead of text_color when image.theme is light. Ignored when empty. |
 | `text_color_dark` | colour | `""` | Text color used instead of text_color when image.theme is dark or classic. Ignored when empty. |
 | `wrap` | true/false | `false` | When true, wraps text to the available width instead of running past it. |
+| `font` | text | `""` | Font of this element's text and of everything inside it: an embedded font file name (default, FiraMono-Bold.ttf, FiraMono-Regular.ttf, FiraSans-Bold.ttf, FiraSans-Italic.ttf, FiraSans-Regular.ttf, PT_Serif-Web-Bold.ttf, PT_Serif-Web-Italic.ttf, PT_Serif-Web-Regular.ttf). Empty (default) inherits the enclosing element's font, or image.font. |
+| `font_size` | number | `0` | Text size in pixels for this element and everything inside it. 0 (default) inherits the enclosing element's size, or image.font_size. (0 to 96) |
 
 ## Plot
 
@@ -61,6 +66,9 @@ Goes in: root, HorizontalLayout, VerticalLayout. Children: PlotBars, PlotBarsH, 
 | `legend_location` | flags | `-1` | Where the legend sits (ImPlotLocation: North/South/West/East and the corner combinations, or Center). -1 (default) keeps ImPlot's own default of top-left inside the plot. Combine with legend_flags Outside to move the legend out of the plot area entirely. (combine with '\|': Center, North, South, West, East, NorthWest, NorthEast, SouthWest, SouthEast) |
 | `legend_flags` | flags | `None` | ImPlotLegendFlags bitmask (combine names with '\|'): Outside renders the legend outside the plot frame, Horizontal lays entries in a row, plus NoButtons / NoMenus / Sort / Reverse. (combine with '\|': None, NoButtons, NoHighlightItem, NoHighlightAxis, NoMenus, Outside, Horizontal, Sort, Reverse) |
 | `colormap` | name | `Default` | Colormap for this plot: the colours series take in turn when they set none, and the scale of heatmaps and surfaces. Deep (the usual default), Dark, Pastel, Paired, Viridis, Plasma, Hot, Cool, Pink, Jet, Twilight, RdBu, BrBG, PiYG, Spectral or Greys. Default leaves the current colormap. (one of: Default, Deep, Dark, Pastel, Paired, Viridis, Plasma, Hot, Cool, Pink, Jet, Twilight, RdBu, BrBG, PiYG, Spectral, Greys) |
+| `font` | text | `""` | Font of this element's text and of everything inside it: an embedded font file name (default, FiraMono-Bold.ttf, FiraMono-Regular.ttf, FiraSans-Bold.ttf, FiraSans-Italic.ttf, FiraSans-Regular.ttf, PT_Serif-Web-Bold.ttf, PT_Serif-Web-Italic.ttf, PT_Serif-Web-Regular.ttf). Empty (default) inherits the enclosing element's font, or image.font. |
+| `font_size` | number | `0` | Text size in pixels for this element and everything inside it. 0 (default) inherits the enclosing element's size, or image.font_size. (0 to 96) |
+| `text_color` | colour | `""` | Text colour ("#RRGGBB" or "#RRGGBBAA") for this element and everything inside it: titles, axis and tick labels, legends and labels. Empty (default) inherits, or uses the theme's. |
 
 ## Plot3D
 
@@ -81,6 +89,9 @@ Goes in: root, HorizontalLayout, VerticalLayout. Children: Plot3DLine, Plot3DMes
 | `y_flags` | flags | `None` | ImPlot3DAxisFlags for the Y axis (combine names with '\|'). (combine with '\|': None, NoLabel, NoGridLines, NoTickMarks, NoTickLabels, LockMin, LockMax, AutoFit, Invert, PanStretch, Lock, NoDecorations) |
 | `z_flags` | flags | `None` | ImPlot3DAxisFlags for the Z axis (combine names with '\|'). (combine with '\|': None, NoLabel, NoGridLines, NoTickMarks, NoTickLabels, LockMin, LockMax, AutoFit, Invert, PanStretch, Lock, NoDecorations) |
 | `colormap` | name | `Default` | Colormap for this plot: the colours series take in turn when they set none, and the scale of heatmaps and surfaces. Deep (the usual default), Dark, Pastel, Paired, Viridis, Plasma, Hot, Cool, Pink, Jet, Twilight, RdBu, BrBG, PiYG, Spectral or Greys. Default leaves the current colormap. (one of: Default, Deep, Dark, Pastel, Paired, Viridis, Plasma, Hot, Cool, Pink, Jet, Twilight, RdBu, BrBG, PiYG, Spectral, Greys) |
+| `font` | text | `""` | Font of this element's text and of everything inside it: an embedded font file name (default, FiraMono-Bold.ttf, FiraMono-Regular.ttf, FiraSans-Bold.ttf, FiraSans-Italic.ttf, FiraSans-Regular.ttf, PT_Serif-Web-Bold.ttf, PT_Serif-Web-Italic.ttf, PT_Serif-Web-Regular.ttf). Empty (default) inherits the enclosing element's font, or image.font. |
+| `font_size` | number | `0` | Text size in pixels for this element and everything inside it. 0 (default) inherits the enclosing element's size, or image.font_size. (0 to 96) |
+| `text_color` | colour | `""` | Text colour ("#RRGGBB" or "#RRGGBBAA") for this element and everything inside it: titles, axis and tick labels, legends and labels. Empty (default) inherits, or uses the theme's. |
 
 ## Separator
 
@@ -99,6 +110,9 @@ Goes in: root, HorizontalLayout, VerticalLayout.
 | Field | Type | Default | Description |
 |---|---|---|---|
 | `label` | text | `""` | Text shown inline with the separator line. |
+| `font` | text | `""` | Font of this element's text and of everything inside it: an embedded font file name (default, FiraMono-Bold.ttf, FiraMono-Regular.ttf, FiraSans-Bold.ttf, FiraSans-Italic.ttf, FiraSans-Regular.ttf, PT_Serif-Web-Bold.ttf, PT_Serif-Web-Italic.ttf, PT_Serif-Web-Regular.ttf). Empty (default) inherits the enclosing element's font, or image.font. |
+| `font_size` | number | `0` | Text size in pixels for this element and everything inside it. 0 (default) inherits the enclosing element's size, or image.font_size. (0 to 96) |
+| `text_color` | colour | `""` | Text colour ("#RRGGBB" or "#RRGGBBAA") for this element and everything inside it: titles, axis and tick labels, legends and labels. Empty (default) inherits, or uses the theme's. |
 
 ## Spring
 
@@ -124,6 +138,9 @@ Goes in: root, HorizontalLayout, VerticalLayout. Children: HorizontalLayout, Lab
 | `card` | true/false | `false` | Draws the children on a rounded, filled, bordered panel, inset by "padding". Colors follow the theme. |
 | `padding` | number | `12` | Inner margin of a card, in pixels. Ignored unless "card" is true. (0 to 128) |
 | `rounding` | number | `10` | Corner radius of a card, in pixels. Ignored unless "card" is true. (0 to 64) |
+| `font` | text | `""` | Font of this element's text and of everything inside it: an embedded font file name (default, FiraMono-Bold.ttf, FiraMono-Regular.ttf, FiraSans-Bold.ttf, FiraSans-Italic.ttf, FiraSans-Regular.ttf, PT_Serif-Web-Bold.ttf, PT_Serif-Web-Italic.ttf, PT_Serif-Web-Regular.ttf). Empty (default) inherits the enclosing element's font, or image.font. |
+| `font_size` | number | `0` | Text size in pixels for this element and everything inside it. 0 (default) inherits the enclosing element's size, or image.font_size. (0 to 96) |
+| `text_color` | colour | `""` | Text colour ("#RRGGBB" or "#RRGGBBAA") for this element and everything inside it: titles, axis and tick labels, legends and labels. Empty (default) inherits, or uses the theme's. |
 
 ## PlotBars
 
@@ -404,6 +421,9 @@ Goes in: Plot.
 | `y` | number | `0` | Y coordinate in plot (data) space. |
 | `offset_x` | number | `0` | Horizontal pixel offset applied after coordinate projection. |
 | `offset_y` | number | `0` | Vertical pixel offset applied after coordinate projection. |
+| `font` | text | `""` | Font of this element's text and of everything inside it: an embedded font file name (default, FiraMono-Bold.ttf, FiraMono-Regular.ttf, FiraSans-Bold.ttf, FiraSans-Italic.ttf, FiraSans-Regular.ttf, PT_Serif-Web-Bold.ttf, PT_Serif-Web-Italic.ttf, PT_Serif-Web-Regular.ttf). Empty (default) inherits the enclosing element's font, or image.font. |
+| `font_size` | number | `0` | Text size in pixels for this element and everything inside it. 0 (default) inherits the enclosing element's size, or image.font_size. (0 to 96) |
+| `text_color` | colour | `""` | Text colour ("#RRGGBB" or "#RRGGBBAA") for this element and everything inside it: titles, axis and tick labels, legends and labels. Empty (default) inherits, or uses the theme's. |
 
 ## Plot3DLine
 
@@ -527,6 +547,9 @@ Goes in: Plot3D.
 | `angle` | number | `0` | Rotation angle of the text in degrees. (-360 to 360) |
 | `offset_x` | number | `0` | Pixel offset applied to the text after projection (horizontal). |
 | `offset_y` | number | `0` | Pixel offset applied to the text after projection (vertical). |
+| `font` | text | `""` | Font of this element's text and of everything inside it: an embedded font file name (default, FiraMono-Bold.ttf, FiraMono-Regular.ttf, FiraSans-Bold.ttf, FiraSans-Italic.ttf, FiraSans-Regular.ttf, PT_Serif-Web-Bold.ttf, PT_Serif-Web-Italic.ttf, PT_Serif-Web-Regular.ttf). Empty (default) inherits the enclosing element's font, or image.font. |
+| `font_size` | number | `0` | Text size in pixels for this element and everything inside it. 0 (default) inherits the enclosing element's size, or image.font_size. (0 to 96) |
+| `text_color` | colour | `""` | Text colour ("#RRGGBB" or "#RRGGBBAA") for this element and everything inside it: titles, axis and tick labels, legends and labels. Empty (default) inherits, or uses the theme's. |
 
 ## Plot3DTriangle
 

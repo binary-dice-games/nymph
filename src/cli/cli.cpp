@@ -15,6 +15,7 @@
 #include "core/error.hpp"
 #include "core/limits.hpp"
 #include "elements/register_builtin.hpp"
+#include "fonts/embedded_fonts.hpp"
 #include "nymph.hpp"
 #include "png/png_meta.hpp"
 
@@ -31,6 +32,7 @@ constexpr const char* kUsage =
     "       nymph extract <in.png> [-o <out>]     print (or write) the YAML a nymph PNG carries\n"
     "       nymph check <in>                      validate without rendering; silent when valid\n"
     "       nymph schema [<Type>] [--markdown]    element reference\n"
+    "       nymph fonts [--licenses]              embedded fonts (names for `font:`), or their licences\n"
     "       nymph --version | --help\n"
     "render writes <in> with its extension replaced by .png unless -o is given; -o - writes to stdout.\n";
 
@@ -46,16 +48,19 @@ struct usage_error {
 };
 
 struct options {
-  std::string command; ///< "", render, extract, check, schema
+  std::string command; ///< "", render, extract, check, schema, fonts
   std::vector<std::string> positional;
   std::optional<std::string> output;
   bool markdown = false;
+  bool licenses = false;
 };
 
 options parse(std::span<const std::string_view> args) {
   options o;
   size_t i = 0;
-  if (!args.empty() && (args[0] == "render" || args[0] == "extract" || args[0] == "check" || args[0] == "schema")) {
+  if (!args.empty() &&
+      (args[0] == "render" || args[0] == "extract" || args[0] == "check" || args[0] == "schema" ||
+       args[0] == "fonts")) {
     o.command = std::string(args[0]);
     i = 1;
   }
@@ -68,6 +73,8 @@ options parse(std::span<const std::string_view> args) {
       o.output = std::string(args[++i]);
     } else if (a == "--markdown" && o.command == "schema") {
       o.markdown = true;
+    } else if (a == "--licenses" && o.command == "fonts") {
+      o.licenses = true;
     } else if (a.size() > 1 && a[0] == '-') {
       throw usage_error{"unknown option '" + std::string(a) + "'"};
     } else {
@@ -251,6 +258,29 @@ int do_schema(const options& o, std::ostream& out) {
   return 0;
 }
 
+/// `fonts`: the names `font:` accepts, one per line, or the licence texts
+/// of the embedded fonts.
+int do_fonts(const options& o, std::ostream& out) {
+  if (!o.positional.empty() || o.output) {
+    throw usage_error{"fonts takes no file, only --licenses"};
+  }
+  if (o.licenses) {
+    for (const embedded_file& f : embedded_licenses()) {
+      out << "== " << f.name << " ==\n\n" << f.text();
+      if (!f.text().empty() && f.text().back() != '\n') {
+        out << '\n';
+      }
+      out << '\n';
+    }
+    return 0;
+  }
+  out << kDefaultFontName << "\n";
+  for (const embedded_file& f : embedded_fonts()) {
+    out << f.name << "\n";
+  }
+  return 0;
+}
+
 /// The input file of the command, for error messages.
 std::string input_label(const options& o) {
   return o.positional.empty() ? "nymph" : label_of(o.positional[0]);
@@ -274,6 +304,9 @@ int run_cli(std::span<const std::string_view> args, std::istream& in, std::ostre
     o = parse(args);
     if (o.command == "schema") {
       return do_schema(o, out);
+    }
+    if (o.command == "fonts") {
+      return do_fonts(o, out);
     }
     if (o.positional.size() != 1) {
       throw usage_error{o.positional.empty() ? "no input" : "too many inputs"};

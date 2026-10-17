@@ -269,7 +269,7 @@ TEST(layout_elements, SeriesAreNotLayoutChildren) {
       << e.what();
 }
 
-// ── Schema parity with wish ──────────────────────────────────────────────────
+// ── Pinned schema ──────────────────────────────────────────────────
 
 std::vector<std::string> schema_of(const std::string& type) {
   const element_class* cls = builtin_registry().find(type);
@@ -302,10 +302,20 @@ std::vector<std::string> sorted(std::vector<std::string> v) {
   return v;
 }
 
-TEST(layout_elements, SchemaMatchesWish) {
-  // From wish's src/ui/ui_elements/{layout,spring,label,separator}.cpp;
-  // wish's `scroll` (needs a live window) is left out by design.
-  const std::vector<std::string> layout{"spacing=0", "width=0", "height=0", "card=false", "padding=12", "rounding=10"};
+TEST(layout_elements, SchemaIsPinned) {
+  // Started from wish's src/ui/ui_elements/{layout,spring,label,
+  // separator}.cpp (without `scroll`, which needs a live window), plus
+  // nymph's text style fields.
+  const std::vector<std::string> layout{
+      "spacing=0",
+      "width=0",
+      "height=0",
+      "card=false",
+      "padding=12",
+      "rounding=10",
+      "font=''",
+      "font_size=0",
+      "text_color=''"};
   std::vector<std::string> horizontal = layout;
   horizontal.push_back("align=left");
   EXPECT_EQ(schema_of("VerticalLayout"), sorted(layout));
@@ -313,9 +323,16 @@ TEST(layout_elements, SchemaMatchesWish) {
   EXPECT_EQ(schema_of("Spring"), (std::vector<std::string>{"weight=1"}));
   EXPECT_EQ(
       schema_of("Label"),
-      sorted({"text=''", "text_color=''", "text_color_light=''", "text_color_dark=''", "wrap=false"}));
+      sorted(
+          {"text=''",
+           "text_color=''",
+           "text_color_light=''",
+           "text_color_dark=''",
+           "wrap=false",
+           "font=''",
+           "font_size=0"}));
   EXPECT_TRUE(schema_of("Separator").empty());
-  EXPECT_EQ(schema_of("SeparatorText"), (std::vector<std::string>{"label=''"}));
+  EXPECT_EQ(schema_of("SeparatorText"), sorted({"label=''", "font=''", "font_size=0", "text_color=''"}));
 }
 
 // ── Samples ──────────────────────────────────────────────────────────────────

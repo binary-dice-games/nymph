@@ -75,7 +75,7 @@ size_t distinct_colors(const image& img, int x0, int y0, int x1, int y1) {
   return colors.size();
 }
 
-// ── Schema parity with wish ──────────────────────────────────────────────────
+// ── Pinned schema ──────────────────────────────────────────────────
 
 /// "name=default" for every field of a class, sorted.
 std::vector<std::string> schema_of(const std::string& type) {
@@ -119,12 +119,16 @@ std::vector<std::string> with_item_fields(std::vector<std::string> own) {
   return sorted(own);
 }
 
-TEST(plot2d, SchemaMatchesWish) {
-  // Copied from wish's src/ui/plot_elements/*.cpp registrations.
+TEST(plot2d, SchemaIsPinned) {
+  // Started from wish's src/ui/plot_elements/*.cpp registrations, plus
+  // nymph's text style fields.
   const std::map<std::string, std::vector<std::string>> expected{
       {"Plot",
        sorted(
-           {"title='##plot'",
+           {"font=''",
+            "font_size=0",
+            "text_color=''",
+            "title='##plot'",
             "x_label=''",
             "y_label=''",
             "width=-1",
@@ -172,7 +176,9 @@ TEST(plot2d, SchemaMatchesWish) {
             "normalize=false",
             "label_fmt='%.1f%%'",
             "angle0=90"})},
-      {"PlotText", with_item_fields({"text=''", "x=0", "y=0", "offset_x=0", "offset_y=0"})},
+      {"PlotText",
+       with_item_fields(
+           {"font=''", "font_size=0", "text_color=''", "text=''", "x=0", "y=0", "offset_x=0", "offset_y=0"})},
       {"PlotInfLines", with_item_fields({"values=[]", "horizontal=false"})},
   };
   for (const auto& [type, fields] : expected) {

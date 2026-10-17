@@ -80,14 +80,18 @@ std::vector<std::string> with_item_fields(std::vector<std::string> own) {
   return sorted(own);
 }
 
-// ── Schema parity with wish ──────────────────────────────────────────────────
+// ── Pinned schema ──────────────────────────────────────────────────
 
-TEST(plot3d, SchemaMatchesWish) {
-  // Copied from wish's src/ui/plot3d_elements/*.cpp registrations.
+TEST(plot3d, SchemaIsPinned) {
+  // Started from wish's src/ui/plot3d_elements/*.cpp registrations, plus
+  // nymph's text style fields.
   const std::map<std::string, std::vector<std::string>> expected{
       {"Plot3D",
        sorted(
-           {"title='##plot3d'",
+           {"font=''",
+            "font_size=0",
+            "text_color=''",
+            "title='##plot3d'",
             "x_label=''",
             "y_label=''",
             "z_label=''",
@@ -105,7 +109,18 @@ TEST(plot3d, SchemaMatchesWish) {
       {"Plot3DSurface",
        with_item_fields({"xs=[]", "ys=[]", "zs=[]", "x_count=2", "y_count=2", "scale_min=0", "scale_max=0"})},
       {"Plot3DMesh", with_item_fields({"xs=[]", "ys=[]", "zs=[]", "indices=[]"})},
-      {"Plot3DText", with_item_fields({"text=''", "x=0", "y=0", "z=0", "angle=0", "offset_x=0", "offset_y=0"})},
+      {"Plot3DText",
+       with_item_fields(
+           {"font=''",
+            "font_size=0",
+            "text_color=''",
+            "text=''",
+            "x=0",
+            "y=0",
+            "z=0",
+            "angle=0",
+            "offset_x=0",
+            "offset_y=0"})},
   };
   for (const auto& [type, fields] : expected) {
     EXPECT_EQ(schema_of(type), fields) << type;

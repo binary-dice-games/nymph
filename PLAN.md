@@ -625,6 +625,51 @@ code that produced its data, kept verbatim through the PNG round trip.
 - `nymph chart.yaml` then `nymph chart.png` returns the file, `source`
   included, byte for byte.
 
+### 17. Fonts and text style
+
+*Result: done.* Eight OFL fonts from Google Fonts in `fonts/` (Fira Sans
+regular / bold / italic, Fira Mono regular / bold, PT Serif regular / bold
+/ italic, 2.8 MB) with their licences; `cmake/NymphFonts.cmake` and
+`cmake/NymphEmbedFile.cmake`; `src/fonts/` (lookup, name check);
+`src/render/text_style` (fields, scope); `draw_context` node dispatch;
+`nymph fonts [--licenses]`; `examples/fonts.yaml` (looked at, also at
+scale 2 and in the dark theme). Tests: 6 in `tests/test_fonts.cpp`, 1 in
+`test_cli.cpp`, pinned schemas updated (the `SchemaMatchesWish` tests are
+now `SchemaIsPinned`). Existing sources render byte-identical images.
+Also built with an empty `NYMPH_FONTS_DIR`: only `default` remains, the
+tests that name fonts skip. The text-check hook of `field_desc` now
+returns a message string, so a font error can list the fonts.
+
+**Goal:** sources choose the font, size and colour of their text, from
+fonts compiled into the binary, by file name.
+
+**Deliverables:**
+- `fonts/`: TTF files and licence texts from fonts.google.com, and a
+  README with their origin.
+- `cmake/NymphFonts.cmake`, `cmake/NymphEmbedFile.cmake`: embed every font
+  and licence of `NYMPH_FONTS_DIR` as generated C++.
+- `src/fonts/embedded_fonts.hpp`, `fonts.cpp`: `embedded_fonts()`,
+  `embedded_licenses()`, `find_font()`, `check_font_name()`.
+- `src/render/text_style`: `font` / `font_size` / `text_color` fields and
+  the scope that applies them; `image.font`, `image.font_size`,
+  `image.text_color`; the fields on layouts, plots, `Label`,
+  `SeparatorText`, `PlotText`, `Plot3DText`.
+- `nymph fonts [--licenses]`; docs, example, CHANGELOG.
+
+**Tests** (`tests/test_fonts.cpp`, `tests/test_cli.cpp`):
+- The embedded fonts and licences are exactly the folder's files, byte
+  for byte.
+- Every embedded font loads, has its own metrics and draws glyphs.
+- `font_size: 32` text is twice as wide as 16.
+- A font set on the image or a layout reaches a label inside it as if set
+  on the label; `font: default` overrides an inherited font.
+- `text_color` colours a plot's title and ticks; the same colour on
+  `image` gives the same pixels.
+- An unknown font is an error at its position with a suggestion and the
+  font list; out-of-range sizes are errors.
+- `nymph fonts` lists `default` and the files; `--licenses` prints the
+  OFL texts.
+
 ## Completion Criteria
 
 - [x] All tests pass under `ctest -j` three times in a row.

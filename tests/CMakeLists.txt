@@ -43,3 +43,5 @@ target_compile_definitions(test_layout_elements PRIVATE NYMPH_SOURCE_DIR="${PROJ
 nymph_add_test(test_cli test_cli.cpp)
 nymph_add_test(test_docs test_docs.cpp)
 target_compile_definitions(test_docs PRIVATE NYMPH_SOURCE_DIR="${PROJECT_SOURCE_DIR}")
+nymph_add_test(test_fonts test_fonts.cpp)
+target_compile_definitions(test_fonts PRIVATE NYMPH_FONTS_DIR="${NYMPH_FONTS_DIR}")

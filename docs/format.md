@@ -48,6 +48,9 @@ Any other key is an error.
 | `scale` | `1` | 1 to 4. The PNG is `width*scale` x `height*scale` pixels with the same layout, only sharper. |
 | `theme` | `light` | `light`, `dark` or `classic`. |
 | `padding` | `8` | Empty pixels between the image edge and `root`. |
+| `font` | `default` | Font of all text, by file name (see "Fonts and text style"). |
+| `font_size` | `16` | Text size in pixels, 1 to 96. |
+| `text_color` | theme | Colour of all text, `"#RRGGBB"`. |
 
 ## Elements
 
@@ -79,6 +82,45 @@ types, defaults and allowed values (also printed by `nymph schema` and
 
 Names are case-sensitive. An unknown type, field, name or key is an
 error, with a "did you mean" suggestion when one is close.
+
+## Fonts and text style
+
+nymph has fonts built in, so it needs no font files. Pick one by its
+file name:
+
+| Font | Files |
+|---|---|
+| built-in (ImGui's) | `default` |
+| Fira Sans | `FiraSans-Regular.ttf`, `FiraSans-Bold.ttf`, `FiraSans-Italic.ttf` |
+| Fira Mono | `FiraMono-Regular.ttf`, `FiraMono-Bold.ttf` |
+| PT Serif | `PT_Serif-Web-Regular.ttf`, `PT_Serif-Web-Bold.ttf`, `PT_Serif-Web-Italic.ttf` |
+
+`nymph fonts` prints the list of the binary you have (a build can embed
+other fonts, see [building.md](building.md)).
+
+Three fields set the text style: `font`, `font_size` (pixels) and
+`text_color`. They go on `image` for the whole figure, and on
+`VerticalLayout`, `HorizontalLayout`, `Plot`, `Plot3D`, `Label`,
+`SeparatorText`, `PlotText` and `Plot3DText`. An element passes its style
+to everything inside it; an empty value (or a size of 0) inherits.
+
+```yaml
+image: {font: FiraSans-Regular.ttf, font_size: 15}
+root:
+  type: VerticalLayout
+  children:
+    - {type: Label, text: Quarterly report, font: PT_Serif-Web-Bold.ttf, font_size: 28}
+    - type: Plot
+      title: Costs
+      font: FiraMono-Regular.ttf      # title, ticks and legend in Fira Mono
+      text_color: "#2471A3"
+      children:
+        - {type: PlotBars, ys: [2, 3, 3, 4]}
+```
+
+On a plot, the style covers its title, axis and tick labels, legend and
+text inside it. `text_color` leaves grid lines alone. `font: default`
+switches back to the built-in font inside a subtree that set another.
 
 ## Layout
 

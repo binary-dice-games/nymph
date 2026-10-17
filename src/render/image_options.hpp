@@ -17,6 +17,9 @@ struct image_options {
   int scale = 1; ///< Supersampling factor 1-4; PNG is width*scale x height*scale.
   std::string theme = "light"; ///< "light", "dark" or "classic".
   int padding = 8; ///< Logical pixels between the image edge and the content.
+  std::string font; ///< Embedded font file name; "" or "default" is ImGui's built-in font.
+  double font_size = 16.0; ///< Text size in logical pixels.
+  std::string text_color; ///< "#RRGGBB[AA]", or "" for the theme's.
 };
 
 /// @brief The themes `image.theme` accepts.

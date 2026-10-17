@@ -18,6 +18,7 @@
 #include <vector>
 #include "elements/plot_style.hpp"
 #include "render/draw_context.hpp"
+#include "render/text_style.hpp"
 #include "schema/element_class.hpp"
 
 namespace bdg::nymph {
@@ -137,7 +138,7 @@ class plot_class : public element_class {
             "Plot",
             std::string(kFigureSlot),
             {kPlot2dItemSlot},
-            {
+            with_text_style({
                 text_field(
                     "title",
                     "##plot",
@@ -208,7 +209,7 @@ class plot_class : public element_class {
                     "ImPlotLegendFlags bitmask (combine names with '|'): Outside renders the legend outside the plot "
                     "frame, Horizontal lays entries in a row, plus NoButtons / NoMenus / Sort / Reverse."),
                 colormap_field(),
-            },
+            }),
             "A 2D plot (ImPlot). Children are 2D series: PlotLine, PlotBars, PlotScatter, ...") {}
 
   void adjust_root(node& n, const std::vector<bool>& set) const override {
@@ -661,6 +662,9 @@ class text_class : public series_class {
                 number_field("y", 0.0, "Y coordinate in plot (data) space."),
                 number_field("offset_x", 0.0, "Horizontal pixel offset applied after coordinate projection."),
                 number_field("offset_y", 0.0, "Vertical pixel offset applied after coordinate projection."),
+                text_style_fields()[0],
+                text_style_fields()[1],
+                text_style_fields()[2],
             },
             "Draws a text string at a plot coordinate.") {}
 

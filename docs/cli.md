@@ -20,6 +20,8 @@ nymph schema PlotLine         # what PlotLine accepts
 | `nymph schema` | Prints every element type with its fields, types, defaults and allowed values. |
 | `nymph schema <Type>` | The same for one type. |
 | `nymph schema --markdown` | The reference as Markdown ([elements.md](elements.md) is generated from it). |
+| `nymph fonts` | The font names `font:` accepts, one per line: `default` and every embedded font file. |
+| `nymph fonts --licenses` | The licence texts of the embedded fonts. |
 | `nymph --version`, `nymph --help` | Version, usage. |
 
 `-o -` writes to standard output, so nymph works in a pipe:

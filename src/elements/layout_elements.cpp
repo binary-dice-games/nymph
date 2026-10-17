@@ -16,6 +16,7 @@
 #include "elements/plot_style.hpp"
 #include "layout/layout.hpp"
 #include "render/draw_context.hpp"
+#include "render/text_style.hpp"
 #include "schema/element_class.hpp"
 
 namespace bdg::nymph {
@@ -72,7 +73,7 @@ std::vector<field_desc> layout_fields(bool horizontal) {
         "Horizontal alignment of the children when they do not fill the row (no stretch child): \"left\" (default) "
         "or \"right\"."));
   }
-  return f;
+  return with_text_style(std::move(f));
 }
 
 class linear_layout_class : public element_class {
@@ -164,17 +165,22 @@ class label_class : public element_class {
             "Label",
             kFigure,
             {},
-            {
-                text_field("text", "", "Displayed text content."),
-                color_field("text_color", "Optional \"#RRGGBBAA\"/\"#RRGGBB\" text color; empty uses the theme's."),
-                color_field(
-                    "text_color_light",
-                    "Text color used instead of text_color when image.theme is light. Ignored when empty."),
-                color_field(
-                    "text_color_dark",
-                    "Text color used instead of text_color when image.theme is dark or classic. Ignored when empty."),
-                bool_field("wrap", false, "When true, wraps text to the available width instead of running past it."),
-            },
+            with_text_style(
+                {
+                    text_field("text", "", "Displayed text content."),
+                    color_field("text_color", "Optional \"#RRGGBBAA\"/\"#RRGGBB\" text color; empty uses the theme's."),
+                    color_field(
+                        "text_color_light",
+                        "Text color used instead of text_color when image.theme is light. Ignored when empty."),
+                    color_field(
+                        "text_color_dark",
+                        "Text color used instead of text_color when image.theme is dark or classic. Ignored when empty."),
+                    bool_field(
+                        "wrap",
+                        false,
+                        "When true, wraps text to the available width instead of running past it."),
+                },
+                false),
             "A read-only text element.") {}
 
   ImVec2 measure(const node& n, draw_context&, float width) const override {
@@ -247,7 +253,7 @@ class separator_text_class : public element_class {
             "SeparatorText",
             kFigure,
             {},
-            {text_field("label", "", "Text shown inline with the separator line.")},
+            with_text_style({text_field("label", "", "Text shown inline with the separator line.")}),
             "A horizontal rule with a text label embedded in the line.") {}
 
   ImVec2 measure(const node& n, draw_context&, float) const override {

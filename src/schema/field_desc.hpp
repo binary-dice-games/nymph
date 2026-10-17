@@ -40,10 +40,11 @@ struct field_desc {
   std::string description; ///< One or two sentences, shown by `nymph schema`.
   const name_table* names = nullptr; ///< enumeration / flags only; must outlive the class.
   std::optional<value_range> limits; ///< integer / number only.
-  /// text only: returns an error message for an unacceptable value, or
-  /// nullptr. Used for printf formats, which must not reach printf
-  /// unchecked.
-  const char* (*check)(std::string_view text) = nullptr;
+  /// text only: returns the problem with an unacceptable value, appended
+  /// to "<Type>.<field>" (start it with ':' for "<Type>.<field>: ..."), or
+  /// "" when the value is fine. Used for printf formats, which must not
+  /// reach printf unchecked, and font names.
+  std::string (*check)(std::string_view text) = nullptr;
 };
 
 /// @brief Human-readable name of a field type ("number", "list of numbers").
@@ -79,7 +80,10 @@ const char* check_double_format(std::string_view text);
 ///        (see check_double_format()).
 inline field_desc double_format_field(std::string name, std::string def, std::string description) {
   field_desc f{std::move(name), field_type::text, std::move(def), std::move(description), nullptr, std::nullopt};
-  f.check = &check_double_format;
+  f.check = [](std::string_view text) -> std::string {
+    const char* problem = check_double_format(text);
+    return problem == nullptr ? std::string() : std::string(problem) + ", not '" + std::string(text) + "'";
+  };
   return f;
 }
 

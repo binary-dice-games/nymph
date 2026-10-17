@@ -16,6 +16,7 @@
 #include <vector>
 #include "elements/plot_style.hpp"
 #include "render/draw_context.hpp"
+#include "render/text_style.hpp"
 #include "schema/element_class.hpp"
 
 namespace bdg::nymph {
@@ -84,7 +85,7 @@ class plot3d_class : public element_class {
             "Plot3D",
             std::string(kFigureSlot),
             {kPlot3dItemSlot},
-            {
+            with_text_style({
                 text_field("title", "##plot3d", "Plot title shown at the top; prefix ## to hide the title bar."),
                 text_field("x_label", "", "X axis label; empty string = no label."),
                 text_field("y_label", "", "Y axis label; empty string = no label."),
@@ -123,7 +124,7 @@ class plot3d_class : public element_class {
                     plot3d_axis_flag_names(),
                     "ImPlot3DAxisFlags for the Z axis (combine names with '|')."),
                 colormap_field(),
-            },
+            }),
             "A 3D plot (ImPlot3D). Children are 3D series: Plot3DLine, Plot3DSurface, ...") {}
 
   void adjust_root(node& n, const std::vector<bool>& set) const override {
@@ -390,6 +391,9 @@ class text3d_class : public series3d_class {
                 number_field("angle", 0.0, "Rotation angle of the text in degrees.", value_range{-360, 360}),
                 number_field("offset_x", 0.0, "Pixel offset applied to the text after projection (horizontal)."),
                 number_field("offset_y", 0.0, "Pixel offset applied to the text after projection (vertical)."),
+                text_style_fields()[0],
+                text_style_fields()[1],
+                text_style_fields()[2],
             },
             "Renders a text string at a given 3-D plot coordinate.") {}
 

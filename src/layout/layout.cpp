@@ -73,7 +73,7 @@ ImVec2 measure_linear(const node& n, draw_context& dc, float width, const linear
     const float axis_hint = how.vertical ? h.height : h.width;
     const float cross_hint = how.vertical ? h.width : h.height;
     const float child_width = how.vertical ? cross_size(cross_hint, width) : width;
-    const ImVec2 natural = child.cls->measure(child, dc, child_width);
+    const ImVec2 natural = dc.measure_node(child, child_width);
     const float natural_along = how.vertical ? natural.y : natural.x;
     const float natural_across = how.vertical ? natural.x : natural.y;
     along += axis_hint > 0.0f ? axis_hint : (axis_hint == 0.0f ? natural_along : 0.0f);
@@ -100,7 +100,7 @@ void arrange_linear(const node& n, draw_context& dc, const rect& r, const linear
     if (axis_hint == 0.0f) {
       // Measured with the width the child will get: wrapped text in a
       // column depends on it; a row's child may take the whole row.
-      const ImVec2 m = child.cls->measure(child, dc, how.vertical ? c : r.width());
+      const ImVec2 m = dc.measure_node(child, how.vertical ? c : r.width());
       natural = how.vertical ? m.y : m.x;
     }
     any_stretch = any_stretch || axis_hint < 0.0f;
@@ -128,7 +128,7 @@ void arrange_linear(const node& n, draw_context& dc, const rect& r, const linear
       cr = {ImVec2(start, r.min.y), ImVec2(end, r.min.y + std::round(cross[i]))};
     }
     dc.set_rect(child, cr);
-    child.cls->arrange(child, dc, cr);
+    dc.arrange_node(child, cr);
     pos += plan.sizes[i] + how.spacing;
   }
 }
@@ -146,7 +146,7 @@ void layout_root(const node& root, draw_context& dc) {
   const float ht = h.height > 0.0f ? h.height : content.height();
   const rect r{content.min, ImVec2(content.min.x + w, content.min.y + ht)};
   dc.set_rect(root, r);
-  root.cls->arrange(root, dc, r);
+  dc.arrange_node(root, r);
 }
 
 } // namespace bdg::nymph

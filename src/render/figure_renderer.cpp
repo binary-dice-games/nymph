@@ -7,10 +7,13 @@
 #include <implot.h>
 #include <implot3d.h>
 #include <cfloat>
+#include <cstdio>
 #include <stdexcept>
 #include <string>
+#include "fonts/embedded_fonts.hpp"
 #include "layout/layout.hpp"
 #include "render/soft_rasterizer.hpp"
+#include "render/text_style.hpp"
 #include "render/texture_store.hpp"
 #include "schema/element_class.hpp"
 
@@ -57,6 +60,12 @@ void check_options(const image_options& o) {
   }
   if (find_theme(o.theme) == nullptr) {
     throw std::invalid_argument("unknown theme '" + o.theme + "' (themes: light, dark, classic)");
+  }
+  if (const std::string problem = check_font_name(o.font); !problem.empty()) {
+    throw std::invalid_argument(problem);
+  }
+  if (!(o.font_size > 0.0 && o.font_size <= kMaxFontSize)) {
+    throw std::invalid_argument("image font size must be above 0 and at most 96");
   }
 }
 
@@ -111,7 +120,6 @@ void configure(const theme& t) {
   ImGui::GetPlatformIO().DrawCallback_ResetRenderState = &reset_render_state_callback;
 
   io.Fonts->TexDesiredFormat = ImTextureFormat_Alpha8;
-  io.Fonts->AddFontDefaultVector();
 
   ImGuiStyle& style = ImGui::GetStyle();
   t.imgui(&style);
@@ -125,6 +133,31 @@ void configure(const theme& t) {
   style.WindowRounding = 0.0f;
   style.WindowBorderSize = 0.0f;
   style.WindowPadding = ImVec2(0.0f, 0.0f);
+}
+
+/// Adds ImGui's built-in font (the default) and every embedded font to the
+/// atlas and registers them by name. Glyphs are only rasterized when used
+/// (ImGui 1.92's dynamic atlas), so unused fonts cost little.
+void load_fonts(draw_context& ctx) {
+  ImFontAtlas& atlas = *ImGui::GetIO().Fonts;
+  ctx.add_font(std::string(kDefaultFontName), atlas.AddFontDefaultVector());
+  for (const embedded_file& f : embedded_fonts()) {
+    ImFontConfig cfg;
+    cfg.FontDataOwnedByAtlas = false; // static data, never freed or written
+    std::snprintf(cfg.Name, sizeof(cfg.Name), "%s", f.name);
+    // ImGui takes a non-const pointer but only reads the font data.
+    void* data = const_cast<unsigned char*>(f.data);
+    ImFont* font = atlas.AddFontFromMemoryTTF(data, static_cast<int>(f.size), kFigureFontSize, &cfg);
+    if (font == nullptr) {
+      throw std::runtime_error(std::string("embedded font ") + f.name + " could not be loaded");
+    }
+    ctx.add_font(f.name, font);
+  }
+}
+
+/// The `image` text style: the outermost one, which elements inherit.
+text_style image_text_style(const image_options& o) {
+  return {o.font.empty() ? std::string(kDefaultFontName) : o.font, o.font_size, o.text_color};
 }
 
 /// The same inputs every frame and every call: no clock, no mouse.
@@ -152,7 +185,10 @@ void run_frames(
     ImGui::SetNextWindowPos(ImVec2(0.0f, 0.0f), ImGuiCond_Always);
     ImGui::SetNextWindowSize(ImGui::GetIO().DisplaySize, ImGuiCond_Always);
     ImGui::Begin("##nymph_figure", nullptr, kFlags);
-    draw(ctx);
+    {
+      const text_style_scope style(image_text_style(options), ctx);
+      draw(ctx);
+    }
     ImGui::End();
     ImGui::Render();
     // Texture requests are answered every frame, as a GPU backend would.
@@ -168,6 +204,7 @@ image render_frames(const image_options& options, const draw_fn& draw) {
   configure(*find_theme(options.theme));
   texture_store textures;
   draw_context ctx(options);
+  load_fonts(ctx);
   run_frames(options, draw, kFigureFrames, textures, ctx);
 
   ImVec4 bg = ImGui::GetStyle().Colors[ImGuiCol_WindowBg];
@@ -178,7 +215,7 @@ image render_frames(const image_options& options, const draw_fn& draw) {
 image render_figure(const figure& f) {
   return render_frames(f.image, [&](draw_context& dc) {
     layout_root(f.root, dc);
-    f.root.cls->draw(f.root, dc);
+    dc.draw_node(f.root);
   });
 }
 
@@ -188,6 +225,7 @@ std::unordered_map<const node*, rect> layout_figure(const figure& f) {
   configure(*find_theme(f.image.theme));
   texture_store textures;
   draw_context ctx(f.image);
+  load_fonts(ctx);
   run_frames(f.image, [&](draw_context& dc) { layout_root(f.root, dc); }, 1, textures, ctx);
   return ctx.rects();
 }

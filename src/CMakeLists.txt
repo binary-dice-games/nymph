@@ -11,12 +11,17 @@ add_library(nymph STATIC
   render/image_options.hpp
   render/draw_context.hpp
   render/draw_context.cpp
+  render/text_style.hpp
+  render/text_style.cpp
   render/figure_renderer.hpp
   render/figure_renderer.cpp
   core/limits.hpp
   png/png_meta.hpp
   png/png_meta.cpp
   core/error.hpp
+  core/suggest.hpp
+  fonts/embedded_fonts.hpp
+  fonts/fonts.cpp
   document/yaml_doc.hpp
   document/yaml_doc.cpp
   document/table.hpp
@@ -51,6 +56,8 @@ add_library(nymph STATIC
   schema/convert.cpp
 )
 add_library(nymph::nymph ALIAS nymph)
+include("${PROJECT_SOURCE_DIR}/cmake/NymphFonts.cmake")
+nymph_embed_fonts(nymph)
 target_include_directories(nymph PUBLIC
   ${CMAKE_CURRENT_SOURCE_DIR}
   ${CMAKE_CURRENT_BINARY_DIR}/generated

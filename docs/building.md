@@ -72,6 +72,27 @@ Outputs:
 | Option | Default | Description |
 |--------|---------|-------------|
 | `NYMPH_BUILD_TESTS` | `ON` when top-level | Build the GoogleTest suite |
+| `NYMPH_FONTS_DIR` | `fonts/` | Folder whose `*.ttf` / `*.otf` fonts and `*.txt` licences are compiled into nymph |
+
+---
+
+## Embedded fonts
+
+The fonts in `fonts/` are compiled into the library: at build time
+`cmake/NymphFonts.cmake` turns each file into a generated C++ array
+(`build/src/generated/fonts/`), so the binary reads no font file at run
+time. Sources name a font by its file name.
+
+- **Add a font:** copy its `.ttf` / `.otf` and its licence text (as
+  `<Family>-<Licence>.txt`) into `fonts/` and build. The configure step
+  re-runs by itself and picks it up; `nymph fonts` lists it.
+- **Use another set:** `cmake -S . -B build -DNYMPH_FONTS_DIR=/path/to/fonts`.
+  An empty folder leaves only the built-in `default` font; tests that name
+  the standard fonts then skip.
+- Each font adds its size to the binary (the standard set is 2.8 MB).
+  File names must not contain `"` or `\`.
+- Licences: the standard fonts are SIL OFL 1.1 (see `fonts/README.md`);
+  `nymph fonts --licenses` prints the texts compiled in with them.
 
 ---
 

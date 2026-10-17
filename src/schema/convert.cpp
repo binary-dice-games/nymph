@@ -121,8 +121,9 @@ value scalar_value(const yaml_node& n, const field_desc& f, std::string_view wha
     case field_type::text: {
       std::string text = n.text.rfind("$$", 0) == 0 ? n.text.substr(1) : n.text;
       if (f.check != nullptr) {
-        if (const char* problem = f.check(text)) {
-          fail(n, what, std::string(problem) + ", not '" + text + "'");
+        const std::string problem = f.check(text);
+        if (!problem.empty()) {
+          fail(n, what, problem);
         }
       }
       return text;
