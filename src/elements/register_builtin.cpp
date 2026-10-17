@@ -3,11 +3,13 @@
 /// @brief register_builtin_elements(): the one list of element families.
 #include "elements/register_builtin.hpp"
 #include "elements/plot2d.hpp"
+#include "elements/plot3d.hpp"
 
 namespace bdg::nymph {
 
 void register_builtin_elements(registry& reg) {
   register_plot2d(reg);
+  register_plot3d(reg);
 }
 
 const registry& builtin_registry() {

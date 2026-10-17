@@ -35,3 +35,5 @@ nymph_add_test(test_bind test_bind.cpp)
 nymph_add_test(test_plot2d test_plot2d.cpp)
 # Reads the sample sources in tests/data in place.
 target_compile_definitions(test_plot2d PRIVATE NYMPH_SOURCE_DIR="${PROJECT_SOURCE_DIR}")
+nymph_add_test(test_plot3d test_plot3d.cpp)
+target_compile_definitions(test_plot3d PRIVATE NYMPH_SOURCE_DIR="${PROJECT_SOURCE_DIR}")

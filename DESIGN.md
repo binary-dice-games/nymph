@@ -1,6 +1,6 @@
 # nymph — Architecture & Design
 
-**Status: in progress, plan steps 1-9 done.** [PLAN.md](PLAN.md) is the ordered
+**Status: in progress, plan steps 1-10 done.** [PLAN.md](PLAN.md) is the ordered
 implementation plan.
 
 ## 1. Purpose / Scope
@@ -224,6 +224,12 @@ wish drew something silently wrong):
 - The `bins` description follows ImPlot (-1 square root, -2 Sturges, -3
   Rice, -4 Scott); wish's text had the names in the wrong order. The
   default (-1) is unchanged.
+- 3D: `xs`, `ys` and `zs` must be equally long; `Plot3DTriangle` /
+  `Plot3DQuad` vertex counts must be multiples of 3 / 4 and
+  `Plot3DSurface` arrays exactly `x_count x y_count` (wish truncated or
+  drew nothing); `Plot3DMesh.indices` must be a non-zero multiple of 3,
+  each within the vertex count. wish passed the indices to ImPlot3D
+  unchecked, so an out-of-range index read past the vertex arrays.
 
 Scalar typing follows the registered field type, not YAML's guess: a value
 assigned to a text field stays text (`title: 2025`); a quoted value

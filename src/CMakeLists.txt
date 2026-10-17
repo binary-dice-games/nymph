@@ -27,6 +27,8 @@ add_library(nymph STATIC
   elements/plot_style.cpp
   elements/plot2d.hpp
   elements/plot2d.cpp
+  elements/plot3d.hpp
+  elements/plot3d.cpp
   elements/register_builtin.hpp
   elements/register_builtin.cpp
   schema/value.hpp

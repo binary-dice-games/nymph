@@ -1,0 +1,13 @@
+image: {width: 480, height: 360}
+root:
+  type: Plot3D
+  title: Samples
+  x_label: a
+  y_label: b
+  z_label: c
+  children:
+    - {type: Plot3DScatter, label: points, xs: $a, ys: $b, zs: $c, marker: Circle}
+data:
+  a: [0.1, 0.4, 0.5, 0.9, 0.3, 0.7, 0.2, 0.8]
+  b: [0.2, 0.1, 0.6, 0.4, 0.9, 0.7, 0.5, 0.3]
+  c: [0.3, 0.8, 0.2, 0.6, 0.4, 0.9, 0.7, 0.1]

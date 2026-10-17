@@ -368,6 +368,13 @@ and defaults.
 
 ### 10. 3D plot elements
 
+*Result: done.* `src/elements/plot3d`; `tests/test_plot3d.cpp` (10 tests)
+and 7 samples in `tests/data/plot3d/`, all looked at. `surface.yaml` is
+wish's `testdata/surface3d.nymph` converted by hand to the YAML form (the
+conversion step 13 automates), at 480x360. Added checks as in step 9;
+the notable one is `Plot3DMesh.indices` bounds checking: wish passed
+indices to ImPlot3D unchecked, so a bad index read out of bounds.
+
 **Goal:** `Plot3D` and every 3D series render with wish's fields and
 defaults.
 

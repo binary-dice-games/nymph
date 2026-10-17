@@ -8,8 +8,8 @@ software rasterizer: no GPU, window or display needed.
 It is meant for AI agents that need to show information as a chart.
 
 It is a standalone version of wish's `nymph` module, with no wish or bison
-dependency. **Status: in progress** (2D plots render through the library
-API; 3D plots, layouts and the command line are next) -- see
+dependency. **Status: in progress** (2D and 3D plots render through the
+library API; layouts and the command line are next) -- see
 [DESIGN.md](DESIGN.md) and [PLAN.md](PLAN.md).
 
 ## Quick Build
