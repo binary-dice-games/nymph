@@ -41,6 +41,7 @@ include(cmake/NymphDependencies.cmake)
 
 # ── nymph — core library ──────────────────────────────────────────────────────
 
+add_subdirectory(imuml)
 add_subdirectory(src)
 
 # ── nymph executable ──────────────────────────────────────────────────────────

@@ -43,6 +43,7 @@ std::vector<field_desc> all_fields() {
       flags_field("flags", 0, flag_names(), "Flags."),
       numbers_field("ys", "Values."),
       integers_field("indices", "Indices."),
+      texts_field("members", "Members."),
   };
 }
 
@@ -264,6 +265,25 @@ TEST(schema, ListItemErrorsPointAtTheItem) {
   EXPECT_EQ(e.column(), 11);
   EXPECT_TRUE(contains(convert_error("[1, [2]]", "ys"), "items must be numbers"));
   EXPECT_TRUE(contains(convert_error("[0, 1.5]", "indices"), "must be a whole number"));
+}
+
+// ── text_array (spec/03_uml_diagrams plan step 1) ────────────────────────────
+
+TEST(schema, TextArrayKeepsEveryItemAsWritten) {
+  EXPECT_EQ(
+      std::get<std::vector<std::string>>(convert("[\"a\", b, 2025, \"$$x\", true]", "members")),
+      (std::vector<std::string>{"a", "b", "2025", "$x", "true"}));
+  EXPECT_TRUE(std::get<std::vector<std::string>>(convert("[]", "members")).empty());
+  EXPECT_STREQ(type_name(field_type::text_array), "list of texts");
+}
+
+TEST(schema, TextArrayRejectsScalarsMappingsAndNestedLists) {
+  EXPECT_TRUE(contains(convert_error("a", "members"), "Fake.members must be a list of texts"));
+  EXPECT_TRUE(contains(convert_error("{a: 1}", "members"), "must be a single value"));
+  const error nested = convert_error("[a, [b]]", "members");
+  EXPECT_TRUE(contains(nested, "items must be texts")) << nested.what();
+  EXPECT_EQ(nested.line(), 1);
+  EXPECT_EQ(nested.column(), 8);
 }
 
 } // namespace

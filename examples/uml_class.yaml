@@ -1,0 +1,21 @@
+nymph: 1
+description: UML class diagram of animals, an abstract Animal and three subclasses, and a Pond aggregating ducks.
+image: {width: 760, height: 520, font: FiraSans-Regular.ttf, font_size: 15}
+root:
+  type: ClassDiagram
+  title: Animals
+  children:
+    - type: Class
+      id: Animal
+      kind: Abstract
+      attributes: ["+name: string", "+age: int"]
+      methods: ["+makeSound()*", "+isMammal() bool"]
+    - {type: Class, id: Duck, attributes: ["+beakColor: string"], methods: ["+swim()", "+quack()"]}
+    - {type: Class, id: Fish, attributes: ["-sizeInFeet: int"], methods: ["-canEat()"]}
+    - {type: Class, id: Zebra, attributes: ["+is_wild: bool"], methods: ["+run()", "+count()$"]}
+    - {type: Class, id: Pond}
+    - {type: ClassRelation, from: Duck, to: Animal, kind: Inheritance}
+    - {type: ClassRelation, from: Fish, to: Animal, kind: Inheritance}
+    - {type: ClassRelation, from: Zebra, to: Animal, kind: Inheritance}
+    - {type: ClassRelation, from: Pond, to: Duck, kind: Aggregation, from_label: "1", to_label: "*", label: has}
+    - {type: Note, text: "Ducks can fly too", attach: [Duck]}

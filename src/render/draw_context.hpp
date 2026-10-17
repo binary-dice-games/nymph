@@ -74,6 +74,16 @@ class draw_context {
     return it == fonts_.end() ? nullptr : it->second;
   }
 
+  /// @brief The name `font` was registered under, or "" if it was not.
+  std::string_view font_name(const ImFont* font) const {
+    for (const auto& [name, f] : fonts_) {
+      if (f == font) {
+        return name;
+      }
+    }
+    return {};
+  }
+
   /// @brief Sets the rectangle `n` draws in.
   void set_rect(const node& n, const rect& r) {
     rects_[&n] = r;

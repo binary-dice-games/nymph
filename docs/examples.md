@@ -571,3 +571,171 @@ data: |
   20, 17.3, 61
   22, 14.6, 68
 ```
+
+## UML class diagram
+
+Classes with attribute and method compartments, an abstract class (italic, from the embedded italic font), inheritance, an aggregation with multiplicities, and a note. Laid out automatically, parents above.
+
+![UML class diagram](../examples/uml_class.png)
+
+[`examples/uml_class.yaml`](../examples/uml_class.yaml):
+
+```yaml
+nymph: 1
+description: UML class diagram of animals, an abstract Animal and three subclasses, and a Pond aggregating ducks.
+image: {width: 760, height: 520, font: FiraSans-Regular.ttf, font_size: 15}
+root:
+  type: ClassDiagram
+  title: Animals
+  children:
+    - type: Class
+      id: Animal
+      kind: Abstract
+      attributes: ["+name: string", "+age: int"]
+      methods: ["+makeSound()*", "+isMammal() bool"]
+    - {type: Class, id: Duck, attributes: ["+beakColor: string"], methods: ["+swim()", "+quack()"]}
+    - {type: Class, id: Fish, attributes: ["-sizeInFeet: int"], methods: ["-canEat()"]}
+    - {type: Class, id: Zebra, attributes: ["+is_wild: bool"], methods: ["+run()", "+count()$"]}
+    - {type: Class, id: Pond}
+    - {type: ClassRelation, from: Duck, to: Animal, kind: Inheritance}
+    - {type: ClassRelation, from: Fish, to: Animal, kind: Inheritance}
+    - {type: ClassRelation, from: Zebra, to: Animal, kind: Inheritance}
+    - {type: ClassRelation, from: Pond, to: Duck, kind: Aggregation, from_label: "1", to_label: "*", label: has}
+    - {type: Note, text: "Ducks can fly too", attach: [Duck]}
+```
+
+## UML sequence diagram
+
+Participants (an actor, a box, a database), numbered messages, activation bars, an `alt` fragment with an `Else`, a self message and a note over two lifelines.
+
+![UML sequence diagram](../examples/uml_sequence.png)
+
+[`examples/uml_sequence.yaml`](../examples/uml_sequence.yaml):
+
+```yaml
+nymph: 1
+description: UML sequence diagram of a login between a user, web app and database, with an alt fragment for a wrong password.
+image: {width: 720, height: 560, font: FiraSans-Regular.ttf, font_size: 15}
+root:
+  type: SequenceDiagram
+  autonumber: true
+  children:
+    - {type: Participant, id: user, name: User, kind: Actor}
+    - {type: Participant, id: web, name: Web app}
+    - {type: Participant, id: db, name: Database, kind: Database}
+    - {type: Message, from: user, to: web, text: "POST /login", activate: true}
+    - type: Fragment
+      kind: Alt
+      label: valid password
+      children:
+        - {type: Message, from: web, to: db, text: load user, activate: true}
+        - {type: Message, from: db, to: web, text: row, kind: Reply, deactivate: true}
+        - {type: Else, label: otherwise}
+        - {type: Message, from: web, to: web, text: log failure}
+    - {type: Message, from: web, to: user, text: "200 OK", kind: Reply, deactivate: true}
+    - {type: Note, text: session cookie set, over: [user, web]}
+```
+
+## UML state diagram
+
+Initial and final pseudo-states, a composite state laid out inside its parent, and a note attached to an inner state.
+
+![UML state diagram](../examples/uml_state.png)
+
+[`examples/uml_state.yaml`](../examples/uml_state.yaml):
+
+```yaml
+nymph: 1
+description: UML state diagram of a media player, with a composite Active state.
+image: {width: 640, height: 600, font: FiraSans-Regular.ttf, font_size: 15}
+root:
+  type: StateDiagram
+  title: Media player
+  children:
+    - {type: State, id: start, kind: Initial}
+    - {type: State, id: stopped, name: Stopped}
+    - type: State
+      id: active
+      name: Active
+      children:
+        - {type: State, id: a0, kind: Initial}
+        - {type: State, id: playing, name: Playing}
+        - {type: State, id: paused, name: Paused}
+        - {type: Transition, from: a0, to: playing}
+        - {type: Transition, from: playing, to: paused, label: pause}
+        - {type: Transition, from: paused, to: playing, label: play}
+    - {type: State, id: end, kind: Final}
+    - {type: Transition, from: start, to: stopped}
+    - {type: Transition, from: stopped, to: playing, label: play}
+    - {type: Transition, from: paused, to: stopped, label: stop}
+    - {type: Transition, from: stopped, to: end, label: eject}
+    - {type: Note, text: "remembers the position", attach: [paused]}
+```
+
+## UML activity diagram
+
+An initial node, actions (one a send signal), a decision with guards, a fork and join, a merge and a final node.
+
+![UML activity diagram](../examples/uml_activity.png)
+
+[`examples/uml_activity.yaml`](../examples/uml_activity.yaml):
+
+```yaml
+nymph: 1
+description: UML activity diagram of order handling, with a decision, a fork and a join.
+image: {width: 560, height: 680, font: FiraSans-Regular.ttf, font_size: 15}
+root:
+  type: ActivityDiagram
+  title: Order handling
+  children:
+    - {type: ActivityControl, id: start, kind: Initial}
+    - {type: Action, id: receive, text: Receive order}
+    - {type: ActivityControl, id: stock, kind: Decision, label: in stock?}
+    - {type: Action, id: ship, text: Ship}
+    - {type: Action, id: bill, text: Send invoice, kind: Send}
+    - {type: Action, id: cancel, text: Cancel order}
+    - {type: ActivityControl, id: fork, kind: Fork}
+    - {type: ActivityControl, id: join, kind: Join}
+    - {type: ActivityControl, id: merge, kind: Merge}
+    - {type: ActivityControl, id: end, kind: Final}
+    - {type: Flow, from: start, to: receive}
+    - {type: Flow, from: receive, to: stock}
+    - {type: Flow, from: stock, to: fork, guard: yes}
+    - {type: Flow, from: stock, to: cancel, guard: no}
+    - {type: Flow, from: fork, to: ship}
+    - {type: Flow, from: fork, to: bill}
+    - {type: Flow, from: ship, to: join}
+    - {type: Flow, from: bill, to: join}
+    - {type: Flow, from: join, to: merge}
+    - {type: Flow, from: cancel, to: merge}
+    - {type: Flow, from: merge, to: end}
+```
+
+## UML use case diagram
+
+Actors on both sides of a system boundary, associations, and dashed `«include»` / `«extend»` relations.
+
+![UML use case diagram](../examples/uml_usecase.png)
+
+[`examples/uml_usecase.yaml`](../examples/uml_usecase.yaml):
+
+```yaml
+nymph: 1
+description: UML use case diagram of an online shop, with a customer and a bank around the shop's use cases.
+image: {width: 760, height: 420, font: FiraSans-Regular.ttf, font_size: 15}
+root:
+  type: UseCaseDiagram
+  system: Online shop
+  children:
+    - {type: Actor, id: customer, name: Customer}
+    - {type: Actor, id: bank, name: Bank, side: Right}
+    - {type: UseCase, id: browse, name: Browse catalog}
+    - {type: UseCase, id: buy, name: Buy item}
+    - {type: UseCase, id: pay, name: Pay}
+    - {type: UseCase, id: coupon, name: Apply coupon}
+    - {type: UseCaseRelation, from: customer, to: browse}
+    - {type: UseCaseRelation, from: customer, to: buy}
+    - {type: UseCaseRelation, from: buy, to: pay, kind: Include}
+    - {type: UseCaseRelation, from: coupon, to: pay, kind: Extend}
+    - {type: UseCaseRelation, from: pay, to: bank}
+```

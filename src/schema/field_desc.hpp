@@ -24,6 +24,7 @@ enum class field_type {
   flags, ///< Names from `names` joined with `|`, or an integer.
   number_array, ///< List of numbers (`~` / `null` is a gap), or a $column.
   integer_array, ///< List of whole numbers, or a $column.
+  text_array, ///< List of texts, each kept as written, or a $column (its cells).
 };
 
 /// @brief Inclusive limits of a number or integer field.
@@ -109,6 +110,16 @@ inline field_desc integers_field(std::string name, std::string description) {
       std::move(name),
       field_type::integer_array,
       std::vector<int64_t>{},
+      std::move(description),
+      nullptr,
+      std::nullopt};
+}
+
+inline field_desc texts_field(std::string name, std::string description) {
+  return {
+      std::move(name),
+      field_type::text_array,
+      std::vector<std::string>{},
       std::move(description),
       nullptr,
       std::nullopt};

@@ -156,10 +156,16 @@ class binder {
     if (is_reference(v)) {
       return single_reference(f, v, what);
     }
-    if (v.is_sequence() && is_array(f.type)) {
+    if (v.is_sequence() && (is_array(f.type) || f.type == field_type::text_array)) {
       size_t references = 0;
       for (const yaml_node& item : v.children) {
         references += is_reference(item) ? 1 : 0;
+      }
+      if (references > 0 && f.type == field_type::text_array) {
+        fail(
+            v,
+            what + " takes one $column reference for the whole list (" + what +
+                ": $col), not references inside it; write $$ for a literal '$'");
       }
       if (references > 0) {
         for (const yaml_node& item : v.children) {
@@ -286,7 +292,7 @@ class binder {
   }
 
   value single_reference(const field_desc& f, const yaml_node& ref, const std::string& what) {
-    if (!is_array(f.type) && f.type != field_type::text) {
+    if (!is_array(f.type) && f.type != field_type::text && f.type != field_type::text_array) {
       fail(ref, what + " cannot take a $column reference (only list and text fields can)");
     }
     const column_ref c = column(ref);
@@ -295,6 +301,15 @@ class binder {
     }
     if (f.type == field_type::integer_array) {
       return integer_column(c);
+    }
+    const std::vector<cell>& column_cells = c.t->columns[static_cast<size_t>(c.index)];
+    if (f.type == field_type::text_array) {
+      std::vector<std::string> texts;
+      texts.reserve(column_cells.size());
+      for (const cell& cl : column_cells) {
+        texts.push_back(cl.text);
+      }
+      return texts;
     }
     std::string joined; // text: the cells, one per line
     const std::vector<cell>& cells = c.t->columns[static_cast<size_t>(c.index)];

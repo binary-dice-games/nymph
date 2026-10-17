@@ -14,7 +14,8 @@ namespace bdg::nymph {
 ///        field_type: boolean -> bool; integer, enumeration, flags ->
 ///        int64_t; number -> double; text, color -> std::string;
 ///        number_array -> std::vector<double>; integer_array ->
-///        std::vector<int64_t>.
-using value = std::variant<bool, int64_t, double, std::string, std::vector<double>, std::vector<int64_t>>;
+///        std::vector<int64_t>; text_array -> std::vector<std::string>.
+using value = std::
+    variant<bool, int64_t, double, std::string, std::vector<double>, std::vector<int64_t>, std::vector<std::string>>;
 
 } // namespace bdg::nymph

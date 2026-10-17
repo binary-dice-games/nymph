@@ -26,6 +26,7 @@ namespace bdg::nymph {
 /// - flags: names joined with `|`, or an integer.
 /// - number_array / integer_array: a list of such numbers; an unquoted
 ///   empty item, `~` or `null` in a number list is NaN (a gap).
+/// - text_array: a list of scalars, each kept as written (`$$` is `$`).
 /// Integers and numbers are checked against the field's limits.
 ///
 /// `$column` references are not handled here: bind() resolves them before

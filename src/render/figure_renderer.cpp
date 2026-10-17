@@ -4,6 +4,7 @@
 ///        its private ImGui context.
 #include "render/figure_renderer.hpp"
 #include <imgui.h>
+#include <imuml.h>
 #include <implot.h>
 #include <implot3d.h>
 #include <cfloat>
@@ -29,12 +30,17 @@ struct theme {
   void (*imgui)(ImGuiStyle*);
   void (*implot)(ImPlotStyle*);
   void (*implot3d)(ImPlot3DStyle*);
+  void (*imuml)(ImUmlStyle*);
 };
 
 constexpr theme kThemes[] = {
-    {"light", &ImGui::StyleColorsLight, &ImPlot::StyleColorsLight, &ImPlot3D::StyleColorsLight},
-    {"dark", &ImGui::StyleColorsDark, &ImPlot::StyleColorsDark, &ImPlot3D::StyleColorsDark},
-    {"classic", &ImGui::StyleColorsClassic, &ImPlot::StyleColorsClassic, &ImPlot3D::StyleColorsClassic},
+    {"light", &ImGui::StyleColorsLight, &ImPlot::StyleColorsLight, &ImPlot3D::StyleColorsLight, &ImUml::StyleColorsLight},
+    {"dark", &ImGui::StyleColorsDark, &ImPlot::StyleColorsDark, &ImPlot3D::StyleColorsDark, &ImUml::StyleColorsDark},
+    {"classic",
+     &ImGui::StyleColorsClassic,
+     &ImPlot::StyleColorsClassic,
+     &ImPlot3D::StyleColorsClassic,
+     &ImUml::StyleColorsClassic},
 };
 
 const theme* find_theme(const std::string& name) {
@@ -72,30 +78,36 @@ void check_options(const image_options& o) {
 
 // ── Context scope ────────────────────────────────────────────────────────────
 
-/// Creates the private context trio and makes it current; on destruction
-/// destroys it and makes the previous contexts current again.
+/// Creates the private ImGui, ImPlot, ImPlot3D and ImUml contexts and makes
+/// them current; on destruction destroys them and makes the previous
+/// contexts current again.
 class context_scope {
  public:
   context_scope()
       : prev_imgui_(ImGui::GetCurrentContext()),
         prev_implot_(ImPlot::GetCurrentContext()),
-        prev_implot3d_(ImPlot3D::GetCurrentContext()) {
+        prev_implot3d_(ImPlot3D::GetCurrentContext()),
+        prev_imuml_(ImUml::GetCurrentContext()) {
     imgui_ = ImGui::CreateContext();
     ImGui::SetCurrentContext(imgui_);
     implot_ = ImPlot::CreateContext();
     ImPlot::SetCurrentContext(implot_);
     implot3d_ = ImPlot3D::CreateContext();
     ImPlot3D::SetCurrentContext(implot3d_);
+    imuml_ = ImUml::CreateContext();
+    ImUml::SetCurrentContext(imuml_);
   }
 
   ~context_scope() {
     ImGui::SetCurrentContext(imgui_);
+    ImUml::DestroyContext(imuml_);
     ImPlot3D::DestroyContext(implot3d_);
     ImPlot::DestroyContext(implot_);
     ImGui::DestroyContext(imgui_);
     ImGui::SetCurrentContext(prev_imgui_);
     ImPlot::SetCurrentContext(prev_implot_);
     ImPlot3D::SetCurrentContext(prev_implot3d_);
+    ImUml::SetCurrentContext(prev_imuml_);
   }
 
   context_scope(const context_scope&) = delete;
@@ -105,9 +117,11 @@ class context_scope {
   ImGuiContext* prev_imgui_;
   ImPlotContext* prev_implot_;
   ImPlot3DContext* prev_implot3d_;
+  ImUmlContext* prev_imuml_;
   ImGuiContext* imgui_ = nullptr;
   ImPlotContext* implot_ = nullptr;
   ImPlot3DContext* implot3d_ = nullptr;
+  ImUmlContext* imuml_ = nullptr;
 };
 
 /// Configures the current (fresh) context as nymph's backend.
@@ -126,6 +140,7 @@ void configure(const theme& t, const char* renderer_name) {
   t.imgui(&style);
   t.implot(&ImPlot::GetStyle());
   t.implot3d(&ImPlot3D::GetStyle());
+  t.imuml(&ImUml::GetStyle());
   style.FontSizeBase = kFigureFontSize;
   // ImGui's textured line anti-aliasing relies on GPU-exact bilinear
   // filtering of a small line texture; geometry fringes need no texture

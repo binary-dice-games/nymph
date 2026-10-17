@@ -161,6 +161,8 @@ value scalar_value(const yaml_node& n, const field_desc& f, std::string_view wha
     case field_type::number_array:
     case field_type::integer_array:
       fail(n, what, "must be a list of numbers, like [1, 2, 3], or a $column reference");
+    case field_type::text_array:
+      fail(n, what, "must be a list of texts, like [a, b], or a $column reference");
   }
   fail(n, what, "has an unsupported type");
 }
@@ -181,7 +183,8 @@ bool is_hex_color(std::string_view text) {
 }
 
 value convert_value(const yaml_node& n, const field_desc& f, std::string_view what) {
-  const bool is_list_type = f.type == field_type::number_array || f.type == field_type::integer_array;
+  const bool is_list_type = f.type == field_type::number_array || f.type == field_type::integer_array ||
+                            f.type == field_type::text_array;
   if (n.is_mapping() || (n.is_sequence() && !is_list_type)) {
     fail(
         n,
@@ -194,6 +197,17 @@ value convert_value(const yaml_node& n, const field_desc& f, std::string_view wh
   }
   if (!n.is_sequence()) {
     return scalar_value(n, f, what); // reports "must be a list"
+  }
+  if (f.type == field_type::text_array) {
+    std::vector<std::string> out;
+    out.reserve(n.children.size());
+    for (const yaml_node& item : n.children) {
+      if (!item.is_scalar()) {
+        fail(item, what, "items must be texts, not lists or mappings");
+      }
+      out.push_back(item.text.rfind("$$", 0) == 0 ? item.text.substr(1) : item.text);
+    }
+    return out;
   }
   if (f.type == field_type::number_array) {
     std::vector<double> out;

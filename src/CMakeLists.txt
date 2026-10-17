@@ -38,6 +38,14 @@ add_library(nymph STATIC
   elements/plot3d.cpp
   elements/layout_elements.hpp
   elements/layout_elements.cpp
+  elements/uml/uml.hpp
+  elements/uml/uml_common.hpp
+  elements/uml/uml_common.cpp
+  elements/uml/class_diagram.cpp
+  elements/uml/sequence_diagram.cpp
+  elements/uml/state_diagram.cpp
+  elements/uml/activity_diagram.cpp
+  elements/uml/usecase_diagram.cpp
   layout/layout.hpp
   layout/layout.cpp
   cli/cli.hpp
@@ -64,7 +72,7 @@ target_include_directories(nymph PUBLIC
   ${CMAKE_CURRENT_SOURCE_DIR}
   ${CMAKE_CURRENT_BINARY_DIR}/generated
 )
-target_link_libraries(nymph PUBLIC nymph_imgui PRIVATE yaml nymph_stb)
+target_link_libraries(nymph PUBLIC nymph_imgui imuml PRIVATE yaml nymph_stb)
 
 # ── OpenGL rasterizer (optional; OpenGL itself is loaded at run time) ────────
 

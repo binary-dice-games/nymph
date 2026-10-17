@@ -2,8 +2,9 @@
 
 nymph is a command-line tool that turns a YAML file describing a chart
 into a PNG image, and a nymph PNG back into its YAML (the YAML is stored
-inside the image). It draws 2D and 3D plots, labels and layouts with Dear
-ImGui, ImPlot and ImPlot3D and rasterizes them with OpenGL when a GPU is
+inside the image). It draws 2D and 3D plots, UML diagrams, labels and
+layouts with Dear ImGui, ImPlot, ImPlot3D and ImUml (nymph's own UML
+library for ImGui), and rasterizes them with OpenGL when a GPU is
 available, or on the CPU with its own software rasterizer: no GPU, window
 or display needed, and no OpenGL library linked.
 It is meant for AI agents that need to show information as a chart.
@@ -76,6 +77,7 @@ carries its source: `bdg::nymph::extract_source(png)` returns it.
 | Path | Contents |
 |------|----------|
 | `src/` | The `nymph` library (namespace `bdg::nymph`) |
+| `imuml/` | ImUml, the UML diagram library for Dear ImGui that nymph's diagrams use |
 | `app/` | The `nymph` command-line executable |
 | `tests/` | GoogleTest suite, run with `ctest` |
 | `examples/` | Example sources and the PNGs rendered from them |
@@ -90,6 +92,7 @@ carries its source: `bdg::nymph::extract_source(png)` returns it.
 | Concept | Description |
 |---------|-------------|
 | **Source** | One YAML document: `description`, `image` options, a `root` element tree, `data`, and optional `source`. |
+| **UML diagrams** | `ClassDiagram`, `SequenceDiagram`, `StateDiagram`, `ActivityDiagram`, `UseCaseDiagram`: nodes and edges named by `id`, laid out automatically (Graphviz dot-style). See [docs/format.md](docs/format.md#uml-diagrams). |
 | **Elements** | `Plot` / `Plot3D` and their series, plus `VerticalLayout` / `HorizontalLayout`, `Spring`, `Label` and separators to combine them. New types register a class; see [the design](spec/01_core_features/DESIGN.md#9-extension-points). |
 | **Data** | `data` holds one table, or several named tables, as CSV text or columns. |
 | **Column references** | `$name` / `$2` in a field takes data from a column; `$table:name` from a named table. |
@@ -113,6 +116,8 @@ carries its source: `bdg::nymph::extract_source(png)` returns it.
 | [spec/01_core_features/PLAN.md](spec/01_core_features/PLAN.md) | Ordered implementation steps and their tests |
 | [spec/02_opengl_rasterizer/DESIGN.md](spec/02_opengl_rasterizer/DESIGN.md) | The OpenGL rasterizer: run-time loading, headless contexts, fallback, `--rasterizer` |
 | [spec/02_opengl_rasterizer/PLAN.md](spec/02_opengl_rasterizer/PLAN.md) | Its implementation steps and tests |
+| [spec/03_uml_diagrams/DESIGN.md](spec/03_uml_diagrams/DESIGN.md) | UML diagrams and the ImUml library: layouts, API, decisions |
+| [spec/03_uml_diagrams/PLAN.md](spec/03_uml_diagrams/PLAN.md) | Its implementation steps and tests |
 | [CHANGELOG.md](CHANGELOG.md) | User-facing changes between releases |
 | [CLAUDE.md](CLAUDE.md) | Coding style and project rules for AI agents and contributors |
 

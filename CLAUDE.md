@@ -137,6 +137,9 @@ Use this guide when generating or editing code in this repository.
 
 - Keep namespace style as `bdg::nymph::...` and close with a namespace comment.
 - Use `snake_case` for types, functions and variables, following existing naming in each subsystem.
+- Exception: `imuml/` is an ImGui extension and follows ImGui / ImPlot naming
+  (`ImUml::BeginClassDiagram`, `ImUmlStyle`, `CamelCase` fields, ImGui
+  containers, no STL or exceptions).
 - Use trailing underscores for private member fields (`running_`, `mtx_`).
 - Use descriptive local names (`payload_bytes`, `request_id`, `workers_mutex_`).
 

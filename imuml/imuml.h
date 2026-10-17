@@ -1,0 +1,418 @@
+// MIT License © 2026 Binary Dice Games
+/// @file imuml.h
+/// @brief ImUml: UML diagrams for Dear ImGui, in the style of ImPlot.
+///
+/// A diagram is a Begin/End scope. Between them, the program submits the
+/// diagram's nodes and edges every frame; End lays them out automatically
+/// (a layered layout after Graphviz's dot for class, state, activity and
+/// use case diagrams, a grid for sequence diagrams), scales the result to
+/// fit the space reserved, and draws it on the window's draw list.
+///
+///     if (ImUml::BeginClassDiagram("Animals")) {
+///       ImUml::BeginClass("Animal", nullptr, ImUmlClassKind_Abstract);
+///       ImUml::ClassAttribute("+name: string");
+///       ImUml::ClassMethod("+makeSound()*");
+///       ImUml::EndClass();
+///       ImUml::Class("Duck");
+///       ImUml::Relation("Duck", "Animal", ImUmlRelationKind_Inheritance);
+///       ImUml::EndClassDiagram();
+///     }
+///
+/// Items are recorded, not drawn, until End: positions are known only once
+/// every node and edge is in. Text is copied, so the strings passed need
+/// not outlive the call. An edge naming an id that was never submitted is
+/// skipped (counted in ImUmlDiagramInfo::SkippedItems); ImUml never fails.
+///
+/// Design: spec/03_uml_diagrams/DESIGN.md (nymph repository).
+#pragma once
+
+#include "imgui.h"
+
+#define IMUML_VERSION "0.1.0"
+/// Colour resolved from the current ImGui style at Begin*.
+#define IMUML_AUTO_COL ImVec4(0, 0, 0, -1)
+
+struct ImUmlContext;
+
+typedef int ImUmlCol; // -> enum ImUmlCol_
+typedef int ImUmlStyleVar; // -> enum ImUmlStyleVar_
+typedef int ImUmlDiagramFlags; // -> enum ImUmlDiagramFlags_
+typedef int ImUmlDirection; // -> enum ImUmlDirection_
+typedef int ImUmlEdgeStyle; // -> enum ImUmlEdgeStyle_
+typedef int ImUmlClassKind; // -> enum ImUmlClassKind_
+typedef int ImUmlRelationKind; // -> enum ImUmlRelationKind_
+typedef int ImUmlParticipantKind; // -> enum ImUmlParticipantKind_
+typedef int ImUmlParticipantFlags; // -> enum ImUmlParticipantFlags_
+typedef int ImUmlMessageKind; // -> enum ImUmlMessageKind_
+typedef int ImUmlMessageFlags; // -> enum ImUmlMessageFlags_
+typedef int ImUmlSequenceFlags; // -> enum ImUmlSequenceFlags_
+typedef int ImUmlFragmentKind; // -> enum ImUmlFragmentKind_
+typedef int ImUmlStateKind; // -> enum ImUmlStateKind_
+typedef int ImUmlActionKind; // -> enum ImUmlActionKind_
+typedef int ImUmlControlKind; // -> enum ImUmlControlKind_
+typedef int ImUmlSide; // -> enum ImUmlSide_
+typedef int ImUmlUseCaseLinkKind; // -> enum ImUmlUseCaseLinkKind_
+
+// ── Enums ────────────────────────────────────────────────────────────────────
+
+enum ImUmlCol_ {
+  ImUmlCol_Line, ///< Edges, arrows, lifelines' default.
+  ImUmlCol_NodeFill, ///< Inside of boxes, ellipses and compartments.
+  ImUmlCol_NodeBorder, ///< Outline of nodes.
+  ImUmlCol_Text, ///< Node and edge text.
+  ImUmlCol_NoteFill,
+  ImUmlCol_NoteBorder,
+  ImUmlCol_FragmentBorder, ///< Sequence fragments.
+  ImUmlCol_FragmentTab, ///< Fill of a fragment's name tab.
+  ImUmlCol_Activation, ///< Fill of activation bars.
+  ImUmlCol_Lifeline,
+  ImUmlCol_EdgeLabelBg, ///< Background behind edge labels.
+  ImUmlCol_Boundary, ///< Composite state and system boundary outline.
+  ImUmlCol_Title,
+  ImUmlCol_Bg, ///< Inside of hollow markers (inheritance triangles).
+  ImUmlCol_COUNT
+};
+
+enum ImUmlStyleVar_ {
+  ImUmlStyleVar_LineWeight, ///< float
+  ImUmlStyleVar_NodePadding, ///< ImVec2
+  ImUmlStyleVar_NodeRounding, ///< float
+  ImUmlStyleVar_NodeSpacing, ///< float, dot's nodesep
+  ImUmlStyleVar_RankSpacing, ///< float, dot's ranksep
+  ImUmlStyleVar_ArrowSize, ///< float
+  ImUmlStyleVar_DashLength, ///< float
+  ImUmlStyleVar_GapLength, ///< float
+  ImUmlStyleVar_ParticipantSpacing, ///< float
+  ImUmlStyleVar_MessageSpacing, ///< float
+  ImUmlStyleVar_ActivationWidth, ///< float
+  ImUmlStyleVar_NoteFold, ///< float
+  ImUmlStyleVar_MaxZoom, ///< float
+  ImUmlStyleVar_COUNT
+};
+
+enum ImUmlDiagramFlags_ {
+  ImUmlDiagramFlags_None = 0,
+  ImUmlDiagramFlags_NoTitle = 1 << 0, ///< Hide the title (the ID after "##" is never shown).
+  ImUmlDiagramFlags_MeasureOnly = 1 << 1, ///< Lay out but draw nothing and reserve no space; see GetLastDiagramInfo().
+  ImUmlDiagramFlags_NoFit = 1 << 2, ///< Draw at zoom 1, clipped, instead of scaling to fit.
+};
+
+enum ImUmlDirection_ {
+  ImUmlDirection_TopDown,
+  ImUmlDirection_BottomUp,
+  ImUmlDirection_LeftRight,
+  ImUmlDirection_RightLeft,
+};
+
+enum ImUmlEdgeStyle_ {
+  ImUmlEdgeStyle_Spline,
+  ImUmlEdgeStyle_Polyline,
+};
+
+enum ImUmlClassKind_ {
+  ImUmlClassKind_Class,
+  ImUmlClassKind_Abstract, ///< «abstract», italic name.
+  ImUmlClassKind_Interface, ///< «interface».
+  ImUmlClassKind_Enum, ///< «enumeration».
+};
+
+enum ImUmlRelationKind_ {
+  ImUmlRelationKind_Association,
+  ImUmlRelationKind_DirectedAssociation,
+  ImUmlRelationKind_Inheritance,
+  ImUmlRelationKind_Realization,
+  ImUmlRelationKind_Dependency,
+  ImUmlRelationKind_Aggregation,
+  ImUmlRelationKind_Composition,
+};
+
+enum ImUmlParticipantKind_ {
+  ImUmlParticipantKind_Participant,
+  ImUmlParticipantKind_Actor,
+  ImUmlParticipantKind_Boundary,
+  ImUmlParticipantKind_Control,
+  ImUmlParticipantKind_Entity,
+  ImUmlParticipantKind_Database,
+};
+
+enum ImUmlParticipantFlags_ {
+  ImUmlParticipantFlags_None = 0,
+  ImUmlParticipantFlags_Created = 1 << 0, ///< The box appears at the first message to it (a Create message).
+};
+
+enum ImUmlMessageKind_ {
+  ImUmlMessageKind_Sync, ///< Solid line, filled arrow.
+  ImUmlMessageKind_Async, ///< Solid line, open arrow.
+  ImUmlMessageKind_Reply, ///< Dashed line, open arrow.
+  ImUmlMessageKind_Create, ///< Dashed line to the new participant's box.
+  ImUmlMessageKind_Destroy, ///< Solid line; the target's lifeline ends in a cross.
+};
+
+enum ImUmlMessageFlags_ {
+  ImUmlMessageFlags_None = 0,
+  ImUmlMessageFlags_Activate = 1 << 0, ///< Start an activation on the target (mermaid's +).
+  ImUmlMessageFlags_Deactivate = 1 << 1, ///< End the source's activation (mermaid's -).
+};
+
+enum ImUmlSequenceFlags_ {
+  ImUmlSequenceFlags_None = 0,
+  ImUmlSequenceFlags_Autonumber = 1 << 0,
+  ImUmlSequenceFlags_MirrorParticipants = 1 << 1, ///< Repeat the participant boxes at the bottom.
+};
+
+enum ImUmlFragmentKind_ {
+  ImUmlFragmentKind_Loop,
+  ImUmlFragmentKind_Alt,
+  ImUmlFragmentKind_Opt,
+  ImUmlFragmentKind_Par,
+  ImUmlFragmentKind_Critical,
+  ImUmlFragmentKind_Break,
+  ImUmlFragmentKind_Group, ///< A filled box with no tab (mermaid's rect).
+};
+
+enum ImUmlStateKind_ {
+  ImUmlStateKind_Simple,
+  ImUmlStateKind_Initial,
+  ImUmlStateKind_Final,
+  ImUmlStateKind_Choice,
+  ImUmlStateKind_Fork,
+  ImUmlStateKind_Join,
+  ImUmlStateKind_History,
+  ImUmlStateKind_DeepHistory,
+};
+
+enum ImUmlActionKind_ {
+  ImUmlActionKind_Action,
+  ImUmlActionKind_Send,
+  ImUmlActionKind_Receive,
+};
+
+enum ImUmlControlKind_ {
+  ImUmlControlKind_Initial,
+  ImUmlControlKind_Final,
+  ImUmlControlKind_FlowFinal,
+  ImUmlControlKind_Decision,
+  ImUmlControlKind_Merge,
+  ImUmlControlKind_Fork,
+  ImUmlControlKind_Join,
+};
+
+enum ImUmlSide_ {
+  ImUmlSide_Left,
+  ImUmlSide_Right,
+};
+
+enum ImUmlUseCaseLinkKind_ {
+  ImUmlUseCaseLinkKind_Association,
+  ImUmlUseCaseLinkKind_Include,
+  ImUmlUseCaseLinkKind_Extend,
+  ImUmlUseCaseLinkKind_Generalization,
+};
+
+// ── Style ────────────────────────────────────────────────────────────────────
+
+struct ImUmlStyle {
+  float LineWeight; ///< Edge and outline thickness at zoom 1.
+  ImVec2 NodePadding; ///< Inside boxes, around text.
+  float NodeRounding; ///< Corner radius of rounded boxes (states, actions).
+  float NodeSpacing; ///< Between nodes in a rank (dot's nodesep).
+  float RankSpacing; ///< Between ranks (dot's ranksep).
+  float ArrowSize; ///< Length of arrowheads and markers.
+  float DashLength;
+  float GapLength;
+  float ParticipantSpacing; ///< Least gap between sequence participant boxes.
+  float MessageSpacing; ///< Vertical space between sequence rows.
+  float ActivationWidth;
+  float NoteFold; ///< Size of a note's folded corner.
+  float MaxZoom; ///< Largest scale when fitting a diagram to its space.
+  ImVec4 Colors[ImUmlCol_COUNT];
+  ImFont* ItalicFont; ///< For abstract names and members; null draws them upright with " {abstract}".
+  IMGUI_API ImUmlStyle();
+};
+
+/// @brief What the last End*() computed.
+struct ImUmlDiagramInfo {
+  ImVec2 NaturalSize; ///< Size at zoom 1, title included.
+  ImVec2 ContentSize; ///< The scalable part of NaturalSize: the diagram without its title.
+  float TitleHeight; ///< The part that is never scaled.
+  ImVec2 Size; ///< Size reserved (0 with MeasureOnly).
+  float Zoom; ///< Scale the content was drawn at.
+  int NodeCount;
+  int EdgeCount;
+  int SkippedItems; ///< Edges or messages naming an unknown id.
+  ImUmlDiagramInfo() {
+    NaturalSize = ContentSize = Size = ImVec2(0, 0);
+    TitleHeight = 0.0f;
+    Zoom = 1.0f;
+    NodeCount = EdgeCount = SkippedItems = 0;
+  }
+};
+
+namespace ImUml {
+
+// ── Context ──────────────────────────────────────────────────────────────────
+
+IMGUI_API ImUmlContext* CreateContext();
+/// @brief Destroys `ctx`, or the current context when null.
+IMGUI_API void DestroyContext(ImUmlContext* ctx = nullptr);
+IMGUI_API ImUmlContext* GetCurrentContext();
+IMGUI_API void SetCurrentContext(ImUmlContext* ctx);
+
+// ── Style ────────────────────────────────────────────────────────────────────
+
+IMGUI_API ImUmlStyle& GetStyle();
+/// @brief Every colour IMUML_AUTO_COL: follows the ImGui style (the default).
+IMGUI_API void StyleColorsAuto(ImUmlStyle* dst = nullptr);
+IMGUI_API void StyleColorsLight(ImUmlStyle* dst = nullptr);
+IMGUI_API void StyleColorsDark(ImUmlStyle* dst = nullptr);
+IMGUI_API void StyleColorsClassic(ImUmlStyle* dst = nullptr);
+IMGUI_API void PushStyleColor(ImUmlCol idx, ImU32 col);
+IMGUI_API void PushStyleColor(ImUmlCol idx, const ImVec4& col);
+IMGUI_API void PopStyleColor(int count = 1);
+IMGUI_API void PushStyleVar(ImUmlStyleVar idx, float val);
+IMGUI_API void PushStyleVar(ImUmlStyleVar idx, const ImVec2& val);
+IMGUI_API void PopStyleVar(int count = 1);
+/// @brief The resolved colour `idx` of the diagram being submitted, else of
+///        the style (auto colours resolved from the current ImGui style).
+IMGUI_API ImU32 GetColorU32(ImUmlCol idx);
+
+// ── Next item ────────────────────────────────────────────────────────────────
+
+/// @brief Colours of the next node or edge: `line` its outline or line,
+///        `fill` its inside; 0 keeps the diagram's colour.
+IMGUI_API void SetNextItemColors(ImU32 line, ImU32 fill = 0);
+/// @brief Places the next node in one rank with every other node of the
+///        same `group` (dot's rank=same). Graph diagrams only.
+IMGUI_API void SetNextNodeRank(const char* group);
+/// @brief Layout hints of the next edge, after dot's attributes: `weight`
+///        keeps it short and straight (0-100, default 1), `min_length` is
+///        the least number of ranks it spans (dot's minlen, default 1), and
+///        `constraint` false leaves it out of ranking.
+IMGUI_API void SetNextEdgeLayout(float weight, int min_length = 1, bool constraint = true);
+
+// ── Diagram scopes ───────────────────────────────────────────────────────────
+// `size`: a positive value is pixels, 0 the natural size, a negative value
+// the available space minus its magnitude (as ImGui's item sizes). Return
+// false when the window is collapsed or clipped; then submit nothing and do
+// not call End*.
+
+IMGUI_API bool BeginClassDiagram(const char* title_id, const ImVec2& size = ImVec2(-1, 0), ImUmlDiagramFlags flags = 0);
+IMGUI_API void EndClassDiagram();
+IMGUI_API bool
+BeginSequenceDiagram(const char* title_id, const ImVec2& size = ImVec2(-1, 0), ImUmlDiagramFlags flags = 0);
+IMGUI_API void EndSequenceDiagram();
+IMGUI_API bool BeginStateDiagram(const char* title_id, const ImVec2& size = ImVec2(-1, 0), ImUmlDiagramFlags flags = 0);
+IMGUI_API void EndStateDiagram();
+IMGUI_API bool
+BeginActivityDiagram(const char* title_id, const ImVec2& size = ImVec2(-1, 0), ImUmlDiagramFlags flags = 0);
+IMGUI_API void EndActivityDiagram();
+IMGUI_API bool
+BeginUseCaseDiagram(const char* title_id, const ImVec2& size = ImVec2(-1, 0), ImUmlDiagramFlags flags = 0);
+IMGUI_API void EndUseCaseDiagram();
+
+// ── Setup (after Begin*, before the first item) ──────────────────────────────
+
+/// @brief Graph diagrams: rank direction (dot's rankdir) and edge shape.
+IMGUI_API void SetupLayout(ImUmlDirection direction, ImUmlEdgeStyle edge_style = ImUmlEdgeStyle_Spline);
+/// @brief Graph diagrams: node and rank spacing; a value <= 0 keeps the style's.
+///        Sequence diagrams: `node_spacing` is the least gap between participants.
+IMGUI_API void SetupSpacing(float node_spacing, float rank_spacing = 0.0f);
+IMGUI_API void SetupSequence(ImUmlSequenceFlags flags);
+/// @brief Use case diagrams: draw a system boundary titled `label` around
+///        the use cases.
+IMGUI_API void SetupSystemBoundary(const char* label);
+
+// ── Class diagrams ───────────────────────────────────────────────────────────
+
+/// @brief A class box. `name` defaults to `id`; `stereotype` replaces the
+///        kind's («interface»); `generic` (type parameters) is drawn in a
+///        dashed box on the corner. Members end with EndClass().
+IMGUI_API void BeginClass(
+    const char* id,
+    const char* name = nullptr,
+    ImUmlClassKind kind = ImUmlClassKind_Class,
+    const char* stereotype = nullptr,
+    const char* generic = nullptr);
+/// @brief A member line, drawn as written, except a trailing `$` (static:
+///        underlined) or `*` (abstract: italic), which is not drawn.
+IMGUI_API void ClassAttribute(const char* text);
+IMGUI_API void ClassMethod(const char* text);
+IMGUI_API void EndClass();
+/// @brief BeginClass() + EndClass() with no members.
+IMGUI_API void Class(const char* id, const char* name = nullptr, ImUmlClassKind kind = ImUmlClassKind_Class);
+/// @brief A relation from `from` to `to`; `from_label` / `to_label` are
+///        drawn next to each end (multiplicities).
+IMGUI_API void Relation(
+    const char* from,
+    const char* to,
+    ImUmlRelationKind kind = ImUmlRelationKind_Association,
+    const char* label = nullptr,
+    const char* from_label = nullptr,
+    const char* to_label = nullptr);
+
+// ── Notes (graph diagrams) ───────────────────────────────────────────────────
+
+/// @brief A note, in the rank of the first attached node and joined to each
+///        by a dashed line; with no ids, a free note.
+IMGUI_API void Note(const char* text, const char* const* attach_ids = nullptr, int attach_count = 0);
+
+// ── Sequence diagrams ────────────────────────────────────────────────────────
+
+IMGUI_API void Participant(
+    const char* id,
+    const char* name = nullptr,
+    ImUmlParticipantKind kind = ImUmlParticipantKind_Participant,
+    ImUmlParticipantFlags flags = 0);
+IMGUI_API void Message(
+    const char* from,
+    const char* to,
+    const char* text,
+    ImUmlMessageKind kind = ImUmlMessageKind_Sync,
+    ImUmlMessageFlags flags = 0);
+/// @brief A combined fragment, ended by EndFragment(); `over_from` /
+///        `over_to` name its leftmost and rightmost participants (null: the
+///        ones its messages touch).
+IMGUI_API void BeginFragment(
+    ImUmlFragmentKind kind,
+    const char* label,
+    const char* over_from = nullptr,
+    const char* over_to = nullptr);
+/// @brief Starts the next operand of an Alt, Par or Critical fragment.
+IMGUI_API void FragmentElse(const char* label);
+IMGUI_API void EndFragment();
+/// @brief A note over one participant, or spanning `a` to `b`.
+IMGUI_API void NoteOver(const char* text, const char* a, const char* b = nullptr);
+IMGUI_API void NoteSide(const char* text, const char* id, ImUmlSide side);
+
+// ── State diagrams ───────────────────────────────────────────────────────────
+
+/// @brief A state; states and transitions submitted before EndState() are
+///        inside it (a composite state).
+IMGUI_API void BeginState(const char* id, const char* name = nullptr, ImUmlStateKind kind = ImUmlStateKind_Simple);
+/// @brief A line of the state's activity compartment ("entry / start").
+IMGUI_API void StateActivity(const char* text);
+IMGUI_API void EndState();
+IMGUI_API void State(const char* id, const char* name = nullptr, ImUmlStateKind kind = ImUmlStateKind_Simple);
+IMGUI_API void Transition(const char* from, const char* to, const char* label = nullptr);
+
+// ── Activity diagrams ────────────────────────────────────────────────────────
+
+IMGUI_API void Action(const char* id, const char* text, ImUmlActionKind kind = ImUmlActionKind_Action);
+IMGUI_API void ControlNode(const char* id, ImUmlControlKind kind, const char* label = nullptr);
+/// @brief A control flow; `guard` is drawn as "[guard]".
+IMGUI_API void Flow(const char* from, const char* to, const char* guard = nullptr);
+
+// ── Use case diagrams ────────────────────────────────────────────────────────
+
+/// @brief An actor, in the first (Left) or last (Right) rank, outside the
+///        system boundary.
+IMGUI_API void Actor(const char* id, const char* name = nullptr, ImUmlSide side = ImUmlSide_Left);
+IMGUI_API void UseCase(const char* id, const char* name = nullptr);
+IMGUI_API void
+UseCaseLink(const char* from, const char* to, ImUmlUseCaseLinkKind kind = ImUmlUseCaseLinkKind_Association);
+
+// ── Queries ──────────────────────────────────────────────────────────────────
+
+IMGUI_API const ImUmlDiagramInfo& GetLastDiagramInfo();
+
+} // namespace ImUml

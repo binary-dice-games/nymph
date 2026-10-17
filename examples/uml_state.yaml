@@ -1,0 +1,25 @@
+nymph: 1
+description: UML state diagram of a media player, with a composite Active state.
+image: {width: 640, height: 600, font: FiraSans-Regular.ttf, font_size: 15}
+root:
+  type: StateDiagram
+  title: Media player
+  children:
+    - {type: State, id: start, kind: Initial}
+    - {type: State, id: stopped, name: Stopped}
+    - type: State
+      id: active
+      name: Active
+      children:
+        - {type: State, id: a0, kind: Initial}
+        - {type: State, id: playing, name: Playing}
+        - {type: State, id: paused, name: Paused}
+        - {type: Transition, from: a0, to: playing}
+        - {type: Transition, from: playing, to: paused, label: pause}
+        - {type: Transition, from: paused, to: playing, label: play}
+    - {type: State, id: end, kind: Final}
+    - {type: Transition, from: start, to: stopped}
+    - {type: Transition, from: stopped, to: playing, label: play}
+    - {type: Transition, from: paused, to: stopped, label: stop}
+    - {type: Transition, from: stopped, to: end, label: eject}
+    - {type: Note, text: "remembers the position", attach: [paused]}

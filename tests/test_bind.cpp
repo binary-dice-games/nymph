@@ -82,6 +82,12 @@ registry fake_registry() {
       std::vector<field_desc>{integers_field("indices", "I.")},
       "Mesh."));
   reg.add(std::make_unique<fake>(
+      "Members",
+      "plot2d.item",
+      std::vector<std::string>{},
+      std::vector<field_desc>{texts_field("names", "Names.")},
+      "Members."));
+  reg.add(std::make_unique<fake>(
       "VerticalLayout",
       "figure",
       std::vector<std::string>{"figure"},
@@ -228,6 +234,22 @@ TEST(bind, ReferenceOnATextFieldJoinsWithNewlines) {
       "data: {name: [north, south, east], share: [1, 2, 3]}\n",
       reg());
   EXPECT_EQ(f.root.children[0].get<std::string>(0), "north\nsouth\neast");
+}
+
+TEST(bind, ReferenceOnATextListGivesTheCells) {
+  const figure f = bind_source(
+      "root:\n  type: Plot\n  children:\n    - {type: Members, names: $name}\n"
+      "data: {name: [north, '2', east]}\n",
+      reg());
+  EXPECT_EQ(f.root.children[0].get<std::vector<std::string>>(0), (std::vector<std::string>{"north", "2", "east"}));
+}
+
+TEST(bind, ReferencesInsideATextListAreAnError) {
+  expect_error_at(
+      "root:\n  type: Plot\n  children:\n    - {type: Members, names: [$a, $b]}\ndata: {a: [1], b: [2]}\n",
+      4,
+      30,
+      "takes one $column reference");
 }
 
 TEST(bind, ReferenceOnAnIntegerListRounds) {
