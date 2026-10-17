@@ -59,8 +59,11 @@ containers, a `children` list of elements:
 
 - `Plot` holds 2D series (`PlotLine`, `PlotBars`, `PlotScatter`, ...).
 - `Plot3D` holds 3D series (`Plot3DSurface`, `Plot3DLine`, ...).
-- `VerticalLayout` and `HorizontalLayout` hold plots, other layouts,
-  `Label`, `Separator`, `SeparatorText` and `Spring`.
+- `VerticalLayout` and `HorizontalLayout` hold plots, diagrams, other
+  layouts, `Label`, `Separator`, `SeparatorText` and `Spring`.
+- UML diagrams hold their nodes and edges: `ClassDiagram`,
+  `SequenceDiagram`, `StateDiagram`, `ActivityDiagram`, `UseCaseDiagram`
+  (see [UML diagrams](#uml-diagrams)).
 
 A series goes directly inside its kind of plot; anything else can be
 `root`. [elements.md](elements.md) lists every type with its fields,
@@ -258,6 +261,58 @@ source:
 
 A `$` inside `source` is plain text, not a column reference.
 
+## UML diagrams
+
+A diagram is an element like `Plot`: it can be `root` or sit in a layout,
+and takes `title`, `width` / `height` hints and the text style. Its
+children are its nodes and edges, and nodes are placed automatically: a
+layered layout after Graphviz's `dot` for class, state, activity and use
+case diagrams, columns and rows for sequence diagrams.
+
+```yaml
+root:
+  type: ClassDiagram
+  children:
+    - {type: Class, id: Animal, kind: Abstract, methods: ["+speak()*"]}
+    - {type: Class, id: Dog, attributes: ["+name: string"]}
+    - {type: ClassRelation, from: Dog, to: Animal, kind: Inheritance}
+```
+
+| Diagram | Nodes | Edges and others |
+|---|---|---|
+| `ClassDiagram` | `Class` | `ClassRelation` |
+| `SequenceDiagram` | `Participant` | `Message`, `Fragment` (with `Else`) |
+| `StateDiagram` | `State` (composite when it has children) | `Transition` |
+| `ActivityDiagram` | `Action`, `ActivityControl` | `Flow` |
+| `UseCaseDiagram` | `Actor`, `UseCase` | `UseCaseRelation` |
+
+`Note` goes in every diagram.
+
+- **Ids.** Every node has an `id`, unique in the diagram; `name` (or
+  `text`) is what is shown and defaults to the id. Edges name nodes by id
+  in `from` / `to`, notes in `attach` / `over`. An unknown id is an error
+  with a suggestion; nothing is created by being named.
+- **Lists of text.** Members, activities and id lists are YAML lists:
+  `attributes: ["+name: string", "+age: int"]`; `$column` gives a
+  column's cells. A member ending in `$` is underlined (static), in `*`
+  italic (abstract).
+- **Steering the layout** (graph diagrams), after dot's attributes:
+  `direction` (`TopDown`, `BottomUp`, `LeftRight`, `RightLeft`),
+  `node_spacing`, `rank_spacing` and `edge_style` on the diagram; `weight`,
+  `min_length` and `constraint` on edges; `rank` on nodes (nodes with the
+  same `rank` text share a rank).
+- **Order.** In a sequence diagram the children are time, top to bottom;
+  declare every `Participant` first. Elsewhere order only breaks ties.
+- **Size.** In a layout a diagram with `width` / `height` 0 takes its
+  natural size; as `root` it fills the image. It is scaled down to fit
+  its space, but not below `min_zoom` (default 0.5): beyond that,
+  rendering fails with the size the diagram needs. `max_zoom` (default 1)
+  lets a small diagram grow.
+- **UML rules are checked**: nothing enters an initial state or leaves a
+  final one, `Else` only inside an `Alt`, `Par` or `Critical` fragment,
+  `Include` only between use cases, a `deactivate` needs an open
+  activation, and so on.
+
 ## Errors
 
 Every problem is reported on one line with its position in the file:
@@ -274,6 +329,8 @@ pie label per value, a mesh index within its vertices, and so on.
 ## Limits
 
 - At most 16 MiB of source and 1,000,000 data rows.
+- A UML diagram has at most 500 nodes, 2,000 edges (sequence diagrams:
+  2,000 rows) and 8 levels of composite states or fragments.
 - Axis ticks are numbers: no date or category axes.
 - The YAML stays in the PNG only while the file is copied byte for byte;
   services that re-encode images drop it. Keep the YAML too.

@@ -83,3 +83,8 @@ endif()
 
 nymph_add_test(test_imuml_graph_layout test_imuml_graph_layout.cpp)
 nymph_add_test(test_imuml_sequence_layout test_imuml_sequence_layout.cpp)
+nymph_add_test(test_imuml_context test_imuml_context.cpp)
+nymph_add_test(test_uml_class test_uml_class.cpp)
+nymph_add_test(test_uml_state test_uml_state.cpp)
+nymph_add_test(test_uml_activity_usecase test_uml_activity_usecase.cpp)
+nymph_add_test(test_uml_sequence test_uml_sequence.cpp)

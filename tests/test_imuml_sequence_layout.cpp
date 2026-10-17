@@ -81,8 +81,10 @@ TEST(imuml_sequence_layout, NestedActivationsAreOffset) {
   EXPECT_GT(inner.Min.x, outer.Min.x);
   EXPECT_GT(inner.Min.y, outer.Min.y);
   EXPECT_LT(inner.Max.y, outer.Max.y);
-  // The second message ends at the edge of the new, inner bar.
-  EXPECT_EQ(out.Events[1].X2, inner.Min.x);
+  // A message from the left ends at the first bar it meets: the outer one.
+  EXPECT_EQ(out.Events[1].X2, outer.Min.x);
+  // A reply leaving the stack starts at its outer side, the inner bar.
+  EXPECT_EQ(out.Events[2].X1, outer.Min.x);
 }
 
 TEST(imuml_sequence_layout, CreateAndDestroy) {

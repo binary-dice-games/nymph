@@ -1025,15 +1025,18 @@ void PositionX(ComponentLayout& c, const ImVector<int>& extra_right, const ImUml
     aux.push_back(e2);
   }
   const float sep = in.NodeSpacing;
+  // Least distance between the centres of neighbours a (left) and b.
+  auto separation = [&](int ia, int ib) -> int {
+    const LNode& a = c.L[ia];
+    const LNode& b = c.L[ib];
+    const bool both_virtual = a.Orig < 0 && !a.IsLabel && b.Orig < 0 && !b.IsLabel;
+    const float gap = both_virtual ? sep * 0.5f : sep;
+    return (int)ImCeil(a.W * 0.5f + (float)extra_right[ia] + b.W * 0.5f + gap);
+  };
   for (int r = 0; r < c.Layers.Size; ++r) {
     const ImVector<int>& layer = *c.Layers[r];
     for (int i = 0; i + 1 < layer.Size; ++i) {
-      const LNode& a = c.L[layer[i]];
-      const LNode& b = c.L[layer[i + 1]];
-      const bool both_virtual = a.Orig < 0 && !a.IsLabel && b.Orig < 0 && !b.IsLabel;
-      const float gap = both_virtual ? sep * 0.5f : sep;
-      const float need = a.W * 0.5f + (float)extra_right[layer[i]] + b.W * 0.5f + gap;
-      ImUmlNsEdge e = {layer[i], layer[i + 1], (int)ImCeil(need), 0};
+      ImUmlNsEdge e = {layer[i], layer[i + 1], separation(layer[i], layer[i + 1]), 0};
       aux.push_back(e);
     }
   }
@@ -1042,6 +1045,73 @@ void PositionX(ComponentLayout& c, const ImVector<int>& extra_right, const ImUml
   c.X.resize(n);
   for (int i = 0; i < n; ++i) {
     c.X[i] = x[i];
+  }
+
+  // Balance (dot's final x step): where a node's cost is flat between its
+  // neighbours, the solver leaves it at one end; move it to the middle of
+  // its neighbours when that costs no more.
+  ImVector<int> nb_start, nb, nb_w;
+  nb_start.resize(n + 1);
+  for (int i = 0; i <= n; ++i) {
+    nb_start[i] = 0;
+  }
+  for (int s = 0; s < c.S.Size; ++s) {
+    nb_start[c.S[s].Upper + 1]++;
+    nb_start[c.S[s].Lower + 1]++;
+  }
+  for (int i = 0; i < n; ++i) {
+    nb_start[i + 1] += nb_start[i];
+  }
+  nb.resize(nb_start[n]);
+  nb_w.resize(nb_start[n]);
+  {
+    ImVector<int> fill;
+    fill.resize(n);
+    for (int i = 0; i < n; ++i) {
+      fill[i] = nb_start[i];
+    }
+    for (int s = 0; s < c.S.Size; ++s) {
+      const int a = c.S[s].Upper, b = c.S[s].Lower;
+      const bool va = c.L[a].Orig < 0, vb = c.L[b].Orig < 0;
+      const int w = (va && vb ? 8 : (va || vb ? 2 : 1)) * c.S[s].Weight;
+      nb[fill[a]] = b;
+      nb_w[fill[a]++] = w;
+      nb[fill[b]] = a;
+      nb_w[fill[b]++] = w;
+    }
+  }
+  auto local_cost = [&](int v, int xv) {
+    long long cost = 0;
+    for (int k = nb_start[v]; k < nb_start[v + 1]; ++k) {
+      cost += (long long)nb_w[k] * ImAbs(xv - c.X[nb[k]]);
+    }
+    return cost;
+  };
+  for (int pass = 0; pass < 2; ++pass) {
+    for (int k = 0; k < c.Layers.Size; ++k) {
+      const ImVector<int>& layer = *c.Layers[pass == 0 ? k : c.Layers.Size - 1 - k];
+      for (int i = 0; i < layer.Size; ++i) {
+        const int v = layer[i];
+        if (nb_start[v] == nb_start[v + 1]) {
+          continue;
+        }
+        int lo = -0x3fffffff, hi = 0x3fffffff, mn = 0x3fffffff, mx = -0x3fffffff;
+        if (i > 0) {
+          lo = c.X[layer[i - 1]] + separation(layer[i - 1], v);
+        }
+        if (i + 1 < layer.Size) {
+          hi = c.X[layer[i + 1]] - separation(v, layer[i + 1]);
+        }
+        for (int q = nb_start[v]; q < nb_start[v + 1]; ++q) {
+          mn = ImMin(mn, c.X[nb[q]]);
+          mx = ImMax(mx, c.X[nb[q]]);
+        }
+        const int target = ImClamp((mn + mx) / 2, lo, ImMax(lo, hi));
+        if (target != c.X[v] && local_cost(v, target) <= local_cost(v, c.X[v])) {
+          c.X[v] = target;
+        }
+      }
+    }
   }
 }
 
@@ -1180,6 +1250,11 @@ void ImUml::LayoutGraph(const ImUmlGraphInput& in, ImUmlGraphOutput* out) {
   }
 
   float offset_x = 0.0f, total_h = 0.0f;
+  struct Packed {
+    ImVector<int> Nodes, Edges;
+    float X0, W, H;
+  };
+  ImVector<Packed*> packed;
   for (int root = 0; root < n; ++root) {
     if (sets.Find(root) != root) {
       continue;
@@ -1420,7 +1495,7 @@ void ImUml::LayoutGraph(const ImUmlGraphInput& in, ImUmlGraphOutput* out) {
         const int ln = ch.Nodes[i];
         ImVec2 p = lpos[ln];
         if (ln == ch.LabelNode) {
-          p.x -= c.L[ln].W * 0.5f; // the edge passes left of its label
+          p.x = RoundPx(p.x - c.L[ln].W * 0.5f); // the edge passes left of its label
         }
         pts.push_back(p);
       }
@@ -1476,10 +1551,57 @@ void ImUml::LayoutGraph(const ImUmlGraphInput& in, ImUmlGraphOutput* out) {
     for (int k = 0; k < chains.Size; ++k) {
       IM_DELETE(chains[k]);
     }
+    Packed* pk = IM_NEW(Packed)();
+    pk->Nodes = comp.Nodes;
+    pk->Edges = comp.Edges;
+    pk->X0 = offset_x;
+    pk->W = RoundPx(max_x - min_x);
+    pk->H = height;
+    packed.push_back(pk);
     offset_x += RoundPx(max_x - min_x) + in.NodeSpacing;
     total_h = ImMax(total_h, height);
   }
-  const float total_w = ImMax(0.0f, offset_x - in.NodeSpacing);
+  float total_w = ImMax(0.0f, offset_x - in.NodeSpacing);
+
+  // Components are packed into rows (dot's pack) so that unconnected nodes
+  // make a block of about 1.6:1 in the output, not one long row.
+  if (packed.Size > 1) {
+    float area = 0.0f, widest = 0.0f;
+    for (int i = 0; i < packed.Size; ++i) {
+      area += packed[i]->W * packed[i]->H;
+      widest = ImMax(widest, packed[i]->W);
+    }
+    const float aspect = across ? 1.0f / 1.6f : 1.6f;
+    const float row_limit = ImMax(widest, RoundPx(ImSqrt(area) * aspect));
+    float x = 0.0f, y = 0.0f, row_h = 0.0f;
+    total_w = 0.0f;
+    for (int i = 0; i < packed.Size; ++i) {
+      const Packed& pk = *packed[i];
+      if (x > 0.0f && x + pk.W > row_limit) {
+        y += row_h + in.RankSpacing;
+        x = 0.0f;
+        row_h = 0.0f;
+      }
+      const ImVec2 shift(x - pk.X0, y);
+      for (int k = 0; k < pk.Nodes.Size; ++k) {
+        td_pos[pk.Nodes[k]] += shift;
+      }
+      for (int k = 0; k < pk.Edges.Size; ++k) {
+        EdgePath& path = *paths[pk.Edges[k]];
+        for (int j = 0; j < path.Pts.Size; ++j) {
+          path.Pts[j] += shift;
+        }
+        path.Label += shift;
+      }
+      x += pk.W + in.NodeSpacing;
+      row_h = ImMax(row_h, pk.H);
+      total_w = ImMax(total_w, x - in.NodeSpacing);
+    }
+    total_h = y + row_h;
+  }
+  for (int i = 0; i < packed.Size; ++i) {
+    IM_DELETE(packed[i]);
+  }
 
   // Transform to the requested direction.
   auto transform = [&](const ImVec2& p) -> ImVec2 {

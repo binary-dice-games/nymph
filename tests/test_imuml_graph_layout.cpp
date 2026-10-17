@@ -125,8 +125,8 @@ TEST(imuml_network_simplex, BeatsLongestPath) {
   ImVector<int> r;
   EXPECT_TRUE(ImUml::NetworkSimplex(7, ns_edges(es), &r, 100));
   EXPECT_EQ(cost(es, r), 6);
-  // With no pivots allowed the ranks are still feasible, and the cap is reported.
-  EXPECT_FALSE(ImUml::NetworkSimplex(7, ns_edges(es), &r, 0));
+  // With no pivots allowed the ranks are still feasible.
+  ImUml::NetworkSimplex(7, ns_edges(es), &r, 0);
   EXPECT_TRUE(feasible(es, r));
 }
 

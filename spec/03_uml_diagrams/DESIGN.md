@@ -1,6 +1,6 @@
 # nymph — UML Diagrams: Design
 
-**Status: design in progress; nothing implemented.** [PLAN.md](PLAN.md)
+**Status: implemented (plan steps 1-13); verified on Linux (GCC); MSYS2 and MSVC not yet.** [PLAN.md](PLAN.md)
 is the ordered implementation plan. This document describes only what
 this project adds or changes; the rest of the architecture is
 [spec/01_core_features/DESIGN.md](../01_core_features/DESIGN.md)
@@ -228,7 +228,7 @@ shared fields except `direction`, `edge_style` and `rank_spacing`.
   `Critical` fragment; anywhere else, first or last in its fragment, it is
   an error.
 - `Note`: `text`, and `over` (one or two ids) or `attach` (one id) with
-  `side: Left | Right`.
+  `side: Left | Right` (default `Right`).
 
 Errors beyond references: `deactivate` on a participant with no active
 activation, a message from or to a destroyed participant, a `Create`
@@ -261,8 +261,9 @@ root:
   as text).
 
 Errors: a transition into an `Initial` or out of a `Final` state;
-children on a pseudo-state; a composite state's `Initial` with more than
-one outgoing transition.
+children or activities on a pseudo-state; an `Initial` state with more
+than one outgoing transition; a transition between a composite state and
+a state inside it.
 
 ### Activity diagram
 
@@ -347,7 +348,7 @@ diagrams only; an error elsewhere).
 ### ImUml (`imuml/`)
 
 An ImGui extension written like ImPlot: C++ with ImGui's types and
-containers (`ImVector`, `ImGuiStorage`, `ImPool`), no STL, no exceptions,
+containers (`ImVector`, `ImGuiStorage`), no STL, no exceptions,
 `ImUml::` functions and `ImUml*` types, `CamelCase` names. That is the
 naming convention of this subsystem (CLAUDE.md: follow each subsystem's
 naming); nymph's own code keeps `snake_case`. It depends only on ImGui.
@@ -359,16 +360,21 @@ keyed by `ImGuiID`, the diagram being submitted and scratch buffers.
 (`LineWeight`, `NodePadding`, `NodeRounding`, `NodeSpacing`,
 `RankSpacing`, `ArrowSize`, `DashLength`, `GapLength`,
 `ParticipantSpacing`, `MessageSpacing`, `ActivationWidth`, `NoteFold`,
-`MinZoom`, `MaxZoom`) and colours `ImUmlCol_` (`Line`, `NodeFill`,
-`NodeBorder`, `NodeHeader`, `Text`, `NoteFill`, `NoteBorder`,
-`FragmentBorder`, `FragmentTab`, `Activation`, `Lifeline`, `EdgeLabelBg`,
-`Boundary`, `Title`). As in ImPlot, a colour may be `IMUML_AUTO_COL`,
-resolved from the current ImGui style at `Begin*` (text from
-`ImGuiCol_Text`, borders from `ImGuiCol_Border`, fills blended from
-`ImGuiCol_FrameBg` and `ImGuiCol_WindowBg`), so diagrams follow the ImGui
-theme with no work. `StyleColorsAuto/Light/Dark/Classic()`,
-`PushStyleColor/Var`, `PopStyleColor/Var`, `SetNextItemColors(line,
-fill)`.
+`MaxZoom`) and colours `ImUmlCol_` (`Line`, `NodeFill`,
+`NodeBorder`, `Text`, `NoteFill`, `NoteBorder`, `FragmentBorder`,
+`FragmentTab`, `Activation`, `Lifeline`, `EdgeLabelBg`, `Boundary`,
+`Title`, `Bg`). As in ImPlot, a colour may be `IMUML_AUTO_COL`, resolved
+from the current ImGui style at `Begin*` (text from `ImGuiCol_Text`,
+fills and borders blended from `ImGuiCol_WindowBg`, `ImGuiCol_ButtonActive`
+and the text colour), so diagrams follow the ImGui theme with no work.
+`StyleColorsLight/Dark/Classic()` compute the same values from ImGui's
+own themes; `StyleColorsAuto()` restores automatic colours.
+`PushStyleColor/Var`, `PopStyleColor/Var`, `GetColorU32`. Next-item
+setters, as ImGui's `SetNextItem*`: `SetNextItemColors(line, fill)`,
+`SetNextNodeRank(group)` (dot's rank=same) and
+`SetNextEdgeLayout(weight, min_length, constraint)`. The minimum zoom is
+not ImUml's business: a library draws what fits; nymph checks `min_zoom`
+itself (section 6).
 
 **Diagram scopes.** One pair per diagram kind:
 `BeginClassDiagram(title_id, size, flags)` / `EndClassDiagram()`, and the
@@ -437,8 +443,9 @@ lengths and constraint flags, rank groups and a direction in; node
 centres, edge paths and label positions out. No ImGui context.
 
 1. **Components**: connected components in order of their first node,
-   each laid out alone and packed side by side across the rank axis (dot
-   with `pack`).
+   each laid out alone, then packed into rows (dot with `pack`) aiming at
+   a 1.6:1 block in the output, so unconnected nodes do not make one long
+   row.
 2. **Acyclic**: a depth-first search in submission order reverses back
    edges for ranking; they are drawn with their real direction. Edges with
    `constraint: false` and self-loops are left out of ranking.
@@ -449,27 +456,32 @@ centres, edge paths and label positions out. No ImGui context.
    limit, until none is negative or the iteration cap is reached; ranks
    normalised to start at 0 and balanced as in the paper. Nodes in one
    `rank` group are merged into one ranking node first; use case actors
-   are pinned to the first or last rank by edges to a virtual source or
-   sink; the per-kind "ranked first" end of section 3 decides each edge's
+   are then moved to a rank before (or after) every other node; the
+   per-kind "ranked first" end of section 3 decides each edge's
    direction.
 4. **Virtual nodes**: an edge spanning several ranks becomes a chain of
    virtual nodes, one per rank crossed; an edge label becomes a virtual
    node of the label's size in the middle rank (dot's label handling), so
    ranks are spaced to fit labels.
-5. **Order** (dot phase 2, `mincross`): initial order by breadth-first
-   search from the first-rank nodes; then 24 iterations, alternating down
+5. **Order** (dot phase 2, `mincross`): initial order by depth-first
+   search from the nodes in rank order; then 24 iterations, alternating down
    and up, each ordering a rank by the **weighted median** of its
    neighbours' positions (nodes with no neighbours keep their place),
    followed by **transpose**: swapping adjacent nodes while that lowers
    the crossings. Ties are broken by current position, and the order with
-   the fewest crossings is kept.
+   the fewest crossings is kept. A node joined only by same-rank edges (a
+   note) is then moved next to the node it is attached to.
 6. **Position** (dot phase 3): x coordinates by network simplex on dot's
    auxiliary graph: each edge becomes a new node with two edges whose
    weight is the edge's `weight` times dot's factor (1 between real nodes,
    2 with one virtual end, 8 between two virtual nodes, so long edges
    straighten), and neighbours in a rank are separated by half their
-   widths plus `node_spacing`. The same solver as step 3. y coordinates:
-   ranks stacked with `rank_spacing` plus the tallest node of each rank.
+   widths plus `node_spacing`. The same solver as step 3. Then dot's final
+   balancing: the solver leaves a node whose cost is flat between its
+   neighbours (a parent over two children) at one end, so each node moves
+   to the middle of its neighbours when that costs no more. y
+   coordinates: ranks stacked with `rank_spacing` plus the tallest node of
+   each rank (half `rank_spacing` when labels doubled the ranks).
 7. **Edges** (dot phase 4, simplified): a path through the virtual node
    centres, ends clipped to the node's shape (rectangle, ellipse, circle,
    diamond, bar). `Polyline` keeps the straight segments; `Spline` fits
@@ -492,8 +504,9 @@ crosses a composite's border is ranked in the parent between the
 composite and the outer node, and drawn to the inner node.
 
 **Notes** with `attach` are placed as nodes in the rank of their first
-attached node, next to it (a dashed connector, no ranking edge); free
-notes are nodes of their own component.
+attached node, next to it (a dashed connector, no ranking edge); a note
+attached to a node inside a composite state is laid out inside that
+composite. Free notes are nodes of their own component.
 
 ### Sequence layout (`imuml_sequence_layout.cpp`)
 
@@ -510,7 +523,8 @@ diagram is a grid, not a graph:
    `MessageSpacing`.
 3. **Activations**: a stack per participant; nested activations are
    offset sideways by half `ActivationWidth`; a message starts or ends at
-   the edge of the active bar.
+   the outer edge of the participant's bars on its side (the first bar it
+   meets).
 4. **Fragments**: rows from header to footer; horizontally the covered
    participants plus a margin per nesting level.
 5. **Lifelines** run from the header box (or the creating row) to the
@@ -574,7 +588,8 @@ walks its subtree once and runs every reference and kind rule of section
 ### ImUml API (`imuml/imuml.h`)
 
 The functions of section 4 plus `GetLastDiagramInfo()` (natural size,
-zoom used, node and edge counts, skipped items). Misuse (an item outside
+its content and title parts, size reserved, zoom used, node and edge
+counts, skipped items). Misuse (an item outside
 a scope, mismatched `Begin`/`End`) is an `IM_ASSERT`, as in ImGui;
 anything a source could cause is drawn as well as possible, never
 asserted. `imuml_internal.h` exposes the layout functions and the last

@@ -1,0 +1,28 @@
+nymph: 1
+description: UML activity diagram of order handling, with a decision, a fork and a join.
+image: {width: 560, height: 680, font: FiraSans-Regular.ttf, font_size: 15}
+root:
+  type: ActivityDiagram
+  title: Order handling
+  children:
+    - {type: ActivityControl, id: start, kind: Initial}
+    - {type: Action, id: receive, text: Receive order}
+    - {type: ActivityControl, id: stock, kind: Decision, label: in stock?}
+    - {type: Action, id: ship, text: Ship}
+    - {type: Action, id: bill, text: Send invoice, kind: Send}
+    - {type: Action, id: cancel, text: Cancel order}
+    - {type: ActivityControl, id: fork, kind: Fork}
+    - {type: ActivityControl, id: join, kind: Join}
+    - {type: ActivityControl, id: merge, kind: Merge}
+    - {type: ActivityControl, id: end, kind: Final}
+    - {type: Flow, from: start, to: receive}
+    - {type: Flow, from: receive, to: stock}
+    - {type: Flow, from: stock, to: fork, guard: yes}
+    - {type: Flow, from: stock, to: cancel, guard: no}
+    - {type: Flow, from: fork, to: ship}
+    - {type: Flow, from: fork, to: bill}
+    - {type: Flow, from: ship, to: join}
+    - {type: Flow, from: bill, to: join}
+    - {type: Flow, from: join, to: merge}
+    - {type: Flow, from: cancel, to: merge}
+    - {type: Flow, from: merge, to: end}

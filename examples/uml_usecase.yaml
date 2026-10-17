@@ -1,0 +1,18 @@
+nymph: 1
+description: UML use case diagram of an online shop, with a customer and a bank around the shop's use cases.
+image: {width: 760, height: 420, font: FiraSans-Regular.ttf, font_size: 15}
+root:
+  type: UseCaseDiagram
+  system: Online shop
+  children:
+    - {type: Actor, id: customer, name: Customer}
+    - {type: Actor, id: bank, name: Bank, side: Right}
+    - {type: UseCase, id: browse, name: Browse catalog}
+    - {type: UseCase, id: buy, name: Buy item}
+    - {type: UseCase, id: pay, name: Pay}
+    - {type: UseCase, id: coupon, name: Apply coupon}
+    - {type: UseCaseRelation, from: customer, to: browse}
+    - {type: UseCaseRelation, from: customer, to: buy}
+    - {type: UseCaseRelation, from: buy, to: pay, kind: Include}
+    - {type: UseCaseRelation, from: coupon, to: pay, kind: Extend}
+    - {type: UseCaseRelation, from: pay, to: bank}

@@ -340,6 +340,33 @@ its default `height: 300` unless you change it, so **give plots
 fit, nymph reports an error with the numbers instead of cutting
 something off.
 
+### UML diagrams
+
+Five diagram elements draw UML from a list of nodes and edges, like
+mermaid; positions are computed (Graphviz `dot`-style layers), never
+written. Each can be `root` or a layout child.
+
+| Diagram | Children |
+|---|---|
+| `ClassDiagram` | `Class` (`id`, `name`, `kind`: Class/Abstract/Interface/Enum, `attributes`, `methods`, `stereotype`), `ClassRelation` (`from`, `to`, `kind`: Association, DirectedAssociation, Inheritance, Realization, Dependency, Aggregation, Composition, `label`, `from_label`, `to_label`) |
+| `SequenceDiagram` | `Participant` (`id`, `name`, `kind`: Participant/Actor/Boundary/Control/Entity/Database, `created`) first, then in time order `Message` (`from`, `to`, `text`, `kind`: Sync/Async/Reply/Create/Destroy, `activate`, `deactivate`), `Fragment` (`kind`: Loop/Alt/Opt/Par/Critical/Break/Group, `label`, children) and `Else` (`label`, inside Alt/Par/Critical) |
+| `StateDiagram` | `State` (`id`, `name`, `kind`: Simple/Initial/Final/Choice/Fork/Join/History/DeepHistory, `activities`; children make it composite), `Transition` (`from`, `to`, `label`) |
+| `ActivityDiagram` | `Action` (`id`, `text`, `kind`: Action/Send/Receive), `ActivityControl` (`id`, `kind`: Initial/Final/FlowFinal/Decision/Merge/Fork/Join, `label`), `Flow` (`from`, `to`, `guard`) |
+| `UseCaseDiagram` (`system`: boundary title) | `Actor` (`id`, `name`, `side`: Left/Right), `UseCase` (`id`, `name`), `UseCaseRelation` (`from`, `to`, `kind`: Association/Include/Extend/Generalization) |
+
+`Note` (`text`, `attach: [ids]`; in sequence diagrams `over: [a, b]` or
+`attach: [a]` with `side`) works in all of them.
+
+- Every node needs a unique `id`; edges name ids. A typo is an error with
+  a suggestion.
+- Lists of text are YAML lists: `attributes: ["+name: string"]`.
+- Steer the layout with `direction: LeftRight` (and `node_spacing`,
+  `rank_spacing`) on the diagram, `rank: same-text` on nodes to line them
+  up, and `min_length`, `weight`, `constraint: false` on edges.
+- A diagram shrinks to fit, down to `min_zoom` (0.5). If it still does not
+  fit, the error gives the size it needs: enlarge the image, lower
+  `min_zoom`, or split the diagram.
+
 ### Fonts and text style
 
 Fonts are built into nymph; name one by its file name (`nymph fonts`
@@ -667,6 +694,50 @@ data: |
   2, 2, 0.0
 ```
 
+### Class diagram
+
+```yaml
+description: Payment classes.
+image: {width: 640, height: 420, font: FiraSans-Regular.ttf}
+root:
+  type: ClassDiagram
+  children:
+    - {type: Class, id: Payment, kind: Interface, methods: ["+pay(amount) bool"]}
+    - {type: Class, id: Card, attributes: ["-number: string"], methods: ["+pay(amount) bool"]}
+    - {type: Class, id: Wallet, attributes: ["-balance: float"], methods: ["+pay(amount) bool"]}
+    - {type: Class, id: Order, attributes: ["+total: float"]}
+    - {type: ClassRelation, from: Card, to: Payment, kind: Realization}
+    - {type: ClassRelation, from: Wallet, to: Payment, kind: Realization}
+    - {type: ClassRelation, from: Order, to: Payment, kind: DirectedAssociation, label: paid by, to_label: "1"}
+```
+
+### Sequence diagram
+
+```yaml
+description: Checkout calls.
+image: {width: 640, height: 420}
+root:
+  type: SequenceDiagram
+  autonumber: true
+  children:
+    - {type: Participant, id: app, name: App}
+    - {type: Participant, id: api, name: API}
+    - {type: Participant, id: bank, name: Bank}
+    - {type: Message, from: app, to: api, text: checkout, activate: true}
+    - type: Fragment
+      kind: Alt
+      label: card accepted
+      children:
+        - {type: Message, from: api, to: bank, text: charge}
+        - {type: Message, from: bank, to: api, text: ok, kind: Reply}
+        - {type: Else, label: declined}
+        - {type: Message, from: api, to: app, text: error, kind: Reply}
+    - {type: Message, from: api, to: app, text: receipt, kind: Reply, deactivate: true}
+```
+
+State, activity and use case diagrams follow the same pattern: see
+[examples.md](examples.md).
+
 ## Making a good chart
 
 - Give every chart a `title` and axis labels with units.
@@ -718,6 +789,10 @@ data: |
 | `must be a list of numbers, like [1, 2, 3], or a $column reference` | A list field was given a single number or plain text. |
 | `mixes $column references and literal values` | Use only numbers or only references in one list. |
 | `cannot take a $column reference` | Only list and text fields take `$column`. |
+| `unknown id 'x'` | An edge or note names an id no node has; the message suggests the closest and lists the ids. |
+| `id 'x' is already used` | Two nodes of one diagram share an id. |
+| `ClassDiagram needs W x H px (at min_zoom ...)` | The diagram does not fit even scaled down: enlarge the image or its space, lower `min_zoom`, or split it. |
+| `declared after the first message` | In a sequence diagram, list every `Participant` before the messages. |
 | `'abc' is not a number` | A referenced column has a non-numeric value at the reported row. |
 | `xs has 3 values but ys has 2` | Series lists must be equally long. |
 | `is empty: the series has no data` | A series list is empty, or its column has no rows. |

@@ -1,0 +1,21 @@
+nymph: 1
+description: UML sequence diagram of a login between a user, web app and database, with an alt fragment for a wrong password.
+image: {width: 720, height: 560, font: FiraSans-Regular.ttf, font_size: 15}
+root:
+  type: SequenceDiagram
+  autonumber: true
+  children:
+    - {type: Participant, id: user, name: User, kind: Actor}
+    - {type: Participant, id: web, name: Web app}
+    - {type: Participant, id: db, name: Database, kind: Database}
+    - {type: Message, from: user, to: web, text: "POST /login", activate: true}
+    - type: Fragment
+      kind: Alt
+      label: valid password
+      children:
+        - {type: Message, from: web, to: db, text: load user, activate: true}
+        - {type: Message, from: db, to: web, text: row, kind: Reply, deactivate: true}
+        - {type: Else, label: otherwise}
+        - {type: Message, from: web, to: web, text: log failure}
+    - {type: Message, from: web, to: user, text: "200 OK", kind: Reply, deactivate: true}
+    - {type: Note, text: session cookie set, over: [user, web]}

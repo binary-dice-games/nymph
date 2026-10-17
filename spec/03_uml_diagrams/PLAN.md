@@ -47,6 +47,8 @@ references inside a text list are an error (the whole list takes one
 
 ### 2. ImUml library skeleton and context
 
+*Result: done.* `imuml/` with its own CMake target, linked by `nymph`; the ImUml context is created, themed and restored by `render_frames()`. `MinZoom` is not an ImUml style variable (nymph checks `min_zoom` itself). Tests in `test_imuml_context.cpp` (5).
+
 **Goal:** an `imuml` CMake target with a context, a style that follows the
 ImGui theme, and empty diagram scopes that reserve space and fit.
 
@@ -75,6 +77,8 @@ ImGui theme, and empty diagram scopes that reserve space and fit.
 
 ### 3. Rendering primitives
 
+*Result: done.* `imuml_render.cpp`. Its tests live in `test_imuml_context.cpp` (4) rather than a separate `test_imuml_render.cpp`.
+
 **Goal:** every shape, line style and arrowhead of DESIGN section 4 draws
 correctly at any zoom.
 
@@ -93,6 +97,8 @@ correctly at any zoom.
 - Rendering the same scene twice gives the same bytes.
 
 ### 4. Network simplex and ranking
+
+*Result: done.* Network simplex is checked against brute force on 60 random DAGs; with no pivots the starting tree can already be optimal, so the cap test checks feasibility only. 7 tests in `test_imuml_graph_layout.cpp`.
 
 **Goal:** dot's ranking phase (DESIGN section 4, graph layout steps 1-3)
 as a pure function, with the network simplex solver reusable by step 5.
@@ -117,6 +123,8 @@ as a pure function, with the network simplex solver reusable by step 5.
 - The same input twice gives identical ranks.
 
 ### 5. Ordering, positions and edge routing
+
+*Result: done.* Added dot's final x balancing (a parent centred over its children), row packing of components (1.6:1) and notes placed beside their node; label points rounded to whole pixels. 7 tests in `test_imuml_graph_layout.cpp`.
 
 **Goal:** the complete dot-style layout (graph layout steps 4-9).
 
@@ -143,6 +151,8 @@ as a pure function, with the network simplex solver reusable by step 5.
   numbers.
 
 ### 6. Class diagram
+
+*Result: done.* `src/elements/uml/` (shared base classes, `Note`, five diagram files); `examples/uml_class.yaml`. 9 tests in `test_uml_class.cpp`.
 
 **Goal:** `ClassDiagram`, `Class`, `ClassRelation` and graph `Note` render
 from YAML.
@@ -174,6 +184,8 @@ from YAML.
 
 ### 7. State diagram (flat)
 
+*Result: done* (with step 12). `examples/uml_state.yaml` shows a composite state. Tests in `test_uml_state.cpp`.
+
 **Goal:** `StateDiagram`, `State` (no children yet), `Transition` render.
 
 **Deliverables:** ImUml `Begin/EndStateDiagram`, `BeginState`,
@@ -191,6 +203,8 @@ the graph layout; `src/elements/uml/state_diagram.cpp`;
 
 ### 8. Activity diagram
 
+*Result: done.* `examples/uml_activity.yaml`. Tests in `test_uml_activity_usecase.cpp` (shared with step 9).
+
 **Goal:** `ActivityDiagram`, `Action`, `ActivityControl`, `Flow` render.
 
 **Deliverables:** ImUml `Begin/EndActivityDiagram`, `Action`,
@@ -204,6 +218,8 @@ the graph layout; `src/elements/uml/state_diagram.cpp`;
   `LeftRight`; guards are drawn (text pixels near the edge midpoint).
 
 ### 9. Use case diagram
+
+*Result: done.* `examples/uml_usecase.yaml`. Tests in `test_uml_activity_usecase.cpp`.
 
 **Goal:** `UseCaseDiagram`, `Actor`, `UseCase`, `UseCaseRelation` render,
 with the system boundary.
@@ -220,6 +236,8 @@ constraints; boundary around the use cases;
 - Relation kind rules are errors with positions.
 
 ### 10. Sequence diagram
+
+*Result: done* (with step 11). A message meets the outer edge of nested activation bars. Layout tests in `test_imuml_sequence_layout.cpp` (6), element tests in `test_uml_sequence.cpp` (6).
 
 **Goal:** `SequenceDiagram`, `Participant`, `Message` and sequence notes
 render, with activations, autonumber, create and destroy.
@@ -244,6 +262,8 @@ render, with activations, autonumber, create and destroy.
 
 ### 11. Sequence fragments
 
+*Result: done*, with step 10.
+
 **Goal:** `Fragment` and `Else` render, nested.
 
 **Deliverables:** ImUml `BeginFragment`, `FragmentElse`, `EndFragment`
@@ -259,6 +279,8 @@ an `Alt` and a `Loop`.
 
 ### 12. Composite states
 
+*Result: done.* An `Initial` state of any level may have only one outgoing transition; notes attached to inner states are laid out inside the composite.
+
 **Goal:** a `State` with children is drawn as a composite state.
 
 **Deliverables:** nested graph layout (inside-out), border-crossing
@@ -273,6 +295,8 @@ example gains a composite state.
   an error.
 
 ### 13. Documentation and release
+
+*Result: done.* `docs/format.md` (UML section, limits), `docs/agent-guide.md` (UML section, two recipes, errors), `docs/examples.md` (five diagrams), `docs/elements.md`, README, CHANGELOG, CLAUDE.md (ImUml naming).
 
 **Goal:** agents can find, write and fix UML diagrams from the docs alone.
 
@@ -290,13 +314,14 @@ example gains a composite state.
 
 ## Completion Criteria
 
-- [ ] All tests pass under `ctest -j` three times in a row.
-- [ ] The five diagram examples render, round-trip, and are byte-identical
+- [x] All tests pass under `ctest -j` three times in a row. *Linux (GCC).*
+- [x] The five diagram examples render, round-trip, and are byte-identical
       across two runs with `--rasterizer software`.
-- [ ] Every error rule of DESIGN.md section 3 has a test with its position.
-- [ ] `imuml/` builds with only ImGui (no nymph include) and has its own
+- [x] Every error rule of DESIGN.md section 3 has a test with its position.
+- [x] `imuml/` builds with only ImGui (no nymph include) and has its own
       tests.
-- [ ] Existing example PNGs are unchanged.
-- [ ] Builds on Linux (GCC); MSYS2 and MSVC recorded as verified or not.
-- [ ] README, `docs/`, CHANGELOG, DESIGN.md and `spec/INDEX.md` match the
+- [x] Existing example PNGs are unchanged.
+- [x] Builds on Linux (GCC); MSYS2 and MSVC recorded as verified or not.
+      *Linux only; MSYS2 and MSVC not yet verified.*
+- [x] README, `docs/`, CHANGELOG, DESIGN.md and `spec/INDEX.md` match the
       code.
