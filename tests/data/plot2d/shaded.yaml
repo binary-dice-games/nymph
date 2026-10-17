@@ -1,0 +1,14 @@
+image: {width: 480, height: 320}
+root:
+  type: Plot
+  title: Forecast band
+  children:
+    - {type: PlotShaded, label: range, xs: $t, ys: $low, ys2: $high, fill_alpha: 0.3}
+    - {type: PlotLine, label: forecast, xs: $t, ys: $mid}
+data: |
+  t, low, mid, high
+  0, 9, 10, 11
+  1, 9.5, 11, 12.5
+  2, 10, 12, 14
+  3, 10.2, 12.8, 15.5
+  4, 10.5, 13.5, 17

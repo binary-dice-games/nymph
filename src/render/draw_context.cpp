@@ -7,8 +7,17 @@
 namespace bdg::nymph {
 
 void draw_context::draw_children(const node& n) {
-  for (const node& child : n.children) {
-    child.cls->draw(child, *this);
+  // Without an ImGui context (unit tests of drawing order) there is no ID
+  // stack to push to.
+  const bool imgui = ImGui::GetCurrentContext() != nullptr;
+  for (size_t i = 0; i < n.children.size(); ++i) {
+    if (imgui) {
+      ImGui::PushID(static_cast<int>(i));
+    }
+    n.children[i].cls->draw(n.children[i], *this);
+    if (imgui) {
+      ImGui::PopID();
+    }
   }
 }
 

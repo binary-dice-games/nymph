@@ -23,6 +23,12 @@ add_library(nymph STATIC
   document/table.cpp
   document/bind.hpp
   document/bind.cpp
+  elements/plot_style.hpp
+  elements/plot_style.cpp
+  elements/plot2d.hpp
+  elements/plot2d.cpp
+  elements/register_builtin.hpp
+  elements/register_builtin.cpp
   schema/value.hpp
   schema/name_table.hpp
   schema/name_table.cpp

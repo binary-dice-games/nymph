@@ -75,6 +75,19 @@ class element_class {
     (void)explicitly_set;
   }
 
+  /// @brief Called by bind_source() on every node of this class once its
+  ///        fields and children are set, for rules between fields (equal
+  ///        lengths, grid sizes). Default: nothing.
+  /// @throws nymph::error, usually through fail_at().
+  virtual void check(const node& n) const {
+    (void)n;
+  }
+
+  /// @brief Throws a nymph::error "<Type>.<field> <message>" at the field's
+  ///        source position, or at the element when the field was not
+  ///        written.
+  [[noreturn]] void fail_at(const node& n, size_t field, const std::string& message) const;
+
   /// @brief Draws `n` (a node of this class) into the open figure frame.
   virtual void draw(const node& n, draw_context& dc) const = 0;
 

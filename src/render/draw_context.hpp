@@ -4,6 +4,7 @@
 #pragma once
 
 #include <imgui.h>
+#include <unordered_map>
 #include "render/image_options.hpp"
 #include "schema/node.hpp"
 
@@ -25,7 +26,9 @@ struct rect {
 ///        figure's full-display ImGui window, with the private ImGui, ImPlot
 ///        and ImPlot3D contexts current.
 ///
-/// Per-node rectangles are added by the layout step of the plan.
+/// Each `figure` element draws in its rectangle (set_rect() / rect()): the
+/// root gets content_rect(); the layout engine (plan step 11) sets the
+/// rectangles of layout children.
 class draw_context {
  public:
   explicit draw_context(const image_options& options) : options_(options) {}
@@ -40,8 +43,21 @@ class draw_context {
     return static_cast<float>(options_.scale);
   }
 
-  /// @brief Draws each child of `n`, in order, through its class's draw().
+  /// @brief Draws each child of `n`, in order, through its class's draw(),
+  ///        each under its own ImGui ID (its index), so two series or plots
+  ///        with the same label do not collide.
   void draw_children(const node& n);
+
+  /// @brief Sets the rectangle `n` draws in.
+  void set_rect(const node& n, const rect& r) {
+    rects_[&n] = r;
+  }
+
+  /// @brief The rectangle `n` draws in; content_rect() if none was set.
+  rect rect_of(const node& n) const {
+    const auto it = rects_.find(&n);
+    return it == rects_.end() ? content_rect() : it->second;
+  }
 
   /// @brief The image minus `image.padding` on every side: where the root
   ///        element goes.
@@ -53,6 +69,7 @@ class draw_context {
 
  private:
   const image_options& options_;
+  std::unordered_map<const node*, rect> rects_;
 };
 
 } // namespace bdg::nymph

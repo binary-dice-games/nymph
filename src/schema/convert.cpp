@@ -118,8 +118,15 @@ value scalar_value(const yaml_node& n, const field_desc& f, std::string_view wha
       return to_integer(n, f, what);
     case field_type::number:
       return to_number(n, f, what);
-    case field_type::text:
-      return n.text.rfind("$$", 0) == 0 ? n.text.substr(1) : n.text;
+    case field_type::text: {
+      std::string text = n.text.rfind("$$", 0) == 0 ? n.text.substr(1) : n.text;
+      if (f.check != nullptr) {
+        if (const char* problem = f.check(text)) {
+          fail(n, what, std::string(problem) + ", not '" + text + "'");
+        }
+      }
+      return text;
+    }
     case field_type::color:
       if (n.text.empty() && is_unquoted(n)) {
         fail(n, what, "is empty; an unquoted '#' starts a YAML comment, so write the colour in quotes: \"#RRGGBB\"");

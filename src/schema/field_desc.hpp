@@ -6,6 +6,7 @@
 
 #include <optional>
 #include <string>
+#include <string_view>
 #include <vector>
 #include "schema/name_table.hpp"
 #include "schema/value.hpp"
@@ -39,6 +40,10 @@ struct field_desc {
   std::string description; ///< One or two sentences, shown by `nymph schema`.
   const name_table* names = nullptr; ///< enumeration / flags only; must outlive the class.
   std::optional<value_range> limits; ///< integer / number only.
+  /// text only: returns an error message for an unacceptable value, or
+  /// nullptr. Used for printf formats, which must not reach printf
+  /// unchecked.
+  const char* (*check)(std::string_view text) = nullptr;
 };
 
 /// @brief Human-readable name of a field type ("number", "list of numbers").
@@ -62,6 +67,20 @@ number_field(std::string name, double def, std::string description, std::optiona
 
 inline field_desc text_field(std::string name, std::string def, std::string description) {
   return {std::move(name), field_type::text, std::move(def), std::move(description), nullptr, std::nullopt};
+}
+
+/// @brief Checks a printf format for one floating-point value: literal text,
+///        `%%`, and at most one `%[flags][width][.precision]` conversion of
+///        type f, F, e, E, g or G, width and precision at most 99.
+/// @return nullptr if acceptable, else what is wrong.
+const char* check_double_format(std::string_view text);
+
+/// @brief A text field holding a printf format for one floating-point value
+///        (see check_double_format()).
+inline field_desc double_format_field(std::string name, std::string def, std::string description) {
+  field_desc f{std::move(name), field_type::text, std::move(def), std::move(description), nullptr, std::nullopt};
+  f.check = &check_double_format;
+  return f;
 }
 
 inline field_desc color_field(std::string name, std::string description) {

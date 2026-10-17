@@ -1,0 +1,7 @@
+image: {width: 480, height: 320}
+root:
+  type: Plot
+  title: Thresholds
+  children:
+    - {type: PlotLine, label: load, ys: [20, 45, 70, 85, 60, 30]}
+    - {type: PlotInfLines, label: limits, values: [50, 80], horizontal: true, color: "#C0392B", line_weight: 2}

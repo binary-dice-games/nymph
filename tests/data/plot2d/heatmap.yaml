@@ -1,0 +1,22 @@
+description: Activity by weekday and time of day.
+image: {width: 480, height: 320}
+root:
+  type: Plot
+  title: Activity
+  x_flags: NoDecorations
+  y_flags: NoDecorations
+  colormap: Viridis
+  children:
+    - type: PlotHeatmap
+      rows: 4
+      cols: 5
+      values: [$mon, $tue, $wed, $thu, $fri]
+      scale_min: 0
+      scale_max: 10
+      format: "%.0f"
+data: |
+  slot, mon, tue, wed, thu, fri
+  morning, 2, 4, 6, 3, 1
+  noon, 5, 7, 9, 6, 4
+  evening, 8, 9, 10, 7, 6
+  night, 1, 2, 3, 2, 5

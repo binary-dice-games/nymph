@@ -11,6 +11,7 @@
 #include <string>
 #include "render/soft_rasterizer.hpp"
 #include "render/texture_store.hpp"
+#include "schema/element_class.hpp"
 
 namespace bdg::nymph {
 
@@ -164,6 +165,13 @@ image render_frames(const image_options& options, const draw_fn& draw) {
   ImVec4 bg = ImGui::GetStyle().Colors[ImGuiCol_WindowBg];
   bg.w = 1.0f; // the image is opaque
   return rasterize(*ImGui::GetDrawData(), textures, ImGui::ColorConvertFloat4ToU32(bg));
+}
+
+image render_figure(const figure& f) {
+  return render_frames(f.image, [&](draw_context& dc) {
+    dc.set_rect(f.root, dc.content_rect());
+    f.root.cls->draw(f.root, dc);
+  });
 }
 
 } // namespace bdg::nymph

@@ -322,6 +322,23 @@ positioned error.
 
 ### 9. 2D plot elements
 
+*Result: done.* `src/elements/` (`plot_style`, `plot2d`,
+`register_builtin`), `render_figure()`, the public `render_png()`,
+`check_source()` and `extract_source()` in `src/nymph.hpp`;
+`tests/test_plot2d.cpp` (13 tests) and 14 samples in
+`tests/data/plot2d/`, all looked at. Additions, recorded in DESIGN.md
+section 3: an `element_class::check()` hook with per-field source
+positions (`node::field_pos`) for rules between fields; `ys` without `xs`
+drawn against the index; printf-format fields validated (a security fix
+over wish); a per-child ImGui ID in `draw_children`. Found while looking
+at the images: ImPlot v1.0's `PlotHistogram2D` drew every bin at count 0
+(it fills the X range wrongly when none is given; wish has the same bug),
+worked around by passing the range; and wish's `bins` description had
+the binning methods in the wrong order. `PlotDigital` draws a 4-pixel
+logic trace at the bottom of the plot, which is ImPlot's design; its
+description now says so. Element rectangles live in `draw_context`
+(`set_rect` / `rect_of`) rather than a separate `layout_context`.
+
 **Goal:** `Plot` and every 2D series from wish render with wish's fields
 and defaults.
 

@@ -5,6 +5,7 @@
 #pragma once
 
 #include <functional>
+#include "document/bind.hpp"
 #include "render/draw_context.hpp"
 #include "render/image.hpp"
 #include "render/image_options.hpp"
@@ -40,5 +41,10 @@ inline constexpr float kFigureFontSize = 16.0f;
 ///         is unknown; std::runtime_error from the rasterizer; anything
 ///         `draw` throws.
 image render_frames(const image_options& options, const draw_fn& draw);
+
+/// @brief Renders a bound figure: render_frames() with `f.image`, drawing
+///        `f.root` in the content rectangle (the image minus padding).
+/// @throws as render_frames().
+image render_figure(const figure& f);
 
 } // namespace bdg::nymph

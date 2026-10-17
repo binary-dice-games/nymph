@@ -14,6 +14,12 @@ namespace bdg::nymph {
 
 class element_class;
 
+/// @brief A position in the source; line 0 means "not written there".
+struct source_pos {
+  int line = 0;
+  int column = 0;
+};
+
 /// @brief An element instance, fully checked by bind(): `values[i]` holds
 ///        field `i` of `cls->fields()` with that field's value alternative.
 struct node {
@@ -22,6 +28,10 @@ struct node {
   std::vector<node> children;
   int line = 0; ///< Source position of the element's mapping.
   int column = 0;
+  /// Where each field's value was written (parallel to `values`); line 0
+  /// for a field left at its default. For error messages from
+  /// element_class::check().
+  std::vector<source_pos> field_pos;
 
   /// @brief Field `index` as `T`; throws std::bad_variant_access if the
   ///        field holds another alternative (a bug, never input-dependent).

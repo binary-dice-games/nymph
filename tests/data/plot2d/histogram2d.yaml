@@ -1,0 +1,7 @@
+image: {width: 480, height: 320}
+root:
+  type: Plot
+  title: Joint distribution
+  colormap: Viridis
+  children:
+    - {type: PlotHistogram2D, label: pairs, xs: [1, 2, 2, 3, 3, 3, 4, 4, 5], ys: [1, 1, 2, 2, 3, 3, 3, 4, 5], x_bins: 5, y_bins: 5}

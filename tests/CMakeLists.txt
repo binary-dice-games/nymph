@@ -32,3 +32,6 @@ nymph_add_test(test_yaml_doc test_yaml_doc.cpp)
 nymph_add_test(test_table test_table.cpp)
 nymph_add_test(test_schema test_schema.cpp)
 nymph_add_test(test_bind test_bind.cpp)
+nymph_add_test(test_plot2d test_plot2d.cpp)
+# Reads the sample sources in tests/data in place.
+target_compile_definitions(test_plot2d PRIVATE NYMPH_SOURCE_DIR="${PROJECT_SOURCE_DIR}")

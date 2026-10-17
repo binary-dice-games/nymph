@@ -107,8 +107,10 @@ class binder {
         fail(key, std::string(cls.name()) + " has no field '" + key.text + "'" + did_you_mean(key.text, names));
       }
       out.values[static_cast<size_t>(index)] = field_value(cls, cls.fields()[static_cast<size_t>(index)], val);
+      out.field_pos[static_cast<size_t>(index)] = source_pos{val.line, val.column};
       set[static_cast<size_t>(index)] = true;
     }
+    cls.check(out);
     if (explicitly_set != nullptr) {
       *explicitly_set = std::move(set);
     }

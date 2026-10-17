@@ -2,6 +2,7 @@
 /// @file schema.cpp
 /// @brief element_class, registry and field-type helpers.
 #include <stdexcept>
+#include "core/error.hpp"
 #include "schema/element_class.hpp"
 #include "schema/registry.hpp"
 
@@ -72,7 +73,60 @@ node element_class::make_node() const {
   for (const field_desc& f : fields_) {
     n.values.push_back(f.default_value);
   }
+  n.field_pos.resize(fields_.size());
   return n;
+}
+
+void element_class::fail_at(const node& n, size_t field, const std::string& message) const {
+  const source_pos at = field < n.field_pos.size() ? n.field_pos[field] : source_pos{};
+  const std::string what = name_ + "." + fields_.at(field).name + " " + message;
+  if (at.line > 0) {
+    throw error(at.line, at.column, what);
+  }
+  throw error(n.line, n.column, what);
+}
+
+const char* check_double_format(std::string_view text) {
+  int conversions = 0;
+  for (size_t i = 0; i < text.size(); ++i) {
+    if (text[i] != '%') {
+      continue;
+    }
+    ++i;
+    if (i < text.size() && text[i] == '%') {
+      continue; // "%%" is a literal percent sign
+    }
+    while (i < text.size() &&
+           (text[i] == '-' || text[i] == '+' || text[i] == ' ' || text[i] == '#' || text[i] == '0')) {
+      ++i;
+    }
+    int digits = 0;
+    while (i < text.size() && text[i] >= '0' && text[i] <= '9') {
+      ++i;
+      ++digits;
+    }
+    if (digits > 2) {
+      return "has a width above 99";
+    }
+    if (i < text.size() && text[i] == '.') {
+      ++i;
+      digits = 0;
+      while (i < text.size() && text[i] >= '0' && text[i] <= '9') {
+        ++i;
+        ++digits;
+      }
+      if (digits > 2) {
+        return "has a precision above 99";
+      }
+    }
+    if (i >= text.size() || std::string_view("fFeEgG").find(text[i]) == std::string_view::npos) {
+      return "must format one number with %f, %e or %g (like \"%.1f\"); write %% for a percent sign";
+    }
+    if (++conversions > 1) {
+      return "may contain only one %f, %e or %g conversion";
+    }
+  }
+  return nullptr;
 }
 
 // ── registry ─────────────────────────────────────────────────────────────────

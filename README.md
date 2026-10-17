@@ -8,7 +8,8 @@ software rasterizer: no GPU, window or display needed.
 It is meant for AI agents that need to show information as a chart.
 
 It is a standalone version of wish's `nymph` module, with no wish or bison
-dependency. **Status: designed, not implemented** -- see
+dependency. **Status: in progress** (2D plots render through the library
+API; 3D plots, layouts and the command line are next) -- see
 [DESIGN.md](DESIGN.md) and [PLAN.md](PLAN.md).
 
 ## Quick Build
@@ -26,14 +27,23 @@ and platform notes.
 
 ```cpp
 #include <nymph.hpp>
-#include <iostream>
+#include <fstream>
 
 int main() {
-  std::cout << "nymph " << bdg::nymph::version() << "\n";
+  const char* source =
+      "root:\n"
+      "  type: Plot\n"
+      "  title: Revenue\n"
+      "  children:\n"
+      "    - {type: PlotLine, label: revenue, ys: $revenue}\n"
+      "data: {revenue: [12, 15, 11, 18]}\n";
+  const std::vector<uint8_t> png = bdg::nymph::render_png(source); // throws bdg::nymph::error
+  std::ofstream("chart.png", std::ios::binary).write((const char*)png.data(), png.size());
 }
 ```
 
-Link against the `nymph` CMake target (`nymph::nymph` alias).
+Link against the `nymph` CMake target (`nymph::nymph` alias). The PNG
+carries its source: `bdg::nymph::extract_source(png)` returns it.
 
 ## Project Layout
 

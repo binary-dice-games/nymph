@@ -1,6 +1,6 @@
 # nymph — Architecture & Design
 
-**Status: designed, not implemented.** [PLAN.md](PLAN.md) is the ordered
+**Status: in progress, plan steps 1-9 done.** [PLAN.md](PLAN.md) is the ordered
 implementation plan.
 
 ## 1. Purpose / Scope
@@ -203,6 +203,28 @@ Layouts follow wish's size hints, so wish nymph sources keep their look:
 wish layout fields that need a live window (`scroll`) are not part of the
 schema.
 
+Differences from wish's 2D elements, all stricter or additive (a source
+that renders in wish nymph renders the same here, or gets an error where
+wish drew something silently wrong):
+
+- Rules between fields are errors: an empty series, `xs` and `ys` (or
+  `ys2`) of different lengths, `PlotHeatmap.values` not `rows x cols`
+  long, a `PlotPieChart` without one label per value, an empty
+  `PlotText.text`, histogram `bins` of 0. wish drew the shorter length or
+  nothing.
+- A series with `ys` and no `xs` is drawn against 0, 1, 2, ... (wish drew
+  nothing, except for bars, which keep ImPlot's values overload).
+- `PlotHeatmap.format` and `PlotPieChart.label_fmt` reach printf inside
+  ImPlot, so they must hold at most one `%f`/`%e`/`%g` conversion (plus
+  `%%`, width and precision up to 99); anything else is an error. In wish
+  an untrusted `%s` or `%n` reached printf.
+- `PlotHistogram2D` passes its data range to ImPlot explicitly: ImPlot
+  v1.0 computes a missing X range wrongly and draws every bin at count 0
+  (one flat colour), in wish too.
+- The `bins` description follows ImPlot (-1 square root, -2 Sturges, -3
+  Rice, -4 Scott); wish's text had the names in the wrong order. The
+  default (-1) is unchanged.
+
 Scalar typing follows the registered field type, not YAML's guess: a value
 assigned to a text field stays text (`title: 2025`); a quoted value
 assigned to a number field is an error. Colours are `"#RRGGBB"` or
@@ -329,6 +351,11 @@ class element_class {
   std::span<const field_desc> fields() const;
   int field_index(std::string_view) const;
   node make_node() const;                 // every field at its default
+  // Rules between fields, run by bind_source() on every node; errors
+  // through fail_at(node, field, message), positioned at the field
+  // (node.field_pos) or at the element.
+  virtual void check(const node& n) const;
+  virtual void adjust_root(node& n, const std::vector<bool>& set) const;
   virtual void draw(const node& n, draw_context& dc) const = 0;
   // Added with the layout engine (plan step 11): measure(), hints(),
   // arrange() for `figure` elements.
@@ -373,8 +400,10 @@ the value, or at the list item, and names `Type.field`.
   lookup per frame.
 - **`draw_context`**: what `draw()` may use — the current ImGui window
   (ImGui, ImPlot and ImPlot3D calls), the node's arranged rectangle
-  (`rect(node)`, `figure` slot only), `draw_children(node)` to draw the
-  children in order, and the image scale. Plots open their scope
+  (`rect_of(node)`, `figure` slot only; `render_figure()` gives the root
+  the content rectangle), `draw_children(node)` to draw the children in
+  order, each under its own ImGui ID so same-labelled series or plots do
+  not collide, and the image scale. Plots open their scope
   (`BeginPlot` at the rectangle, with its size), call `draw_children`,
   then close it (`EndPlot`). Layouts only draw their card, if any, and
   their children.
@@ -714,6 +743,9 @@ result renders with this tool when it uses only the elements nymph has.
 - Limits, checked before the allocation they bound: source 16 MiB; output
   `width*scale` and `height*scale` at most 8192; data at most 1,000,000
   rows. Exceeding one is an ordinary `nymph::error`.
+- No source text reaches printf unchecked: printf-format fields are
+  declared with `double_format_field()`, whose check allows one
+  floating-point conversion.
 - The source never names a file: nymph reads only the input path and writes
   only the output path given on the command line.
 - Metadata survives only byte-exact copies; services that re-encode images
