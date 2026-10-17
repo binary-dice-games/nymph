@@ -1,7 +1,9 @@
 # nymph — OpenGL Rasterizer: Design
 
-**Status: designed, not started.** [PLAN.md](PLAN.md) is the ordered
-implementation plan. This document describes only what this project adds
+**Status: plan steps 1-8 done. Verified on Linux (GCC, Mesa llvmpipe
+through EGL) and with a MinGW cross build run under Wine (WGL, through
+Wine's OpenGL to Mesa); not yet on a hardware GPU, native MSVC or MSYS2.**
+[PLAN.md](PLAN.md) is the ordered implementation plan. This document describes only what this project adds
 or changes; the rest of the architecture is
 [spec/01_core_features/DESIGN.md](../01_core_features/DESIGN.md)
 (referred to below as *core DESIGN*).
@@ -106,16 +108,22 @@ unchanged), and `configure()` takes the backend's name for
 `BackendRendererName` instead of the constant `nymph_soft_rasterizer`.
 
 `raster_unavailable` (derived from `std::runtime_error`) is the only
-exception that means "fall back". Bad draw data is a nymph bug and must
+exception that means "fall back"; its subclass `raster_too_large` marks
+the one case that falls back for that image only (section 3, fallback
+rules). Bad draw data is a nymph bug and must
 not be hidden by a silent fallback, so it keeps its own exception and
 propagates from either backend.
 
 ### `shared_library` (`src/render/gl/shared_library.hpp/.cpp`)
 
-A move-only handle to a library opened at run time: `open(names)` tries
-each name in order and keeps the first that loads (the error text of the
-last failure otherwise); `symbol(name)` returns a `void*` or null;
-the destructor closes it. It is the only code that calls `dlopen` /
+A move-only handle to a library opened at run time: `open(names, error,
+pin)` tries each name in order and keeps the first that loads (the
+loader's message for every failed name otherwise); `symbol(name)` returns
+a `void*` or null; the destructor closes it. `pin` keeps the library in
+the process after the handle closes (`RTLD_NODELETE`,
+`GET_MODULE_HANDLE_EX_FLAG_PIN`): nymph pins libEGL and opengl32, because
+graphics drivers keep per-process state and are known to crash when
+unloaded and loaded again. It is the only code that calls `dlopen` /
 `dlsym` / `dlclose` or `LoadLibraryW` / `GetProcAddress` / `FreeLibrary`,
 behind one narrow `#if defined(_WIN32)` guard (CLAUDE.md, Platform
 Support). On Linux it links `${CMAKE_DL_LIBS}` (libdl on glibc older
@@ -129,13 +137,16 @@ rasterizer calls (OpenGL 3.3 core), gathered in one struct:
 
 ```cpp
 struct gl_api {
-  PFN_glGenTextures GenTextures = nullptr;
+  void (NYMPH_GLAPI* GenTextures)(GLsizei n, GLuint* textures) = nullptr;
   ...
   /// Fills every pointer through `lookup`; returns the name of the first
   /// one that is null, or an empty string when all were found.
-  std::string load(void* (*lookup)(const char* name, void* user), void* user);
+  std::string load(gl_lookup_fn lookup, void* user);
 };
 ```
+
+The members, their names and their loading come from one X-macro list
+(`NYMPH_GL_FUNCTIONS`), so a function is added in one place.
 
 Nothing includes `<GL/gl.h>`, `<EGL/egl.h>` or `<windows.h>`'s `wingdi.h`
 GL parts for GL purposes: the headers may not exist on the build machine
@@ -149,14 +160,16 @@ scissor, viewport, `glDrawElementsBaseVertex`, `glReadPixels`,
 `glGetString`, `glGetIntegerv`, `glGetError`, `glFinish`, `glPixelStorei`,
 `glTexParameteri`).
 
-### `gl_device` (`src/render/gl/gl_device.hpp`, `gl_device_posix.cpp`, `gl_device_win.cpp`)
+### `gl_device` (`src/render/gl/gl_device.hpp`, `gl_device.cpp`, `gl_device_posix.cpp`, `gl_device_win.cpp`)
 
 Owns the loaded libraries, an OpenGL 3.3 core context with no window
 surface, and the filled `gl_api`. Platform-specific creation lives in two
 suffixed files, chosen by CMake: the EGL and WGL paths share no code
 beyond the interface, so one file with guards would be mostly `#if`
 (CLAUDE.md, Platform Support). MSYS2 defines `_WIN32` and has
-`opengl32.dll`, so it takes the WGL file.
+`opengl32.dll`, so it takes the WGL file. `gl_device.cpp` holds what both
+share once a context is current: loading `gl_api`, the 3.3 version check,
+the software-GL rule, the name and the size limit.
 
 ```cpp
 struct gl_device_options {
@@ -177,7 +190,7 @@ class gl_device {
   /// @brief Never throws for an OpenGL problem; reports it in `reason`.
   static result create(const gl_device_options&);
   const gl_api& gl() const noexcept;
-  std::string renderer_name() const;  ///< GL_VENDOR + GL_RENDERER + GL_VERSION
+  const std::string& renderer_name() const noexcept; ///< "<vendor> <renderer>, OpenGL <version>"
   int max_size() const noexcept;      ///< min(MAX_TEXTURE_SIZE, MAX_RENDERBUFFER_SIZE, MAX_VIEWPORT_DIMS)
   /// Makes the context current for the scope and restores whatever context
   /// (EGL or WGL) was current on this thread before.
@@ -197,7 +210,9 @@ runs headless.
    `eglGetPlatformDisplay(EGL_PLATFORM_DEVICE_EXT, device)` for each
    device from `eglQueryDevicesEXT` (headless NVIDIA and Mesa GPUs),
    then `EGL_PLATFORM_SURFACELESS_MESA`, then
-   `eglGetDisplay(EGL_DEFAULT_DISPLAY)`.
+   `eglGetDisplay(EGL_DEFAULT_DISPLAY)`. When every display fails, the
+   reason reported is the one that got furthest (a refused context says
+   more than a display that did not open).
 3. `eglBindAPI(EGL_OPENGL_API)`; choose a config with
    `EGL_RENDERABLE_TYPE = EGL_OPENGL_BIT`; create a 3.3 core context
    (EGL 1.5 attributes, or `EGL_KHR_create_context`).
@@ -206,6 +221,10 @@ runs headless.
 5. GL functions through `eglGetProcAddress` (valid for core functions
    with EGL 1.5 or `EGL_KHR_get_all_proc_addresses`); otherwise `dlsym`
    on `libOpenGL.so.0`, then `libGL.so.1`.
+6. The display is never terminated: EGL displays are shared per process
+   (two devices on one GPU get the same `EGLDisplay`), and
+   `eglTerminate` would destroy the other device's context too. The cost
+   is one initialized display for the process lifetime.
 
 GLX is not tried: it needs an X server, which a headless agent machine
 does not have, and a machine with an X server and a GPU has EGL too.
@@ -227,8 +246,9 @@ does not have, and a machine with an X server and a GPU has EGL too.
    sessions without a GPU driver) is a failure with that reason.
 
 **Software GL is refused by default.** After the context is current,
-`GL_RENDERER` is matched against `llvmpipe`, `softpipe`, `SwiftShader`
-and `GDI Generic` (and an EGL device reporting
+`GL_RENDERER` is matched against `llvmpipe`, `softpipe`, `SwiftShader`,
+`GDI Generic`, Mesa's `Software Rasterizer` and Microsoft's `Basic Render
+Driver` (and an EGL device reporting
 `EGL_MESA_device_software` is skipped). The request is "use the GPU when
 there is one"; Mesa's CPU drivers are slower than nymph's own
 rasterizer and give a less exact image. Tests set `allow_software_gl` so
@@ -244,11 +264,11 @@ Per `rasterize()` call, inside a `gl_device::current_scope`:
 
 - **Target**: a framebuffer object with an `GL_RGBA8` colour texture of
   `round(DisplaySize * FramebufferScale)`; a size above
-  `gl_device::max_size()` throws `raster_unavailable` (that one image
+  `gl_device::max_size()` throws `raster_too_large` (that one image
   falls back). Not sRGB, no multisampling, `GL_DITHER` and
   `GL_FRAMEBUFFER_SRGB` off. Cleared to `clear_color / 255`.
-- **Textures**: every texture in the `texture_store` is uploaded fresh
-  (`GL_RGBA8` for RGBA32, `GL_R8` with swizzle `(1, 1, 1, R)` for
+- **Textures**: every texture a command uses is uploaded fresh, once per
+  call (`GL_RGBA8` for RGBA32, `GL_R8` with swizzle `(1, 1, 1, R)` for
   Alpha8, which is how ImGui's GPU backends and the software rasterizer
   read Alpha8: white with that alpha). `GL_LINEAR`, `GL_CLAMP_TO_EDGE`,
   `GL_UNPACK_ALIGNMENT` 1. The atlas is small, so uploading per image
@@ -264,18 +284,25 @@ Per `rasterize()` call, inside a `gl_device::current_scope`:
   DESIGN's `soft_rasterizer`), no depth, stencil or culling, scissor on.
 - **Commands**: one vertex and index buffer per draw list
   (`GL_STREAM_DRAW`); for each command the clip rectangle is mapped with
-  `(clip - DisplayPos) * FramebufferScale`, clamped to the target, and
-  set as the scissor (with the Y flip of a bottom-left origin); then
+  `(clip - DisplayPos) * FramebufferScale`, rounded to the pixels whose
+  centre is inside (as the software rasterizer does), clamped to the
+  target, and set as the scissor; then
   `glDrawElementsBaseVertex` with `IdxOffset` and `VtxOffset`, 16- or
   32-bit indices to match `sizeof(ImDrawIdx)`. Reset-render-state
   callbacks are skipped; any other callback throws, as in the software
   rasterizer.
-- **Read back**: `glFinish`, `glReadPixels(GL_RGBA, GL_UNSIGNED_BYTE)`
-  with `GL_PACK_ALIGNMENT` 1, rows reversed into the top-first `image`.
-  Alpha is forced to 255 (the software path's target is opaque and
-  stays opaque; a driver could round `1 - a` differently).
-- **Errors**: `glGetError` after the upload and after the read; an
-  error, or an incomplete framebuffer, throws `raster_unavailable`.
+- **Read back**: `glReadPixels(GL_RGBA, GL_UNSIGNED_BYTE)` with
+  `GL_PACK_ALIGNMENT` 1, then `glFinish`. The projection maps the
+  display's top edge to framebuffer row 0 (bottom in GL's convention), so
+  the rows come back top first, as `image` stores them, and scissor
+  rectangles need no Y flip. Alpha is blended like colour, not forced:
+  the frame driver clears opaque, so the image stays opaque, and a test
+  scene that clears transparent compares like the software path.
+- **Errors**: `glGetError` after the read; an error, or an incomplete
+  framebuffer, throws `raster_unavailable`.
+- **Test hooks**: `fail_next_rasterize()` (the next call throws as a
+  driver failure would) and `limit_size(n)` (a lower size limit), so the
+  fallback rules are tested on any device.
 - Every GL object created for the call is deleted before it returns,
   also when it throws.
 
@@ -286,6 +313,9 @@ namespace bdg::nymph {
 
 /// @brief The rasterizers nymph can draw with.
 enum class rasterizer { software, opengl };
+
+/// @brief "software" or "opengl".
+std::string_view rasterizer_name(rasterizer r) noexcept;
 
 /// @brief Renders sources with a chosen rasterizer, keeping an OpenGL
 ///        context between calls.
@@ -335,13 +365,20 @@ Fallback rules, in one place (`renderer::impl`):
 | What failed | This image | Later images |
 |---|---|---|
 | Device creation (library, symbol, display, context, software GL refused) | software | software (`active()` = software) |
-| Image larger than `max_size()` | software | OpenGL |
+| Image larger than `max_size()` (`raster_too_large`) | software | OpenGL |
 | Shader, framebuffer or GL error during `rasterize()` | software | software (the device is dropped: a driver that failed once is not trusted again) |
 | Bad draw data (`std::runtime_error`, not `raster_unavailable`) | error, propagated | — |
 
 A `renderer` is used by one thread at a time, like the free functions
 (ImGui's current context is process-global, core DESIGN section 4).
 `check_source()` does not rasterize and is unchanged.
+
+Tests reach the internals through `src/render/renderer_options.hpp`:
+`make_renderer(rasterizer, renderer_test_options)` with
+`allow_software_gl`, `library_names` (simulate a machine without
+OpenGL), `fail_first_render` and `max_size`. `renderer` declares
+`make_renderer` a friend; it is not part of the public header's
+contract.
 
 ## 4. Public Contract: the command line
 
@@ -366,8 +403,11 @@ Additions to core DESIGN section 6 and `docs/cli.md`:
   opened), and gives exactly the bytes the library's `render_png()`
   gives.
 
-`run_cli` keeps its signature. Internally the CLI distinguishes "no flag"
-from "explicit `opengl`" only for the warning.
+`run_cli` keeps its signature. An overload taking `renderer_test_options`
+lets tests simulate a machine without OpenGL. Internally the CLI
+distinguishes "no flag" from "explicit `opengl`" only for the warning.
+`nymph <in.png> --rasterizer ...` is an extract, so the option is a
+usage error there too.
 
 ## 5. Build
 
@@ -397,9 +437,13 @@ GPU tests cannot assume a GPU. Three layers:
    llvmpipe through EGL counts; `GTEST_SKIP()` with the probe's reason
    otherwise): every scene of `test_soft_rasterizer` and every example
    rendered by both rasterizers and compared with a tolerance: at least
-   99.5 % of pixels within 2 per channel, none beyond 64, and the mean
-   absolute difference below 0.5 (the step that adds the test tunes these
-   numbers against llvmpipe and one hardware GPU, and records them).
+   99.5 % of pixels within 2 per channel (in images of under 200 pixels,
+   all but one), none beyond 64, and the mean absolute difference below
+   0.5. Measured on llvmpipe (plan step 4): the scenes are within 1 per
+   channel everywhere (mean 0.09); the examples are 100.000 % within 2
+   (rounded), worst single channel 44 (an anti-aliased edge pixel), mean
+   0.0044. The thresholds keep a wide margin for hardware GPUs, which
+   have not been measured yet.
    Plus: two renders on one device give identical bytes; an over-size
    image falls back; the previous EGL / WGL context is current again after
    rendering.

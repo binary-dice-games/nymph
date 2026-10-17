@@ -21,11 +21,16 @@ sources nor promises to keep wish's schema. Compared with wish nymph:
 - **No wish, no bison.** The element schema, the YAML binding and the
   plot drawing that wish provides through its widget registry are
   reimplemented here, small and specific to charts.
-- **No GPU, no window, no display.** Frames are drawn by Dear ImGui and
-  rasterized on the CPU by nymph's own software rasterizer
+- **No GPU needed, no window, no display.** Frames are drawn by Dear
+  ImGui and rasterized on the CPU by nymph's own software rasterizer
   (`src/render/soft_rasterizer`), written for ImGui 1.92 with emilk's
   [imgui_software_renderer](https://github.com/emilk/imgui_software_renderer)
-  as the reference design. No SDL, no OpenGL, no platform backend.
+  as the reference design. No SDL, no platform backend, and no OpenGL
+  linked. (A later project,
+  [spec/02_opengl_rasterizer](../02_opengl_rasterizer/DESIGN.md), adds an
+  optional OpenGL rasterizer loaded at run time, used by the CLI when a
+  GPU is available; the software rasterizer stays the default of the
+  library and the fallback everywhere.)
 - **Only the silent mode.** wish nymph's `render` and `extract` commands
   exist here; its interactive `edit` and `view` modes do not (they need a
   window).
@@ -612,7 +617,10 @@ as a second line behind `bind()`. Per call:
 - Three frames are run and the third is kept: ImPlot fits axes one frame
   late, and text sizes settle after the first frame. After each frame the
   `ImTextureData` requests are applied to a `texture_store`; after the
-  third, its `ImDrawData` goes to `soft_rasterizer`.
+  third, its `ImDrawData` goes to a `raster_backend`: `soft_rasterizer`
+  by default, or the OpenGL rasterizer of
+  [spec/02_opengl_rasterizer](../02_opengl_rasterizer/DESIGN.md)
+  section 3.
 
 ImGui's current-context pointer is a process global, so `render_figure()`
 must not run on two threads at once. The CLI renders one figure per
@@ -906,6 +914,12 @@ it as an invalid source.
   embedded font, never a file on disk.
 - Metadata survives only byte-exact copies; services that re-encode images
   drop it. The README says so.
+- No OpenGL, EGL or GLX library is linked; the optional OpenGL rasterizer
+  opens them at run time (spec/02_opengl_rasterizer/DESIGN.md section 8),
+  and the `nymph_no_gl_linkage` test checks the executable. Goal 3's "same
+  bytes" holds for the software rasterizer (`--rasterizer software`, and
+  the library's `render_png()`); OpenGL output is repeatable per device,
+  not across GPUs.
 
 Dependencies (git submodules in `extern/`, built from source by
 `cmake/NymphDependencies.cmake`, initialised lazily by

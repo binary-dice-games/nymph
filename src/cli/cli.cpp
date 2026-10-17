@@ -18,6 +18,7 @@
 #include "fonts/embedded_fonts.hpp"
 #include "nymph.hpp"
 #include "png/png_meta.hpp"
+#include "render/renderer_options.hpp"
 
 namespace bdg::nymph {
 
@@ -33,8 +34,11 @@ constexpr const char* kUsage =
     "       nymph check <in>                      validate without rendering; silent when valid\n"
     "       nymph schema [<Type>] [--markdown]    element reference\n"
     "       nymph fonts [--licenses]              embedded fonts (names for `font:`), or their licences\n"
+    "       nymph rasterizers                     whether OpenGL can be used here, and why not\n"
     "       nymph --version | --help\n"
-    "render writes <in> with its extension replaced by .png unless -o is given; -o - writes to stdout.\n";
+    "render writes <in> with its extension replaced by .png unless -o is given; -o - writes to stdout.\n"
+    "--rasterizer software|opengl chooses how a render draws (default opengl: the GPU when there is one,\n"
+    "otherwise the software rasterizer).\n";
 
 /// A failure to report as `nymph: <file>: <message>`.
 struct cli_failure {
@@ -48,19 +52,20 @@ struct usage_error {
 };
 
 struct options {
-  std::string command; ///< "", render, extract, check, schema, fonts
+  std::string command; ///< "", render, extract, check, schema, fonts, rasterizers
   std::vector<std::string> positional;
   std::optional<std::string> output;
   bool markdown = false;
   bool licenses = false;
+  std::optional<rasterizer> raster; ///< set by --rasterizer
 };
 
 options parse(std::span<const std::string_view> args) {
   options o;
   size_t i = 0;
   if (!args.empty() &&
-      (args[0] == "render" || args[0] == "extract" || args[0] == "check" || args[0] == "schema" ||
-       args[0] == "fonts")) {
+      (args[0] == "render" || args[0] == "extract" || args[0] == "check" || args[0] == "schema" || args[0] == "fonts" ||
+       args[0] == "rasterizers")) {
     o.command = std::string(args[0]);
     i = 1;
   }
@@ -71,6 +76,18 @@ options parse(std::span<const std::string_view> args) {
         throw usage_error{"-o needs a file name"};
       }
       o.output = std::string(args[++i]);
+    } else if (a == "--rasterizer") {
+      if (i + 1 >= args.size()) {
+        throw usage_error{"--rasterizer needs software or opengl"};
+      }
+      const std::string_view value = args[++i];
+      if (value == "software") {
+        o.raster = rasterizer::software;
+      } else if (value == "opengl") {
+        o.raster = rasterizer::opengl;
+      } else {
+        throw usage_error{"unknown rasterizer '" + std::string(value) + "' (rasterizers: software, opengl)"};
+      }
     } else if (a == "--markdown" && o.command == "schema") {
       o.markdown = true;
     } else if (a == "--licenses" && o.command == "fonts") {
@@ -203,12 +220,24 @@ std::string png_name_for(const std::string& in) {
 }
 
 /// `render`: `input` (YAML, or a nymph PNG whose source is re-rendered) to
-/// a PNG at `-o`, or next to the input.
-int do_render(const options& o, const std::string& path, const bytes_t& input, std::ostream& out) {
+/// a PNG at `-o`, or next to the input, with the rasterizer of
+/// `--rasterizer` (default OpenGL, falling back silently; an explicit
+/// `--rasterizer opengl` warns on fallback).
+int do_render(
+    const options& o,
+    const std::string& path,
+    const bytes_t& input,
+    std::ostream& out,
+    std::ostream& err,
+    const renderer_test_options& gl_options) {
   const std::string source = source_of(input, path);
   std::vector<uint8_t> png;
   try {
-    png = render_png(source);
+    renderer r = make_renderer(o.raster.value_or(rasterizer::opengl), gl_options);
+    png = r.render_png(source);
+    if (o.raster == rasterizer::opengl && r.last_used() != rasterizer::opengl) {
+      err << "nymph: warning: OpenGL unavailable (" << r.fallback_reason() << "); used the software rasterizer\n";
+    }
   } catch (const error&) {
     throw; // a problem in the source: reported with its position
   } catch (const std::exception& e) {
@@ -281,6 +310,21 @@ int do_fonts(const options& o, std::ostream& out) {
   return 0;
 }
 
+/// `rasterizers`: one line per rasterizer, saying whether it can be used.
+int do_rasterizers(const options& o, std::ostream& out, const renderer_test_options& gl_options) {
+  if (!o.positional.empty() || o.output) {
+    throw usage_error{"rasterizers takes no arguments"};
+  }
+  out << "software: available\n";
+  const renderer r = make_renderer(rasterizer::opengl, gl_options);
+  if (r.active() == rasterizer::opengl) {
+    out << "opengl: available (" << r.device_name() << ")\n";
+  } else {
+    out << "opengl: unavailable (" << r.fallback_reason() << ")\n";
+  }
+  return 0;
+}
+
 /// The input file of the command, for error messages.
 std::string input_label(const options& o) {
   return o.positional.empty() ? "nymph" : label_of(o.positional[0]);
@@ -289,6 +333,15 @@ std::string input_label(const options& o) {
 } // namespace
 
 int run_cli(std::span<const std::string_view> args, std::istream& in, std::ostream& out, std::ostream& err) {
+  return run_cli(args, in, out, err, renderer_test_options{});
+}
+
+int run_cli(
+    std::span<const std::string_view> args,
+    std::istream& in,
+    std::ostream& out,
+    std::ostream& err,
+    const renderer_test_options& gl_options) {
   for (std::string_view a : args) {
     if (a == "--help" || a == "-h") {
       out << kUsage;
@@ -302,6 +355,12 @@ int run_cli(std::span<const std::string_view> args, std::istream& in, std::ostre
   options o;
   try {
     o = parse(args);
+    if (o.raster && !o.command.empty() && o.command != "render") {
+      throw usage_error{"--rasterizer applies only to rendering"};
+    }
+    if (o.command == "rasterizers") {
+      return do_rasterizers(o, out, gl_options);
+    }
     if (o.command == "schema") {
       return do_schema(o, out);
     }
@@ -326,9 +385,12 @@ int run_cli(std::span<const std::string_view> args, std::istream& in, std::ostre
         throw usage_error{"rendering from stdin needs -o <out.png> (or -o - for stdout)"};
       }
       o.command = is_png(input) ? "extract" : "render";
+      if (o.raster && o.command != "render") {
+        throw usage_error{"--rasterizer applies only to rendering (the input is a PNG: use nymph render)"};
+      }
     }
     if (o.command == "render") {
-      return do_render(o, path, input, out);
+      return do_render(o, path, input, out, err, gl_options);
     }
     if (o.command == "extract") {
       return do_extract(o, path, input, out);

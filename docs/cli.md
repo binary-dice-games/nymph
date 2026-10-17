@@ -5,9 +5,11 @@ nymph chart.yaml              # render: writes chart.png
 nymph chart.png               # extract: prints the YAML the image carries
 nymph check chart.yaml        # validate only; prints nothing when valid
 nymph schema PlotLine         # what PlotLine accepts
+nymph rasterizers             # can this machine draw with the GPU?
 ```
 
-`nymph` needs no display, window or GPU: it draws on the CPU.
+`nymph` needs no display, window or GPU. It draws with OpenGL when a GPU
+is available and on the CPU otherwise ([Rasterizers](#rasterizers)).
 
 ## Commands
 
@@ -22,6 +24,7 @@ nymph schema PlotLine         # what PlotLine accepts
 | `nymph schema --markdown` | The reference as Markdown ([elements.md](elements.md) is generated from it). |
 | `nymph fonts` | The font names `font:` accepts, one per line: `default` and every embedded font file. |
 | `nymph fonts --licenses` | The licence texts of the embedded fonts. |
+| `nymph rasterizers` | Whether each rasterizer can be used here: `software: available`, then `opengl: available (<device>)` or `opengl: unavailable (<reason>)`. Exit 0 either way. |
 | `nymph --version`, `nymph --help` | Version, usage. |
 
 `-o -` writes to standard output, so nymph works in a pipe:
@@ -29,6 +32,30 @@ nymph schema PlotLine         # what PlotLine accepts
 ```sh
 generate-yaml | nymph render - -o - > chart.png
 ```
+
+## Rasterizers
+
+`render` and the implicit render of `nymph <in>` take
+`--rasterizer software|opengl`:
+
+| Value | Draws with |
+|---|---|
+| `opengl` (default) | The GPU, through OpenGL 3.3 loaded at run time (EGL on Linux, needing no display server; `opengl32.dll` on Windows). If OpenGL cannot be used (no library, no GPU driver, only a CPU OpenGL such as Mesa llvmpipe, an image larger than the GPU allows, a driver error), the image is drawn by the software rasterizer instead and the command still succeeds. |
+| `software` | nymph's own CPU rasterizer. Never touches OpenGL, and gives the same bytes for the same source and nymph build on every machine. |
+
+Without the option, a fallback is silent. With an explicit
+`--rasterizer opengl`, a fallback prints one line on standard error and
+still exits 0:
+
+```
+nymph: warning: OpenGL unavailable (libEGL.so.1: cannot open shared object file: No such file or directory); used the software rasterizer
+```
+
+The two rasterizers draw the same picture; their pixels can differ
+slightly at anti-aliased edges, and OpenGL images can differ between GPUs.
+Use `--rasterizer software` when images must compare byte for byte.
+`--rasterizer` on any other command, or an unknown value, is a usage error
+(exit 2).
 
 ## Exit codes and errors
 

@@ -8,6 +8,9 @@ project(
   LANGUAGES C CXX)
 
 option(NYMPH_BUILD_TESTS "Build the nymph tests" ${PROJECT_IS_TOP_LEVEL})
+# The OpenGL rasterizer loads OpenGL at run time; nothing is linked and no
+# GL headers are needed (spec/02_opengl_rasterizer/DESIGN.md section 5).
+option(NYMPH_OPENGL "Build the optional OpenGL rasterizer" ON)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED True)

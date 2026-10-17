@@ -45,3 +45,36 @@ nymph_add_test(test_docs test_docs.cpp)
 target_compile_definitions(test_docs PRIVATE NYMPH_SOURCE_DIR="${PROJECT_SOURCE_DIR}")
 nymph_add_test(test_fonts test_fonts.cpp)
 target_compile_definitions(test_fonts PRIVATE NYMPH_FONTS_DIR="${NYMPH_FONTS_DIR}")
+
+# ── OpenGL rasterizer (spec/02_opengl_rasterizer) ────────────────────────────
+
+# The nymph executable must not link any OpenGL library.
+if(TARGET nymph-cli)
+  if(MSVC)
+    find_program(NYMPH_DUMPBIN dumpbin)
+  endif()
+  if(NYMPH_DUMPBIN)
+    set(_nymph_linkage_tool -DDUMPBIN=${NYMPH_DUMPBIN})
+  elseif(CMAKE_OBJDUMP)
+    set(_nymph_linkage_tool -DOBJDUMP=${CMAKE_OBJDUMP})
+  endif()
+  if(_nymph_linkage_tool)
+    add_test(NAME nymph_no_gl_linkage
+      COMMAND ${CMAKE_COMMAND} -DBINARY=$<TARGET_FILE:nymph-cli> ${_nymph_linkage_tool}
+              -P ${PROJECT_SOURCE_DIR}/cmake/NymphCheckLinkage.cmake)
+  else()
+    message(STATUS "nymph: no objdump or dumpbin found; skipping the OpenGL linkage test")
+  endif()
+endif()
+
+# Runs with or without NYMPH_OPENGL: the fallback must work either way.
+nymph_add_test(test_renderer test_renderer.cpp)
+target_compile_definitions(test_renderer PRIVATE NYMPH_SOURCE_DIR="${PROJECT_SOURCE_DIR}")
+target_link_libraries(test_renderer PRIVATE nymph_stb)
+
+if(NYMPH_OPENGL)
+  nymph_add_test(test_gl_loader test_gl_loader.cpp)
+  nymph_add_test(test_gl_device test_gl_device.cpp)
+  nymph_add_test(test_gl_rasterizer test_gl_rasterizer.cpp)
+  target_compile_definitions(test_gl_rasterizer PRIVATE NYMPH_SOURCE_DIR="${PROJECT_SOURCE_DIR}")
+endif()

@@ -3,8 +3,9 @@
 nymph is a command-line tool that turns a YAML file describing a chart
 into a PNG image, and a nymph PNG back into its YAML (the YAML is stored
 inside the image). It draws 2D and 3D plots, labels and layouts with Dear
-ImGui, ImPlot and ImPlot3D and rasterizes them on the CPU with its own
-software rasterizer: no GPU, window or display needed.
+ImGui, ImPlot and ImPlot3D and rasterizes them with OpenGL when a GPU is
+available, or on the CPU with its own software rasterizer: no GPU, window
+or display needed, and no OpenGL library linked.
 It is meant for AI agents that need to show information as a chart.
 
 It started as wish's `nymph` module and is now standalone, with no wish or
@@ -39,6 +40,7 @@ root:
 data: {revenue: [12, 15, 11, 18]}
 YAML
 nymph chart.yaml        # writes chart.png (no display or GPU needed)
+nymph chart.yaml --rasterizer software   # always the CPU: same bytes on every machine
 nymph chart.png         # prints the YAML back
 ```
 
@@ -94,6 +96,7 @@ carries its source: `bdg::nymph::extract_source(png)` returns it.
 | **Text style** | `font` (an embedded font by file name), `font_size` and `text_color` on `image`, layouts, plots and labels, inherited down the tree. `nymph fonts` lists the fonts. |
 | **Provenance** | An optional `source` key records the prompt, query or code that made the data; it travels in the PNG for the next edit. |
 | **Round trip** | The PNG carries its YAML; `nymph image.png` prints it back byte for byte. |
+| **Rasterizers** | `--rasterizer opengl` (CLI default: the GPU, loaded at run time, falling back silently) or `software` (byte-exact, the library default). `nymph rasterizers` says what this machine can use. |
 
 ## Further Documentation
 
@@ -108,7 +111,7 @@ carries its source: `bdg::nymph::extract_source(png)` returns it.
 | [spec/INDEX.md](spec/INDEX.md) | Index of the project specifications (one folder per project, with its DESIGN.md and PLAN.md) |
 | [spec/01_core_features/DESIGN.md](spec/01_core_features/DESIGN.md) | Architecture, source format, key abstractions, design decisions |
 | [spec/01_core_features/PLAN.md](spec/01_core_features/PLAN.md) | Ordered implementation steps and their tests |
-| [spec/02_opengl_rasterizer/DESIGN.md](spec/02_opengl_rasterizer/DESIGN.md) | Planned OpenGL rasterizer: run-time loading, fallback, `--rasterizer` |
+| [spec/02_opengl_rasterizer/DESIGN.md](spec/02_opengl_rasterizer/DESIGN.md) | The OpenGL rasterizer: run-time loading, headless contexts, fallback, `--rasterizer` |
 | [spec/02_opengl_rasterizer/PLAN.md](spec/02_opengl_rasterizer/PLAN.md) | Its implementation steps and tests |
 | [CHANGELOG.md](CHANGELOG.md) | User-facing changes between releases |
 | [CLAUDE.md](CLAUDE.md) | Coding style and project rules for AI agents and contributors |

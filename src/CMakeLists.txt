@@ -8,6 +8,8 @@ add_library(nymph STATIC
   render/texture_store.cpp
   render/soft_rasterizer.hpp
   render/soft_rasterizer.cpp
+  render/raster_backend.hpp
+  render/renderer_options.hpp
   render/image_options.hpp
   render/draw_context.hpp
   render/draw_context.cpp
@@ -63,3 +65,31 @@ target_include_directories(nymph PUBLIC
   ${CMAKE_CURRENT_BINARY_DIR}/generated
 )
 target_link_libraries(nymph PUBLIC nymph_imgui PRIVATE yaml nymph_stb)
+
+# ── OpenGL rasterizer (optional; OpenGL itself is loaded at run time) ────────
+
+if(NYMPH_OPENGL)
+  target_sources(nymph PRIVATE
+    render/gl/shared_library.hpp
+    render/gl/shared_library.cpp
+    render/gl/gl_api.hpp
+    render/gl/gl_api.cpp
+    render/gl/gl_device.hpp
+    render/gl/gl_device.cpp
+    render/gl_rasterizer.hpp
+    render/gl_rasterizer.cpp
+  )
+  # EGL and WGL share nothing but the interface: one file each.
+  if(WIN32)
+    target_sources(nymph PRIVATE render/gl/gl_device_win.cpp)
+  else()
+    target_sources(nymph PRIVATE render/gl/gl_device_posix.cpp)
+  endif()
+  target_compile_definitions(nymph PRIVATE NYMPH_HAS_OPENGL=1)
+  if(WIN32)
+    # System libraries for the hidden window and pixel format; not OpenGL.
+    target_link_libraries(nymph PRIVATE user32 gdi32)
+  else()
+    target_link_libraries(nymph PRIVATE ${CMAKE_DL_LIBS})
+  endif()
+endif()

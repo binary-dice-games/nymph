@@ -11,6 +11,8 @@
 #include <string_view>
 #include <vector>
 #include "cli/cli.hpp"
+#include "nymph.hpp"
+#include "render/renderer_options.hpp"
 
 namespace bdg::nymph {
 namespace {
@@ -67,13 +69,21 @@ class cli : public ::testing::Test {
   }
 
   run_result run(std::initializer_list<std::string> args, const std::string& stdin_text = "") const {
+    return run_with(renderer_test_options{}, args, stdin_text);
+  }
+
+  /// run() with the renderer's internal test options.
+  run_result run_with(
+      const renderer_test_options& gl_options,
+      std::initializer_list<std::string> args,
+      const std::string& stdin_text = "") const {
     std::vector<std::string> owned(args);
     std::vector<std::string_view> views(owned.begin(), owned.end());
     std::istringstream in(stdin_text);
     std::ostringstream out;
     std::ostringstream err;
     run_result r;
-    r.code = run_cli(views, in, out, err);
+    r.code = run_cli(views, in, out, err, gl_options);
     r.out = out.str();
     r.err = err.str();
     return r;
@@ -319,6 +329,109 @@ TEST_F(cli, FontsListsTheNamesAndPrintsTheLicences) {
   EXPECT_NE(licenses.out.find("== FiraSans-OFL.txt =="), std::string::npos);
   EXPECT_NE(licenses.out.find("SIL OPEN FONT LICENSE"), std::string::npos);
   EXPECT_EQ(run({"fonts", "x.ttf"}).code, 2);
+}
+
+// ── Rasterizers (spec/02_opengl_rasterizer, plan step 6) ─────────────────────
+
+#if defined(_WIN32)
+const char* const kMissingGL = "nymph-no-such-opengl32.dll";
+#else
+const char* const kMissingGL = "nymph-no-such-libEGL.so";
+#endif
+
+/// The forced missing library, or, in a build without OpenGL, that.
+bool names_missing_gl(const std::string& text) {
+  return text.find(kMissingGL) != std::string::npos || text.find("built without OpenGL support") != std::string::npos;
+}
+
+std::string png_text(const std::vector<uint8_t>& png) {
+  return std::string(png.begin(), png.end());
+}
+
+TEST_F(cli, SoftwareRasterizerGivesTheLibraryBytes) {
+  write("chart.yaml", kSource);
+  const run_result r = run({"render", path("chart.yaml"), "--rasterizer", "software"});
+  EXPECT_EQ(r.code, 0) << r.err;
+  EXPECT_EQ(r.err, "");
+  EXPECT_EQ(read("chart.png"), png_text(render_png(kSource)));
+  // The implicit render takes it too, before or after the file.
+  EXPECT_EQ(run({"--rasterizer", "software", path("chart.yaml"), "-o", path("b.png")}).code, 0);
+  EXPECT_EQ(read("b.png"), read("chart.png"));
+}
+
+TEST_F(cli, BadRasterizerArgumentsExitTwo) {
+  write("chart.yaml", kSource);
+  for (std::initializer_list<std::string> args : {
+           std::initializer_list<std::string>{path("chart.yaml"), "--rasterizer", "vulkan"},
+           {path("chart.yaml"), "--rasterizer"},
+           {"check", path("chart.yaml"), "--rasterizer", "software"},
+           {"schema", "--rasterizer", "opengl"},
+           {"rasterizers", "foo"},
+       }) {
+    const run_result r = run(args);
+    EXPECT_EQ(r.code, 2) << r.err;
+    EXPECT_NE(r.err.find("usage:"), std::string::npos);
+  }
+  ASSERT_EQ(run({path("chart.yaml")}).code, 0);
+  // `nymph chart.png --rasterizer ...` is an extract: the option does not apply.
+  EXPECT_EQ(run({path("chart.png"), "--rasterizer", "opengl"}).code, 2);
+  EXPECT_FALSE(exists("chart.yaml.png"));
+}
+
+TEST_F(cli, DefaultRenderIsSilentWhateverTheRasterizer) {
+  write("chart.yaml", kSource);
+  const run_result r = run({path("chart.yaml")});
+  EXPECT_EQ(r.code, 0);
+  EXPECT_EQ(r.err, "");
+  ASSERT_TRUE(exists("chart.png"));
+  EXPECT_EQ(run({"extract", path("chart.png")}).out, kSource);
+}
+
+TEST_F(cli, FallbackIsSilentByDefaultAndWarnsWhenOpenGLWasAskedFor) {
+  write("chart.yaml", kSource);
+  renderer_test_options no_gl;
+  no_gl.library_names = {kMissingGL};
+
+  const run_result quiet = run_with(no_gl, {path("chart.yaml"), "-o", path("quiet.png")});
+  EXPECT_EQ(quiet.code, 0);
+  EXPECT_EQ(quiet.err, "");
+  EXPECT_EQ(read("quiet.png"), png_text(render_png(kSource)));
+
+  const run_result loud = run_with(no_gl, {path("chart.yaml"), "--rasterizer", "opengl", "-o", path("loud.png")});
+  EXPECT_EQ(loud.code, 0);
+  EXPECT_EQ(lines(loud.err), 1u) << loud.err;
+  EXPECT_EQ(loud.err.rfind("nymph: warning: OpenGL unavailable (", 0), 0u) << loud.err;
+  EXPECT_TRUE(names_missing_gl(loud.err)) << loud.err;
+  EXPECT_EQ(read("loud.png"), png_text(render_png(kSource)));
+}
+
+TEST_F(cli, RasterizersReportsWhatIsAvailable) {
+  const run_result r = run({"rasterizers"});
+  EXPECT_EQ(r.code, 0) << r.err;
+  const auto [available, text] = probe_opengl();
+  EXPECT_EQ(
+      r.out, "software: available\nopengl: " + std::string(available ? "available (" : "unavailable (") + text + ")\n");
+
+  renderer_test_options no_gl;
+  no_gl.library_names = {kMissingGL};
+  const run_result missing = run_with(no_gl, {"rasterizers"});
+  EXPECT_EQ(missing.code, 0);
+  EXPECT_NE(missing.out.find("opengl: unavailable ("), std::string::npos) << missing.out;
+  EXPECT_TRUE(names_missing_gl(missing.out)) << missing.out;
+}
+
+TEST_F(cli, ExplicitOpenGLWithAGPUWritesAnImageWithoutWarning) {
+  renderer_test_options gl;
+  gl.allow_software_gl = true;
+  const renderer probe = make_renderer(rasterizer::opengl, gl);
+  if (probe.active() != rasterizer::opengl) {
+    GTEST_SKIP() << "no OpenGL device: " << probe.fallback_reason();
+  }
+  write("chart.yaml", kSource);
+  const run_result r = run_with(gl, {path("chart.yaml"), "--rasterizer", "opengl"});
+  EXPECT_EQ(r.code, 0);
+  EXPECT_EQ(r.err, "");
+  EXPECT_EQ(run({"extract", path("chart.png")}).out, kSource);
 }
 
 } // namespace

@@ -22,6 +22,11 @@ skipped, and on what device.
 
 ### 1. Rasterizer seam
 
+*Result: done.* `src/render/raster_backend.hpp` (with `raster_too_large`,
+added in step 5), `render_frames()` / `render_figure()` overloads; 4 tests
+in `test_figure_renderer.cpp`. `layout_figure()` keeps the name
+`nymph_soft_rasterizer` (it never rasterizes). Existing tests unchanged.
+
 **Goal:** `render_frames()` draws through a `raster_backend`, and the
 software rasterizer is one; images are byte-identical to before.
 
@@ -48,6 +53,14 @@ software rasterizer is one; images are byte-identical to before.
 - All existing tests pass unmodified (the software bytes are unchanged).
 
 ### 2. Run-time loading and the GL function table
+
+*Result: done.* `shared_library` gained a `pin` flag (kept in the process
+after close) for EGL and opengl32; `gl_api` is generated from one X-macro
+list; 5 tests in `test_gl_loader.cpp`; `nymph_no_gl_linkage` (CTest)
+passes for the Linux binary and, run by hand, for the MinGW `nymph.exe`
+(imports GDI32, KERNEL32, msvcrt, USER32 and the MinGW runtime). Checked
+by hand that the script fails for an ELF binary linked with `libEGL.so.1`
+and a PE binary importing `OPENGL32.dll`.
 
 **Goal:** nymph can open a shared library and fill a table of OpenGL
 function pointers at run time, with no OpenGL header or library at build
@@ -93,6 +106,14 @@ time, behind the `NYMPH_OPENGL` option.
 
 ### 3. Headless OpenGL device on Linux (EGL)
 
+*Result: done.* `gl_device.cpp` holds the shared part (function table,
+version check, software-GL rule, limits). The EGL display is never
+terminated (shared per process; DESIGN.md section 3). When every display
+fails, the reason that got furthest is reported. 6 tests in
+`test_gl_device.cpp` (with `tests/gl_test_device.hpp`); GL tests ran on
+Mesa llvmpipe 25.2.8 through EGL (no display server), and skip with the
+reason when libEGL is absent.
+
 **Goal:** on Linux, `gl_device::create()` gives a current-able OpenGL 3.3
 core context with no window or display server, or a one-line reason why
 not.
@@ -131,6 +152,17 @@ not.
   the "software OpenGL" reason (skips on a hardware GPU).
 
 ### 4. OpenGL rasterizer
+
+*Result: done.* Departures: rows are not reversed after the read (the
+projection draws the top edge into framebuffer row 0) and alpha is not
+forced (DESIGN.md section 3); textures are uploaded when a command first
+uses them. `tests/raster_scenes.hpp` (builder, textures, 14 scenes),
+`tests/raster_compare.hpp`, 7 tests in `test_gl_rasterizer.cpp`. Measured
+on llvmpipe: scenes worst 100 % within 2, max 1, mean 0.09; the ten
+examples plus `scale: 2` and dark variants of two worst max 44, mean
+0.0044, 100.000 % within 2 (rounded). Thresholds kept, with the share
+rule relaxed to "all but one pixel" for images under 200 pixels. Not
+measured on a hardware GPU (none available where this was built).
 
 **Goal:** `gl_backend` turns ImGui draw data into an image that matches
 the software rasterizer within the tolerance of DESIGN.md section 6.
@@ -178,6 +210,12 @@ the software rasterizer within the tolerance of DESIGN.md section 6.
 
 ### 5. `renderer` and fallback
 
+*Result: done.* `rasterizer`, `rasterizer_name()`, `renderer`,
+`probe_opengl()` in `nymph.hpp`; `src/render/renderer_options.hpp`
+(`renderer_test_options`, `make_renderer()`); `raster_too_large` tells the
+per-image fallback from the permanent one; `gl_backend::limit_size()` lets
+the over-size test run on any device. 8 tests in `test_renderer.cpp`.
+
 **Goal:** library users choose the rasterizer, and every OpenGL failure
 falls back to software as the table in DESIGN.md section 3 says.
 
@@ -215,6 +253,13 @@ falls back to software as the table in DESIGN.md section 3 says.
 - A moved-from renderer can be destroyed; the moved-to one renders.
 
 ### 6. Command line
+
+*Result: done.* `--rasterizer` anywhere among the arguments; also a
+usage error on an implicit extract (`nymph x.png --rasterizer opengl`).
+`run_cli` overload with `renderer_test_options`. 6 tests in
+`test_cli.cpp`. Manual: with `libEGL.so.1` moved away, `nymph
+rasterizers` reports it missing and `nymph examples/dashboard.yaml` writes
+a PNG identical to the committed one; `ldd nymph` lists no GL library.
 
 **Goal:** `nymph` renders with OpenGL by default, falls back silently,
 warns only when OpenGL was requested by name, and can report what is
@@ -258,6 +303,17 @@ not assumed):
 
 ### 7. Windows and MSYS2 (WGL)
 
+*Result: done, verified by cross build and Wine only.* Built with MinGW-w64
+(GCC 13, the MSYS2 toolchain family) from Linux; every test executable run
+under Wine 9 passes (one pre-existing symlink test skips on Windows). With
+a virtual X server, Wine's opengl32 reaches Mesa llvmpipe, so the WGL path
+(hidden window, pixel format, `wglCreateContextAttribsARB`, lookups
+through `wglGetProcAddress` / `GetProcAddress`, context restore) ran for
+real: the GL tests passed with the same differences as on Linux. Without
+a display, `nymph rasterizers` reports "no hidden window for OpenGL" and
+the GL tests skip. Still to do on real machines: native MSVC (`dumpbin`
+linkage test, `/W4`), MSYS2, and a hardware GPU on Windows.
+
 **Goal:** the same OpenGL path works on native Windows (MSVC) and MSYS2,
 loaded from `opengl32.dll` at run time, with the same fallback.
 
@@ -286,6 +342,23 @@ loaded from `opengl32.dll` at run time, with the same fallback.
 
 ### 8. Measurements and documentation
 
+*Result: done; the timing question is open with the user.* No hardware
+GPU was available, so the timings use llvmpipe (4 cores) as the OpenGL
+device, release build:
+
+| Example | software render_png | llvmpipe device creation | llvmpipe render (first / again) | software rasterization alone |
+|---|---|---|---|---|
+| `line` | 30 ms | 35 ms | 50 / 28 ms | 4 ms |
+| `dashboard` | 42 ms | 11 ms | 58 / 45 ms | 6 ms |
+| `surface`, `scale: 2` | 145 ms | 9 ms | 148 / 126 ms | 31 ms |
+
+The last column is the most a faster rasterizer can save: binding, frame
+generation and above all PNG encoding (stb, level 8) take the rest. A
+hardware GPU cannot make `nymph` much faster per image, and creating its
+context (tens of ms on NVIDIA's EGL) can cost more than it saves on small
+charts. The CLI default stays `opengl` as requested; whether to keep it
+is raised with the user.
+
 **Goal:** the project's claims are measured and every document matches the
 code.
 
@@ -310,19 +383,28 @@ code.
 
 ## Completion Criteria
 
-- [ ] All tests pass under `ctest -j` three times in a row, with OpenGL
-      available (GL tests run) and without it (GL tests skip).
+- [x] All tests pass under `ctest -j` three times in a row, with OpenGL
+      available (GL tests run) and without it (GL tests skip). *Linux:
+      230 tests, three runs with Mesa llvmpipe through EGL, one with
+      libEGL removed.*
 - [ ] Builds and tests pass on Linux (GCC), MSYS2 and native Windows
-      (MSVC), and with `-DNYMPH_OPENGL=OFF`.
-- [ ] The `nymph` executable lists no OpenGL, EGL, GLX or `opengl32`
+      (MSVC), and with `-DNYMPH_OPENGL=OFF`. *Linux (GCC) and
+      `NYMPH_OPENGL=OFF` (212 tests) verified; a MinGW-w64 cross build
+      passes every test under Wine 9. Native MSVC and MSYS2 not yet.*
+- [x] The `nymph` executable lists no OpenGL, EGL, GLX or `opengl32`
       library among its dependencies (`nymph_no_gl_linkage`), and renders
-      on a machine where none is installed.
+      on a machine where none is installed. *Linux by test and with
+      libEGL removed; the MinGW `nymph.exe` checked by hand.*
 - [ ] `nymph chart.yaml` uses OpenGL when a hardware GPU is available,
       and otherwise falls back silently with exit 0; `--rasterizer
-      opengl` warns on fallback; `nymph rasterizers` says why.
-- [ ] `--rasterizer software` and the library's `render_png()` give the
-      same bytes as before this project for every example.
-- [ ] OpenGL images of every example match the software images within
-      the DESIGN.md tolerance.
-- [ ] README, `docs/`, CHANGELOG, both projects' DESIGN.md and
+      opengl` warns on fallback; `nymph rasterizers` says why. *The
+      fallback, warning and report are verified; use of a hardware GPU is
+      not (none available), only the same path on llvmpipe.*
+- [x] `--rasterizer software` and the library's `render_png()` give the
+      same bytes as before this project for every example. *All ten
+      committed example PNGs are reproduced byte for byte.*
+- [x] OpenGL images of every example match the software images within
+      the DESIGN.md tolerance. *On llvmpipe, through EGL and through WGL
+      under Wine.*
+- [x] README, `docs/`, CHANGELOG, both projects' DESIGN.md and
       `spec/INDEX.md` match the code.

@@ -10,6 +10,8 @@
 #include <cstdint>
 #include <set>
 #include <stdexcept>
+#include <string>
+#include <vector>
 #include "render/figure_renderer.hpp"
 
 namespace bdg::nymph {
@@ -194,6 +196,73 @@ TEST(figure_renderer, RejectsOutOfRangeOptions) {
   EXPECT_THROW(render_frames(padded, nothing), std::invalid_argument);
   EXPECT_TRUE(is_known_theme("classic"));
   EXPECT_FALSE(is_known_theme("wish"));
+}
+
+// ── Raster backends (spec/02_opengl_rasterizer, plan step 1) ─────────────────
+
+/// Records what render_frames() hands it and returns a marker image.
+class recording_backend final : public raster_backend {
+ public:
+  const char* name() const noexcept override {
+    return "nymph_test_backend";
+  }
+  image rasterize(const ImDrawData& data, const texture_store& textures, ImU32 clear) override {
+    ++calls;
+    width = static_cast<int>(data.DisplaySize.x * data.FramebufferScale.x + 0.5f);
+    height = static_cast<int>(data.DisplaySize.y * data.FramebufferScale.y + 0.5f);
+    clear_color = clear;
+    texture_count = textures.size();
+    if (fail) {
+      throw raster_unavailable("test backend unavailable");
+    }
+    image img;
+    img.width = 1;
+    img.height = 1;
+    img.rgba = {1, 2, 3, 4};
+    return img;
+  }
+  int calls = 0;
+  int width = 0;
+  int height = 0;
+  ImU32 clear_color = 0;
+  size_t texture_count = 0;
+  bool fail = false;
+};
+
+TEST(figure_renderer, BackendIsCalledOnceWithTheLastFrame) {
+  recording_backend backend;
+  const image img = render_frames(options(120, 80, 2), &draw_line_plot, backend);
+  EXPECT_EQ(backend.calls, 1);
+  EXPECT_EQ(backend.width, 240);
+  EXPECT_EQ(backend.height, 160);
+  EXPECT_EQ(backend.clear_color, IM_COL32(240, 240, 240, 255)); // light WindowBg, opaque
+  EXPECT_GE(backend.texture_count, 1u); // the font atlas
+  EXPECT_EQ(img.rgba, (std::vector<uint8_t>{1, 2, 3, 4}));
+}
+
+TEST(figure_renderer, BackendNameIsTheRendererNameWhileDrawing) {
+  recording_backend backend;
+  std::string seen;
+  render_frames(options(64, 64), [&](draw_context&) { seen = ImGui::GetIO().BackendRendererName; }, backend);
+  EXPECT_EQ(seen, "nymph_test_backend");
+  render_frames(options(64, 64), [&](draw_context&) { seen = ImGui::GetIO().BackendRendererName; });
+  EXPECT_EQ(seen, "nymph_soft_rasterizer");
+}
+
+TEST(figure_renderer, RasterUnavailablePropagatesAndContextsAreRestored) {
+  recording_backend backend;
+  backend.fail = true;
+  EXPECT_THROW(render_frames(options(64, 64), &draw_line_plot, backend), raster_unavailable);
+  EXPECT_EQ(ImGui::GetCurrentContext(), nullptr);
+  EXPECT_EQ(ImPlot::GetCurrentContext(), nullptr);
+  EXPECT_EQ(ImPlot3D::GetCurrentContext(), nullptr);
+}
+
+TEST(figure_renderer, SoftwareBackendGivesTheDefaultBytes) {
+  software_backend software;
+  const image a = render_frames(options(160, 120), &draw_line_plot, software);
+  const image b = render_frames(options(160, 120), &draw_line_plot);
+  EXPECT_TRUE(a.rgba == b.rgba);
 }
 
 } // namespace
