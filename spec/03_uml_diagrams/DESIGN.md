@@ -40,6 +40,7 @@ Diagrams in this project, the most used UML kinds (mermaid has each):
 | State | `StateDiagram` | `State` (composite when it has children), `Transition`, `Note` |
 | Activity | `ActivityDiagram` | `Action`, `ActivityControl`, `Flow`, `Note` |
 | Use case | `UseCaseDiagram` | `Actor`, `UseCase`, `UseCaseRelation`, `Note` |
+| Entity-relationship (database structure; not UML, added later) | `ERDiagram` | `Entity`, `Relationship`, `Note` |
 
 Not in this project (section 10 lists where they would go): component,
 deployment, object, package, timing and communication diagrams; activity
@@ -323,6 +324,34 @@ root:
 Errors: `Include` / `Extend` not between use cases, `Association` not
 between an actor and a use case, `Generalization` between different kinds.
 
+### ER diagram
+
+Database structure, after mermaid's `erDiagram`, in crow's foot notation:
+
+```yaml
+root:
+  type: ERDiagram
+  children:
+    - {type: Entity, id: customer, name: CUSTOMER, attributes: ["int id PK", "string email UK"]}
+    - {type: Entity, id: order, name: ORDER, attributes: ["int id PK", "int customer_id FK \"buyer\""]}
+    - {type: Relationship, from: customer, to: order, from_cardinality: ExactlyOne, to_cardinality: ZeroOrMore, label: places}
+```
+
+- `Entity`: `id`, `name` (the table name), `attributes` (`text_array`),
+  `rank`. Each attribute is mermaid's `type name`, then optional keys
+  `PK`, `FK`, `UK` (separated by commas or spaces) and a double-quoted
+  comment; anything else after the name is an error at the field, naming
+  the item. Drawn as a table: a header over one row per attribute, in
+  aligned columns type | name | keys | comment (an empty column takes no
+  space).
+- `Relationship`: `from`, `to` (entities), `from_cardinality`,
+  `to_cardinality` (`ExactlyOne` ||, `ZeroOrOne` o|, `ZeroOrMore` o{,
+  `OneOrMore` |{; defaults `ExactlyOne` and `ZeroOrMore`, a one-to-many),
+  `label`, `identifying` (default true: solid; false: dashed). Each
+  cardinality is drawn at its own end, the "many" crow's foot spreading at
+  the entity and the minimum (circle or bar) behind it. The layout ranks
+  `from` first.
+
 ### `Note`
 
 One element class for every diagram (slot `uml.note`): `text`, `attach`
@@ -398,6 +427,7 @@ text colour with each item, so ImGui's push stacks apply per item:
 | State | `BeginState(id, name, kind)`, `StateActivity(text)`, `EndState()` (states and transitions between them are nested children), `Transition(from, to, label)` |
 | Activity | `Action(id, text, kind)`, `ControlNode(id, kind, label)`, `Flow(from, to, guard)` |
 | Use case | `Actor(id, name, side)`, `UseCase(id, name)`, `UseCaseLink(from, to, kind)` |
+| ER (`Begin/EndERDiagram`) | `BeginEntity(id, name)`, `EntityAttribute(type, name, keys, comment)`, `EndEntity()`; `Relationship(from, to, from_cardinality, to_cardinality, label, flags)` |
 | Any graph | `Note(text, attach_ids, count)` |
 
 Ids are strings hashed with `ImHashStr` into `ImGuiID`s within the
@@ -426,7 +456,8 @@ boundary, control, entity, database cylinder), `RenderPath` (polyline or
 spline, solid or dashed by arc length), `RenderArrowHead` (open, filled,
 hollow triangle, hollow / filled diamond, destroy cross), `RenderEdgeLabel`
 (text on a background box), `RenderFragment` (box, pentagon tab,
-operand separators), `RenderBoundary`. Each takes a rectangle or points,
+operand separators), `RenderBoundary`, `RenderCardinality` (crow's foot
+ends). Each takes a rectangle or points,
 a zoom and colours; curves and circles use an explicit segment count, so
 the geometry does not depend on ImGui's adaptive tessellation.
 
@@ -575,6 +606,7 @@ diagram is a grid, not a graph:
 | `state_diagram.cpp` | `StateDiagram`, `State`, `Transition`. |
 | `activity_diagram.cpp` | `ActivityDiagram`, `Action`, `ActivityControl`, `Flow`. |
 | `usecase_diagram.cpp` | `UseCaseDiagram`, `Actor`, `UseCase`, `UseCaseRelation`. |
+| `er_diagram.cpp` | `ERDiagram`, `Entity` (attribute syntax check), `Relationship`. |
 | `uml.hpp` | `register_uml(registry&)` and the slot names. |
 
 Slots: each diagram has slot `figure` and accepts its item slot and

@@ -353,6 +353,7 @@ written. Each can be `root` or a layout child.
 | `StateDiagram` | `State` (`id`, `name`, `kind`: Simple/Initial/Final/Choice/Fork/Join/History/DeepHistory, `activities`; children make it composite), `Transition` (`from`, `to`, `label`) |
 | `ActivityDiagram` | `Action` (`id`, `text`, `kind`: Action/Send/Receive), `ActivityControl` (`id`, `kind`: Initial/Final/FlowFinal/Decision/Merge/Fork/Join, `label`), `Flow` (`from`, `to`, `guard`) |
 | `UseCaseDiagram` (`system`: boundary title) | `Actor` (`id`, `name`, `side`: Left/Right), `UseCase` (`id`, `name`), `UseCaseRelation` (`from`, `to`, `kind`: Association/Include/Extend/Generalization) |
+| `ERDiagram` (database structure) | `Entity` (`id`, `name`, `attributes`: `"type name PK, FK \"comment\""`), `Relationship` (`from`, `to`, `from_cardinality` / `to_cardinality`: ExactlyOne/ZeroOrOne/ZeroOrMore/OneOrMore, `label`, `identifying`) |
 
 `Note` (`text`, `attach: [ids]`; in sequence diagrams `over: [a, b]` or
 `attach: [a]` with `side`) works in all of them.
@@ -735,6 +736,19 @@ root:
     - {type: Message, from: api, to: app, text: receipt, kind: Reply, deactivate: true}
 ```
 
+### Database tables (ER diagram)
+
+```yaml
+description: Blog database.
+image: {width: 640, height: 420}
+root:
+  type: ERDiagram
+  children:
+    - {type: Entity, id: user, name: USER, attributes: ["int id PK", "string email UK"]}
+    - {type: Entity, id: post, name: POST, attributes: ["int id PK", "int author_id FK", "string title"]}
+    - {type: Relationship, from: user, to: post, from_cardinality: ExactlyOne, to_cardinality: ZeroOrMore, label: writes}
+```
+
 State, activity and use case diagrams follow the same pattern: see
 [examples.md](examples.md).
 
@@ -792,6 +806,7 @@ State, activity and use case diagrams follow the same pattern: see
 | `unknown id 'x'` | An edge or note names an id no node has; the message suggests the closest and lists the ids. |
 | `id 'x' is already used` | Two nodes of one diagram share an id. |
 | `ClassDiagram needs W x H px (at min_zoom ...)` | The diagram does not fit even scaled down: enlarge the image or its space, lower `min_zoom`, or split it. |
+| `only the keys PK, FK and UK` / `needs a type and a name` | An ER attribute is `"type name"`, then optional `PK`, `FK`, `UK` and a `"comment"`. |
 | `declared after the first message` | In a sequence diagram, list every `Participant` before the messages. |
 | `'abc' is not a number` | A referenced column has a non-numeric value at the reported row. |
 | `xs has 3 values but ys has 2` | Series lists must be equally long. |

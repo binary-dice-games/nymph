@@ -54,11 +54,34 @@ Goes in: root, HorizontalLayout, VerticalLayout. Children: Class, ClassRelation,
 | `font_size` | number | `0` | Text size in pixels for this element and everything inside it. 0 (default) inherits the enclosing element's size, or image.font_size. (0 to 96) |
 | `text_color` | colour | `""` | Text colour ("#RRGGBB" or "#RRGGBBAA") for this element and everything inside it: titles, axis and tick labels, legends and labels. Empty (default) inherits, or uses the theme's. |
 
+## ERDiagram
+
+An entity-relationship diagram of a database: entities (tables) with their attributes and keys, joined by relationships in crow's foot notation, laid out automatically. Children: Entity, Relationship, Note.
+
+Goes in: root, HorizontalLayout, VerticalLayout. Children: Entity, Relationship, Note.
+
+| Field | Type | Default | Description |
+|---|---|---|---|
+| `title` | text | `""` | Title drawn above the diagram, at the full text size; empty for none. |
+| `width` | number | `0` | Width in pixels. 0 (default) is the natural width in a layout; as root it fills the image. In a HorizontalLayout a negative value is a stretch weight. (-1000 to 8192) |
+| `height` | number | `0` | Height in pixels. 0 (default) is the natural height in a layout; as root it fills the image. In a VerticalLayout a negative value is a stretch weight. (-1000 to 8192) |
+| `direction` | name | `TopDown` | Direction of the ranks (Graphviz dot's rankdir; mermaid's TB, BT, LR, RL). (one of: TopDown, BottomUp, LeftRight, RightLeft) |
+| `edge_style` | name | `Spline` | Shape of the edges: smooth curves (Spline) or straight segments (Polyline). (one of: Spline, Polyline) |
+| `node_spacing` | number | `0` | Pixels between nodes in one rank (dot's nodesep); 0 uses the default (30). (0 to 500) |
+| `rank_spacing` | number | `0` | Pixels between ranks (dot's ranksep); 0 uses the default (46). (0 to 500) |
+| `min_zoom` | number | `0.5` | Smallest scale the diagram may be drawn at to fit its space. Needing less is an error that gives the size the diagram needs. (0.05 to 1) |
+| `max_zoom` | number | `1` | Largest scale: 1 (default) never enlarges a small diagram; 2 lets it grow to fill a large space. (0.1 to 8) |
+| `line_color` | colour | `""` | Default colour of edges and node outlines; empty for the theme's. |
+| `fill_color` | colour | `""` | Default fill of nodes; empty for the theme's. |
+| `font` | text | `""` | Font of this element's text and of everything inside it: an embedded font file name (default, FiraMono-Bold.ttf, FiraMono-Regular.ttf, FiraSans-Bold.ttf, FiraSans-Italic.ttf, FiraSans-Regular.ttf, PT_Serif-Web-Bold.ttf, PT_Serif-Web-Italic.ttf, PT_Serif-Web-Regular.ttf). Empty (default) inherits the enclosing element's font, or image.font. |
+| `font_size` | number | `0` | Text size in pixels for this element and everything inside it. 0 (default) inherits the enclosing element's size, or image.font_size. (0 to 96) |
+| `text_color` | colour | `""` | Text colour ("#RRGGBB" or "#RRGGBBAA") for this element and everything inside it: titles, axis and tick labels, legends and labels. Empty (default) inherits, or uses the theme's. |
+
 ## HorizontalLayout
 
 Arranges children left-to-right.
 
-Goes in: root, HorizontalLayout, VerticalLayout. Children: ActivityDiagram, ClassDiagram, HorizontalLayout, Label, Plot, Plot3D, Separator, SeparatorText, SequenceDiagram, Spring, StateDiagram, UseCaseDiagram, VerticalLayout.
+Goes in: root, HorizontalLayout, VerticalLayout. Children: ActivityDiagram, ClassDiagram, ERDiagram, HorizontalLayout, Label, Plot, Plot3D, Separator, SeparatorText, SequenceDiagram, Spring, StateDiagram, UseCaseDiagram, VerticalLayout.
 
 | Field | Type | Default | Description |
 |---|---|---|---|
@@ -243,7 +266,7 @@ Goes in: root, HorizontalLayout, VerticalLayout. Children: Actor, UseCase, UseCa
 
 Stacks children top-to-bottom.
 
-Goes in: root, HorizontalLayout, VerticalLayout. Children: ActivityDiagram, ClassDiagram, HorizontalLayout, Label, Plot, Plot3D, Separator, SeparatorText, SequenceDiagram, Spring, StateDiagram, UseCaseDiagram, VerticalLayout.
+Goes in: root, HorizontalLayout, VerticalLayout. Children: ActivityDiagram, ClassDiagram, ERDiagram, HorizontalLayout, Label, Plot, Plot3D, Separator, SeparatorText, SequenceDiagram, Spring, StateDiagram, UseCaseDiagram, VerticalLayout.
 
 | Field | Type | Default | Description |
 |---|---|---|---|
@@ -769,11 +792,45 @@ Goes in: ClassDiagram.
 | `constraint` | true/false | `true` | false: the edge is drawn but does not influence the ranks (dot's constraint). |
 | `color` | colour | `""` | Line colour; empty for the diagram's. |
 
+## Entity
+
+An entity (a database table): a header with its name over a row per attribute.
+
+Goes in: ERDiagram.
+
+| Field | Type | Default | Description |
+|---|---|---|---|
+| `id` | text | `""` | Unique id that relationships and notes name. |
+| `name` | text | `""` | Name shown in the header (the table name); empty shows the id. |
+| `attributes` | list of texts | `[]` | One row per attribute, as in mermaid: "type name", then optional keys PK, FK, UK (comma-separated) and a "comment" in double quotes: "int customer_id FK \"buyer\"". |
+| `rank` | text | `""` | Nodes with the same rank text are placed in one rank (Graphviz dot's rank=same); empty for none. |
+| `color` | colour | `""` | Outline colour; empty for the diagram's. |
+| `fill_color` | colour | `""` | Fill colour; empty for the diagram's. |
+
+## Relationship
+
+A relationship between two entities, with the cardinality allowed at each end.
+
+Goes in: ERDiagram.
+
+| Field | Type | Default | Description |
+|---|---|---|---|
+| `from` | text | `""` | Id of the first entity. |
+| `to` | text | `""` | Id of the second entity. |
+| `from_cardinality` | name | `ExactlyOne` | How many `from` entities one `to` relates to, drawn at the `from` end: ExactlyOne (\|\|), ZeroOrOne (o\|), ZeroOrMore (o{), OneOrMore (\|{). (one of: ExactlyOne, ZeroOrOne, ZeroOrMore, OneOrMore) |
+| `to_cardinality` | name | `ZeroOrMore` | How many `to` entities one `from` relates to, drawn at the `to` end. (one of: ExactlyOne, ZeroOrOne, ZeroOrMore, OneOrMore) |
+| `label` | text | `""` | Verb phrase drawn beside the line ("places"). |
+| `identifying` | true/false | `true` | true: solid line (mermaid's --); false: dashed, a non-identifying relationship (..). |
+| `weight` | number | `1` | How strongly the layout keeps this edge short and straight (Graphviz dot's weight). (0 to 100) |
+| `min_length` | integer | `1` | Least number of ranks between the two ends (dot's minlen); 0 allows one rank. (0 to 10) |
+| `constraint` | true/false | `true` | false: the edge is drawn but does not influence the ranks (dot's constraint). |
+| `color` | colour | `""` | Line colour; empty for the diagram's. |
+
 ## Note
 
 A note. In a graph diagram it sits beside the nodes it is attached to; in a sequence diagram it takes a row, over participants or beside one.
 
-Goes in: ActivityDiagram, ClassDiagram, Fragment, SequenceDiagram, State, StateDiagram, UseCaseDiagram.
+Goes in: ActivityDiagram, ClassDiagram, ERDiagram, Fragment, SequenceDiagram, State, StateDiagram, UseCaseDiagram.
 
 | Field | Type | Default | Description |
 |---|---|---|---|

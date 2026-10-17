@@ -739,3 +739,45 @@ root:
     - {type: UseCaseRelation, from: coupon, to: pay, kind: Extend}
     - {type: UseCaseRelation, from: pay, to: bank}
 ```
+
+## ER diagram (database structure)
+
+Tables with typed attributes, primary / foreign / unique keys and a comment, joined by relationships in crow's foot notation; the dashed line is a non-identifying relationship.
+
+![ER diagram (database structure)](../examples/uml_er.png)
+
+[`examples/uml_er.yaml`](../examples/uml_er.yaml):
+
+```yaml
+nymph: 1
+description: Entity-relationship diagram of an online shop database, with customers, orders, order lines, products and categories.
+image: {width: 820, height: 560, font: FiraSans-Regular.ttf, font_size: 15}
+root:
+  type: ERDiagram
+  title: Shop database
+  children:
+    - type: Entity
+      id: customer
+      name: CUSTOMER
+      attributes: ["int id PK", "string email UK", "string name", "date joined \"first order date\""]
+    - type: Entity
+      id: order
+      name: ORDER
+      attributes: ["int id PK", "int customer_id FK", "date placed", "string status"]
+    - type: Entity
+      id: line
+      name: ORDER_LINE
+      attributes: ["int order_id PK, FK", "int product_id PK, FK", "int quantity", "decimal price"]
+    - type: Entity
+      id: product
+      name: PRODUCT
+      attributes: ["int id PK", "string sku UK", "string name", "int category_id FK"]
+    - type: Entity
+      id: category
+      name: CATEGORY
+      attributes: ["int id PK", "string name"]
+    - {type: Relationship, from: customer, to: order, from_cardinality: ExactlyOne, to_cardinality: ZeroOrMore, label: places}
+    - {type: Relationship, from: order, to: line, from_cardinality: ExactlyOne, to_cardinality: OneOrMore, label: contains}
+    - {type: Relationship, from: product, to: line, from_cardinality: ExactlyOne, to_cardinality: ZeroOrMore, label: "ordered in"}
+    - {type: Relationship, from: category, to: product, from_cardinality: ZeroOrOne, to_cardinality: ZeroOrMore, label: groups, identifying: false}
+```

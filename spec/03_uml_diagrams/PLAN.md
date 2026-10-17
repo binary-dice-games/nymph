@@ -312,6 +312,29 @@ example gains a composite state.
 - `test_docs` (schema doc in step) passes; every example renders to its
   committed PNG byte for byte with the software rasterizer.
 
+### 14. ER diagrams (added after the project shipped)
+
+*Result: done.* `examples/uml_er.yaml`; 6 tests in `test_uml_er.cpp`.
+
+**Goal:** database structure can be drawn as an entity-relationship
+diagram in crow's foot notation.
+
+**Deliverables:**
+- ImUml: `Begin/EndERDiagram`, `BeginEntity`, `EntityAttribute`,
+  `EndEntity`, `Entity`, `Relationship`; `ImUmlCardinality_`,
+  `ImUmlAttributeKeys_`, `ImUmlRelationshipFlags_`; entity tables and
+  `RenderCardinality`.
+- `src/elements/uml/er_diagram.cpp`: `ERDiagram`, `Entity`,
+  `Relationship`; `examples/uml_er.yaml`; docs.
+
+**Tests** (`tests/test_uml_er.cpp`):
+- The example renders, round-trips and is deterministic; a relationship
+  ranks `from` above `to`; a table grows with its attributes.
+- Malformed attributes (no name, an unknown key, an unterminated comment)
+  and relationships naming a non-entity are errors at the field.
+- A non-identifying relationship is dashed; zero ends draw a circle,
+  many ends a crow's foot.
+
 ## Completion Criteria
 
 - [x] All tests pass under `ctest -j` three times in a row. *Linux (GCC).*

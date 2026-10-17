@@ -200,3 +200,33 @@ void ImUml::RenderCylinder(ImDrawList* dl, const ImVec2& a, const ImVec2& b, ImU
   dl->AddLine(ImVec2(a.x, a.y + ry), ImVec2(a.x, b.y - ry), border, lw);
   dl->AddLine(ImVec2(b.x, a.y + ry), ImVec2(b.x, b.y - ry), border, lw);
 }
+
+void ImUml::RenderCardinality(ImDrawList* dl, ImUmlCardinality cardinality, const ImVec2& tip, const ImVec2& dir,
+                              float size, ImU32 line, ImU32 bg, float lw) {
+  // Measured back from the tip along the line: the crow's foot spreads at
+  // the tip; bars and circles sit behind it, the "many" / "one" mark
+  // nearest the entity and the "zero / one" minimum farther out.
+  const ImVec2 n(-dir.y, dir.x);
+  const float half = size * 0.55f;
+  auto at = [&](float back) { return tip - dir * back; };
+  auto bar = [&](float back) { dl->AddLine(at(back) + n * half, at(back) - n * half, line, lw); };
+  auto circle = [&](float back) {
+    const float r = size * 0.32f;
+    dl->AddCircleFilled(at(back), r, bg, CircleSegments(r));
+    dl->AddCircle(at(back), r, line, CircleSegments(r), lw);
+  };
+  const bool many = cardinality == ImUmlCardinality_ZeroOrMore || cardinality == ImUmlCardinality_OneOrMore;
+  const bool zero = cardinality == ImUmlCardinality_ZeroOrOne || cardinality == ImUmlCardinality_ZeroOrMore;
+  if (many) {
+    const ImVec2 apex = at(size);
+    dl->AddLine(apex, tip + n * half, line, lw);
+    dl->AddLine(apex, tip - n * half, line, lw);
+  } else {
+    bar(size * 0.5f);
+  }
+  if (zero) {
+    circle(size * 1.45f);
+  } else {
+    bar(size * 1.1f);
+  }
+}

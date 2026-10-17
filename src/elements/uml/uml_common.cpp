@@ -73,6 +73,8 @@ begin_fn begin_of(diagram_kind k) {
       return &ImUml::BeginActivityDiagram;
     case diagram_kind::use_case:
       return &ImUml::BeginUseCaseDiagram;
+    case diagram_kind::er:
+      return &ImUml::BeginERDiagram;
     default:
       return &ImUml::BeginClassDiagram;
   }
@@ -88,6 +90,8 @@ end_fn end_of(diagram_kind k) {
       return &ImUml::EndActivityDiagram;
     case diagram_kind::use_case:
       return &ImUml::EndUseCaseDiagram;
+    case diagram_kind::er:
+      return &ImUml::EndERDiagram;
     default:
       return &ImUml::EndClassDiagram;
   }
@@ -626,6 +630,7 @@ void register_uml(registry& reg) {
   uml::register_state_diagram(reg);
   uml::register_activity_diagram(reg);
   uml::register_usecase_diagram(reg);
+  uml::register_er_diagram(reg);
 }
 
 } // namespace bdg::nymph

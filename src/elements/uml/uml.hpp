@@ -14,6 +14,7 @@ inline constexpr const char* kUmlSequenceItemSlot = "uml.sequence.item";
 inline constexpr const char* kUmlStateItemSlot = "uml.state.item";
 inline constexpr const char* kUmlActivityItemSlot = "uml.activity.item";
 inline constexpr const char* kUmlUseCaseItemSlot = "uml.usecase.item";
+inline constexpr const char* kUmlErItemSlot = "uml.er.item";
 /// @brief `Note`, accepted by every diagram (and `Fragment`, `State`).
 inline constexpr const char* kUmlNoteSlot = "uml.note";
 
@@ -21,7 +22,7 @@ inline constexpr const char* kUmlNoteSlot = "uml.note";
 ///        `SequenceDiagram`, `Participant`, `Message`, `Fragment`, `Else`,
 ///        `StateDiagram`, `State`, `Transition`, `ActivityDiagram`, `Action`,
 ///        `ActivityControl`, `Flow`, `UseCaseDiagram`, `Actor`, `UseCase`,
-///        `UseCaseRelation` and `Note`.
+///        `UseCaseRelation`, `ERDiagram`, `Entity`, `Relationship` and `Note`.
 void register_uml(registry& reg);
 
 } // namespace bdg::nymph

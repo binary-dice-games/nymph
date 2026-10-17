@@ -62,8 +62,8 @@ containers, a `children` list of elements:
 - `VerticalLayout` and `HorizontalLayout` hold plots, diagrams, other
   layouts, `Label`, `Separator`, `SeparatorText` and `Spring`.
 - UML diagrams hold their nodes and edges: `ClassDiagram`,
-  `SequenceDiagram`, `StateDiagram`, `ActivityDiagram`, `UseCaseDiagram`
-  (see [UML diagrams](#uml-diagrams)).
+  `SequenceDiagram`, `StateDiagram`, `ActivityDiagram`, `UseCaseDiagram`,
+  and `ERDiagram` for database structure (see [UML diagrams](#uml-diagrams)).
 
 A series goes directly inside its kind of plot; anything else can be
 `root`. [elements.md](elements.md) lists every type with its fields,
@@ -285,6 +285,7 @@ root:
 | `StateDiagram` | `State` (composite when it has children) | `Transition` |
 | `ActivityDiagram` | `Action`, `ActivityControl` | `Flow` |
 | `UseCaseDiagram` | `Actor`, `UseCase` | `UseCaseRelation` |
+| `ERDiagram` (database) | `Entity` (a table) | `Relationship` (crow's foot) |
 
 `Note` goes in every diagram.
 
@@ -301,6 +302,12 @@ root:
   `node_spacing`, `rank_spacing` and `edge_style` on the diagram; `weight`,
   `min_length` and `constraint` on edges; `rank` on nodes (nodes with the
   same `rank` text share a rank).
+- **ER attributes** are written as in mermaid: `"type name"`, then
+  optional keys `PK`, `FK`, `UK` (comma-separated) and a `"comment"` in
+  double quotes: `attributes: ["int id PK", "int customer_id FK \"buyer\""]`.
+  A `Relationship` sets `from_cardinality` / `to_cardinality`
+  (`ExactlyOne`, `ZeroOrOne`, `ZeroOrMore`, `OneOrMore`), drawn at each
+  end; `identifying: false` draws it dashed.
 - **Order.** In a sequence diagram the children are time, top to bottom;
   declare every `Participant` first. Elsewhere order only breaks ties.
 - **Size.** In a layout a diagram with `width` / `height` 0 takes its

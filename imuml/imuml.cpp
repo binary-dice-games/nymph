@@ -770,3 +770,58 @@ void ImUml::UseCaseLink(const char* from, const char* to, ImUmlUseCaseLinkKind k
                                                              : nullptr;
   AddEdge(d, ImUmlEdgeType_UseCaseLink, kind, from, to, label);
 }
+
+// ── ER diagrams ──────────────────────────────────────────────────────────────
+
+bool ImUml::BeginERDiagram(const char* title_id, const ImVec2& size, ImUmlDiagramFlags flags) {
+  return BeginDiagram(ImUmlDiagramKind_ER, title_id, size, flags);
+}
+
+void ImUml::BeginEntity(const char* id, const char* name) {
+  ImUmlDiagram* d = CurrentDiagram();
+  IM_ASSERT(d->Kind == ImUmlDiagramKind_ER && d->OpenClass < 0);
+  ImUmlNodeRec& n = AddNode(d, ImUmlNodeType_Entity, 0, id, name);
+  n.Shape = ImUmlShape_Box;
+  d->OpenClass = d->Nodes.Size - 1;
+}
+
+void ImUml::EntityAttribute(const char* type, const char* name, ImUmlAttributeKeys keys, const char* comment) {
+  ImUmlDiagram* d = CurrentDiagram();
+  IM_ASSERT(d->OpenClass >= 0 && "EntityAttribute() must be between BeginEntity() and EndEntity()");
+  if (d->OpenClass < 0) {
+    return;
+  }
+  ImUmlLine line;
+  memset((void*)&line, 0, sizeof(line));
+  line.Text = AddString(d, name != nullptr ? name : "", nullptr);
+  line.Type = AddString(d, type != nullptr ? type : "", nullptr);
+  line.Comment = comment != nullptr && comment[0] != 0 ? AddString(d, comment, nullptr) : ImUmlStr();
+  line.Keys = keys;
+  d->Lines.push_back(line);
+  d->Nodes[d->OpenClass].LineCount++;
+}
+
+void ImUml::EndEntity() {
+  ImUmlDiagram* d = CurrentDiagram();
+  IM_ASSERT(d->OpenClass >= 0 && "EndEntity() without BeginEntity()");
+  d->OpenClass = -1;
+}
+
+void ImUml::Entity(const char* id, const char* name) {
+  BeginEntity(id, name);
+  EndEntity();
+}
+
+void ImUml::Relationship(
+    const char* from,
+    const char* to,
+    ImUmlCardinality from_cardinality,
+    ImUmlCardinality to_cardinality,
+    const char* label,
+    ImUmlRelationshipFlags flags) {
+  ImUmlDiagram* d = CurrentDiagram();
+  IM_ASSERT(d->Kind == ImUmlDiagramKind_ER);
+  // Kind packs both cardinalities and the flags: from | to << 4 | flags << 8.
+  const int kind = (from_cardinality & 15) | (to_cardinality & 15) << 4 | (flags & 255) << 8;
+  AddEdge(d, ImUmlEdgeType_Relationship, kind, from, to, label);
+}

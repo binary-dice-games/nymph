@@ -92,7 +92,7 @@ carries its source: `bdg::nymph::extract_source(png)` returns it.
 | Concept | Description |
 |---------|-------------|
 | **Source** | One YAML document: `description`, `image` options, a `root` element tree, `data`, and optional `source`. |
-| **UML diagrams** | `ClassDiagram`, `SequenceDiagram`, `StateDiagram`, `ActivityDiagram`, `UseCaseDiagram`: nodes and edges named by `id`, laid out automatically (Graphviz dot-style). See [docs/format.md](docs/format.md#uml-diagrams). |
+| **UML diagrams** | `ClassDiagram`, `SequenceDiagram`, `StateDiagram`, `ActivityDiagram`, `UseCaseDiagram`, `ERDiagram` (database tables): nodes and edges named by `id`, laid out automatically (Graphviz dot-style). See [docs/format.md](docs/format.md#uml-diagrams). |
 | **Elements** | `Plot` / `Plot3D` and their series, plus `VerticalLayout` / `HorizontalLayout`, `Spring`, `Label` and separators to combine them. New types register a class; see [the design](spec/01_core_features/DESIGN.md#9-extension-points). |
 | **Data** | `data` holds one table, or several named tables, as CSV text or columns. |
 | **Column references** | `$name` / `$2` in a field takes data from a column; `$table:name` from a named table. |

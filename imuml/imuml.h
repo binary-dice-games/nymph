@@ -52,6 +52,9 @@ typedef int ImUmlActionKind; // -> enum ImUmlActionKind_
 typedef int ImUmlControlKind; // -> enum ImUmlControlKind_
 typedef int ImUmlSide; // -> enum ImUmlSide_
 typedef int ImUmlUseCaseLinkKind; // -> enum ImUmlUseCaseLinkKind_
+typedef int ImUmlCardinality; // -> enum ImUmlCardinality_
+typedef int ImUmlAttributeKeys; // -> enum ImUmlAttributeKeys_
+typedef int ImUmlRelationshipFlags; // -> enum ImUmlRelationshipFlags_
 
 // ── Enums ────────────────────────────────────────────────────────────────────
 
@@ -209,6 +212,26 @@ enum ImUmlUseCaseLinkKind_ {
   ImUmlUseCaseLinkKind_Generalization,
 };
 
+/// How many of an entity an ER relationship end allows (crow's foot).
+enum ImUmlCardinality_ {
+  ImUmlCardinality_ExactlyOne, ///< Two bars.
+  ImUmlCardinality_ZeroOrOne, ///< A circle and a bar.
+  ImUmlCardinality_ZeroOrMore, ///< A circle and a crow's foot.
+  ImUmlCardinality_OneOrMore, ///< A bar and a crow's foot.
+};
+
+enum ImUmlAttributeKeys_ {
+  ImUmlAttributeKeys_None = 0,
+  ImUmlAttributeKeys_PK = 1 << 0, ///< Primary key.
+  ImUmlAttributeKeys_FK = 1 << 1, ///< Foreign key.
+  ImUmlAttributeKeys_UK = 1 << 2, ///< Unique key.
+};
+
+enum ImUmlRelationshipFlags_ {
+  ImUmlRelationshipFlags_None = 0,
+  ImUmlRelationshipFlags_NonIdentifying = 1 << 0, ///< Dashed line (mermaid's `..`); identifying is solid (`--`).
+};
+
 // ── Style ────────────────────────────────────────────────────────────────────
 
 struct ImUmlStyle {
@@ -309,6 +332,9 @@ IMGUI_API void EndActivityDiagram();
 IMGUI_API bool
 BeginUseCaseDiagram(const char* title_id, const ImVec2& size = ImVec2(-1, 0), ImUmlDiagramFlags flags = 0);
 IMGUI_API void EndUseCaseDiagram();
+/// @brief An entity-relationship diagram (database structure, mermaid's erDiagram).
+IMGUI_API bool BeginERDiagram(const char* title_id, const ImVec2& size = ImVec2(-1, 0), ImUmlDiagramFlags flags = 0);
+IMGUI_API void EndERDiagram();
 
 // ── Setup (after Begin*, before the first item) ──────────────────────────────
 
@@ -410,6 +436,28 @@ IMGUI_API void Actor(const char* id, const char* name = nullptr, ImUmlSide side 
 IMGUI_API void UseCase(const char* id, const char* name = nullptr);
 IMGUI_API void
 UseCaseLink(const char* from, const char* to, ImUmlUseCaseLinkKind kind = ImUmlUseCaseLinkKind_Association);
+
+// ── ER diagrams ──────────────────────────────────────────────────────────────
+
+/// @brief An entity (a table): a header with its name (defaults to `id`)
+///        over one row per attribute. Attributes end with EndEntity().
+IMGUI_API void BeginEntity(const char* id, const char* name = nullptr);
+/// @brief An attribute row: its type, name, keys (PK / FK / UK) and an
+///        optional comment, drawn in aligned columns.
+IMGUI_API void
+EntityAttribute(const char* type, const char* name, ImUmlAttributeKeys keys = 0, const char* comment = nullptr);
+IMGUI_API void EndEntity();
+/// @brief BeginEntity() + EndEntity() with no attributes.
+IMGUI_API void Entity(const char* id, const char* name = nullptr);
+/// @brief A relationship from `from` to `to`, with the cardinality allowed
+///        at each end (drawn at that end, crow's foot notation).
+IMGUI_API void Relationship(
+    const char* from,
+    const char* to,
+    ImUmlCardinality from_cardinality,
+    ImUmlCardinality to_cardinality,
+    const char* label = nullptr,
+    ImUmlRelationshipFlags flags = 0);
 
 // ── Queries ──────────────────────────────────────────────────────────────────
 
