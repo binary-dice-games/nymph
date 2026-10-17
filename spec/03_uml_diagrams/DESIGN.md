@@ -40,6 +40,9 @@ Diagrams in this project, the most used UML kinds (mermaid has each):
 | State | `StateDiagram` | `State` (composite when it has children), `Transition`, `Note` |
 | Activity | `ActivityDiagram` | `Action`, `ActivityControl`, `Flow`, `Note` |
 | Use case | `UseCaseDiagram` | `Actor`, `UseCase`, `UseCaseRelation`, `Note` |
+| Entity-relationship (database structure; not UML, added later) | `ERDiagram` | `Entity`, `Relationship`, `Note` |
+| Data flow (not UML, added later) | `DataFlowDiagram` | `ExternalEntity`, `Process`, `DataStore`, `DataFlow`, `TrustBoundary`, `Note` |
+| Network (not UML, added later) | `NetworkDiagram` | `Device`, `Link`, `Zone`, `Note` |
 
 Not in this project (section 10 lists where they would go): component,
 deployment, object, package, timing and communication diagrams; activity
@@ -323,6 +326,93 @@ root:
 Errors: `Include` / `Extend` not between use cases, `Association` not
 between an actor and a use case, `Generalization` between different kinds.
 
+### ER diagram
+
+Database structure, after mermaid's `erDiagram`, in crow's foot notation:
+
+```yaml
+root:
+  type: ERDiagram
+  children:
+    - {type: Entity, id: customer, name: CUSTOMER, attributes: ["int id PK", "string email UK"]}
+    - {type: Entity, id: order, name: ORDER, attributes: ["int id PK", "int customer_id FK \"buyer\""]}
+    - {type: Relationship, from: customer, to: order, from_cardinality: ExactlyOne, to_cardinality: ZeroOrMore, label: places}
+```
+
+- `Entity`: `id`, `name` (the table name), `attributes` (`text_array`),
+  `rank`. Each attribute is mermaid's `type name`, then optional keys
+  `PK`, `FK`, `UK` (separated by commas or spaces) and a double-quoted
+  comment; anything else after the name is an error at the field, naming
+  the item. Drawn as a table: a header over one row per attribute, in
+  aligned columns type | name | keys | comment (an empty column takes no
+  space).
+- `Relationship`: `from`, `to` (entities), `from_cardinality`,
+  `to_cardinality` (`ExactlyOne` ||, `ZeroOrOne` o|, `ZeroOrMore` o{,
+  `OneOrMore` |{; defaults `ExactlyOne` and `ZeroOrMore`, a one-to-many),
+  `label`, `identifying` (default true: solid; false: dashed). Each
+  cardinality is drawn at its own end, the "many" crow's foot spreading at
+  the entity and the minimum (circle or bar) behind it. The layout ranks
+  `from` first.
+
+### Data flow diagram
+
+Yourdon / DeMarco notation, with threat-modelling trust boundaries:
+
+```yaml
+root:
+  type: DataFlowDiagram
+  children:
+    - {type: ExternalEntity, id: user, name: User}
+    - type: TrustBoundary
+      id: app
+      name: App
+      children:
+        - {type: Process, id: login, name: Log in, number: "1"}
+        - {type: DataStore, id: users, name: Users, number: D1}
+    - {type: DataFlow, from: user, to: login, label: credentials}
+    - {type: DataFlow, from: login, to: users, label: lookup, bidirectional: true}
+```
+
+- `ExternalEntity` (a box with a heavy border), `Process` (a circle, its
+  `number` above a rule over the name) and `DataStore` (a box open on the
+  right, its `number` in a left cell): `id`, `name`, `number` (not on
+  entities), `rank`, colours.
+- `DataFlow`: `from`, `to`, `label`, `bidirectional` (an arrowhead at both
+  ends), the edge layout fields. One end must be a `Process` (entities and
+  stores only exchange data through a process); neither may be a
+  `TrustBoundary`.
+- `TrustBoundary`: `id`, `name`, colours, children (nodes, nested
+  boundaries, notes). A dashed box titled at its top left, laid out as a
+  cluster (section 4). The diagram defaults to `LeftRight`.
+
+### Network diagram
+
+```yaml
+root:
+  type: NetworkDiagram
+  children:
+    - {type: Device, id: fw, name: Firewall, kind: Firewall, address: 203.0.113.1}
+    - type: Zone
+      id: lan
+      name: LAN
+      children:
+        - {type: Device, id: sw, name: Switch, kind: Switch}
+    - {type: Link, from: fw, to: sw, from_label: eth1}
+```
+
+- `Device`: `id`, `name`, `kind` (`Server`, `Database`, `Storage`,
+  `Router`, `Switch`, `Firewall`, `LoadBalancer`, `AccessPoint`, `Cloud`,
+  `Internet`, `Workstation`, `Laptop`, `Mobile`, `User`), `address`,
+  `rank`, colours. Drawn as a line icon over the name, the address below
+  in the lifeline colour; icons are drawn from primitives, so no image
+  assets ship.
+- `Link`: `from`, `to` (devices, not zones), `kind` (`Wired` solid,
+  `Wireless` dashed, `Vpn` long heavy dashes), `label`, `from_label` /
+  `to_label` (ports, at each end), `directed` (an arrow at `to`), the edge
+  layout fields. Links are undirected by default; the layout still ranks
+  `from` first.
+- `Zone`: as `TrustBoundary`, for subnets, VLANs, sites.
+
 ### `Note`
 
 One element class for every diagram (slot `uml.note`): `text`, `attach`
@@ -398,6 +488,9 @@ text colour with each item, so ImGui's push stacks apply per item:
 | State | `BeginState(id, name, kind)`, `StateActivity(text)`, `EndState()` (states and transitions between them are nested children), `Transition(from, to, label)` |
 | Activity | `Action(id, text, kind)`, `ControlNode(id, kind, label)`, `Flow(from, to, guard)` |
 | Use case | `Actor(id, name, side)`, `UseCase(id, name)`, `UseCaseLink(from, to, kind)` |
+| ER (`Begin/EndERDiagram`) | `BeginEntity(id, name)`, `EntityAttribute(type, name, keys, comment)`, `EndEntity()`; `Relationship(from, to, from_cardinality, to_cardinality, label, flags)` |
+| Data flow (`Begin/EndDataFlowDiagram`) | `ExternalEntity(id, name)`, `Process(id, name, number)`, `DataStore(id, name, number)`, `DataFlow(from, to, label, flags)`, `BeginGroup(id, label)` / `EndGroup()` |
+| Network (`Begin/EndNetworkDiagram`) | `Device(id, name, kind, address)`, `Link(from, to, kind, label, from_label, to_label, flags)`, `BeginGroup(id, label)` / `EndGroup()` |
 | Any graph | `Note(text, attach_ids, count)` |
 
 Ids are strings hashed with `ImHashStr` into `ImGuiID`s within the
@@ -426,7 +519,8 @@ boundary, control, entity, database cylinder), `RenderPath` (polyline or
 spline, solid or dashed by arc length), `RenderArrowHead` (open, filled,
 hollow triangle, hollow / filled diamond, destroy cross), `RenderEdgeLabel`
 (text on a background box), `RenderFragment` (box, pentagon tab,
-operand separators), `RenderBoundary`. Each takes a rectangle or points,
+operand separators), `RenderBoundary`, `RenderCardinality` (crow's foot
+ends), `RenderDeviceIcon` (one line icon per `ImUmlDeviceKind`). Each takes a rectangle or points,
 a zoom and colours; curves and circles use an explicit segment count, so
 the geometry does not depend on ImGui's adaptive tessellation.
 
@@ -500,7 +594,8 @@ centres, edge paths and label positions out. No ImGui context.
    `rankdir`).
 9. **Pixels**: every coordinate is rounded to a whole logical pixel.
 
-**Composite states** are dot's clusters (`ImUmlGraphInput::Clusters`,
+**Composite states and groups** (`TrustBoundary`, `Zone`, recorded by
+`BeginGroup`) are dot's clusters (`ImUmlGraphInput::Clusters`,
 `ImUmlGraphNode::Cluster`), laid out with the whole graph, not on their
 own, so every edge is ranked, ordered and routed knowing every box:
 
@@ -525,11 +620,15 @@ own, so every edge is ranked, ordered and routed knowing every box:
    neighbouring box. A final pair of sweeps (down, then up) moves each
    edge's run of virtual nodes to one side of a box, which single moves
    cannot do because each only shifts where the edge would cross; the
-   order with the fewest crossings is kept.
+   order with the fewest crossings is kept. Last, every rank is re-sorted
+   by one key per box (its borders' mean position over all its ranks), so
+   sibling boxes keep the same left-to-right order on every rank.
 5. **Position.** Borders are separated from contents by the cluster's
    padding, aligned rank to rank by heavy auxiliary edges (weight 1000,
    so a box is a rectangle), and the header rank is at least as wide as
-   the header.
+   the header. A node or box beside a cluster on one rank is also kept
+   clear of that cluster's borders on every other rank it spans (hard
+   constraints), so sibling boxes never overlap.
 6. **Box and routes.** A box spans its borders across and its contents
    plus padding and header along the ranks. Edge ends at a box are
    clipped to it; a segment still crossing a box neither end belongs to
@@ -575,6 +674,9 @@ diagram is a grid, not a graph:
 | `state_diagram.cpp` | `StateDiagram`, `State`, `Transition`. |
 | `activity_diagram.cpp` | `ActivityDiagram`, `Action`, `ActivityControl`, `Flow`. |
 | `usecase_diagram.cpp` | `UseCaseDiagram`, `Actor`, `UseCase`, `UseCaseRelation`. |
+| `er_diagram.cpp` | `ERDiagram`, `Entity` (attribute syntax check), `Relationship`. |
+| `dataflow_diagram.cpp` | `DataFlowDiagram`, `ExternalEntity`, `Process`, `DataStore`, `DataFlow`, `TrustBoundary` (the process-end rule). |
+| `network_diagram.cpp` | `NetworkDiagram`, `Device`, `Link`, `Zone`. |
 | `uml.hpp` | `register_uml(registry&)` and the slot names. |
 
 Slots: each diagram has slot `figure` and accepts its item slot and

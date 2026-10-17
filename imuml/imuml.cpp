@@ -453,7 +453,9 @@ bool BeginDiagram(int kind, const char* title_id, const ImVec2& size, ImUmlDiagr
   } else {
     d->TitleStyle.Col = d->Colors[ImUmlCol_Title];
   }
-  d->Direction = kind == ImUmlDiagramKind_UseCase ? ImUmlDirection_LeftRight : ImUmlDirection_TopDown;
+  // Use case and data flow diagrams read left to right; the rest top down.
+  d->Direction = kind == ImUmlDiagramKind_UseCase || kind == ImUmlDiagramKind_DataFlow ? ImUmlDirection_LeftRight
+                                                                                         : ImUmlDirection_TopDown;
   d->EdgeStyle = ImUmlEdgeStyle_Spline;
   d->NodeSpacing = kind == ImUmlDiagramKind_Sequence ? g.Style.ParticipantSpacing : g.Style.NodeSpacing;
   d->RankSpacing = g.Style.RankSpacing;
@@ -769,4 +771,144 @@ void ImUml::UseCaseLink(const char* from, const char* to, ImUmlUseCaseLinkKind k
                       : kind == ImUmlUseCaseLinkKind_Extend ? "\xC2\xAB" "extend\xC2\xBB"
                                                              : nullptr;
   AddEdge(d, ImUmlEdgeType_UseCaseLink, kind, from, to, label);
+}
+
+// ── ER diagrams ──────────────────────────────────────────────────────────────
+
+bool ImUml::BeginERDiagram(const char* title_id, const ImVec2& size, ImUmlDiagramFlags flags) {
+  return BeginDiagram(ImUmlDiagramKind_ER, title_id, size, flags);
+}
+
+void ImUml::BeginEntity(const char* id, const char* name) {
+  ImUmlDiagram* d = CurrentDiagram();
+  IM_ASSERT(d->Kind == ImUmlDiagramKind_ER && d->OpenClass < 0);
+  ImUmlNodeRec& n = AddNode(d, ImUmlNodeType_Entity, 0, id, name);
+  n.Shape = ImUmlShape_Box;
+  d->OpenClass = d->Nodes.Size - 1;
+}
+
+void ImUml::EntityAttribute(const char* type, const char* name, ImUmlAttributeKeys keys, const char* comment) {
+  ImUmlDiagram* d = CurrentDiagram();
+  IM_ASSERT(d->OpenClass >= 0 && "EntityAttribute() must be between BeginEntity() and EndEntity()");
+  if (d->OpenClass < 0) {
+    return;
+  }
+  ImUmlLine line;
+  memset((void*)&line, 0, sizeof(line));
+  line.Text = AddString(d, name != nullptr ? name : "", nullptr);
+  line.Type = AddString(d, type != nullptr ? type : "", nullptr);
+  line.Comment = comment != nullptr && comment[0] != 0 ? AddString(d, comment, nullptr) : ImUmlStr();
+  line.Keys = keys;
+  d->Lines.push_back(line);
+  d->Nodes[d->OpenClass].LineCount++;
+}
+
+void ImUml::EndEntity() {
+  ImUmlDiagram* d = CurrentDiagram();
+  IM_ASSERT(d->OpenClass >= 0 && "EndEntity() without BeginEntity()");
+  d->OpenClass = -1;
+}
+
+void ImUml::Entity(const char* id, const char* name) {
+  BeginEntity(id, name);
+  EndEntity();
+}
+
+void ImUml::Relationship(
+    const char* from,
+    const char* to,
+    ImUmlCardinality from_cardinality,
+    ImUmlCardinality to_cardinality,
+    const char* label,
+    ImUmlRelationshipFlags flags) {
+  ImUmlDiagram* d = CurrentDiagram();
+  IM_ASSERT(d->Kind == ImUmlDiagramKind_ER);
+  // Kind packs both cardinalities and the flags: from | to << 4 | flags << 8.
+  const int kind = (from_cardinality & 15) | (to_cardinality & 15) << 4 | (flags & 255) << 8;
+  AddEdge(d, ImUmlEdgeType_Relationship, kind, from, to, label);
+}
+
+// ── Groups, data flow and network diagrams ───────────────────────────────────
+
+bool ImUml::BeginDataFlowDiagram(const char* title_id, const ImVec2& size, ImUmlDiagramFlags flags) {
+  return BeginDiagram(ImUmlDiagramKind_DataFlow, title_id, size, flags);
+}
+
+bool ImUml::BeginNetworkDiagram(const char* title_id, const ImVec2& size, ImUmlDiagramFlags flags) {
+  return BeginDiagram(ImUmlDiagramKind_Network, title_id, size, flags);
+}
+
+void ImUml::BeginGroup(const char* id, const char* label) {
+  ImUmlDiagram* d = CurrentDiagram();
+  IM_ASSERT(d->Kind == ImUmlDiagramKind_DataFlow || d->Kind == ImUmlDiagramKind_Network);
+  AddNode(d, ImUmlNodeType_Group, 0, id, label);
+  d->OpenStates.push_back(d->Nodes.Size - 1);
+}
+
+void ImUml::EndGroup() {
+  ImUmlDiagram* d = CurrentDiagram();
+  IM_ASSERT(!d->OpenStates.empty() && "EndGroup() without BeginGroup()");
+  if (!d->OpenStates.empty()) {
+    d->OpenStates.pop_back();
+  }
+}
+
+namespace {
+
+void DataFlowNode(int type, const char* id, const char* name, const char* number) {
+  ImUmlDiagram* d = ImUml::GetCurrentDiagram();
+  IM_ASSERT(d->Kind == ImUmlDiagramKind_DataFlow);
+  ImUmlNodeRec& n = ImUml::AddNode(d, type, 0, id, name);
+  if (number != nullptr && number[0] != 0) {
+    n.Stereotype = ImUml::AddString(d, number, nullptr);
+  }
+}
+
+} // namespace
+
+void ImUml::ExternalEntity(const char* id, const char* name) {
+  DataFlowNode(ImUmlNodeType_ExternalEntity, id, name, nullptr);
+}
+
+void ImUml::Process(const char* id, const char* name, const char* number) {
+  DataFlowNode(ImUmlNodeType_Process, id, name, number);
+}
+
+void ImUml::DataStore(const char* id, const char* name, const char* number) {
+  DataFlowNode(ImUmlNodeType_DataStore, id, name, number);
+}
+
+void ImUml::DataFlow(const char* from, const char* to, const char* label, ImUmlDataFlowFlags flags) {
+  ImUmlDiagram* d = CurrentDiagram();
+  IM_ASSERT(d->Kind == ImUmlDiagramKind_DataFlow);
+  AddEdge(d, ImUmlEdgeType_DataFlow, flags, from, to, label);
+}
+
+void ImUml::Device(const char* id, const char* name, ImUmlDeviceKind kind, const char* address) {
+  ImUmlDiagram* d = CurrentDiagram();
+  IM_ASSERT(d->Kind == ImUmlDiagramKind_Network);
+  ImUmlNodeRec& n = AddNode(d, ImUmlNodeType_Device, kind, id, name);
+  if (address != nullptr && address[0] != 0) {
+    n.Stereotype = AddString(d, address, nullptr);
+  }
+}
+
+void ImUml::Link(
+    const char* from,
+    const char* to,
+    ImUmlLinkKind kind,
+    const char* label,
+    const char* from_label,
+    const char* to_label,
+    ImUmlLinkFlags flags) {
+  ImUmlDiagram* d = CurrentDiagram();
+  IM_ASSERT(d->Kind == ImUmlDiagramKind_Network);
+  // Kind packs the link kind and its flags: kind | flags << 8.
+  ImUmlEdgeRec& e = AddEdge(d, ImUmlEdgeType_Link, (kind & 255) | (flags & 255) << 8, from, to, label);
+  if (from_label != nullptr && from_label[0] != 0) {
+    e.FromLabel = AddString(d, from_label, nullptr);
+  }
+  if (to_label != nullptr && to_label[0] != 0) {
+    e.ToLabel = AddString(d, to_label, nullptr);
+  }
 }

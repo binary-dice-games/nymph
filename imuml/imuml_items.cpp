@@ -143,6 +143,54 @@ ClassGeometry MeasureClass(const ImUmlDiagram* d, const ImUmlNodeRec& n) {
   return g;
 }
 
+/// Text of an ER attribute's key column ("PK, FK").
+void KeysText(int keys, char* buf, int size) {
+  buf[0] = 0;
+  const char* names[3] = {"PK", "FK", "UK"};
+  for (int i = 0; i < 3; ++i) {
+    if (keys & (1 << i)) {
+      ImStrncpy(buf + strlen(buf), buf[0] != 0 ? ", " : "", (size_t)size - strlen(buf));
+      ImStrncpy(buf + strlen(buf), names[i], (size_t)size - strlen(buf));
+    }
+  }
+}
+
+/// Sizes of an entity table's parts at zoom 1: the header, one row per
+/// attribute, and the columns type | name | keys | comment (a column with
+/// no text in any row has no width).
+struct EntityGeometry {
+  float Header;
+  float Row;
+  float Col[4];
+  float Width;
+};
+
+EntityGeometry MeasureEntity(const ImUmlDiagram* d, const ImUmlNodeRec& n) {
+  const ImVec2 pad = d->Style.NodePadding;
+  EntityGeometry g;
+  const ImVec2 name = TextSize(n.Text, 1.0f, StrBegin(d, n.Name), StrEnd(d, n.Name));
+  g.Header = name.y + pad.y * 2.0f;
+  g.Row = LineHeight(n.Text, 1.0f) + pad.y;
+  float text[4] = {0.0f, 0.0f, 0.0f, 0.0f};
+  char keys[32];
+  for (int i = 0; i < n.LineCount; ++i) {
+    const ImUmlLine& line = d->Lines[n.FirstLine + i];
+    KeysText(line.Keys, keys, IM_ARRAYSIZE(keys));
+    text[0] = ImMax(text[0], TextSize(n.Text, 1.0f, StrBegin(d, line.Type), StrEnd(d, line.Type)).x);
+    text[1] = ImMax(text[1], TextSize(n.Text, 1.0f, StrBegin(d, line.Text), StrEnd(d, line.Text)).x);
+    text[2] = ImMax(text[2], TextSize(n.Text, 1.0f, keys, keys + strlen(keys)).x);
+    text[3] = ImMax(text[3], TextSize(n.Text, 1.0f, StrBegin(d, line.Comment), StrEnd(d, line.Comment)).x);
+  }
+  float sum = 0.0f;
+  for (int c = 0; c < 4; ++c) {
+    g.Col[c] = text[c] > 0.0f ? ImCeil(text[c] + pad.x * 2.0f) : 0.0f;
+    sum += g.Col[c];
+  }
+  g.Width = ImMax(ImMax(sum, name.x + pad.x * 2.0f), 80.0f);
+  g.Col[1] += g.Width - sum; // the name column takes what is left
+  return g;
+}
+
 bool IsBar(const ImUmlNodeRec& n) {
   return (n.Type == ImUmlNodeType_State && (n.Kind == ImUmlStateKind_Fork || n.Kind == ImUmlStateKind_Join)) ||
          (n.Type == ImUmlNodeType_Control && (n.Kind == ImUmlControlKind_Fork || n.Kind == ImUmlControlKind_Join));
@@ -245,6 +293,40 @@ void MeasureNode(const ImUmlDiagram* d, ImUmlNodeRec& n) {
     case ImUmlNodeType_Note:
       n.Size = ImVec2(text.x + pad.x * 2.0f + d->Style.NoteFold, text.y + pad.y * 2.0f);
       break;
+    case ImUmlNodeType_Entity: {
+      const EntityGeometry g = MeasureEntity(d, n);
+      n.Size = ImVec2(g.Width, g.Header + g.Row * (float)n.LineCount);
+      break;
+    }
+    case ImUmlNodeType_ExternalEntity:
+      n.Size = ImVec2(ImMax(text.x + pad.x * 3.0f, 70.0f), ImMax(text.y + pad.y * 3.0f, 34.0f));
+      break;
+    case ImUmlNodeType_Process: {
+      const ImVec2 number = TextSize(n.Text, 1.0f, StrBegin(d, n.Stereotype), StrEnd(d, n.Stereotype));
+      const float body_h = text.y + (number.y > 0.0f ? number.y + pad.y : 0.0f);
+      // The circle through the corners of the text block.
+      const float body_w = ImMax(text.x, number.x);
+      const float diameter = ImSqrt(body_w * body_w + body_h * body_h) + pad.x * 2.0f;
+      n.Size = ImVec2(ImMax(diameter, 56.0f), ImMax(diameter, 56.0f));
+      n.Shape = ImUmlShape_Circle;
+      break;
+    }
+    case ImUmlNodeType_DataStore: {
+      const ImVec2 number = TextSize(n.Text, 1.0f, StrBegin(d, n.Stereotype), StrEnd(d, n.Stereotype));
+      const float cell = number.x > 0.0f ? number.x + pad.x * 2.0f : 0.0f;
+      n.Size = ImVec2(ImMax(cell + text.x + pad.x * 2.0f, 70.0f), text.y + pad.y * 3.0f);
+      break;
+    }
+    case ImUmlNodeType_Device: {
+      const ImVec2 address = TextSize(n.Text, 1.0f, StrBegin(d, n.Stereotype), StrEnd(d, n.Stereotype));
+      n.Size = ImVec2(
+          ImMax(ImMax(44.0f, text.x), address.x) + 4.0f,
+          36.0f + 4.0f + text.y + (address.y > 0.0f ? address.y + 1.0f : 0.0f));
+      break;
+    }
+    case ImUmlNodeType_Group:
+      n.Size = ImVec2(text.x + pad.x * 4.0f, text.y + pad.y * 6.0f);
+      break;
     default:
       n.Size = text + pad * 2.0f;
       break;
@@ -263,10 +345,12 @@ struct EdgeLook {
   bool Dashed;
   ImUmlMarker AtFrom, AtTo;
   bool RankToFirst; ///< The layout ranks `to` above `from`.
+  float DashScale; ///< Dash and gap lengths times this.
+  float WeightScale; ///< Line weight times this.
 };
 
 EdgeLook LookOf(const ImUmlDiagram* d, const ImUmlEdgeRec& e) {
-  EdgeLook l = {false, ImUmlMarker_None, ImUmlMarker_None, false};
+  EdgeLook l = {false, ImUmlMarker_None, ImUmlMarker_None, false, 1.0f, 1.0f};
   switch (e.Type) {
     case ImUmlEdgeType_Relation:
       switch (e.Kind) {
@@ -317,6 +401,27 @@ EdgeLook LookOf(const ImUmlDiagram* d, const ImUmlEdgeRec& e) {
       break;
     case ImUmlEdgeType_NoteLink:
       l.Dashed = true;
+      break;
+    case ImUmlEdgeType_Relationship:
+      l.Dashed = ((e.Kind >> 8) & ImUmlRelationshipFlags_NonIdentifying) != 0;
+      break;
+    case ImUmlEdgeType_DataFlow:
+      l.AtTo = ImUmlMarker_Filled;
+      if (e.Kind & ImUmlDataFlowFlags_Bidirectional) {
+        l.AtFrom = ImUmlMarker_Filled;
+      }
+      break;
+    case ImUmlEdgeType_Link:
+      if ((e.Kind >> 8) & ImUmlLinkFlags_Directed) {
+        l.AtTo = ImUmlMarker_Filled;
+      }
+      if ((e.Kind & 255) == ImUmlLinkKind_Wireless) {
+        l.Dashed = true;
+      } else if ((e.Kind & 255) == ImUmlLinkKind_Vpn) {
+        l.Dashed = true;
+        l.DashScale = 2.4f;
+        l.WeightScale = 2.0f;
+      }
       break;
     default:
       break;
@@ -1058,6 +1163,109 @@ void DrawNode(const Painter& pt, const ImUmlNodeRec& n) {
       TextCentered(pt.DL, n.Text, pt.Zoom, cx, (a.y + b.y - ts.y) * 0.5f, nb, ne, n.Text.Col);
       break;
     }
+    case ImUmlNodeType_Group: {
+      // A dashed box, its label in the top-left corner.
+      const float rounding = pt.S(d->Style.NodeRounding);
+      const ImU32 edge = n.LineCol != 0 ? n.LineCol : pt.Col(ImUmlCol_Boundary);
+      if (n.FillCol != 0) {
+        pt.DL->AddRectFilled(a, b, n.FillCol, rounding);
+      }
+      const ImVec2 outline[5] = {a, ImVec2(b.x, a.y), b, ImVec2(a.x, b.y), a};
+      ImUml::RenderPath(pt.DL, outline, 5, edge, pt.LW, true, pt.S(d->Style.DashLength * 1.4f), pt.S(d->Style.GapLength));
+      TextAt(pt.DL, n.Text, pt.Zoom, ImVec2(a.x + pt.S(pad.x), a.y + pt.S(pad.y)), nb, ne, n.Text.Col);
+      break;
+    }
+    case ImUmlNodeType_ExternalEntity:
+      pt.DL->AddRectFilled(a, b, fill);
+      pt.DL->AddRect(a, b, border, 0.0f, ImDrawFlags_None, pt.LW * 2.0f);
+      TextCentered(pt.DL, n.Text, pt.Zoom, cx, (a.y + b.y - ts.y) * 0.5f, nb, ne, n.Text.Col);
+      break;
+    case ImUmlNodeType_Process: {
+      const ImVec2 c = pt.P(n.Pos);
+      const float r = (b.x - a.x) * 0.5f;
+      pt.DL->AddCircleFilled(c, r, fill, ImUml::CircleSegments(r));
+      pt.DL->AddCircle(c, r, border, ImUml::CircleSegments(r), pt.LW);
+      const char* sb = StrBegin(d, n.Stereotype);
+      const char* se = StrEnd(d, n.Stereotype);
+      const ImVec2 number = TextSize(n.Text, pt.Zoom, sb, se);
+      const float gap = number.y > 0.0f ? pt.S(pad.y) : 0.0f;
+      float y = c.y - (number.y + gap + ts.y) * 0.5f;
+      if (number.y > 0.0f) {
+        TextCentered(pt.DL, n.Text, pt.Zoom, c.x, y, sb, se, n.Text.Col);
+        y += number.y;
+        pt.DL->AddLine(ImVec2(c.x - r * 0.6f, y + gap * 0.5f), ImVec2(c.x + r * 0.6f, y + gap * 0.5f), border, pt.LW);
+        y += gap;
+      }
+      TextCentered(pt.DL, n.Text, pt.Zoom, c.x, y, nb, ne, n.Text.Col);
+      break;
+    }
+    case ImUmlNodeType_DataStore: {
+      // Open on the right: top and bottom lines, the left side, and the
+      // number's cell.
+      pt.DL->AddRectFilled(a, b, fill);
+      pt.DL->AddLine(a, ImVec2(b.x, a.y), border, pt.LW);
+      pt.DL->AddLine(ImVec2(a.x, b.y), b, border, pt.LW);
+      pt.DL->AddLine(a, ImVec2(a.x, b.y), border, pt.LW);
+      const char* sb = StrBegin(d, n.Stereotype);
+      const char* se = StrEnd(d, n.Stereotype);
+      float x = a.x;
+      if (sb != se) {
+        const float cell = TextSize(n.Text, pt.Zoom, sb, se).x + pt.S(pad.x * 2.0f);
+        TextAt(pt.DL, n.Text, pt.Zoom, ImVec2(a.x + pt.S(pad.x), (a.y + b.y - ts.y) * 0.5f), sb, se, n.Text.Col);
+        x += cell;
+        pt.DL->AddLine(ImVec2(x, a.y), ImVec2(x, b.y), border, pt.LW);
+      }
+      TextAt(pt.DL, n.Text, pt.Zoom, ImVec2(x + pt.S(pad.x), (a.y + b.y - ts.y) * 0.5f), nb, ne, n.Text.Col);
+      break;
+    }
+    case ImUmlNodeType_Device: {
+      const float icon_w = pt.S(44.0f), icon_h = pt.S(36.0f);
+      ImUml::RenderDeviceIcon(pt.DL, n.Kind, ImVec2(cx - icon_w * 0.5f, a.y), ImVec2(cx + icon_w * 0.5f, a.y + icon_h),
+                              border, fill, pt.LW);
+      float y = a.y + icon_h + pt.S(4.0f);
+      TextCentered(pt.DL, n.Text, pt.Zoom, cx, y, nb, ne, n.Text.Col);
+      y += ts.y + pt.S(1.0f);
+      TextCentered(pt.DL, n.Text, pt.Zoom, cx, y, StrBegin(d, n.Stereotype), StrEnd(d, n.Stereotype),
+                   pt.Col(ImUmlCol_Lifeline));
+      break;
+    }
+    case ImUmlNodeType_Entity: {
+      const EntityGeometry g = MeasureEntity(d, n);
+      const float header_bottom = a.y + pt.S(g.Header);
+      pt.DL->AddRectFilled(a, b, fill);
+      pt.DL->AddRectFilled(a, ImVec2(b.x, header_bottom), pt.Col(ImUmlCol_FragmentTab));
+      pt.DL->AddRect(a, b, border, 0.0f, ImDrawFlags_None, pt.LW);
+      TextCentered(pt.DL, n.Text, pt.Zoom, cx, a.y + pt.S(pad.y), nb, ne, n.Text.Col);
+      if (n.LineCount == 0) {
+        break;
+      }
+      pt.DL->AddLine(ImVec2(a.x, header_bottom), ImVec2(b.x, header_bottom), border, pt.LW);
+      const ImU32 grid = pt.Col(ImUmlCol_Lifeline);
+      char keys[32];
+      for (int i = 0; i < n.LineCount; ++i) {
+        const ImUmlLine& line = d->Lines[n.FirstLine + i];
+        const float y = header_bottom + pt.S(g.Row * (float)i);
+        if (i > 0) {
+          pt.DL->AddLine(ImVec2(a.x + pt.LW, y), ImVec2(b.x - pt.LW, y), grid, 1.0f);
+        }
+        KeysText(line.Keys, keys, IM_ARRAYSIZE(keys));
+        const char* cells[4][2] = {
+            {StrBegin(d, line.Type), StrEnd(d, line.Type)},
+            {StrBegin(d, line.Text), StrEnd(d, line.Text)},
+            {keys, keys + strlen(keys)},
+            {StrBegin(d, line.Comment), StrEnd(d, line.Comment)}};
+        float x = a.x;
+        for (int c = 0; c < 4; ++c) {
+          if (g.Col[c] <= 0.0f) {
+            continue;
+          }
+          TextAt(pt.DL, n.Text, pt.Zoom, ImVec2(x + pt.S(pad.x), y + pt.S(pad.y * 0.5f)), cells[c][0], cells[c][1],
+                 n.Text.Col);
+          x += pt.S(g.Col[c]);
+        }
+      }
+      break;
+    }
     case ImUmlNodeType_Note: {
       const ImU32 nf = n.FillCol != 0 ? n.FillCol : pt.Col(ImUmlCol_NoteFill);
       const ImU32 nbd = n.LineCol != 0 ? n.LineCol : pt.Col(ImUmlCol_NoteBorder);
@@ -1148,10 +1356,14 @@ void DrawEdge(const Painter& pt, const ImUmlEdgeRec& e, const ImUmlGraphEdgeOut&
   const ImVec2 to_tip = path.back(), from_tip = path[0];
   TrimPath(&path, ImUml::MarkerLength(look.AtTo, size), true);
   TrimPath(&path, ImUml::MarkerLength(look.AtFrom, size), false);
-  ImUml::RenderPath(pt.DL, path.Data, path.Size, col, pt.LW, look.Dashed, pt.S(d->Style.DashLength),
-                    pt.S(d->Style.GapLength));
+  ImUml::RenderPath(pt.DL, path.Data, path.Size, col, pt.LW * look.WeightScale, look.Dashed,
+                    pt.S(d->Style.DashLength * look.DashScale), pt.S(d->Style.GapLength * look.DashScale));
   ImUml::RenderMarker(pt.DL, look.AtTo, to_tip, to_dir, size, col, pt.Col(ImUmlCol_Bg), pt.LW);
   ImUml::RenderMarker(pt.DL, look.AtFrom, from_tip, from_dir, size, col, pt.Col(ImUmlCol_Bg), pt.LW);
+  if (e.Type == ImUmlEdgeType_Relationship) {
+    ImUml::RenderCardinality(pt.DL, e.Kind & 15, from_tip, from_dir, size, col, pt.Col(ImUmlCol_Bg), pt.LW);
+    ImUml::RenderCardinality(pt.DL, (e.Kind >> 4) & 15, to_tip, to_dir, size, col, pt.Col(ImUmlCol_Bg), pt.LW);
+  }
   if (!e.Label.Empty()) {
     DrawEdgeLabel(pt, e.Text, eo.LabelPos, StrBegin(d, e.Label), StrEnd(d, e.Label));
   }
@@ -1543,4 +1755,16 @@ void ImUml::EndActivityDiagram() {
 
 void ImUml::EndUseCaseDiagram() {
   EndDiagram(ImUmlDiagramKind_UseCase);
+}
+
+void ImUml::EndERDiagram() {
+  EndDiagram(ImUmlDiagramKind_ER);
+}
+
+void ImUml::EndDataFlowDiagram() {
+  EndDiagram(ImUmlDiagramKind_DataFlow);
+}
+
+void ImUml::EndNetworkDiagram() {
+  EndDiagram(ImUmlDiagramKind_Network);
 }

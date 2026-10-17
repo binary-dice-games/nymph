@@ -1,0 +1,25 @@
+nymph: 1
+description: Data flow diagram of online ordering, with a customer, a payment provider, three processes and two data stores inside the shop's trust boundary.
+image: {width: 900, height: 520, font: FiraSans-Regular.ttf, font_size: 15}
+root:
+  type: DataFlowDiagram
+  title: Online ordering
+  children:
+    - {type: ExternalEntity, id: customer, name: Customer}
+    - {type: ExternalEntity, id: psp, name: Payment provider}
+    - type: TrustBoundary
+      id: shop
+      name: Shop backend
+      children:
+        - {type: Process, id: take, name: Take order, number: "1"}
+        - {type: Process, id: pay, name: Charge card, number: "2"}
+        - {type: Process, id: ship, name: Ship order, number: "3"}
+        - {type: DataStore, id: orders, name: Orders, number: D1}
+        - {type: DataStore, id: stock, name: Stock, number: D2}
+    - {type: DataFlow, from: customer, to: take, label: order}
+    - {type: DataFlow, from: take, to: orders, label: new order}
+    - {type: DataFlow, from: take, to: pay, label: amount}
+    - {type: DataFlow, from: pay, to: psp, label: card details, bidirectional: true}
+    - {type: DataFlow, from: orders, to: ship, label: paid order}
+    - {type: DataFlow, from: stock, to: ship, label: availability}
+    - {type: DataFlow, from: ship, to: customer, label: tracking number}

@@ -465,6 +465,31 @@ TEST(imuml_clusters, NestedBoxesAndEdgesToABox) {
   EXPECT_LE(d, 1.0f);
 }
 
+TEST(imuml_clusters, SiblingBoxesNeverOverlap) {
+  // Two sibling clusters fed from one node, with edges between them, the
+  // shape of the network example (a DMZ and a LAN behind a firewall).
+  // 0 fw; A: 1 lb, 2 web1, 3 web2; B: 4 sw, 5 db, 6 pc, 7 ap, 8 phone.
+  ImUmlGraphInput in = graph(9, {{0, 1}, {1, 2}, {1, 3}, {0, 4}, {4, 5}, {4, 6}, {4, 7}, {7, 8}, {2, 5}}, 60, 50);
+  in.Edges[8].Constraint = false;
+  ImUmlGraphCluster a, b;
+  in.Clusters.push_back(a);
+  in.Clusters.push_back(b);
+  for (int v = 1; v <= 3; ++v) {
+    in.Nodes[v].Cluster = 0;
+  }
+  for (int v = 4; v <= 8; ++v) {
+    in.Nodes[v].Cluster = 1;
+  }
+  ImUmlGraphOutput out;
+  ImUml::LayoutGraph(in, &out);
+  EXPECT_FALSE(out.ClusterRects[0].Overlaps(out.ClusterRects[1]));
+  EXPECT_FALSE(out.ClusterRects[0].Overlaps(node_rect(in, out, 0)));
+  EXPECT_FALSE(out.ClusterRects[1].Overlaps(node_rect(in, out, 0)));
+  for (int v = 1; v <= 8; ++v) {
+    EXPECT_TRUE(out.ClusterRects[in.Nodes[v].Cluster].Contains(node_rect(in, out, v))) << v;
+  }
+}
+
 TEST(imuml_clusters, Deterministic) {
   ImUmlGraphOutput a, b;
   ImUml::LayoutGraph(media_player(), &a);

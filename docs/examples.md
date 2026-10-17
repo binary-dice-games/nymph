@@ -739,3 +739,129 @@ root:
     - {type: UseCaseRelation, from: coupon, to: pay, kind: Extend}
     - {type: UseCaseRelation, from: pay, to: bank}
 ```
+
+## ER diagram (database structure)
+
+Tables with typed attributes, primary / foreign / unique keys and a comment, joined by relationships in crow's foot notation; the dashed line is a non-identifying relationship.
+
+![ER diagram (database structure)](../examples/uml_er.png)
+
+[`examples/uml_er.yaml`](../examples/uml_er.yaml):
+
+```yaml
+nymph: 1
+description: Entity-relationship diagram of an online shop database, with customers, orders, order lines, products and categories.
+image: {width: 820, height: 560, font: FiraSans-Regular.ttf, font_size: 15}
+root:
+  type: ERDiagram
+  title: Shop database
+  children:
+    - type: Entity
+      id: customer
+      name: CUSTOMER
+      attributes: ["int id PK", "string email UK", "string name", "date joined \"first order date\""]
+    - type: Entity
+      id: order
+      name: ORDER
+      attributes: ["int id PK", "int customer_id FK", "date placed", "string status"]
+    - type: Entity
+      id: line
+      name: ORDER_LINE
+      attributes: ["int order_id PK, FK", "int product_id PK, FK", "int quantity", "decimal price"]
+    - type: Entity
+      id: product
+      name: PRODUCT
+      attributes: ["int id PK", "string sku UK", "string name", "int category_id FK"]
+    - type: Entity
+      id: category
+      name: CATEGORY
+      attributes: ["int id PK", "string name"]
+    - {type: Relationship, from: customer, to: order, from_cardinality: ExactlyOne, to_cardinality: ZeroOrMore, label: places}
+    - {type: Relationship, from: order, to: line, from_cardinality: ExactlyOne, to_cardinality: OneOrMore, label: contains}
+    - {type: Relationship, from: product, to: line, from_cardinality: ExactlyOne, to_cardinality: ZeroOrMore, label: "ordered in"}
+    - {type: Relationship, from: category, to: product, from_cardinality: ZeroOrOne, to_cardinality: ZeroOrMore, label: groups, identifying: false}
+```
+
+## Data flow diagram
+
+External entities (boxes), processes (numbered circles) and data stores (open-ended boxes) joined by labelled data flows; the dashed box is a trust boundary, and the two-headed flow goes both ways.
+
+![Data flow diagram](../examples/uml_dataflow.png)
+
+[`examples/uml_dataflow.yaml`](../examples/uml_dataflow.yaml):
+
+```yaml
+nymph: 1
+description: Data flow diagram of online ordering, with a customer, a payment provider, three processes and two data stores inside the shop's trust boundary.
+image: {width: 900, height: 520, font: FiraSans-Regular.ttf, font_size: 15}
+root:
+  type: DataFlowDiagram
+  title: Online ordering
+  children:
+    - {type: ExternalEntity, id: customer, name: Customer}
+    - {type: ExternalEntity, id: psp, name: Payment provider}
+    - type: TrustBoundary
+      id: shop
+      name: Shop backend
+      children:
+        - {type: Process, id: take, name: Take order, number: "1"}
+        - {type: Process, id: pay, name: Charge card, number: "2"}
+        - {type: Process, id: ship, name: Ship order, number: "3"}
+        - {type: DataStore, id: orders, name: Orders, number: D1}
+        - {type: DataStore, id: stock, name: Stock, number: D2}
+    - {type: DataFlow, from: customer, to: take, label: order}
+    - {type: DataFlow, from: take, to: orders, label: new order}
+    - {type: DataFlow, from: take, to: pay, label: amount}
+    - {type: DataFlow, from: pay, to: psp, label: card details, bidirectional: true}
+    - {type: DataFlow, from: orders, to: ship, label: paid order}
+    - {type: DataFlow, from: stock, to: ship, label: availability}
+    - {type: DataFlow, from: ship, to: customer, label: tracking number}
+```
+
+## Network diagram
+
+Devices drawn as icons with their addresses, grouped into dashed zones and joined by links; the Wi-Fi link is dashed, the VPN link long-dashed, and the SQL link directed.
+
+![Network diagram](../examples/uml_network.png)
+
+[`examples/uml_network.yaml`](../examples/uml_network.yaml):
+
+```yaml
+nymph: 1
+description: Network diagram of a small company, with the internet, a firewall, a DMZ holding the web servers behind a load balancer, and an office LAN with a database, workstations and Wi-Fi.
+image: {width: 900, height: 680, font: FiraSans-Regular.ttf, font_size: 14}
+root:
+  type: NetworkDiagram
+  title: Company network
+  children:
+    - {type: Device, id: internet, name: Internet, kind: Internet}
+    - {type: Device, id: fw, name: Firewall, kind: Firewall, address: 203.0.113.1}
+    - type: Zone
+      id: dmz
+      name: DMZ 10.0.1.0/24
+      children:
+        - {type: Device, id: lb, name: Load balancer, kind: LoadBalancer, address: 10.0.1.10}
+        - {type: Device, id: web1, name: web-1, kind: Server, address: 10.0.1.21}
+        - {type: Device, id: web2, name: web-2, kind: Server, address: 10.0.1.22}
+    - type: Zone
+      id: lan
+      name: Office LAN 10.0.2.0/24
+      children:
+        - {type: Device, id: sw, name: Core switch, kind: Switch}
+        - {type: Device, id: db, name: Database, kind: Database, address: 10.0.2.5}
+        - {type: Device, id: pc, name: Workstation, kind: Workstation}
+        - {type: Device, id: ap, name: Wi-Fi, kind: AccessPoint}
+        - {type: Device, id: phone, name: Phone, kind: Mobile}
+    - {type: Device, id: remote, name: Remote worker, kind: Laptop}
+    - {type: Link, from: internet, to: fw, label: 1 Gbit/s}
+    - {type: Link, from: fw, to: lb, from_label: eth1}
+    - {type: Link, from: lb, to: web1}
+    - {type: Link, from: lb, to: web2}
+    - {type: Link, from: fw, to: sw, from_label: eth2}
+    - {type: Link, from: sw, to: db}
+    - {type: Link, from: sw, to: pc}
+    - {type: Link, from: sw, to: ap}
+    - {type: Link, from: ap, to: phone, kind: Wireless}
+    - {type: Link, from: web1, to: db, label: SQL, directed: true, constraint: false}
+    - {type: Link, from: remote, to: fw, kind: Vpn, label: VPN}
+```
