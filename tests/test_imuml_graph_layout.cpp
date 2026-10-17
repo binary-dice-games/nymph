@@ -337,6 +337,46 @@ TEST(imuml_layout, LabelsGetTheirOwnSpace) {
   }
 }
 
+TEST(imuml_layout, SplinesBendOnlyWherePathsDo) {
+  // a -> b -> c -> d, a long labelled edge a -> d, a short edge a -> b.
+  ImUmlGraphInput in = graph(5, {{0, 1}, {1, 2}, {2, 3}, {0, 3}, {0, 4}});
+  in.Edges[3].LabelSize = ImVec2(60, 14);
+  ImUmlGraphOutput out;
+  ImUml::LayoutGraph(in, &out);
+  for (int e = 0; e < in.Edges.Size; ++e) {
+    const ImUmlGraphEdgeOut& eo = out.Edges[e];
+    ASSERT_TRUE(eo.Bezier);
+    const ImVec2* p = &out.Points[eo.PointStart];
+    // Never doubling back along the rank axis.
+    for (int i = 1; i < eo.PointCount; ++i) {
+      EXPECT_GE(p[i].y, p[i - 1].y) << "edge " << e << " point " << i;
+    }
+    // Sideways, the curve turns at most once (no S-shapes).
+    ImVector<ImVec2> flat;
+    ImUml::FlattenPath(p, eo.PointCount, true, &flat);
+    int turns = 0, sign = 0;
+    for (int i = 1; i < flat.Size; ++i) {
+      const float dx = flat[i].x - flat[i - 1].x;
+      const int s = dx > 0.5f ? 1 : (dx < -0.5f ? -1 : 0);
+      if (s != 0 && sign != 0 && s != sign) {
+        ++turns;
+      }
+      sign = s != 0 ? s : sign;
+    }
+    EXPECT_LE(turns, 1) << "edge " << e;
+  }
+  // A two-point edge is a straight line: its control points lie on it.
+  ImUml::LayoutGraph(graph(3, {{0, 1}, {0, 2}}), &out);
+  const ImUmlGraphEdgeOut& shrt = out.Edges[1];
+  ASSERT_EQ(shrt.PointCount, 4);
+  const ImVec2 a = out.Points[shrt.PointStart], b = out.Points[shrt.PointStart + 3];
+  for (int k = 1; k <= 2; ++k) {
+    const ImVec2 c = out.Points[shrt.PointStart + k];
+    const float cross = (b.x - a.x) * (c.y - a.y) - (b.y - a.y) * (c.x - a.x);
+    EXPECT_NEAR(cross / std::sqrt(ImLengthSqr(b - a)), 0.0f, 1.0f);
+  }
+}
+
 TEST(imuml_layout, LeftRightIsTopDownTransposed) {
   ImUmlGraphInput td = graph(4, {{0, 1}, {0, 2}, {1, 3}}, 50, 20);
   ImUmlGraphInput lr = graph(4, {{0, 1}, {0, 2}, {1, 3}}, 20, 50);

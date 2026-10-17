@@ -1126,27 +1126,61 @@ ImVec2 LabelSizeTd(const ImUmlGraphInput& in, const ImVec2& s) {
   return across ? ImVec2(s.y, s.x) : s;
 }
 
-/// Turns a top-down polyline into a chain of cubic Béziers whose tangents
-/// run along the rank axis at every interior point.
-void ToBezier(const ImVector<ImVec2>& pts, ImVector<ImVec2>* out) {
+/// Turns a polyline into a smooth chain of cubic Béziers through the same
+/// points. The cross coordinate is interpolated as a monotone cubic of the
+/// rank coordinate (Fritsch-Carlson, as d3's monotone curves): where the
+/// path turns, the tangent runs along the rank axis, elsewhere it is the
+/// harmonic mean of the two segments' slopes. So the curve never swings
+/// past its neighbouring points sideways: straight runs stay straight, a
+/// two-point edge is a straight line, and each turn is a single bend.
+/// `along_y`: the rank axis is y (else x).
+void ToBezier(const ImVector<ImVec2>& pts, ImVector<ImVec2>* out, bool along_y) {
   out->resize(0);
+  const int n = pts.Size;
   out->push_back(pts[0]);
-  for (int i = 0; i + 1 < pts.Size; ++i) {
-    const ImVec2 a = pts[i], b = pts[i + 1];
-    const float dy = (b.y - a.y) * 0.5f;
-    if (ImFabs(dy) < 1.0f) {
-      const ImVec2 d = (b - a) * (1.0f / 3.0f);
-      out->push_back(RoundPx(a + d));
-      out->push_back(RoundPx(b - d));
-    } else {
-      out->push_back(RoundPx(ImVec2(a.x, a.y + dy)));
-      out->push_back(RoundPx(ImVec2(b.x, b.y - dy)));
+  auto u = [&](int i) { return along_y ? pts[i].y : pts[i].x; };
+  auto v = [&](int i) { return along_y ? pts[i].x : pts[i].y; };
+  auto make = [&](float uu, float vv) { return RoundPx(along_y ? ImVec2(vv, uu) : ImVec2(uu, vv)); };
+  ImVector<float> slope, tangent;
+  slope.resize(ImMax(0, n - 1));
+  bool monotone = true;
+  for (int i = 0; i + 1 < n; ++i) {
+    const float du = u(i + 1) - u(i);
+    if (ImFabs(du) < 0.5f || (i > 0 && (du > 0.0f) != (u(i) - u(i - 1) > 0.0f))) {
+      monotone = false; // runs across the rank axis: no function of it
+      break;
     }
-    out->push_back(b);
+    slope[i] = (v(i + 1) - v(i)) / du;
+  }
+  if (!monotone) {
+    for (int i = 0; i + 1 < n; ++i) {
+      const ImVec2 d = (pts[i + 1] - pts[i]) * (1.0f / 3.0f);
+      out->push_back(RoundPx(pts[i] + d));
+      out->push_back(RoundPx(pts[i + 1] - d));
+      out->push_back(pts[i + 1]);
+    }
+    return;
+  }
+  tangent.resize(n);
+  tangent[0] = slope[0];
+  tangent[n - 1] = slope[n - 2];
+  for (int i = 1; i + 1 < n; ++i) {
+    const float a = slope[i - 1], b = slope[i];
+    tangent[i] = a * b <= 0.0f ? 0.0f : 2.0f * a * b / (a + b);
+  }
+  for (int i = 0; i + 1 < n; ++i) {
+    const float du = (u(i + 1) - u(i)) / 3.0f;
+    out->push_back(make(u(i) + du, v(i) + tangent[i] * du));
+    out->push_back(make(u(i + 1) - du, v(i + 1) - tangent[i + 1] * du));
+    out->push_back(pts[i + 1]);
   }
 }
 
 } // namespace
+
+void ImUml::SmoothPath(const ImVector<ImVec2>& pts, ImVector<ImVec2>* out, bool along_y) {
+  ToBezier(pts, out, along_y);
+}
 
 bool ImUml::RankGraph(const ImUmlGraphInput& in, ImVector<int>* ranks, ImVector<bool>* reversed) {
   RankResult r;
@@ -1348,6 +1382,13 @@ void ImUml::LayoutGraph(const ImUmlGraphInput& in, ImUmlGraphOutput* out) {
     extra_right.resize(c.L.Size);
     for (int i = 0; i < c.L.Size; ++i) {
       extra_right[i] = 0;
+      // A label's room is reserved right of its edge, so the edge runs
+      // through the label node's centre and stays straight (dot draws its
+      // edge labels beside the edge the same way).
+      if (c.L[i].IsLabel) {
+        extra_right[i] = (int)c.L[i].W;
+        c.L[i].W = 0.0f;
+      }
     }
     const float loop_size = RoundPx(ImMax(16.0f, in.NodeSpacing * 0.6f));
     for (int k = 0; k < comp.Edges.Size; ++k) {
@@ -1493,11 +1534,7 @@ void ImUml::LayoutGraph(const ImUmlGraphInput& in, ImUmlGraphOutput* out) {
       pts.resize(0);
       for (int i = 0; i < ch.Nodes.Size; ++i) {
         const int ln = ch.Nodes[i];
-        ImVec2 p = lpos[ln];
-        if (ln == ch.LabelNode) {
-          p.x = RoundPx(p.x - c.L[ln].W * 0.5f); // the edge passes left of its label
-        }
-        pts.push_back(p);
+        pts.push_back(lpos[ln]);
       }
       // Parallel edges with no virtual node between the same two nodes are
       // fanned apart through an offset midpoint.
@@ -1527,14 +1564,14 @@ void ImUml::LayoutGraph(const ImUmlGraphInput& in, ImUmlGraphOutput* out) {
           RoundPx(ClipToShape(in.Nodes[ow].Shape, lpos[w], ShapeSizeTd(in, ow), pts[pts.Size - 2]));
       if (ch.LabelNode >= 0) {
         const ImVec2 lp = lpos[ch.LabelNode];
-        path.Label = RoundPx(ImVec2(lp.x - c.L[ch.LabelNode].W * 0.5f + 6.0f + label_td.x * 0.5f, lp.y));
+        path.Label = RoundPx(ImVec2(lp.x + 6.0f + label_td.x * 0.5f, lp.y));
       } else if (has_label) {
         const ImVec2 a = pts[(pts.Size - 1) / 2], b = pts[pts.Size / 2];
         const ImVec2 m = (a + b) * 0.5f;
         path.Label = RoundPx(ImVec2(m.x + 6.0f + label_td.x * 0.5f, m.y));
       }
       if (in.EdgeStyle == ImUmlEdgeStyle_Spline) {
-        ToBezier(pts, &path.Pts);
+        ToBezier(pts, &path.Pts, true); // top-down: ranks along y
         path.Bezier = true;
       } else {
         path.Pts = pts;

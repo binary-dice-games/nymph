@@ -124,7 +124,7 @@ as a pure function, with the network simplex solver reusable by step 5.
 
 ### 5. Ordering, positions and edge routing
 
-*Result: done.* Added dot's final x balancing (a parent centred over its children), row packing of components (1.6:1) and notes placed beside their node; label points rounded to whole pixels. 7 tests in `test_imuml_graph_layout.cpp`.
+*Result: done.* Added dot's final x balancing (a parent centred over its children), row packing of components (1.6:1) and notes placed beside their node. Later revised after review: splines are monotone cubics of the rank coordinate (no S-shaped or wiggling edges), labels sit beside a straight edge, and edges into composite states are re-smoothed as one curve. 8 tests in `test_imuml_graph_layout.cpp`.
 
 **Goal:** the complete dot-style layout (graph layout steps 4-9).
 

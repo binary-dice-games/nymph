@@ -484,12 +484,17 @@ centres, edge paths and label positions out. No ImGui context.
    each rank (half `rank_spacing` when labels doubled the ranks).
 7. **Edges** (dot phase 4, simplified): a path through the virtual node
    centres, ends clipped to the node's shape (rectangle, ellipse, circle,
-   diamond, bar). `Polyline` keeps the straight segments; `Spline` fits
-   cubic Bézier segments through the same points with tangents along the
-   rank axis at each virtual node, so edges stay within the gap between
-   neighbours as dot's box-constrained splines do. Parallel edges between
-   the same two nodes are fanned apart; self-loops are a loop on the
-   node's side away from the flow.
+   diamond, bar). A label's room is reserved to the right of its virtual
+   node, so the edge runs straight through the node's centre and the label
+   sits beside it, as dot draws edge labels. `Polyline` keeps the straight
+   segments; `Spline` turns the path into cubic Béziers whose cross
+   coordinate is a monotone cubic of the rank coordinate (Fritsch-Carlson,
+   as d3's monotone curves): the tangent runs along the rank axis where
+   the path turns and is the harmonic mean of the neighbouring slopes
+   elsewhere. The curve never swings past its points sideways, straight
+   runs stay straight and a two-point edge is a straight line. Parallel
+   edges between the same two nodes are fanned apart; self-loops are a
+   loop on the node's side away from the flow.
 8. **Direction**: computed top-down; `BottomUp`, `LeftRight`, `RightLeft`
    by swapping node width and height before and transforming after (dot's
    `rankdir`).
@@ -501,7 +506,8 @@ by dot's cluster-aware mincross: a composite's children are laid out first
 its header in the parent's layout. The use case system boundary is a
 cluster too, drawn around the use cases' bounding box. A transition that
 crosses a composite's border is ranked in the parent between the
-composite and the outer node, and drawn to the inner node.
+composite and the outer node; its path then ends on the inner node instead
+of the composite's border and is smoothed again as one curve.
 
 **Notes** with `attach` are placed as nodes in the rank of their first
 attached node, next to it (a dashed connector, no ranking edge); a note
@@ -639,6 +645,15 @@ prints one.
   are the reference); dot's box-constrained spline router and
   cluster-aware mincross (much of dot's code, small gain on diagrams of
   tens of nodes; both stay possible behind the same function).
+- **Monotone splines, not rank-axis tangents everywhere.** The first
+  version gave every path point a tangent along the rank axis (the shape
+  of dot's splines near virtual nodes); with no box router to go with it,
+  every diagonal segment became an S and long edges wiggled. Catmull-Rom
+  tangents fixed most of that but overshoot where a straight run meets a
+  turn. A monotone cubic of the rank coordinate bends only where the path
+  does and never overshoots, at the cost of a slightly sharper turn at
+  the bend. Edge weights were not the cause: dot's 1 / 2 / 8 factors
+  already keep long edges straight.
 - **Graphviz as a reference, not a dependency.** Linking `libgvc` /
   `cgraph` would bring a large C library with plugins and its own
   configuration, under the Eclipse Public License (weak copyleft) into an

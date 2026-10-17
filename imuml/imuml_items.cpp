@@ -587,10 +587,13 @@ void PlaceScope(ImUmlDiagram* d, int scope, const ImVec2& origin, const ImVector
 }
 
 /// An edge drawn to a node inside a composite ends at the composite in its
-/// scope's layout; extend it to the inner node with a straight segment.
+/// scope's layout. Its path is rebuilt to end on the inner node instead:
+/// the end point on the composite's border is replaced by the inner node's
+/// border and the whole path is smoothed again, so it has no corner where
+/// it enters the composite.
 void ExtendIntoComposites(ImUmlDiagram* d, const ImVector<int>& edge_scope, ImVector<ImUmlGraphEdgeOut>* edge_out,
                           ImVector<ImVec2>* points) {
-  ImVector<ImVec2> rebuilt;
+  ImVector<ImVec2> line, smooth;
   for (int e = 0; e < d->Edges.Size; ++e) {
     const ImUmlEdgeRec& er = d->Edges[e];
     if (er.From < 0) {
@@ -599,48 +602,38 @@ void ExtendIntoComposites(ImUmlDiagram* d, const ImVector<int>& edge_scope, ImVe
     const int scope = edge_scope[e];
     const bool deep_from = ChildOfScope(d, er.From, scope) != er.From;
     const bool deep_to = ChildOfScope(d, er.To, scope) != er.To;
-    if (!deep_from && !deep_to) {
-      continue;
-    }
     ImUmlGraphEdgeOut& eo = (*edge_out)[e];
-    if (eo.PointCount < 2) {
+    if ((!deep_from && !deep_to) || eo.PointCount < 2) {
       continue;
     }
-    rebuilt.resize(0);
-    for (int i = 0; i < eo.PointCount; ++i) {
-      rebuilt.push_back((*points)[eo.PointStart + i]);
+    // The points the path passes through (a Bézier chain's every third).
+    line.resize(0);
+    const int step = eo.Bezier ? 3 : 1;
+    for (int i = 0; i < eo.PointCount; i += step) {
+      line.push_back((*points)[eo.PointStart + i]);
+    }
+    if (line.Size < 2) {
+      continue;
     }
     if (deep_to) {
       const ImUmlNodeRec& n = d->Nodes[er.To];
-      const ImVec2 p = rebuilt.back();
-      const ImVec2 q = ImUml::ClipToShape(n.Shape, n.Pos, n.Size, p);
-      const ImVec2 qr(RoundPx(q.x), RoundPx(q.y));
-      if (eo.Bezier) {
-        rebuilt.push_back(p + (qr - p) * (1.0f / 3.0f));
-        rebuilt.push_back(p + (qr - p) * (2.0f / 3.0f));
-      }
-      rebuilt.push_back(qr);
+      const ImVec2 q = ImUml::ClipToShape(n.Shape, n.Pos, n.Size, line[line.Size - 2]);
+      line.back() = ImVec2(RoundPx(q.x), RoundPx(q.y));
     }
     if (deep_from) {
       const ImUmlNodeRec& n = d->Nodes[er.From];
-      const ImVec2 p = rebuilt[0];
-      const ImVec2 q = ImUml::ClipToShape(n.Shape, n.Pos, n.Size, p);
-      const ImVec2 qr(RoundPx(q.x), RoundPx(q.y));
-      ImVector<ImVec2> head;
-      head.push_back(qr);
-      if (eo.Bezier) {
-        head.push_back(qr + (p - qr) * (1.0f / 3.0f));
-        head.push_back(qr + (p - qr) * (2.0f / 3.0f));
-      }
-      for (int i = 0; i < rebuilt.Size; ++i) {
-        head.push_back(rebuilt[i]);
-      }
-      rebuilt = head;
+      const ImVec2 q = ImUml::ClipToShape(n.Shape, n.Pos, n.Size, line[1]);
+      line[0] = ImVec2(RoundPx(q.x), RoundPx(q.y));
+    }
+    const ImVector<ImVec2>* out = &line;
+    if (eo.Bezier) {
+      ImUml::SmoothPath(line, &smooth, !Across(d));
+      out = &smooth;
     }
     eo.PointStart = points->Size;
-    eo.PointCount = rebuilt.Size;
-    for (int i = 0; i < rebuilt.Size; ++i) {
-      points->push_back(rebuilt[i]);
+    eo.PointCount = out->Size;
+    for (int i = 0; i < out->Size; ++i) {
+      points->push_back((*out)[i]);
     }
   }
 }

@@ -109,6 +109,11 @@ bool NetworkSimplex(int node_count, const ImVector<ImUmlNsEdge>& edges, ImVector
 bool RankGraph(const ImUmlGraphInput& in, ImVector<int>* ranks, ImVector<bool>* reversed);
 /// @brief The whole layout.
 void LayoutGraph(const ImUmlGraphInput& in, ImUmlGraphOutput* out);
+/// @brief A smooth cubic Bézier chain (p0, c1, c2, p1, ...) through the
+///        polyline `pts` (at least 2 points): a monotone cubic of the rank
+///        coordinate (y when `along_y`, else x), so it never swings past its
+///        points sideways; control points rounded to whole pixels.
+void SmoothPath(const ImVector<ImVec2>& pts, ImVector<ImVec2>* out, bool along_y);
 /// @brief The point where the segment from `centre` towards `towards`
 ///        leaves a node of `shape` and `size` centred at `centre`.
 ImVec2 ClipToShape(ImUmlShape shape, const ImVec2& centre, const ImVec2& size, const ImVec2& towards);
