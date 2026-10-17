@@ -19,17 +19,20 @@ extracted into a standalone program:
   plot drawing that wish provides through its widget registry are
   reimplemented here, small and specific to charts.
 - **No GPU, no window, no display.** Frames are drawn by Dear ImGui and
-  rasterized on the CPU by an adapted copy of emilk's
+  rasterized on the CPU by nymph's own software rasterizer
+  (`src/render/soft_rasterizer`), written for ImGui 1.92 with emilk's
   [imgui_software_renderer](https://github.com/emilk/imgui_software_renderer)
-  (`src/render/imgui_sw`). No SDL, no OpenGL, no platform backend.
+  as the reference design. No SDL, no OpenGL, no platform backend.
 - **Only the silent mode.** wish nymph's `render` and `extract` commands
   exist here; its interactive `edit` and `view` modes do not (they need a
   window).
 
 First release scope: the 2D (`Plot` + series) and 3D (`Plot3D` + series)
-chart elements of wish nymph, with the same fields. The design is built to
-grow two ways later (section 9): more element types (layouts, labels,
-tables) and direct drawing commands on an `ImDrawList`.
+chart elements of wish nymph, plus the layout and text elements wish nymph
+allowed for combining them (`VerticalLayout`, `HorizontalLayout`,
+`Spring`, `Label`, `Separator`, and `SeparatorText`), all with wish's
+fields. The design is built to grow two ways later (section 9): more
+element types and direct drawing commands on an `ImDrawList`.
 
 ## 2. Design Goals
 
@@ -38,9 +41,9 @@ tables) and direct drawing commands on an `ImDrawList`.
    error is one line, `nymph: <file>:<line>:<column>: <message>`, and exit
    code 1. Nothing is written on failure.
 3. **Deterministic.** The same YAML and the same build give the same PNG
-   bytes: no clock, no input, no threads in the rasterizer. (Different
-   compilers may differ in the last bit of an anti-aliased edge: the
-   rasterizer uses float arithmetic.)
+   bytes: no clock, no input, no threads in the rasterizer. Which pixels a
+   triangle covers is decided in integer arithmetic, so it does not vary
+   between compilers either.
 4. **Compatible with wish nymph.** The `image` options, element types,
    field names, defaults and `$column` references are wish nymph's, so a
    wish nymph chart moves to this tool by changing only its outer
@@ -119,15 +122,86 @@ registered element classes (section 4). In the first release:
   `PlotText`, `PlotInfLines`.
 - `Plot3D`, with children `Plot3DLine`, `Plot3DScatter`, `Plot3DSurface`,
   `Plot3DTriangle`, `Plot3DQuad`, `Plot3DMesh`, `Plot3DText`.
+- `VerticalLayout` and `HorizontalLayout`, with any of the elements in
+  this list except series as children; `Spring`, `Label`, `Separator`,
+  `SeparatorText`.
 
-`root` must be a `Plot` or a `Plot3D`. A series must be a direct child of
+`root` is any element except a series. A series must be a direct child of
 its kind of plot (section 4, slots). Fields, defaults and enum/flag names
 are those of the wish registrations (`wish/src/ui/plot_elements/`,
-`wish/src/ui/plot3d_elements/`, `plot_style_fields.hpp`), including the
-style fields `color`, `fill_color`, `line_weight`, `fill_alpha`, `marker`,
-`marker_size` and `colormap`. Integer fields with named values take names
-or numbers (`flags: NoLegend|NoTitle`). A `Plot` / `Plot3D` used as `root`
-with no `height` fills the image, as in wish.
+`wish/src/ui/plot3d_elements/`, `plot_style_fields.hpp`,
+`wish/src/ui/ui_elements/{layout,spring,label,separator}.cpp`), including
+the style fields `color`, `fill_color`, `line_weight`, `fill_alpha`,
+`marker`, `marker_size` and `colormap`. Integer fields with named values
+take names or numbers (`flags: NoLegend|NoTitle`).
+
+Two plots and a caption in one image:
+
+```yaml
+image: {width: 640, height: 560}
+root:
+  type: VerticalLayout
+  spacing: 6
+  children:
+    - {type: Label, text: "Temperature and humidity, 12 March", text_color: "#555555"}
+    - type: Plot
+      title: Temperature
+      height: -1
+      children:
+        - {type: PlotLine, label: temp, xs: $hour, ys: $temp}
+    - type: Plot
+      title: Humidity
+      height: -1
+      children:
+        - {type: PlotShaded, label: humidity, xs: $hour, ys: $hum}
+    - {type: Separator}
+    - {type: Label, text: "Source: station 14.", wrap: true}
+data: |
+  hour, temp, hum
+  0, 12.8, 73
+  12, 23.2, 47
+```
+
+### Layout
+
+Layouts follow wish's size hints, so wish nymph sources keep their look:
+
+- **Hints.** Every element in a layout has a `width` and a `height`
+  (layouts and plots have the fields; `Label`, `Separator`,
+  `SeparatorText` and `Spring` behave as if both were 0). Along the
+  layout's axis — `height` in a `VerticalLayout`, `width` in a
+  `HorizontalLayout` — a positive value is fixed pixels, `0` is the
+  element's natural size, and a negative value is a stretch weight: the
+  space left after fixed sizes, natural sizes and `spacing` is shared by
+  the stretch children in proportion to the magnitude. A `Spring` is a
+  stretch child with weight `weight` (0 collapses it); two Springs around
+  an element centre it.
+- **Cross axis.** A positive hint is fixed pixels (clamped to the
+  layout); anything else fills the layout's width (`VerticalLayout`) or
+  height (`HorizontalLayout`). `HorizontalLayout.align: right` pushes the
+  row against the right edge when the children do not fill it.
+- **Natural sizes.** `Label`: its text measured with the image font,
+  wrapped at the available width when `wrap` is true. `Separator`,
+  `SeparatorText`: the height ImGui gives them. A layout: the sum of its
+  children's sizes along its axis (stretch children count as 0) plus
+  `spacing`, plus `2 * padding` when `card` is true. `Plot` / `Plot3D`
+  always carry a hint (defaults: width -1, height 300 / 400), so they never
+  need a natural size.
+- **Root.** `root` gets the whole image minus `image.padding`. A `Plot` /
+  `Plot3D` used as `root` with no `height` fills it, as in wish nymph.
+- **Overflow is an error.** If the fixed and natural sizes along an axis
+  do not fit, rendering fails with the layout's position and the numbers
+  (`needs 620 px of height, has 484`), rather than clipping something an
+  agent cannot see.
+- **Card.** `card: true` draws the layout's children on a rounded,
+  bordered panel in theme colours, inset by `padding`, corner radius
+  `rounding` (wish's defaults 12 and 10).
+- **Label colours.** `text_color`, else `text_color_light` or
+  `text_color_dark` by whether `image.theme` is light or dark, else the
+  theme's text colour.
+
+wish layout fields that need a live window (`scroll`) are not part of the
+schema.
 
 Scalar typing follows the registered field type, not YAML's guess: a value
 assigned to a text field stays text (`title: 2025`); a quoted value
@@ -174,8 +248,8 @@ naming its position. Columns nothing refers to are never checked.
                 (libyaml,     │  ▲        (image_options    │                          ▲
                  positions)   │  │         + node tree)     ▼                          │
                               │  registry             ImGui/ImPlot/ImPlot3D frame      source text
-                              ▼                        ──► ImDrawData ──► imgui_sw
-                            table (CSV or columns)
+                              ▼                        (layout, then draw)
+                            table (CSV or columns)     ──► ImDrawData ──► soft_rasterizer
 ```
 
 ### `yaml_doc` (`src/document/yaml_doc`)
@@ -214,30 +288,66 @@ class element_class {
   std::string_view slot() const;          // what it is: "plot2d.item"
   std::span<const std::string_view> accepts() const;  // child slots, e.g. {"plot2d.item"}
   std::span<const field_desc> fields() const;
+  /// Natural size (`figure` slot only): the size of a 0 hint.
+  virtual ImVec2 measure(const node& n, layout_context& lc,
+                         float avail_width) const;
+  /// Size hints (`figure` slot only); default reads `width` / `height`
+  /// fields if the class has them, else {0, 0}.
+  virtual size_hints hints(const node& n) const;
+  /// Arrange the children inside `rect` (containers only).
+  virtual void arrange(const node& n, layout_context& lc, ImRect rect) const;
   virtual void draw(const node& n, draw_context& dc) const = 0;
 };
 ```
 
 - **`registry`**: name → `element_class`. Built explicitly by
   `register_builtin_elements(registry&)`, which calls
-  `register_plot2d(registry&)` and `register_plot3d(registry&)`. A plain
+  `register_plot2d(registry&)`, `register_plot3d(registry&)` and
+  `register_layout(registry&)`. A plain
   object passed by reference, not a global singleton, so tests can build
   one with fake classes.
 - **Slots** replace wish's hard-coded placement rules. `Plot` has slot
   `figure` and accepts `plot2d.item`; every 2D series has slot
   `plot2d.item` and accepts nothing; likewise `Plot3D` / `plot3d.item`.
-  `root` must have slot `figure`. A child whose slot its parent does not
-  accept is an error. A future layout element (slot `figure`, accepts
-  `figure`) or canvas (accepts `draw.command`) is added without touching
+  `VerticalLayout` and `HorizontalLayout` have slot `figure` and accept
+  `figure`; `Spring`, `Label`, `Separator` and `SeparatorText` have slot
+  `figure` and accept nothing. `root` must have slot `figure`. A child
+  whose slot its parent does not accept is an error. A future element,
+  such as a canvas accepting `draw.command`, is added without touching
   `bind()`.
 - **Field order is fixed** at registration; a `node` stores its values in a
   `std::vector<value>` indexed by field position, so `draw()` reads fields
   through index constants defined next to the class, with no string
   lookup per frame.
 - **`draw_context`**: what `draw()` may use — the current ImGui window
-  (ImGui, ImPlot and ImPlot3D calls), `draw_children(node)` to draw the
-  children in order, and the image scale. Containers open their scope
-  (`BeginPlot`), call `draw_children`, then close it (`EndPlot`).
+  (ImGui, ImPlot and ImPlot3D calls), the node's arranged rectangle
+  (`rect(node)`, `figure` slot only), `draw_children(node)` to draw the
+  children in order, and the image scale. Plots open their scope
+  (`BeginPlot` at the rectangle, with its size), call `draw_children`,
+  then close it (`EndPlot`). Layouts only draw their card, if any, and
+  their children.
+
+### Layout engine (`src/layout/`)
+
+Runs inside each frame, after `NewFrame()` and before any drawing, because
+measuring text needs the frame's font. `layout_context` holds a rectangle
+per `figure` node.
+
+1. **Measure**, bottom-up: each `figure` node's natural size through
+   `measure()`; containers combine their children's hints and natural
+   sizes as in section 3, "Layout".
+2. **Arrange**, top-down: `root` gets the image rectangle minus
+   `image.padding`; each container's `arrange()` divides its rectangle
+   among its children and stores theirs. The axis arithmetic (fixed,
+   natural, stretch weights, spacing, overflow check) is one shared
+   function used by both layout directions.
+3. **Draw**: `root`'s `draw()`, each node at its stored rectangle
+   (`SetCursorScreenPos` + the element's own size, clipped to the
+   rectangle).
+
+Sizes are known before anything is drawn, so unlike wish (where an auto row
+learns its height from the previous frame) the first frame is already
+correctly laid out.
 
 ### `figure` (`src/document/bind`)
 
@@ -248,7 +358,7 @@ the element tree, checks every type, slot, field, type conversion, name,
 range and colour, and replaces every column reference with literal data.
 Throws `nymph::error{line, column, message}` (1-based positions in the
 whole file). It is pure: no file access, no ImGui. It is the only
-validator; `render_figure()` trusts its result.
+validator of content; `render_figure()` trusts its result.
 
 ### `render_figure()` (`src/render/figure_renderer`)
 
@@ -267,67 +377,75 @@ exception. Per call:
   framebuffer scale, so text stays sharp at `scale: 2`.
 - Style: the `image.theme` ImGui and ImPlot styles, with
   `AntiAliasedLinesUseTex = false` (see section 7).
-- One window covering the display (no decoration, no saved settings,
-  `padding` as window padding) draws `root` through its class's `draw()`.
+- One window covering the display (no decoration, no saved settings, no
+  padding) in which the layout engine runs and `root` is drawn.
 - Three frames are run and the third is kept: ImPlot fits axes one frame
   late, and text sizes settle after the first frame. After each frame the
   `ImTextureData` requests are applied to a `texture_store`; after the
-  third, its `ImDrawData` goes to the rasterizer.
+  third, its `ImDrawData` goes to `soft_rasterizer`.
 
 ImGui's current-context pointer is a process global, so `render_figure()`
 must not run on two threads at once. The CLI renders one figure per
 process.
 
-### `imgui_sw` (`src/render/imgui_sw`)
+### `soft_rasterizer` (`src/render/soft_rasterizer`)
 
 Turns `ImDrawData` into RGBA8 pixels on the CPU. It replaces the GPU or SDL
-backend wish uses. It is emilk's
+backend wish uses. Written for nymph against ImGui 1.92, with emilk's
 [imgui_software_renderer](https://github.com/emilk/imgui_software_renderer)
-(commit `b5ae63a`, 2018, public domain), copied into the source tree
-rather than added as a submodule because it needs changes for ImGui 1.92
-and `extern/` code is never edited. The file header names the origin
-commit and lists the changes.
+(`src/imgui_sw.cpp`, commit `b5ae63a`, public domain) as the reference
+for its structure and fast paths. That project does not compile against
+ImGui 1.92, so it is read, not built; the file header credits it.
 
-What it already does, kept as is:
+- **Input**: `ImDrawData` plus a `texture_store` (texture id → pixels,
+  Alpha8 or RGBA32). `texture_store::apply(ImTextureData&)` handles the
+  `WantCreate` / `WantUpdates` / `WantDestroy` requests that ImGui ≥ 1.92
+  issues when the backend sets `ImGuiBackendFlags_RendererHasTextures`;
+  that flag is what lets ImGui bake glyphs at the output density, so text
+  is sharp at `scale: 2`. The font atlas is requested as Alpha8.
+- **Geometry**: for every draw command, its triangles read through
+  `IdxOffset` / `VtxOffset` (the backend sets
+  `ImGuiBackendFlags_RendererHasVtxOffset`, so meshes over 64K vertices
+  work with 16-bit indices); positions mapped with `(pos - DisplayPos) *
+  FramebufferScale`; clipped to the command's clip rectangle (mapped the
+  same way, rounded to whole pixels) and the target.
+  `ImDrawCallback_ResetRenderState` is ignored; any other callback is an
+  error (neither ImPlot nor ImPlot3D emits one).
+- **Coverage**: edge functions in 64-bit fixed point (8 sub-pixel bits),
+  sampled at pixel centres, with the top-left fill rule, so two triangles
+  sharing an edge never both cover a pixel. This matters more than it
+  looks: ImGui's anti-aliasing fringes are thin triangles that share every
+  edge, and a double-covered edge shows as a darker seam.
+- **Attributes**: colour and UV interpolated with barycentric weights
+  (affine; ImGui geometry is 2D). Anti-aliasing comes from ImGui's own
+  fringe geometry (vertex alpha fading to 0), so no multisampling is
+  needed; `image.scale` is the supersampling knob.
+- **Texture sampling**: bilinear, clamp to edge, texel centres at
+  `(i + 0.5) / size`. Alpha8 texels are white with that alpha, as ImGui's
+  GPU backends treat them. Solid fills sample the atlas's white pixel
+  (`ImFontAtlas::TexUvWhitePixel`).
+- **Blending**: ImGui's `SRC_ALPHA, ONE_MINUS_SRC_ALPHA` on colour and
+  `ONE, ONE_MINUS_SRC_ALPHA` on alpha, in 8-bit integer arithmetic with
+  one fixed rounding rule. The caller clears the target to the theme's
+  window background, opaque, so the PNG is opaque.
+- **Fast paths** (taken from imgui_sw's design; each must produce exactly
+  the bytes of the general path, which a test checks):
+  1. Axis-aligned rectangles: two triangles forming an axis-aligned quad
+     with one colour and the white-pixel UV are filled row by row, no
+     edge functions.
+  2. Text quads: an axis-aligned textured quad of one colour whose UV
+     size matches its pixel size is a glyph drawn 1:1; texels are read
+     directly instead of interpolated and bilinear-sampled.
+  3. Uniform-colour triangles skip colour interpolation.
+  4. A one-entry cache of the last (destination, source) blend, since long
+     runs blend the same colour over the same background.
 
-- Barycentric triangle filling at pixel centres, with a top-left-style
-  bias so two triangles sharing an edge do not both cover a pixel.
-- Clip rectangles; output scaled from `DisplaySize` to the target size
-  (so `image.scale` works like `DisplayFramebufferScale`).
-- Fast paths for axis-aligned solid rectangles and text quads, the bulk of
-  a plot frame.
-- Straight-alpha blending (`SRC_ALPHA, ONE_MINUS_SRC_ALPHA`) into a packed
-  `ImU32` buffer, which is RGBA byte order on the little-endian targets
-  nymph supports. Anti-aliasing comes from ImGui's own fringe geometry
-  (vertex alpha fading to 0); `image.scale` is the supersampling knob.
-
-Changes nymph makes (each covered by a plan step 2 test):
-
-1. **ImGui 1.92 textures.** The single global font `Texture` set up by
-   `bind_imgui_painting()` (`GetTexDataAsAlpha8`, `io.Fonts->TexID`) is
-   replaced by a `texture_store` passed to `paint()`: textures by
-   `pcmd.GetTexID()`, filled from the `ImTextureData` requests
-   (`WantCreate` / `WantUpdates` / `WantDestroy`) that ImGui issues when
-   `ImGuiBackendFlags_RendererHasTextures` is set. Textures stay Alpha8
-   (the atlas is asked for `ImTextureFormat_Alpha8`), the one format the
-   painter samples. This is what lets ImGui bake glyphs at the output
-   density, so text is sharp at `scale: 2`.
-2. **`VtxOffset` / `IdxOffset`** honoured. The original predates them;
-   without them a mesh over 64K vertices (a large `Plot3DSurface`) draws
-   wrong triangles. The backend sets `ImGuiBackendFlags_RendererHasVtxOffset`.
-3. **White pixel** taken from `ImFontAtlas::TexUvWhitePixel`, not assumed
-   at texel (0, 0) as in pre-1.92 atlases.
-4. **Texel lookup** at `floor(uv * size)`, the texel containing the sample,
-   instead of `round(uv * (size - 1))`, which is off by up to half a texel.
-5. **Callbacks:** `ImDrawCallback_ResetRenderState` is ignored and any
-   other callback throws, instead of being called (neither ImPlot nor
-   ImPlot3D emits one).
-6. **API trimmed** to `paint(const ImDrawData&, const texture_store&,
-   image&)`: the ImGui option/stats windows, the static stats and
-   `make_style_fast()` are removed; the target is cleared by the caller
-   to the theme's window background (opaque, so the PNG is opaque).
-7. **Style:** nymph's own `.clang-format` applied, so the file reads like
-   the rest of `src/`.
+What is deliberately not taken from imgui_sw: float edge tests (coverage
+would depend on the compiler), a single global font texture, a
+`round(uv * (size - 1))` texel lookup (off by up to half a texel), the
+white pixel assumed at texel (0, 0) (no longer true in 1.92 atlases),
+ignoring `VtxOffset`, calling draw callbacks, and its global statistics
+and ImGui option windows.
 
 ### `png` (`src/png/`)
 
@@ -388,7 +506,7 @@ in-process; `app/main.cpp` only forwards `argv` and the standard streams
 | `nymph <in> [-o <out>]` | If `<in>` starts with the PNG signature: extract its YAML to `<out>` or stdout. Otherwise: render it to `<out>`, default `<in>` with its extension replaced by `.png`. |
 | `nymph render <in> [-o <out.png>]` | Render; `<in>` may be `-` (stdin, then `-o` is required) or a nymph PNG (re-render its embedded source). |
 | `nymph extract <in.png> [-o <out.yaml>]` | Extract the embedded YAML. |
-| `nymph check <in>` | Validate only (bind, no render). Exit 0 and no output when valid. |
+| `nymph check <in>` | Validate only: bind and lay out, no rasterizing. Exit 0 and no output when valid. |
 | `nymph schema [<Type>] [--markdown]` | Print the element reference from the registry: every type, its slot, fields, types, defaults, names and descriptions. `--markdown` prints the form kept in `docs/elements.md`. |
 | `nymph --version`, `nymph --help` | Version, usage. |
 
@@ -406,23 +524,34 @@ result renders with this tool when it uses only the elements nymph has.
 
 ## 7. Design Decisions
 
-- **An adapted copy of imgui_software_renderer as the rasterizer.** Dear
-  ImGui ships no software renderer: its backends are GPU APIs (OpenGL,
-  Vulkan, DirectX, Metal, WebGPU, SDL renderers) plus `imgui_impl_null`,
-  which draws nothing. wish nymph used SDL's software renderer through
-  `imgui_impl_sdlrenderer3`; that brings in SDL, which this tool must not
-  depend on. emilk's imgui_sw is about 700 lines, public domain, has no
-  dependency but ImGui, and already handles the hard parts (fill rule,
-  anti-aliased fringes, text fast path). Its gaps are all about ImGui
-  versions newer than 2018 and are listed in section 4. Rejected: a
-  rasterizer written from scratch (more new code for the same result) and
-  using imgui_sw unmodified as a submodule (it does not compile against
-  ImGui 1.92 and would draw large meshes wrong).
-- **Float arithmetic in the rasterizer is accepted.** imgui_sw computes
-  coverage and blending in float. Within one build the output is
-  repeatable (single thread, fixed order), which is what Goal 3 needs;
-  byte-identical PNGs across compilers are not a goal. If they become one,
-  the coverage test is the place to switch to fixed point.
+- **nymph's own rasterizer, designed after imgui_software_renderer.**
+  Dear ImGui ships no software renderer: its backends are GPU APIs
+  (OpenGL, Vulkan, DirectX, Metal, WebGPU, SDL renderers) plus
+  `imgui_impl_null`, which draws nothing. wish nymph used SDL's software
+  renderer through `imgui_impl_sdlrenderer3`; that brings in SDL, which
+  this tool must not depend on. emilk's imgui_sw is the obvious base but
+  was written for ImGui 1.6x and does not compile against 1.92 (the
+  texture API changed), and its gaps (single font texture, no
+  `VtxOffset`, texel and white-pixel assumptions) touch most of its code.
+  Writing the rasterizer fresh for 1.92, with imgui_sw as the reference for
+  structure and fast paths, costs about as much as patching it and leaves
+  code that follows nymph's conventions. Rejected: SDL's software renderer
+  (dependency), patching an imgui_sw copy (most of it would change), and
+  other third-party rasterizers (unmaintained, pre-1.92).
+- **Fixed-point coverage, integer blending.** Goal 3 asks for repeatable
+  bytes; float edge tests can differ across compilers and FMA settings,
+  and a wrong edge decision shows as a seam between fringe triangles.
+  Colour and UV interpolation stay in float (they do not decide coverage),
+  quantized once with an explicit rounding rule.
+- **Layout is computed before drawing, not by ImGui's flow layout.** The
+  image is static and every size is known, so a measure/arrange pass in
+  the same frame gives exact rectangles; wish's flow layout learns auto
+  sizes one frame late and needs child windows. The hint convention is
+  wish's (positive fixed, 0 natural, negative stretch weight), so wish
+  nymph sources lay out the same way.
+- **Overflow is an error, not clipping.** An agent cannot see that a plot
+  was squeezed to nothing or a label cut off; a positioned error with the
+  needed and available pixels tells it what to change.
 - **Geometry anti-aliasing, not textured lines**
   (`AntiAliasedLinesUseTex = false`). Learned in wish nymph: textured lines
   depend on GPU-exact bilinear filtering and came out uneven on a
@@ -464,7 +593,9 @@ result renders with this tool when it uses only the elements nymph has.
 
 - `read_source(encode_png(img, t, d)) == t`; line endings, comments and
   whitespace are preserved, never normalised.
-- `bind()` is pure and is the only validator.
+- `bind()` is pure and is the only validator of the source's content; the
+  layout overflow check (it needs font metrics) is the one error found
+  while rendering, and `check` runs the layout pass to find it too.
 - The rendered frame depends only on the `figure`. No wall clock, no
   environment variable, no locale (numbers are parsed and printed with
   `std::from_chars` / `std::to_chars`).
@@ -488,9 +619,6 @@ lazily by `nymph_ensure_submodules()`):
 | `stb` | `stb_image_write` (PNG), zlib for compressed `iTXt` | wish's `extern/stb` commit |
 | `googletest` | Tests only | `v1.15.2` |
 
-Not a submodule: `src/render/imgui_sw.hpp`/`.cpp`, an adapted copy of
-emilk's imgui_software_renderer (section 4).
-
 ImPlot and ImPlot3D are ImGui extensions, and libyaml and stb are small
 vendored C libraries; none of them is a system or GPU dependency. Pinning
 ImGui, ImPlot and ImPlot3D to wish's versions keeps the drawing code
@@ -498,15 +626,11 @@ portable between the two projects.
 
 ## 9. Extension Points
 
-- **New element types** (layouts, `Label`, `Separator`, `Spring`, tables,
-  more series): one source file under `src/elements/<family>/` that
-  defines `element_class` subclasses and a `register_<family>()` called
-  from `register_builtin_elements()`. Choosing slots is the only
-  integration step. Layouts are the expected first addition (wish nymph
-  allowed `VerticalLayout`, `HorizontalLayout`, `Spring`, `Label`,
-  `Separator` to combine plots); with them, `root` may be any `figure`
-  element and the "root plot fills the image" rule becomes "a plot with no
-  height fills its share".
+- **New element types** (tables, images, a grid layout, more series):
+  one source file under `src/elements/<family>/` that defines
+  `element_class` subclasses and a `register_<family>()` called from
+  `register_builtin_elements()`. Choosing slots and, for `figure`
+  elements, `measure()` / `hints()` are the only integration steps.
 - **Direct drawing commands.** A `Canvas` element (slot `figure`, accepts
   `draw.command`) reserves a rectangle and exposes it through
   `draw_context` as a coordinate transform plus `ImGui::GetWindowDrawList()`.
@@ -527,5 +651,5 @@ portable between the two projects.
 | `edit`, `view` modes | Not present | They need a window. |
 | Three-part `.nymph` text | YAML document; converted on `extract` | Section 7. |
 | `wish` theme | Not present | It is wish's own palette; can be added as data later. |
-| Layout and `Label` / `Separator` elements | Not in the first release | Scope: plots only. First planned extension (section 9). |
+| Layout `scroll`, `Splitter`, other wish widgets | Not present | They need a live window or are not chart elements. |
 | Schema completion in an editor | `nymph schema` | No editor; agents read the printed schema. |

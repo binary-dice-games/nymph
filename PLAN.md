@@ -38,48 +38,59 @@ and link into the `nymph` library with no system packages.
 - A fresh clone without `--recursive` configures and builds (manual check,
   recorded in the step's result).
 
-### 2. Software rasterizer (adapted imgui_sw)
+### 2. Software rasterizer
 
 **Goal:** `ImDrawData` from ImGui 1.92 becomes correct, repeatable RGBA8
-pixels on the CPU, using an adapted copy of emilk's
-imgui_software_renderer.
+pixels on the CPU, from nymph's own rasterizer.
+
+Reference: emilk's imgui_software_renderer (`src/imgui_sw.cpp`, commit
+`b5ae63a`). Read it before writing this step, for the overall structure
+(per-list, per-command, per-triangle loop), the fast-path detection and
+the blend cache; DESIGN.md section 4 (`soft_rasterizer`) lists what to
+take from it and what to do differently. Do not copy its float edge test,
+texel lookup or white-pixel assumption.
 
 **Deliverables:**
-- `src/render/imgui_sw.hpp`/`.cpp`: copied from
-  `emilk/imgui_software_renderer` commit `b5ae63a` (`src/imgui_sw.*`), with
-  a header stating the origin, its public-domain licence, and the changes
-  of DESIGN.md section 4 (`imgui_sw`), items 1-7. First commit the copy
-  as is plus only the formatting, then the changes, so the diff against
-  upstream stays reviewable.
-- `src/render/texture_store.hpp`/`.cpp`: Alpha8 textures by id;
-  `apply(ImTextureData&)` for `WantCreate` / `WantUpdates` /
-  `WantDestroy`, setting `TexID` and status.
 - `src/render/image.hpp`: `struct image {int width, height;
   std::vector<uint8_t> rgba;}`.
-- `THIRD_PARTY.md` (repository root): imgui_sw's origin and licence text.
+- `src/render/texture_store.hpp`/`.cpp`: Alpha8 and RGBA32 textures by
+  id; `apply(ImTextureData&)` for `WantCreate` / `WantUpdates` /
+  `WantDestroy`, setting `TexID` and status.
+- `src/render/soft_rasterizer.hpp`/`.cpp`: `rasterize(const ImDrawData&,
+  const texture_store&, ImU32 clear_color, raster_options = {}) -> image`. General path first
+  (fixed-point edges, top-left rule, affine interpolation, bilinear
+  sampling, integer blending, clip rectangles, `IdxOffset` / `VtxOffset`,
+  `FramebufferScale`), then the four fast paths. The header credits
+  imgui_sw as the reference.
+- `raster_options{bool fast_paths = true}`, an optional `rasterize()`
+  argument, so tests can compare both paths.
 
-**Tests** (`tests/test_imgui_sw.cpp`, hand-built `ImDrawList`s with a
-small Alpha8 test texture whose white pixel is not at (0, 0), no ImGui
+**Tests** (`tests/test_soft_rasterizer.cpp`, hand-built `ImDrawList`s
+with a small Alpha8 texture whose white pixel is not at (0, 0), no ImGui
 frame):
 - An opaque axis-aligned rectangle covers exactly its pixels, with its
   colour, and nothing else changes.
 - Two triangles forming a square with alpha 0.5 give one uniform colour:
-  no pixel along the shared diagonal is blended twice.
-- A triangle partly outside its clip rectangle changes no pixel outside it.
+  no pixel along the shared diagonal is blended twice. Same for a fan of
+  eight triangles around a centre point.
+- A triangle partly outside its clip rectangle changes no pixel outside
+  it.
 - Blending a known colour at known alpha over a known background gives the
-  expected bytes (within 1 per channel).
-- A textured quad mapped 1:1 onto the texture reproduces its texels at the
-  right pixels (catches the texel-lookup fix).
+  exact hand-computed bytes (three cases, including alpha 0 and 255).
+- A textured quad mapped 1:1 onto the texture reproduces its texels at
+  the right pixels; a quad sampling halfway between two texels gets their
+  average.
 - A solid rectangle that samples the moved white pixel is painted solid.
-- A draw list over 65,536 vertices with `VtxOffset` set draws the same
+- A draw list over 65,536 vertices using `VtxOffset` draws the same
   pixels as the same shapes split into small lists.
 - Two textures in one frame are each sampled from their own pixels.
 - `texture_store` applies `WantCreate`, then a `WantUpdates` rectangle,
   then `WantDestroy`, with the expected pixels and statuses.
-- A display of 10x10 painted into a 20x20 target draws a rectangle twice
-  as large.
+- `FramebufferScale = 2` with a 10x10 display gives a 20x20 image and a
+  rectangle twice as large.
 - A `ResetRenderState` callback is ignored; any other callback throws.
-- Painting the same draw data twice gives identical bytes.
+- For every test above, the fast paths on and off give identical bytes.
+- Rasterizing the same draw data twice gives identical bytes.
 
 ### 3. Offscreen frame driver
 
@@ -92,7 +103,7 @@ ImPlot3D context comes out as an image, with no window or display.
   -> image`. Context trio created and destroyed per call (RAII guard),
   `AddFontDefaultVector()` at 16 px, Alpha8 atlas, theme (`light`, `dark`,
   `classic`) with `AntiAliasedLinesUseTex = false`, the full-display
-  window with `padding`, fixed `DeltaTime`, mouse at `-FLT_MAX`, three
+  window without padding, fixed `DeltaTime`, mouse at `-FLT_MAX`, three
   frames with texture requests applied after each, rasterize the third.
 - `src/render/draw_context.hpp`: what `draw()` receives (section 4), with
   `draw_children` left to step 7.
@@ -235,6 +246,9 @@ and defaults.
   registrations, and `draw()` ported from `imgui_plot_renderer.cpp` and
   `imgui_plot_style.hpp`; `register_plot2d()`.
 - `src/elements/register_builtin.cpp`: `register_builtin_elements()`.
+- `src/layout/layout_context.hpp`/`.cpp`, first form: rectangles per
+  node; `root` gets the image minus `image.padding`. The axis arithmetic
+  comes in step 11.
 - `src/nymph.hpp`: `render_png()` using the built-in registry.
 - `tests/data/`: one YAML source per 2D series.
 
@@ -264,7 +278,53 @@ defaults.
 **Tests** (`tests/test_plot3d.cpp`): the step 9 tests for the 3D classes,
 plus: a `Plot3D` inside a `Plot` is a slot error.
 
-### 11. Command line
+### 11. Layout and text elements
+
+**Goal:** several plots, labels and separators can be arranged in one
+image with wish's layout hints.
+
+**Deliverables:**
+- `src/layout/`: measure and arrange passes, the shared axis function
+  (fixed, natural, stretch weights, `spacing`, overflow error with
+  position and pixel counts), as in DESIGN.md sections 3 ("Layout") and 4
+  ("Layout engine").
+- `src/elements/layout/`: `VerticalLayout`, `HorizontalLayout` (`spacing`,
+  `width`, `height`, `card`, `padding`, `rounding`; `align` on the
+  horizontal one), `Spring` (`weight`), `Label` (`text`, `text_color`,
+  `text_color_light`, `text_color_dark`, `wrap`), `Separator`,
+  `SeparatorText` (`label`), with wish's defaults and descriptions;
+  `register_layout()`.
+- `Plot` / `Plot3D`: `hints()` from their `width` / `height` (negative
+  height now allowed as a stretch weight; positive values keep wish's
+  range); a root plot with no `height` fills.
+- `check_source()` runs the layout pass (no rasterizing).
+- `tests/data/`: the DESIGN.md two-plot example, a centred label (two
+  Springs), a card, a horizontal row of two plots.
+
+**Tests:**
+- `tests/test_layout.cpp`, the axis function alone (no ImGui): fixed,
+  natural and stretch children with spacing get the expected sizes;
+  weights 1 and 3 split 400 px as 100 / 300; a Spring with weight 0
+  collapses; `align: right` offsets the row; fixed + natural sizes larger
+  than the space give the overflow error with both numbers.
+- `tests/test_layout_elements.cpp` (rendered):
+  - Two plots with `height: -1` in a `VerticalLayout` get equal heights
+    (their frame borders found in the pixels); `-1` and `-3` split 1:3.
+  - A `Label` between two Springs is horizontally centred (its text
+    pixels' bounding box centred within 1 px).
+  - A wrapped `Label` is taller than the same text unwrapped and fits the
+    width.
+  - `text_color` shows in the text pixels; with `theme: dark`,
+    `text_color_dark` wins over `text_color_light`.
+  - `card: true` draws a panel whose border pixels sit `padding` outside
+    the children.
+  - A `Separator` draws a one-pixel-high line across the layout.
+  - A layout whose fixed heights exceed the image fails with the
+    layout's line and column, and `check` reports the same error.
+  - A series directly inside a `VerticalLayout` is a slot error.
+  - The schema of each class matches a table copied from wish.
+
+### 12. Command line
 
 **Goal:** the `nymph` executable implements DESIGN.md section 6.
 
@@ -289,7 +349,7 @@ after the gtest test):
 - `check` prints nothing on a valid source.
 - `schema PlotLine` lists `xs`, `ys` and `color`; `schema Nope` exits 1.
 
-### 12. wish nymph images
+### 13. wish nymph images
 
 **Goal:** `extract` turns a wish nymph three-part source into equivalent
 nymph YAML.
@@ -305,10 +365,10 @@ nymph YAML.
   binds, with the same description, root tree and data as the original.
 - A YAML source containing a `--` line inside a block scalar is not
   mistaken for a legacy source.
-- `chart.nymph` (it uses `VerticalLayout`) converts, and rendering it
-  reports the unknown type at its line, until layouts exist.
+- `chart.nymph` (a `VerticalLayout` with a `Label` and two plots)
+  converts and renders, and its image shows a label above two plots.
 
-### 13. Documentation and examples
+### 14. Documentation and examples
 
 **Goal:** a person or an agent can use nymph from the docs alone.
 
@@ -322,7 +382,8 @@ nymph YAML.
   ported from wish's `AGENT_GUIDE.md` to the YAML form and this CLI
   (recipes, good-chart advice, limits, common errors).
 - `examples/*.yaml` (line, bars, histogram, heatmap, pie, scatter, 3D
-  surface) and `docs/examples.md` showing each with its PNG.
+  surface, several plots with labels in a layout) and `docs/examples.md`
+  showing each with its PNG.
 - `CHANGELOG.md` `### Added` entries; DESIGN.md status line updated.
 
 **Tests** (`tests/test_docs.cpp`):
@@ -343,6 +404,8 @@ nymph YAML.
       nothing.
 - [ ] The `nymph` binary links no SDL, OpenGL, wish or bison symbols
       (`nm` / `dumpbin` check).
-- [ ] Every 2D and 3D element type and field of wish nymph is accepted
-      with the same name and default.
+- [ ] Every element type and field wish nymph accepted (2D and 3D plots,
+      layouts, `Spring`, `Label`, `Separator`) is accepted with the same
+      name and default, and wish's three test charts render after
+      `extract` converts them.
 - [ ] README, `docs/`, CHANGELOG and DESIGN.md match the code.

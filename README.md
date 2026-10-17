@@ -2,8 +2,9 @@
 
 nymph is a command-line tool that turns a YAML file describing a chart
 into a PNG image, and a nymph PNG back into its YAML (the YAML is stored
-inside the image). It draws 2D and 3D plots with Dear ImGui, ImPlot and
-ImPlot3D and rasterizes them on the CPU: no GPU, window or display needed.
+inside the image). It draws 2D and 3D plots, labels and layouts with Dear
+ImGui, ImPlot and ImPlot3D and rasterizes them on the CPU with its own
+software rasterizer: no GPU, window or display needed.
 It is meant for AI agents that need to show information as a chart.
 
 It is a standalone version of wish's `nymph` module, with no wish or bison
@@ -50,7 +51,7 @@ Link against the `nymph` CMake target (`nymph::nymph` alias).
 | Concept | Description |
 |---------|-------------|
 | **Source** | One YAML document: `description`, `image` options, a `root` element tree, and `data` (CSV text or columns). |
-| **Elements** | `Plot` / `Plot3D` and their series, with the same fields as wish's plot widgets. New types register a class; see [DESIGN.md](DESIGN.md#9-extension-points). |
+| **Elements** | `Plot` / `Plot3D` and their series, plus `VerticalLayout` / `HorizontalLayout`, `Spring`, `Label` and separators to combine them, with the same fields as wish's widgets. New types register a class; see [DESIGN.md](DESIGN.md#9-extension-points). |
 | **Column references** | `$name` / `$2` in a field takes data from a column. |
 | **Round trip** | The PNG carries its YAML; `nymph image.png` prints it back byte for byte. |
 
