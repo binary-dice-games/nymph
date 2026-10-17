@@ -23,3 +23,4 @@ nymph_add_test(test_version test_version.cpp)
 nymph_add_test(test_dependencies test_dependencies.cpp)
 # Uses libyaml and stb directly; nymph links them PRIVATE.
 target_link_libraries(test_dependencies PRIVATE yaml nymph_stb)
+nymph_add_test(test_soft_rasterizer test_soft_rasterizer.cpp)

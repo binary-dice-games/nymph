@@ -54,6 +54,17 @@ and link into the `nymph` library with no system packages.
 
 ### 2. Software rasterizer
 
+*Result: done.* `src/render/soft_rasterizer`, `texture_store`, `image`;
+`tests/test_soft_rasterizer.cpp` (16 tests). Refinements recorded in
+DESIGN.md: constant attributes are never interpolated (a rule, not a fast
+path, so the old fast path 3 is gone), sampling and colour modulation are
+integer after rounding the sample position to 1/256 texel, and draw
+callbacks follow 1.92.8's `DrawCallback_ResetRenderState`. A temporary
+counter confirmed the fast-path tests really take the fast paths (2 solid
+rectangles and 6 glyph quads in the mixed scene; the scaled quad falls
+back). No `THIRD_PARTY.md`: no code was copied, the header credits
+imgui_sw.
+
 **Goal:** `ImDrawData` from ImGui 1.92 becomes correct, repeatable RGBA8
 pixels on the CPU, from nymph's own rasterizer.
 
@@ -74,10 +85,12 @@ texel lookup or white-pixel assumption.
   const texture_store&, ImU32 clear_color, raster_options = {}) ->
   image`. General path first (fixed-point edges, top-left rule, affine interpolation, bilinear
   sampling, integer blending, clip rectangles, `IdxOffset` / `VtxOffset`,
-  `FramebufferScale`), then the four fast paths. The header credits
+  `FramebufferScale`), then the fast paths. The header credits
   imgui_sw as the reference.
 - `raster_options{bool fast_paths = true}`, an optional `rasterize()`
   argument, so tests can compare both paths.
+- `reset_render_state_callback`, the no-op callback the frame driver
+  installs as `ImGuiPlatformIO::DrawCallback_ResetRenderState`.
 
 **Tests** (`tests/test_soft_rasterizer.cpp`, hand-built `ImDrawList`s
 with a small Alpha8 texture whose white pixel is not at (0, 0), no ImGui

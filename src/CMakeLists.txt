@@ -3,6 +3,11 @@ configure_file(version.hpp.in "${CMAKE_CURRENT_BINARY_DIR}/generated/version.hpp
 add_library(nymph STATIC
   nymph.hpp
   nymph.cpp
+  render/image.hpp
+  render/texture_store.hpp
+  render/texture_store.cpp
+  render/soft_rasterizer.hpp
+  render/soft_rasterizer.cpp
 )
 add_library(nymph::nymph ALIAS nymph)
 target_include_directories(nymph PUBLIC

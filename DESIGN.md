@@ -409,36 +409,57 @@ ImGui 1.92, so it is read, not built; the file header credits it.
   work with 16-bit indices); positions mapped with `(pos - DisplayPos) *
   FramebufferScale`; clipped to the command's clip rectangle (mapped the
   same way, rounded to whole pixels) and the target.
-  `ImDrawCallback_ResetRenderState` is ignored; any other callback is an
-  error (neither ImPlot nor ImPlot3D emits one).
+  Reset-render-state callbacks are ignored (the legacy
+  `ImDrawCallback_ResetRenderState` value, and nymph's own
+  `reset_render_state_callback`, which the frame driver installs as
+  `ImGuiPlatformIO::DrawCallback_ResetRenderState`, the 1.92.8 mechanism);
+  any other callback is an error (neither ImGui, ImPlot nor ImPlot3D emits
+  one). Vertices are clamped to +-2^19 px so edge functions fit in 64
+  bits, and a triangle with a non-finite vertex is skipped.
 - **Coverage**: edge functions in 64-bit fixed point (8 sub-pixel bits),
   sampled at pixel centres, with the top-left fill rule, so two triangles
   sharing an edge never both cover a pixel. This matters more than it
   looks: ImGui's anti-aliasing fringes are thin triangles that share every
   edge, and a double-covered edge shows as a darker seam.
 - **Attributes**: colour and UV interpolated with barycentric weights
-  (affine; ImGui geometry is 2D). Anti-aliasing comes from ImGui's own
+  (affine, in double; ImGui geometry is 2D) and colour rounded to 8 bits.
+  An attribute equal at all three vertices is used as is, never
+  interpolated: this is a rule of the general path, not an optimisation,
+  because it is what makes a solid rectangle give the same bytes through
+  either path. Anti-aliasing comes from ImGui's own
   fringe geometry (vertex alpha fading to 0), so no multisampling is
   needed; `image.scale` is the supersampling knob.
 - **Texture sampling**: bilinear, clamp to edge, texel centres at
-  `(i + 0.5) / size`. Alpha8 texels are white with that alpha, as ImGui's
-  GPU backends treat them. Solid fills sample the atlas's white pixel
-  (`ImFontAtlas::TexUvWhitePixel`).
+  `(i + 0.5) / size`. The sample position is rounded to 1/256 texel and
+  the four texels weighted in integers, so a sample within 1/512 texel of
+  a texel centre returns that texel exactly whatever the float error in
+  the interpolated UV. Vertex colour and texel are multiplied in integers
+  (`(c * t + 127) / 255`). Alpha8 texels are white with that alpha, as
+  ImGui's GPU backends treat them. Solid fills sample the atlas's white
+  pixel (`ImFontAtlas::TexUvWhitePixel`).
 - **Blending**: ImGui's `SRC_ALPHA, ONE_MINUS_SRC_ALPHA` on colour and
   `ONE, ONE_MINUS_SRC_ALPHA` on alpha, in 8-bit integer arithmetic with
   one fixed rounding rule. The caller clears the target to the theme's
   window background, opaque, so the PNG is opaque.
-- **Fast paths** (taken from imgui_sw's design; each must produce exactly
-  the bytes of the general path, which a test checks):
-  1. Axis-aligned rectangles: two triangles forming an axis-aligned quad
-     with one colour and the white-pixel UV are filled row by row, no
-     edge functions.
-  2. Text quads: an axis-aligned textured quad of one colour whose UV
-     size matches its pixel size is a glyph drawn 1:1; texels are read
-     directly instead of interpolated and bilinear-sampled.
-  3. Uniform-colour triangles skip colour interpolation.
-  4. A one-entry cache of the last (destination, source) blend, since long
+- **Fast paths** (taken from imgui_sw's design; each produces exactly the
+  bytes of the general path, which every rasterizer test checks by
+  rendering with `raster_options::fast_paths` on and off). Both quad paths
+  apply to six indices in ImGui's `PrimRect` order, `(a, b, c), (a, c,
+  d)`, forming an axis-aligned rectangle of one colour; they cover the
+  pixels whose centres lie in `[x0, x1) x [y0, y1)`, which is exactly what
+  the top-left rule gives the two triangles.
+  1. Solid rectangles: one UV at all four corners; one texel sample, then
+     a row-by-row fill.
+  2. Text quads: UV separable (u follows x, v follows y), the left/top
+     edge on a pixel boundary, and a 1:1 texel mapping aligned to texel
+     boundaries within 1/4096 texel; texels are read directly. Anything
+     else (a scaled image, a glyph at a fractional position) falls back to
+     the triangle path.
+  3. A one-entry cache of the last (destination, source) blend, since long
      runs blend the same colour over the same background.
+  The triangle path also stops a row at the first pixel outside the
+  triangle once it has been inside (triangles are convex), as imgui_sw
+  does.
 
 What is deliberately not taken from imgui_sw: float edge tests (coverage
 would depend on the compiler), a single global font texture, a
