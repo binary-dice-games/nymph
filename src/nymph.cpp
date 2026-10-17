@@ -20,7 +20,9 @@ std::vector<uint8_t> render_png(std::string_view source) {
 }
 
 void check_source(std::string_view source) {
-  bind_source(source, builtin_registry());
+  // Binding checks the content; the layout pass (it needs font metrics)
+  // finds the one remaining error, a layout that does not fit.
+  layout_figure(bind_source(source, builtin_registry()));
 }
 
 std::optional<std::string> extract_source(std::span<const uint8_t> png) {

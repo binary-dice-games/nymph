@@ -9,6 +9,7 @@
 #include <cfloat>
 #include <stdexcept>
 #include <string>
+#include "layout/layout.hpp"
 #include "render/soft_rasterizer.hpp"
 #include "render/texture_store.hpp"
 #include "schema/element_class.hpp"
@@ -135,21 +136,17 @@ void set_frame_inputs(const image_options& options) {
   io.MousePos = ImVec2(-FLT_MAX, -FLT_MAX);
 }
 
-} // namespace
-
-image render_frames(const image_options& options, const draw_fn& draw) {
-  check_options(options);
-  const theme& t = *find_theme(options.theme);
-
-  context_scope scope;
-  configure(t);
-  texture_store textures;
-  draw_context ctx(options);
-
+/// Runs `frames` frames of `draw` in the current (configured) context.
+void run_frames(
+    const image_options& options,
+    const draw_fn& draw,
+    int frames,
+    texture_store& textures,
+    draw_context& ctx) {
   constexpr ImGuiWindowFlags kFlags = ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoMove |
       ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoNav | ImGuiWindowFlags_NoScrollWithMouse |
       ImGuiWindowFlags_NoBringToFrontOnFocus;
-  for (int frame = 0; frame < kFigureFrames; ++frame) {
+  for (int frame = 0; frame < frames; ++frame) {
     set_frame_inputs(options);
     ImGui::NewFrame();
     ImGui::SetNextWindowPos(ImVec2(0.0f, 0.0f), ImGuiCond_Always);
@@ -161,6 +158,17 @@ image render_frames(const image_options& options, const draw_fn& draw) {
     // Texture requests are answered every frame, as a GPU backend would.
     textures.apply_all(*ImGui::GetDrawData());
   }
+}
+
+} // namespace
+
+image render_frames(const image_options& options, const draw_fn& draw) {
+  check_options(options);
+  context_scope scope;
+  configure(*find_theme(options.theme));
+  texture_store textures;
+  draw_context ctx(options);
+  run_frames(options, draw, kFigureFrames, textures, ctx);
 
   ImVec4 bg = ImGui::GetStyle().Colors[ImGuiCol_WindowBg];
   bg.w = 1.0f; // the image is opaque
@@ -169,9 +177,19 @@ image render_frames(const image_options& options, const draw_fn& draw) {
 
 image render_figure(const figure& f) {
   return render_frames(f.image, [&](draw_context& dc) {
-    dc.set_rect(f.root, dc.content_rect());
+    layout_root(f.root, dc);
     f.root.cls->draw(f.root, dc);
   });
+}
+
+std::unordered_map<const node*, rect> layout_figure(const figure& f) {
+  check_options(f.image);
+  context_scope scope;
+  configure(*find_theme(f.image.theme));
+  texture_store textures;
+  draw_context ctx(f.image);
+  run_frames(f.image, [&](draw_context& dc) { layout_root(f.root, dc); }, 1, textures, ctx);
+  return ctx.rects();
 }
 
 } // namespace bdg::nymph

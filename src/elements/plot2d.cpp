@@ -147,13 +147,16 @@ class plot_class : public element_class {
                 number_field(
                     "width",
                     -1.0,
-                    "Plot width in pixels; -1 fills the available horizontal space.",
-                    value_range{-1, 8192}),
+                    "Plot width in pixels; -1 (default) fills the available width. In a HorizontalLayout a negative "
+                    "value is a stretch weight (-1 and -3 split the space left 1:3) and 0 the natural width.",
+                    value_range{-1000, 8192}),
                 number_field(
                     "height",
                     300.0,
-                    "Plot height in pixels. A Plot used as root with no height fills the image.",
-                    value_range{16, 8192}),
+                    "Plot height in pixels. A Plot used as root with no height fills the image. In a VerticalLayout "
+                    "a negative value is a stretch weight (-1 and -3 split the space left 1:3) and 0 the natural "
+                    "height (300).",
+                    value_range{-1000, 8192}),
                 flags_field(
                     "flags",
                     0,
@@ -214,12 +217,16 @@ class plot_class : public element_class {
     }
   }
 
+  /// Natural size (a 0 hint): wish's default height, 400 wide.
+  ImVec2 measure(const node&, draw_context&, float) const override {
+    return ImVec2(400.0f, 300.0f);
+  }
+
   void draw(const node& n, draw_context& dc) const override {
     using namespace plot_field;
     const rect r = dc.rect_of(n);
-    const double w = n.get<double>(width);
-    const double h = n.get<double>(height);
-    const ImVec2 size(w < 0 ? r.width() : static_cast<float>(w), h < 0 ? r.height() : static_cast<float>(h));
+    // The layout engine already applied width / height: draw at the rectangle.
+    const ImVec2 size(r.width(), r.height());
     ImGui::SetCursorScreenPos(r.min);
 
     const int64_t colormap_value = n.get<int64_t>(colormap);

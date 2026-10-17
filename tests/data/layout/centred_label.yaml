@@ -1,0 +1,13 @@
+image: {width: 480, height: 360}
+root:
+  type: VerticalLayout
+  children:
+    - type: HorizontalLayout
+      children:
+        - {type: Spring}
+        - {type: Label, text: Quarterly sales}
+        - {type: Spring}
+    - type: Plot
+      height: -1
+      children:
+        - {type: PlotBars, label: sales, ys: [12, 18, 15, 22]}

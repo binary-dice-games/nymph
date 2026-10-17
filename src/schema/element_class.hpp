@@ -4,19 +4,27 @@
 ///        may be placed, and how it draws.
 #pragma once
 
+#include <imgui.h>
 #include <span>
 #include <string>
 #include <string_view>
 #include <vector>
+#include "render/draw_context.hpp"
 #include "schema/field_desc.hpp"
 #include "schema/node.hpp"
 
 namespace bdg::nymph {
 
-class draw_context;
-
 /// @brief Slot of elements that can be `root` or a layout child.
 inline constexpr std::string_view kFigureSlot = "figure";
+
+/// @brief Layout size hints of a `figure` element (DESIGN.md section 3,
+///        "Layout"): positive is fixed pixels, 0 the natural size, negative
+///        a stretch weight.
+struct size_hints {
+  float width = 0.0f;
+  float height = 0.0f;
+};
 
 /// @brief Base of every element type. Subclasses pass their schema to the
 ///        constructor and implement draw().
@@ -87,6 +95,32 @@ class element_class {
   ///        source position, or at the element when the field was not
   ///        written.
   [[noreturn]] void fail_at(const node& n, size_t field, const std::string& message) const;
+
+  // ── Layout (`figure` elements) ──────────────────────────────────────────
+
+  /// @brief Size hints. Default: the `width` and `height` number fields if
+  ///        the class has them, else 0 (natural).
+  virtual size_hints hints(const node& n) const;
+
+  /// @brief Natural size of `n` when it is given `width` pixels across
+  ///        (wrapped text depends on it). Called inside a frame, so text
+  ///        can be measured. Default: {0, 0}.
+  virtual ImVec2 measure(const node& n, draw_context& dc, float width) const {
+    (void)n;
+    (void)dc;
+    (void)width;
+    return ImVec2(0.0f, 0.0f);
+  }
+
+  /// @brief Containers: sets the rectangle of every `figure` child (and,
+  ///        recursively, theirs) inside `r`, the container's own
+  ///        rectangle. Default: nothing.
+  /// @throws nymph::error when the children do not fit.
+  virtual void arrange(const node& n, draw_context& dc, const rect& r) const {
+    (void)n;
+    (void)dc;
+    (void)r;
+  }
 
   /// @brief Draws `n` (a node of this class) into the open figure frame.
   virtual void draw(const node& n, draw_context& dc) const = 0;

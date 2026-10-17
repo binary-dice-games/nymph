@@ -390,6 +390,20 @@ plus: a `Plot3D` inside a `Plot` is a slot error.
 
 ### 11. Layout and text elements
 
+*Result: done.* `src/layout/` (`distribute`, `arrange_linear`,
+`measure_linear`, `layout_root`), `src/elements/layout_elements`
+(the files are `layout_elements.*`, not `elements/layout/`),
+`element_class::hints / measure / arrange`, `layout_figure()`;
+`tests/test_layout.cpp` (6 tests), `tests/test_layout_elements.cpp`
+(15 tests) and 5 samples in `tests/data/layout/`, all looked at.
+Decisions: natural sizes are measured at the width the child will get,
+during arrange, rather than in a separate bottom-up pass (a wrapped
+label's height depends on it); a root's positive width/height is honoured
+and a larger one is an overflow error; plots now always draw at their
+rectangle; wish's descriptions for the layout fields were rewritten for
+nymph's engine. A `Plot` in a row keeps its fixed default height unless
+it sets `height: -1` (wish's rule); the agent guide must say so.
+
 **Goal:** several plots, labels and separators can be arranged in one
 image with wish's layout hints.
 
@@ -408,6 +422,9 @@ image with wish's layout hints.
   height now allowed as a stretch weight; positive values keep wish's
   range); a root plot with no `height` fills.
 - `check_source()` runs the layout pass (no rasterizing).
+- `layout_figure(figure) -> rectangles` in `figure_renderer`: one frame,
+  layout only. Used by `check_source()` and by the tests, which check
+  rectangles exactly instead of looking for plot borders in pixels.
 - `tests/data/`: the DESIGN.md two-plot example, a centred label (two
   Springs), a card, a horizontal row of two plots.
 
@@ -419,9 +436,9 @@ image with wish's layout hints.
   than the space give the overflow error with both numbers.
 - `tests/test_layout_elements.cpp` (rendered):
   - Two plots with `height: -1` in a `VerticalLayout` get equal heights
-    (their frame borders found in the pixels); `-1` and `-3` split 1:3.
-  - A `Label` between two Springs is horizontally centred (its text
-    pixels' bounding box centred within 1 px).
+    (their rectangles); `-1` and `-3` split 1:3.
+  - A `Label` between two Springs is horizontally centred (its rectangle
+    centred within 1 px, and its text pixels inside the rectangle).
   - A wrapped `Label` is taller than the same text unwrapped and fits the
     width.
   - `text_color` shows in the text pixels; with `theme: dark`,

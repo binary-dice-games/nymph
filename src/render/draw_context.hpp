@@ -53,6 +53,11 @@ class draw_context {
     rects_[&n] = r;
   }
 
+  /// @brief Every rectangle set so far.
+  const std::unordered_map<const node*, rect>& rects() const {
+    return rects_;
+  }
+
   /// @brief The rectangle `n` draws in; content_rect() if none was set.
   rect rect_of(const node& n) const {
     const auto it = rects_.find(&n);

@@ -1,6 +1,6 @@
 # nymph — Architecture & Design
 
-**Status: in progress, plan steps 1-10 done.** [PLAN.md](PLAN.md) is the ordered
+**Status: in progress, plan steps 1-11 done.** [PLAN.md](PLAN.md) is the ordered
 implementation plan.
 
 ## 1. Purpose / Scope
@@ -178,24 +178,32 @@ Layouts follow wish's size hints, so wish nymph sources keep their look:
   an element centre it.
 - **Cross axis.** A positive hint is fixed pixels (clamped to the
   layout); anything else fills the layout's width (`VerticalLayout`) or
-  height (`HorizontalLayout`). `HorizontalLayout.align: right` pushes the
-  row against the right edge when the children do not fill it.
-- **Natural sizes.** `Label`: its text measured with the image font,
-  wrapped at the available width when `wrap` is true. `Separator`,
-  `SeparatorText`: the height ImGui gives them. A layout: the sum of its
-  children's sizes along its axis (stretch children count as 0) plus
-  `spacing`, plus `2 * padding` when `card` is true. `Plot` / `Plot3D`
-  always carry a hint (defaults: width -1, height 300 / 400), so they never
-  need a natural size.
-- **Root.** `root` gets the whole image minus `image.padding`. A `Plot` /
-  `Plot3D` used as `root` with no `height` fills it, as in wish nymph.
+  height (`HorizontalLayout`). So a `Plot` in a row keeps its default
+  height of 300 unless it sets `height: -1` to fill the row, as in wish.
+  `HorizontalLayout.align: right` pushes the row against the right edge
+  when it has no stretch child.
+- **Natural sizes**, measured with the width the element will get (so a
+  wrapped label in a column knows its height). `Label`: its text in the
+  image font, wrapped at that width when `wrap` is true. `Separator`: 1 px
+  plus the style's item spacing above and below. `SeparatorText`: its
+  text plus the style's separator-text padding. A layout: the sum of its
+  children along its axis (stretch children count 0) plus `spacing`, the
+  largest across, plus `2 * padding` when `card` is true. `Plot` /
+  `Plot3D` (with a 0 hint): 400 wide, 300 / 400 high.
+- **Root.** `root` is placed in the image minus `image.padding`: a
+  positive `width` / `height` is its size (an error if larger than the
+  space), anything else fills. So a `Plot` / `Plot3D` used as `root` with
+  no `height` fills the image, as in wish nymph, and one with `height: 200`
+  is 200 high.
+- **Plots draw at their rectangle**: the layout engine has already applied
+  their `width` and `height`.
 - **Overflow is an error.** If the fixed and natural sizes along an axis
   do not fit, rendering fails with the layout's position and the numbers
   (`needs 620 px of height, has 484`), rather than clipping something an
   agent cannot see.
-- **Card.** `card: true` draws the layout's children on a rounded,
-  bordered panel in theme colours, inset by `padding`, corner radius
-  `rounding` (wish's defaults 12 and 10).
+- **Card.** `card: true` draws the layout's children on a rounded panel
+  (the theme's `FrameBg`, bordered with `Border`), inset by `padding`,
+  corner radius `rounding` (wish's defaults 12 and 10).
 - **Label colours.** `text_color`, else `text_color_light` or
   `text_color_dark` by whether `image.theme` is light or dark, else the
   theme's text colour.
@@ -417,20 +425,26 @@ the value, or at the list item, and names `Type.field`.
 ### Layout engine (`src/layout/`)
 
 Runs inside each frame, after `NewFrame()` and before any drawing, because
-measuring text needs the frame's font. `layout_context` holds a rectangle
-per `figure` node.
+measuring text needs the frame's font. The rectangles are kept in
+`draw_context` (`set_rect` / `rect_of`), keyed by node.
 
-1. **Measure**, bottom-up: each `figure` node's natural size through
-   `measure()`; containers combine their children's hints and natural
-   sizes as in section 3, "Layout".
-2. **Arrange**, top-down: `root` gets the image rectangle minus
-   `image.padding`; each container's `arrange()` divides its rectangle
-   among its children and stores theirs. The axis arithmetic (fixed,
-   natural, stretch weights, spacing, overflow check) is one shared
-   function used by both layout directions.
-3. **Draw**: `root`'s `draw()`, each node at its stored rectangle
-   (`SetCursorScreenPos` + the element's own size, clipped to the
-   rectangle).
+1. **Place the root** (`layout_root`): the content rectangle, sized by the
+   root's hints (section 3, "Root").
+2. **Arrange**, top-down: a container's `arrange()` (the layouts call
+   `arrange_linear()`) measures each child that has a 0 hint with
+   `measure(node, dc, width)` at the width it will get, shares the axis
+   with `distribute()`, rounds boundaries to whole pixels, stores each
+   child's rectangle and arranges it in turn. `distribute()` is the one
+   pure function holding the axis arithmetic (fixed, natural, stretch
+   weights, spacing); the overflow check compares what it needs with
+   what is available (0.5 px tolerance).
+3. **Draw**: `root`'s `draw()`, each node at its stored rectangle.
+
+Element hooks: `hints()` (default: the `width` / `height` number fields),
+`measure()`, `arrange()`. `layout_figure(figure)` runs one frame with only
+the layout pass and returns the rectangles; `check_source()` uses it, so
+an overflow is found without rendering, and tests use it to check exact
+rectangles.
 
 Sizes are known before anything is drawn, so unlike wish (where an auto row
 learns its height from the previous frame) the first frame is already

@@ -77,6 +77,19 @@ node element_class::make_node() const {
   return n;
 }
 
+size_hints element_class::hints(const node& n) const {
+  size_hints h;
+  const int w = field_index("width");
+  const int ht = field_index("height");
+  if (w >= 0 && fields_[static_cast<size_t>(w)].type == field_type::number) {
+    h.width = static_cast<float>(n.get<double>(static_cast<size_t>(w)));
+  }
+  if (ht >= 0 && fields_[static_cast<size_t>(ht)].type == field_type::number) {
+    h.height = static_cast<float>(n.get<double>(static_cast<size_t>(ht)));
+  }
+  return h;
+}
+
 void element_class::fail_at(const node& n, size_t field, const std::string& message) const {
   const source_pos at = field < n.field_pos.size() ? n.field_pos[field] : source_pos{};
   const std::string what = name_ + "." + fields_.at(field).name + " " + message;

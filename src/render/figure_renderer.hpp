@@ -5,6 +5,7 @@
 #pragma once
 
 #include <functional>
+#include <unordered_map>
 #include "document/bind.hpp"
 #include "render/draw_context.hpp"
 #include "render/image.hpp"
@@ -46,5 +47,11 @@ image render_frames(const image_options& options, const draw_fn& draw);
 ///        `f.root` in the content rectangle (the image minus padding).
 /// @throws as render_frames().
 image render_figure(const figure& f);
+
+/// @brief Runs one frame of `f` with only the layout pass: every `figure`
+///        node's rectangle, in logical pixels. Used by check_source() (a
+///        layout overflow is only found here) and by tests.
+/// @throws nymph::error for a layout that does not fit; as render_frames().
+std::unordered_map<const node*, rect> layout_figure(const figure& f);
 
 } // namespace bdg::nymph
