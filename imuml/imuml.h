@@ -4,9 +4,10 @@
 ///
 /// A diagram is a Begin/End scope. Between them, the program submits the
 /// diagram's nodes and edges every frame; End lays them out automatically
-/// (a layered layout after Graphviz's dot for class, state, activity, use
-/// case diagrams and flowcharts, a grid for sequence diagrams), scales the result to
-/// fit the space reserved, and draws it on the window's draw list.
+/// (a layered layout after Graphviz's dot for class, state, activity and
+/// use case diagrams and flowcharts, a grid for sequence diagrams), scales
+/// the result to fit the space reserved, and draws it on the window's draw
+/// list.
 ///
 ///     if (ImUml::BeginClassDiagram("Animals")) {
 ///       ImUml::BeginClass("Animal", nullptr, ImUmlClassKind_Abstract);
