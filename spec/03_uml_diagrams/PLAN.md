@@ -279,7 +279,7 @@ an `Alt` and a `Loop`.
 
 ### 12. Composite states
 
-*Result: done.* An `Initial` state of any level may have only one outgoing transition; notes attached to inner states are laid out inside the composite.
+*Result: done.* An `Initial` state of any level may have only one outgoing transition; notes attached to inner states are laid out inside the composite. Later revised after review: composites are clusters of one whole-graph layout (dot's approach: top / bottom nodes, borders, hierarchical ordering, side sweeps, corner detours) instead of being laid out inside-out, so edges leaving a composite go around it. 4 cluster tests in `test_imuml_graph_layout.cpp`.
 
 **Goal:** a `State` with children is drawn as a composite state.
 

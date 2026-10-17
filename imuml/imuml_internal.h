@@ -30,11 +30,27 @@ struct ImUmlGraphNode {
   ImUmlShape Shape;
   int RankGroup; ///< Nodes with the same value >= 0 share a rank.
   int Pin; ///< 0 none, 1 first rank, 2 last rank.
+  int Cluster; ///< The innermost cluster containing the node, or -1.
   ImUmlGraphNode() {
     Size = ImVec2(0, 0);
     Shape = ImUmlShape_Box;
     RankGroup = -1;
     Pin = 0;
+    Cluster = -1;
+  }
+};
+
+/// @brief A cluster (dot's subgraph cluster): a box around its nodes and
+///        nested clusters, laid out as part of the whole graph and kept
+///        together in every rank, so edges from outside are routed around it.
+struct ImUmlGraphCluster {
+  int Parent; ///< Enclosing cluster, or -1. Parents come before children.
+  ImVec2 HeaderSize; ///< The title band, in the output orientation (drawn at the top).
+  float Padding; ///< Between the box and its contents.
+  ImUmlGraphCluster() {
+    Parent = -1;
+    HeaderSize = ImVec2(0, 0);
+    Padding = 10.0f;
   }
 };
 
@@ -44,8 +60,10 @@ struct ImUmlGraphEdge {
   int MinLen; ///< dot's minlen, >= 0.
   bool Constraint; ///< false: drawn but not ranked.
   ImVec2 LabelSize; ///< (0, 0) for none.
+  int FromCluster, ToCluster; ///< >= 0: the end is that cluster's box (From / To ignored).
   ImUmlGraphEdge() {
     From = To = 0;
+    FromCluster = ToCluster = -1;
     Weight = 1;
     MinLen = 1;
     Constraint = true;
@@ -56,6 +74,7 @@ struct ImUmlGraphEdge {
 struct ImUmlGraphInput {
   ImVector<ImUmlGraphNode> Nodes;
   ImVector<ImUmlGraphEdge> Edges;
+  ImVector<ImUmlGraphCluster> Clusters;
   ImUmlDirection Direction;
   ImUmlEdgeStyle EdgeStyle;
   float NodeSpacing;
@@ -82,8 +101,9 @@ struct ImUmlGraphOutput {
   ImVector<int> NodeOrder; ///< Position within its rank.
   ImVector<ImUmlGraphEdgeOut> Edges;
   ImVector<ImVec2> Points;
+  ImVector<ImRect> ClusterRects; ///< One box per cluster, the header band at its top.
   ImVec2 Size;
-  int Crossings; ///< Edge crossings between ranks after ordering.
+  int Crossings; ///< Edge crossings between ranks after ordering (with clusters, edge-border crossings count too).
   int ReversedEdges; ///< Edges reversed to break cycles.
   bool HitIterationCap;
 };

@@ -720,6 +720,47 @@ struct LNode {
   float W, H; ///< Across / along the rank axis (top-down orientation).
   bool IsLabel;
   int Edge; ///< Virtual nodes: the input edge.
+  int Cluster; ///< Innermost cluster containing it, or -1.
+  int Border; ///< 0, or a cluster's left (1) / right (2) border in this rank.
+};
+
+/// Clusters, after LayoutGraph() turned them into nodes and edges of the
+/// extended graph (see LayoutClustered()).
+struct ClusterInfo {
+  ImVector<int> NodeCluster; ///< Per extended node.
+  ImVector<int> Parent; ///< Per cluster.
+  ImVector<int> Top, Bottom; ///< Per cluster: its top and bottom nodes.
+  ImVector<int> AnchorOf; ///< Per extended node: the cluster it is the top / bottom node of, or -1.
+  ImVector<float> Pad, LeftExtra, HeaderW, HeaderH; ///< Per cluster, top-down orientation.
+  bool HeaderAtBottom; ///< BottomUp: the header band is in the bottom rank.
+  int HiddenStart; ///< Extended edges from here on only hold clusters together.
+
+  /// The innermost cluster containing both clusters (-1 for the root).
+  int Lca(int a, int b) const {
+    for (int x = a; x >= 0; x = Parent[x]) {
+      for (int y = b; y >= 0; y = Parent[y]) {
+        if (x == y) {
+          return x;
+        }
+      }
+    }
+    return -1;
+  }
+  /// The child of `x` on the way down to its descendant `c`.
+  int ChildOf(int x, int c) const {
+    while (c >= 0 && Parent[c] != x) {
+      c = Parent[c];
+    }
+    return c; // -1 when `c` is not inside `x`
+  }
+};
+
+/// A cluster's border nodes in one component: one left and one right per
+/// rank from its top to its bottom node.
+struct ClusterBorders {
+  int Cluster;
+  int RTop, RBot;
+  ImVector<int> L, R; ///< LNode indices, rank RTop + i.
 };
 
 struct LSeg {
@@ -739,6 +780,7 @@ struct Chain {
   bool Flipped; ///< The input edge runs bottom to top.
   bool Flat;
   bool Loop;
+  bool Hidden; ///< Only holds a cluster together: not drawn, no route.
 };
 
 struct ComponentLayout {
@@ -751,12 +793,99 @@ struct ComponentLayout {
   ImVector<float> RankTop, RankHeight;
   int Crossings;
   bool Completed;
+  const ClusterInfo* Cl; ///< Null without clusters.
+  ImVector<ClusterBorders*> Borders;
   ~ComponentLayout() {
     for (int i = 0; i < Layers.Size; ++i) {
       IM_DELETE(Layers[i]);
     }
+    for (int i = 0; i < Borders.Size; ++i) {
+      IM_DELETE(Borders[i]);
+    }
   }
 };
+
+/// Orders `members` (LNodes of one rank, all inside cluster `x`) so that
+/// every cluster's nodes stay together: the items at this level (nodes of
+/// `x` and blocks of its child clusters) are sorted by key, a block by the
+/// mean key of its nodes, ties by current position; then each block in
+/// turn. A cluster's own borders sort first and last.
+void FlattenCluster(const ComponentLayout& c, int x, const ImVector<int>& members, const ImVector<float>& key,
+                    ImVector<int>* out) {
+  struct Item {
+    int Block; ///< Child cluster, or -1 for a node.
+    int Node;
+    float Sum;
+    int Count;
+    int First;
+    float Key;
+  };
+  ImVector<Item> items;
+  for (int i = 0; i < members.Size; ++i) {
+    const int m = members[i];
+    const LNode& ln = c.L[m];
+    if (ln.Cluster == x) {
+      Item it = {-1, m, 0.0f, 0, c.Pos[m], ln.Border == 1 ? -1e30f : (ln.Border == 2 ? 1e30f : key[m])};
+      items.push_back(it);
+      continue;
+    }
+    const int child = c.Cl->ChildOf(x, ln.Cluster);
+    int at = -1;
+    for (int k = 0; k < items.Size; ++k) {
+      if (items[k].Block == child) {
+        at = k;
+      }
+    }
+    if (at < 0) {
+      Item it = {child, -1, 0.0f, 0, c.Pos[m], 0.0f};
+      items.push_back(it);
+      at = items.Size - 1;
+    }
+    items[at].First = ImMin(items[at].First, c.Pos[m]);
+    if (ln.Border == 0) {
+      items[at].Sum += key[m];
+      items[at].Count++;
+    }
+  }
+  for (int k = 0; k < items.Size; ++k) {
+    if (items[k].Block >= 0) {
+      items[k].Key = items[k].Count > 0 ? items[k].Sum / (float)items[k].Count : (float)items[k].First;
+    }
+  }
+  StableSort(items.Data, items.Size, [](const Item& a, const Item& b) {
+    return a.Key < b.Key || (a.Key == b.Key && a.First < b.First);
+  });
+  ImVector<int> sub;
+  for (int k = 0; k < items.Size; ++k) {
+    if (items[k].Block < 0) {
+      out->push_back(items[k].Node);
+      continue;
+    }
+    sub.resize(0);
+    for (int i = 0; i < members.Size; ++i) {
+      const int mc = c.L[members[i]].Cluster;
+      if (mc >= 0 && (mc == items[k].Block || c.Cl->ChildOf(items[k].Block, mc) >= 0)) {
+        sub.push_back(members[i]);
+      }
+    }
+    ImVector<int> nested;
+    FlattenCluster(c, items[k].Block, sub, key, &nested);
+    for (int i = 0; i < nested.Size; ++i) {
+      out->push_back(nested[i]);
+    }
+  }
+}
+
+/// Re-sorts rank `r` by `key` keeping clusters together.
+void SortLayerClustered(ComponentLayout& c, int r, const ImVector<float>& key) {
+  ImVector<int>& layer = *c.Layers[r];
+  ImVector<int> sorted;
+  FlattenCluster(c, -1, layer, key, &sorted);
+  layer = sorted;
+  for (int i = 0; i < layer.Size; ++i) {
+    c.Pos[layer[i]] = i;
+  }
+}
 
 int CountCrossings(ComponentLayout& c) {
   int total = 0;
@@ -847,6 +976,17 @@ float MedianValue(const ComponentLayout& c, int v, bool upward) {
 
 void ReorderLayer(ComponentLayout& c, int r, bool upward) {
   ImVector<int>& layer = *c.Layers[r];
+  if (c.Cl != nullptr) {
+    // Nodes with no neighbours there keep about their place.
+    ImVector<float> key;
+    key.resize(c.L.Size);
+    for (int i = 0; i < layer.Size; ++i) {
+      const float m = MedianValue(c, layer[i], upward);
+      key[layer[i]] = m < 0.0f ? (float)i : m;
+    }
+    SortLayerClustered(c, r, key);
+    return;
+  }
   struct Item {
     float Median;
     int Node;
@@ -877,6 +1017,63 @@ void ReorderLayer(ComponentLayout& c, int r, bool upward) {
   }
 }
 
+/// Clustered transpose step at positions i, i + 1 of `layer`: a plain node
+/// beside a sibling cluster's block (from its left border to its right
+/// border) moves to the block's other side when that crosses fewer edges.
+bool MoveAcrossBlock(ComponentLayout& c, ImVector<int>& layer, int i) {
+  const int v = layer[i], w = layer[i + 1];
+  const LNode& lv = c.L[v];
+  const LNode& lw = c.L[w];
+  int node, first, last; // the node, and the block's span in `layer`
+  bool node_left;
+  if (lv.Border == 0 && lw.Border == 1 && c.Cl->Parent[lw.Cluster] == lv.Cluster) {
+    node = v;
+    node_left = true;
+    first = i + 1;
+    last = first;
+    while (last < layer.Size && !(c.L[layer[last]].Border == 2 && c.L[layer[last]].Cluster == lw.Cluster)) {
+      ++last;
+    }
+  } else if (lw.Border == 0 && lv.Border == 2 && c.Cl->Parent[lv.Cluster] == lw.Cluster) {
+    node = w;
+    node_left = false;
+    last = i;
+    first = last;
+    while (first >= 0 && !(c.L[layer[first]].Border == 1 && c.L[layer[first]].Cluster == lv.Cluster)) {
+      --first;
+    }
+  } else {
+    return false;
+  }
+  if (first < 0 || last >= layer.Size) {
+    return false;
+  }
+  int now = 0, moved = 0;
+  for (int t = first; t <= last; ++t) {
+    const int b = layer[t];
+    now += node_left ? PairCrossings(c, node, b) : PairCrossings(c, b, node);
+    moved += node_left ? PairCrossings(c, b, node) : PairCrossings(c, node, b);
+  }
+  if (moved >= now) {
+    return false;
+  }
+  if (node_left) {
+    for (int t = i; t < last; ++t) {
+      layer[t] = layer[t + 1];
+    }
+    layer[last] = node;
+  } else {
+    for (int t = i + 1; t > first; --t) {
+      layer[t] = layer[t - 1];
+    }
+    layer[first] = node;
+  }
+  for (int t = 0; t < layer.Size; ++t) {
+    c.Pos[layer[t]] = t;
+  }
+  return true;
+}
+
 void Transpose(ComponentLayout& c) {
   for (int pass = 0; pass < 32; ++pass) {
     bool improved = false;
@@ -884,6 +1081,15 @@ void Transpose(ComponentLayout& c) {
       ImVector<int>& layer = *c.Layers[r];
       for (int i = 0; i + 1 < layer.Size; ++i) {
         const int v = layer[i], w = layer[i + 1];
+        if (c.Cl != nullptr &&
+            (c.L[v].Cluster != c.L[w].Cluster || c.L[v].Border != 0 || c.L[w].Border != 0)) {
+          // A node next to a whole cluster box of its own level may move to
+          // the box's other side (the box moves as a block).
+          if (MoveAcrossBlock(c, layer, i)) {
+            improved = true;
+          }
+          continue; // swaps never take a node out of its cluster
+        }
         if (PairCrossings(c, w, v) < PairCrossings(c, v, w)) {
           layer[i] = w;
           layer[i + 1] = v;
@@ -929,6 +1135,75 @@ void BuildNeighbours(ComponentLayout& c) {
   }
 }
 
+/// Position in `layer` of cluster `k`'s left (side 1) or right (side 2)
+/// border, or -1 when the cluster has no border in this rank.
+int BorderPos(const ComponentLayout& c, const ImVector<int>& layer, int k, int side) {
+  for (int i = 0; i < layer.Size; ++i) {
+    const LNode& ln = c.L[layer[i]];
+    if (ln.Border == side && ln.Cluster == k) {
+      return i;
+    }
+  }
+  return -1;
+}
+
+/// One sweep (down, or up) that keeps each edge's run of virtual nodes on
+/// one side of a cluster box: a virtual node on the other side of a sibling
+/// box from its neighbour in the previous rank moves next to the box on
+/// the neighbour's side.
+void SweepChainSides(ComponentLayout& c, bool down) {
+  const int ranks = c.Layers.Size;
+  for (int step = 1; step < ranks; ++step) {
+    const int r = down ? step : ranks - 1 - step;
+    const int pr = down ? r - 1 : r + 1;
+    ImVector<int>& layer = *c.Layers[r];
+    const ImVector<int>& prev = *c.Layers[pr];
+    for (int i = 0; i < layer.Size; ++i) {
+      const int v = layer[i];
+      const LNode& lv = c.L[v];
+      if (lv.Orig >= 0 || lv.Border != 0) {
+        continue;
+      }
+      const ImVector<int>& start = down ? c.UpStart : c.DownStart;
+      const ImVector<int>& list = down ? c.Up : c.Down;
+      if (start[v + 1] - start[v] != 1) {
+        continue;
+      }
+      const int p = list[start[v]];
+      for (int guard = 0; guard < layer.Size; ++guard) {
+        bool moved = false;
+        for (int j = 0; j < layer.Size && !moved; ++j) {
+          const LNode& lb = c.L[layer[j]];
+          if (lb.Border != 1 || c.Cl->Parent[lb.Cluster] != lv.Cluster) {
+            continue;
+          }
+          const int k = lb.Cluster;
+          const int pl = BorderPos(c, prev, k, 1), prr = BorderPos(c, prev, k, 2);
+          const int bl = j, br = BorderPos(c, layer, k, 2);
+          if (pl < 0 || prr < 0 || br < 0) {
+            continue;
+          }
+          const int pv = c.Pos[p], vv = c.Pos[v];
+          const bool p_left = pv < pl, p_right = pv > prr;
+          const bool v_left = vv < bl, v_right = vv > br;
+          if ((p_left && v_right) || (p_right && v_left)) {
+            layer.erase(layer.Data + vv);
+            const int bl2 = BorderPos(c, layer, k, 1), br2 = BorderPos(c, layer, k, 2);
+            layer.insert(layer.Data + (p_left ? bl2 : br2 + 1), v);
+            for (int t = 0; t < layer.Size; ++t) {
+              c.Pos[layer[t]] = t;
+            }
+            moved = true;
+          }
+        }
+        if (!moved) {
+          break;
+        }
+      }
+    }
+  }
+}
+
 void Order(ComponentLayout& c) {
   const int n = c.L.Size;
   c.Pos.resize(n);
@@ -967,6 +1242,16 @@ void Order(ComponentLayout& c) {
       }
     }
   }
+  if (c.Cl != nullptr) {
+    ImVector<float> key;
+    key.resize(n);
+    for (int i = 0; i < n; ++i) {
+      key[i] = (float)c.Pos[i];
+    }
+    for (int r = 0; r < c.Layers.Size; ++r) {
+      SortLayerClustered(c, r, key);
+    }
+  }
   Transpose(c);
   // The best order so far, all layers concatenated (layer sizes never change).
   ImVector<int> best;
@@ -997,11 +1282,30 @@ void Order(ComponentLayout& c) {
       save();
     }
   }
-  int k = 0;
-  for (int r = 0; r < c.Layers.Size; ++r) {
-    for (int i = 0; i < c.Layers[r]->Size; ++i) {
-      (*c.Layers[r])[i] = best[k++];
-      c.Pos[(*c.Layers[r])[i]] = i;
+  auto restore = [&c, &best]() {
+    int k = 0;
+    for (int r = 0; r < c.Layers.Size; ++r) {
+      for (int i = 0; i < c.Layers[r]->Size; ++i) {
+        (*c.Layers[r])[i] = best[k++];
+        c.Pos[(*c.Layers[r])[i]] = i;
+      }
+    }
+  };
+  restore();
+  // With clusters: an edge passing a box should stay on one side of it,
+  // which moving one virtual node at a time cannot reach (each single move
+  // only shifts where the edge crosses the box). Sweep whole runs down,
+  // and up, and keep what crosses least.
+  if (c.Cl != nullptr && !c.Borders.empty()) {
+    for (int pass = 0; pass < 2; ++pass) {
+      SweepChainSides(c, pass == 0);
+      Transpose(c);
+      const int crossings = CountCrossings(c);
+      if (crossings < best_crossings) {
+        best_crossings = crossings;
+        save();
+      }
+      restore();
     }
   }
   c.Crossings = best_crossings;
@@ -1030,13 +1334,40 @@ void PositionX(ComponentLayout& c, const ImVector<int>& extra_right, const ImUml
     const LNode& a = c.L[ia];
     const LNode& b = c.L[ib];
     const bool both_virtual = a.Orig < 0 && !a.IsLabel && b.Orig < 0 && !b.IsLabel;
-    const float gap = both_virtual ? sep * 0.5f : sep;
+    float gap = both_virtual ? sep * 0.5f : sep;
+    if (a.Border == 1) {
+      gap = c.Cl->Pad[a.Cluster] + c.Cl->LeftExtra[a.Cluster]; // inside a box, from its left side
+    } else if (b.Border == 2) {
+      gap = c.Cl->Pad[b.Cluster]; // inside a box, to its right side
+    }
     return (int)ImCeil(a.W * 0.5f + (float)extra_right[ia] + b.W * 0.5f + gap);
   };
   for (int r = 0; r < c.Layers.Size; ++r) {
     const ImVector<int>& layer = *c.Layers[r];
     for (int i = 0; i + 1 < layer.Size; ++i) {
       ImUmlNsEdge e = {layer[i], layer[i + 1], separation(layer[i], layer[i + 1]), 0};
+      aux.push_back(e);
+    }
+  }
+  // A box's borders line up from rank to rank (strongly, so the box is a
+  // rectangle), and its header band is wide enough for the header.
+  const int kBorderWeight = 1000;
+  for (int b = 0; b < c.Borders.Size; ++b) {
+    const ClusterBorders& cb = *c.Borders[b];
+    for (int i = 0; i + 1 < cb.L.Size; ++i) {
+      for (int side = 0; side < 2; ++side) {
+        const ImVector<int>& nodes = side == 0 ? cb.L : cb.R;
+        const int node = count++;
+        ImUmlNsEdge e1 = {node, nodes[i], 0, kBorderWeight};
+        ImUmlNsEdge e2 = {node, nodes[i + 1], 0, kBorderWeight};
+        aux.push_back(e1);
+        aux.push_back(e2);
+      }
+    }
+    const int hr = c.Cl->HeaderAtBottom ? cb.L.Size - 1 : 0;
+    const float header = c.Cl->HeaderW[cb.Cluster];
+    if (header > 0.0f) {
+      ImUmlNsEdge e = {cb.L[hr], cb.R[hr], (int)ImCeil(header + 2.0f * c.Cl->Pad[cb.Cluster]), 0};
       aux.push_back(e);
     }
   }
@@ -1092,7 +1423,7 @@ void PositionX(ComponentLayout& c, const ImVector<int>& extra_right, const ImUml
       const ImVector<int>& layer = *c.Layers[pass == 0 ? k : c.Layers.Size - 1 - k];
       for (int i = 0; i < layer.Size; ++i) {
         const int v = layer[i];
-        if (nb_start[v] == nb_start[v + 1]) {
+        if (nb_start[v] == nb_start[v + 1] || c.L[v].Border != 0) {
           continue;
         }
         int lo = -0x3fffffff, hi = 0x3fffffff, mn = 0x3fffffff, mx = -0x3fffffff;
@@ -1217,7 +1548,125 @@ ImVec2 ImUml::ClipToShape(ImUmlShape shape, const ImVec2& centre, const ImVec2& 
   return centre + d * t;
 }
 
-void ImUml::LayoutGraph(const ImUmlGraphInput& in, ImUmlGraphOutput* out) {
+namespace {
+
+/// Where the segment from `inside` to `outside` leaves `r`; `inside` if
+/// `outside` is in `r` too.
+ImVec2 ClipToRect(const ImVec2& inside, const ImVec2& outside, const ImRect& r) {
+  if (r.Contains(outside)) {
+    return inside;
+  }
+  const ImVec2 d = outside - inside;
+  float t = 1.0f;
+  if (d.x > 0.0f) {
+    t = ImMin(t, (r.Max.x - inside.x) / d.x);
+  } else if (d.x < 0.0f) {
+    t = ImMin(t, (r.Min.x - inside.x) / d.x);
+  }
+  if (d.y > 0.0f) {
+    t = ImMin(t, (r.Max.y - inside.y) / d.y);
+  } else if (d.y < 0.0f) {
+    t = ImMin(t, (r.Min.y - inside.y) / d.y);
+  }
+  return inside + d * ImMax(0.0f, t);
+}
+
+/// Whether the segment a-b passes through the inside of `r` (Liang-Barsky).
+bool SegmentHitsRect(const ImVec2& a, const ImVec2& b, const ImRect& r) {
+  float t0 = 0.0f, t1 = 1.0f;
+  const ImVec2 d = b - a;
+  const float p[4] = {-d.x, d.x, -d.y, d.y};
+  const float q[4] = {a.x - r.Min.x, r.Max.x - a.x, a.y - r.Min.y, r.Max.y - a.y};
+  for (int i = 0; i < 4; ++i) {
+    if (p[i] == 0.0f) {
+      if (q[i] <= 0.0f) {
+        return false;
+      }
+      continue;
+    }
+    const float t = q[i] / p[i];
+    if (p[i] < 0.0f) {
+      t0 = ImMax(t0, t);
+    } else {
+      t1 = ImMin(t1, t);
+    }
+    if (t0 >= t1) {
+      return false;
+    }
+  }
+  return true;
+}
+
+/// Bends a path around the boxes it should not cross: a segment through a
+/// box gets an extra point just outside the box corner that makes the
+/// shortest detour (a small stand-in for dot's box-constrained router).
+void AvoidBoxes(ImVector<ImVec2>* pts, const ImVector<ImRect>& boxes) {
+  const float margin = 8.0f;
+  for (int guard = 0; guard < 8; ++guard) {
+    bool changed = false;
+    for (int i = 0; i + 1 < pts->Size && !changed; ++i) {
+      const ImVec2 a = (*pts)[i], b = (*pts)[i + 1];
+      for (int k = 0; k < boxes.Size && !changed; ++k) {
+        ImRect inner = boxes[k];
+        inner.Expand(margin - 3.0f);
+        if (inner.Contains(a) || inner.Contains(b) || !SegmentHitsRect(a, b, inner)) {
+          continue;
+        }
+        ImRect outer = boxes[k];
+        outer.Expand(margin);
+        const ImVec2 corners[4] = {outer.Min, ImVec2(outer.Max.x, outer.Min.y), outer.Max, ImVec2(outer.Min.x, outer.Max.y)};
+        int best = -1;
+        float best_len = 0.0f;
+        for (int j = 0; j < 4; ++j) {
+          const ImVec2 cj = corners[j];
+          if (SegmentHitsRect(a, cj, inner) || SegmentHitsRect(cj, b, inner)) {
+            continue;
+          }
+          const float len = ImSqrt(ImLengthSqr(cj - a)) + ImSqrt(ImLengthSqr(b - cj));
+          if (best < 0 || len < best_len) {
+            best = j;
+            best_len = len;
+          }
+        }
+        if (best >= 0) {
+          pts->insert(pts->Data + i + 1, RoundPx(corners[best]));
+          changed = true;
+          continue;
+        }
+        // Around one side: two neighbouring corners.
+        int best_a = -1, best_b = -1;
+        for (int j = 0; j < 4; ++j) {
+          for (int dir = 1; dir <= 3; dir += 2) {
+            const int jb = (j + dir) % 4;
+            const ImVec2 ca = corners[j], cb = corners[jb];
+            if (SegmentHitsRect(a, ca, inner) || SegmentHitsRect(ca, cb, inner) || SegmentHitsRect(cb, b, inner)) {
+              continue;
+            }
+            const float len =
+                ImSqrt(ImLengthSqr(ca - a)) + ImSqrt(ImLengthSqr(cb - ca)) + ImSqrt(ImLengthSqr(b - cb));
+            if (best_a < 0 || len < best_len) {
+              best_a = j;
+              best_b = jb;
+              best_len = len;
+            }
+          }
+        }
+        if (best_a >= 0) {
+          pts->insert(pts->Data + i + 1, RoundPx(corners[best_b]));
+          pts->insert(pts->Data + i + 1, RoundPx(corners[best_a]));
+          changed = true;
+        }
+      }
+    }
+    if (!changed) {
+      break;
+    }
+  }
+}
+
+/// The layout of a graph whose clusters, if any, were already turned into
+/// nodes and edges (`cl`, null for none).
+void LayoutCore(const ImUmlGraphInput& in, ImUmlGraphOutput* out, const ClusterInfo* cl) {
   const int n = in.Nodes.Size;
   out->NodePos.resize(n);
   out->NodeRank.resize(n);
@@ -1228,6 +1677,10 @@ void ImUml::LayoutGraph(const ImUmlGraphInput& in, ImUmlGraphOutput* out) {
   out->Crossings = 0;
   out->ReversedEdges = 0;
   out->HitIterationCap = false;
+  const int cluster_count = cl != nullptr ? cl->Parent.Size : 0;
+  ImVector<ImRect> td_rect; // per cluster, top-down
+  td_rect.resize(cluster_count);
+  out->ClusterRects.resize(cluster_count);
   if (n == 0) {
     for (int e = 0; e < in.Edges.Size; ++e) {
       out->Edges[e].PointStart = out->Edges[e].PointCount = 0;
@@ -1285,7 +1738,7 @@ void ImUml::LayoutGraph(const ImUmlGraphInput& in, ImUmlGraphOutput* out) {
 
   float offset_x = 0.0f, total_h = 0.0f;
   struct Packed {
-    ImVector<int> Nodes, Edges;
+    ImVector<int> Nodes, Edges, Clusters;
     float X0, W, H;
   };
   ImVector<Packed*> packed;
@@ -1307,6 +1760,7 @@ void ImUml::LayoutGraph(const ImUmlGraphInput& in, ImUmlGraphOutput* out) {
 
     ComponentLayout c;
     c.Completed = true;
+    c.Cl = cl;
     ImVector<int> lnode_of;
     lnode_of.resize(n);
     int min_rank = 0x7fffffff, max_rank = 0;
@@ -1317,7 +1771,8 @@ void ImUml::LayoutGraph(const ImUmlGraphInput& in, ImUmlGraphOutput* out) {
     for (int i = 0; i < comp.Nodes.Size; ++i) {
       const int v = comp.Nodes[i];
       const ImVec2 s = ShapeSizeTd(in, v);
-      LNode ln = {v, rr.Ranks[v] - min_rank, ImCeil(s.x), ImCeil(s.y), false, -1};
+      LNode ln = {v, rr.Ranks[v] - min_rank, ImCeil(s.x), ImCeil(s.y), false, -1, -1, 0};
+      ln.Cluster = cl != nullptr ? cl->NodeCluster[v] : -1;
       lnode_of[v] = c.L.Size;
       c.L.push_back(ln);
     }
@@ -1337,11 +1792,34 @@ void ImUml::LayoutGraph(const ImUmlGraphInput& in, ImUmlGraphOutput* out) {
       ch->Flipped = false;
       ch->Flat = false;
       ch->Loop = ed.From == ed.To;
+      ch->Hidden = cl != nullptr && e >= cl->HiddenStart;
       chains.push_back(ch);
-      if (ch->Loop) {
+      if (ch->Loop || ch->Hidden) {
         continue;
       }
       int u = lnode_of[ed.From], v = lnode_of[ed.To];
+      // An end at a cluster uses the box side facing the other end: its top
+      // node when the other end ranks above the cluster, its bottom node
+      // when below (ranking only knew the edge's direction).
+      if (cl != nullptr) {
+        auto facing = [&](int anchor, int other) -> int {
+          const int k = cl->AnchorOf[c.L[anchor].Orig];
+          if (k < 0) {
+            return anchor;
+          }
+          const int top = lnode_of[cl->Top[k]], bottom = lnode_of[cl->Bottom[k]];
+          if (c.L[other].Rank <= c.L[top].Rank) {
+            return top;
+          }
+          if (c.L[other].Rank >= c.L[bottom].Rank) {
+            return bottom;
+          }
+          return anchor;
+        };
+        const int u0 = u;
+        u = facing(u, v);
+        v = facing(v, u0);
+      }
       if (c.L[u].Rank == c.L[v].Rank) {
         ch->Flat = true;
         ch->Nodes.push_back(u);
@@ -1360,7 +1838,10 @@ void ImUml::LayoutGraph(const ImUmlGraphInput& in, ImUmlGraphOutput* out) {
       ch->Nodes.push_back(u);
       int prev = u;
       for (int r = ru + 1; r < rv; ++r) {
-        LNode vn = {-1, r, 0.0f, 0.0f, false, e};
+        LNode vn = {-1, r, 0.0f, 0.0f, false, e, -1, 0};
+        // An edge's virtual nodes belong to the innermost cluster holding
+        // both its ends, so an edge leaving a cluster is routed outside it.
+        vn.Cluster = cl != nullptr ? cl->Lca(cl->NodeCluster[ed.From], cl->NodeCluster[ed.To]) : -1;
         if (r == label_rank) {
           const ImVec2 ls = LabelSizeTd(in, ed.LabelSize);
           vn.W = ImCeil(ls.x) + 8.0f;
@@ -1378,6 +1859,33 @@ void ImUml::LayoutGraph(const ImUmlGraphInput& in, ImUmlGraphOutput* out) {
       LSeg sg = {prev, v, ed.Weight};
       c.S.push_back(sg);
       ch->Nodes.push_back(v);
+    }
+    // Cluster borders: a left and a right node per rank of each cluster.
+    for (int k = 0; k < cluster_count; ++k) {
+      if (sets.Find(cl->Top[k]) != root) {
+        continue;
+      }
+      ClusterBorders* cb = IM_NEW(ClusterBorders)();
+      cb->Cluster = k;
+      cb->RTop = c.L[lnode_of[cl->Top[k]]].Rank;
+      cb->RBot = ImMax(cb->RTop, c.L[lnode_of[cl->Bottom[k]]].Rank);
+      for (int r = cb->RTop; r <= cb->RBot; ++r) {
+        for (int side = 1; side <= 2; ++side) {
+          LNode bn = {-1, r, 0.0f, 0.0f, false, -1, k, side};
+          (side == 1 ? cb->L : cb->R).push_back(c.L.Size);
+          c.L.push_back(bn);
+        }
+      }
+      // Each border is joined rank to rank by a weightless segment: it adds
+      // nothing to the positioning, but an edge passing over the box crosses
+      // it, so the ordering counts that as a crossing and avoids it.
+      for (int i = 0; i + 1 < cb->L.Size; ++i) {
+        LSeg left = {cb->L[i], cb->L[i + 1], 0};
+        LSeg right = {cb->R[i], cb->R[i + 1], 0};
+        c.S.push_back(left);
+        c.S.push_back(right);
+      }
+      c.Borders.push_back(cb);
     }
     extra_right.resize(c.L.Size);
     for (int i = 0; i < c.L.Size; ++i) {
@@ -1417,7 +1925,7 @@ void ImUml::LayoutGraph(const ImUmlGraphInput& in, ImUmlGraphOutput* out) {
         for (int side = 0; side < 2; ++side) {
           const int a = ch.Nodes[side], b = ch.Nodes[1 - side];
           const bool isolated = c.UpStart[a] == c.UpStart[a + 1] && c.DownStart[a] == c.DownStart[a + 1];
-          if (!isolated || moved[a] || extra_right[a] != 0) {
+          if (!isolated || moved[a] || extra_right[a] != 0 || c.L[a].Cluster != c.L[b].Cluster) {
             continue;
           }
           moved[a] = true;
@@ -1482,6 +1990,55 @@ void ImUml::LayoutGraph(const ImUmlGraphInput& in, ImUmlGraphOutput* out) {
       out->NodeRank[v] = c.L[lnode_of[v]].Rank;
       out->NodeOrder[v] = c.Pos[lnode_of[v]];
     }
+    // Cluster boxes: across, between their borders; along the ranks,
+    // around their contents plus padding and the header band (innermost
+    // first, so a box holds its nested boxes). Their top and bottom ranks
+    // only reserve the space; the box needs no more than its contents.
+    ImVector<int> comp_clusters;
+    for (int b = c.Borders.Size - 1; b >= 0; --b) {
+      const ClusterBorders& cb = *c.Borders[b];
+      const int k = cb.Cluster;
+      float x0 = 1e30f, x1 = -1e30f;
+      for (int i = 0; i < cb.L.Size; ++i) {
+        x0 = ImMin(x0, lpos[cb.L[i]].x);
+        x1 = ImMax(x1, lpos[cb.R[i]].x);
+      }
+      float y0 = 1e30f, y1 = -1e30f;
+      for (int i = 0; i < c.L.Size; ++i) {
+        const LNode& ln = c.L[i];
+        if (ln.Cluster != k || ln.Border != 0 || (ln.Orig >= 0 && cl->AnchorOf[ln.Orig] >= 0)) {
+          continue;
+        }
+        y0 = ImMin(y0, lpos[i].y - ln.H * 0.5f);
+        y1 = ImMax(y1, lpos[i].y + ln.H * 0.5f);
+      }
+      for (int j = 0; j < comp_clusters.Size; ++j) {
+        if (cl->Parent[comp_clusters[j]] == k) {
+          y0 = ImMin(y0, td_rect[comp_clusters[j]].Min.y);
+          y1 = ImMax(y1, td_rect[comp_clusters[j]].Max.y);
+        }
+      }
+      if (y0 > y1) {
+        y0 = c.RankTop[cb.RTop];
+        y1 = c.RankTop[cb.RBot] + c.RankHeight[cb.RBot];
+      } else {
+        y0 -= cl->Pad[k] + (cl->HeaderAtBottom ? 0.0f : cl->HeaderH[k]);
+        y1 += cl->Pad[k] + (cl->HeaderAtBottom ? cl->HeaderH[k] : 0.0f);
+      }
+      td_rect[k] = ImRect(x0, RoundPx(y0), x1, RoundPx(y1));
+      comp_clusters.push_back(k);
+    }
+    // An end at a cluster's top or bottom node ends on the cluster's box,
+    // where the segment from inside it towards `towards` leaves it.
+    auto anchor_end = [&](int ln, const ImVec2& towards, const ImVec2& fallback) -> ImVec2 {
+      const int v = c.L[ln].Orig;
+      if (cl == nullptr || v < 0 || cl->AnchorOf[v] < 0) {
+        return fallback;
+      }
+      const ImRect& r = td_rect[cl->AnchorOf[v]];
+      const ImVec2 inside(ImClamp(lpos[ln].x, r.Min.x + 1.0f, r.Max.x - 1.0f), (r.Min.y + r.Max.y) * 0.5f);
+      return RoundPx(ClipToRect(inside, towards, r));
+    };
 
     // Phase 4: routes.
     ImVector<ImVec2> pts;
@@ -1492,6 +2049,9 @@ void ImUml::LayoutGraph(const ImUmlGraphInput& in, ImUmlGraphOutput* out) {
       EdgePath& path = *paths[e];
       const ImVec2 label_td = LabelSizeTd(in, ed.LabelSize);
       const bool has_label = ed.LabelSize.x > 0 && ed.LabelSize.y > 0;
+      if (ch.Hidden) {
+        continue;
+      }
       if (ch.Loop) {
         const int v = ed.From;
         const ImVec2 cp = td_pos[v];
@@ -1513,8 +2073,8 @@ void ImUml::LayoutGraph(const ImUmlGraphInput& in, ImUmlGraphOutput* out) {
         const ImVec2 pu = lpos[u], pw = lpos[w];
         const ImVec2 su = ShapeSizeTd(in, ou), sw = ShapeSizeTd(in, ow);
         if (ImAbs(c.Pos[u] - c.Pos[w]) <= 1) {
-          path.Pts.push_back(RoundPx(ClipToShape(in.Nodes[ou].Shape, pu, su, pw)));
-          path.Pts.push_back(RoundPx(ClipToShape(in.Nodes[ow].Shape, pw, sw, pu)));
+          path.Pts.push_back(RoundPx(ImUml::ClipToShape(in.Nodes[ou].Shape, pu, su, pw)));
+          path.Pts.push_back(RoundPx(ImUml::ClipToShape(in.Nodes[ow].Shape, pw, sw, pu)));
           path.Bezier = false;
           path.Label = RoundPx(ImVec2((pu.x + pw.x) * 0.5f, (pu.y + pw.y) * 0.5f - label_td.y * 0.5f - 4.0f));
         } else {
@@ -1559,9 +2119,30 @@ void ImUml::LayoutGraph(const ImUmlGraphInput& in, ImUmlGraphOutput* out) {
           pts[1] = mid;
         }
       }
-      pts[0] = RoundPx(ClipToShape(in.Nodes[ou].Shape, lpos[u], ShapeSizeTd(in, ou), pts[1]));
-      pts[pts.Size - 1] =
-          RoundPx(ClipToShape(in.Nodes[ow].Shape, lpos[w], ShapeSizeTd(in, ow), pts[pts.Size - 2]));
+      pts[0] = anchor_end(u, pts[1], RoundPx(ImUml::ClipToShape(in.Nodes[ou].Shape, lpos[u], ShapeSizeTd(in, ou), pts[1])));
+      pts[pts.Size - 1] = anchor_end(
+          w,
+          pts[pts.Size - 2],
+          RoundPx(ImUml::ClipToShape(in.Nodes[ow].Shape, lpos[w], ShapeSizeTd(in, ow), pts[pts.Size - 2])));
+      // Boxes the edge has no business in: clusters holding neither end.
+      if (cl != nullptr && !comp_clusters.empty()) {
+        ImVector<ImRect> avoid;
+        const int cu = cl->NodeCluster[ou], cw = cl->NodeCluster[ow];
+        for (int j = 0; j < comp_clusters.Size; ++j) {
+          const int k = comp_clusters[j];
+          bool holds = false;
+          for (int x = cu; x >= 0 && !holds; x = cl->Parent[x]) {
+            holds = x == k;
+          }
+          for (int x = cw; x >= 0 && !holds; x = cl->Parent[x]) {
+            holds = x == k;
+          }
+          if (!holds) {
+            avoid.push_back(td_rect[k]);
+          }
+        }
+        AvoidBoxes(&pts, avoid);
+      }
       if (ch.LabelNode >= 0) {
         const ImVec2 lp = lpos[ch.LabelNode];
         path.Label = RoundPx(ImVec2(lp.x + 6.0f + label_td.x * 0.5f, lp.y));
@@ -1591,6 +2172,7 @@ void ImUml::LayoutGraph(const ImUmlGraphInput& in, ImUmlGraphOutput* out) {
     Packed* pk = IM_NEW(Packed)();
     pk->Nodes = comp.Nodes;
     pk->Edges = comp.Edges;
+    pk->Clusters = comp_clusters;
     pk->X0 = offset_x;
     pk->W = RoundPx(max_x - min_x);
     pk->H = height;
@@ -1630,6 +2212,9 @@ void ImUml::LayoutGraph(const ImUmlGraphInput& in, ImUmlGraphOutput* out) {
         }
         path.Label += shift;
       }
+      for (int k = 0; k < pk.Clusters.Size; ++k) {
+        td_rect[pk.Clusters[k]].Translate(shift);
+      }
       x += pk.W + in.NodeSpacing;
       row_h = ImMax(row_h, pk.H);
       total_w = ImMax(total_w, x - in.NodeSpacing);
@@ -1667,5 +2252,102 @@ void ImUml::LayoutGraph(const ImUmlGraphInput& in, ImUmlGraphOutput* out) {
     }
     IM_DELETE(paths[e]);
   }
+  for (int k = 0; k < cluster_count; ++k) {
+    const ImVec2 a = transform(td_rect[k].Min), b = transform(td_rect[k].Max);
+    out->ClusterRects[k] = ImRect(ImMin(a, b), ImMax(a, b));
+  }
   out->Size = across ? ImVec2(total_h, total_w) : ImVec2(total_w, total_h);
+}
+
+} // namespace
+
+void ImUml::LayoutGraph(const ImUmlGraphInput& in, ImUmlGraphOutput* out) {
+  if (in.Clusters.empty()) {
+    LayoutCore(in, out, nullptr);
+    return;
+  }
+  // Clusters become nodes and edges of an extended graph, as dot does: a
+  // top and a bottom node per cluster, which hidden edges keep above and
+  // below every member (and nested cluster), so a cluster spans
+  // consecutive ranks. Its header band is the top node's rank (the bottom
+  // node's for BottomUp, the left margin for LeftRight / RightLeft). An
+  // edge to a cluster ends at its top node, from a cluster starts at its
+  // bottom node; both are drawn to the box.
+  const int n = in.Nodes.Size, nc = in.Clusters.Size;
+  const bool across = in.Direction == ImUmlDirection_LeftRight || in.Direction == ImUmlDirection_RightLeft;
+  const bool bottom_up = in.Direction == ImUmlDirection_BottomUp;
+  ImUmlGraphInput ext;
+  ext.Direction = in.Direction;
+  ext.EdgeStyle = in.EdgeStyle;
+  ext.NodeSpacing = in.NodeSpacing;
+  ext.RankSpacing = in.RankSpacing;
+  ext.MaxIterations = in.MaxIterations;
+  ext.Nodes = in.Nodes;
+  ClusterInfo info;
+  info.HeaderAtBottom = bottom_up;
+  info.Parent.resize(nc);
+  info.Top.resize(nc);
+  info.Bottom.resize(nc);
+  info.Pad.resize(nc);
+  info.LeftExtra.resize(nc);
+  info.HeaderW.resize(nc);
+  info.HeaderH.resize(nc);
+  for (int k = 0; k < nc; ++k) {
+    const ImUmlGraphCluster& gc = in.Clusters[k];
+    info.Parent[k] = gc.Parent;
+    info.Pad[k] = RoundPx(gc.Padding);
+    info.LeftExtra[k] = across ? ImCeil(gc.HeaderSize.y) : 0.0f;
+    info.HeaderW[k] = across ? 0.0f : ImCeil(gc.HeaderSize.x);
+    info.HeaderH[k] = across ? 0.0f : ImCeil(gc.HeaderSize.y);
+    ImUmlGraphNode header, edge;
+    header.Cluster = edge.Cluster = k;
+    edge.Size = across ? ImVec2(info.Pad[k], 0.0f) : ImVec2(0.0f, info.Pad[k]);
+    header.Size = across ? edge.Size : ImVec2(ImCeil(gc.HeaderSize.x), ImCeil(gc.HeaderSize.y));
+    info.Top[k] = ext.Nodes.Size;
+    ext.Nodes.push_back(bottom_up ? edge : header);
+    info.Bottom[k] = ext.Nodes.Size;
+    ext.Nodes.push_back(bottom_up ? header : edge);
+  }
+  info.NodeCluster.resize(ext.Nodes.Size);
+  info.AnchorOf.resize(ext.Nodes.Size);
+  for (int v = 0; v < ext.Nodes.Size; ++v) {
+    info.NodeCluster[v] = ext.Nodes[v].Cluster;
+    info.AnchorOf[v] = v < n ? -1 : (v - n) / 2;
+  }
+  for (int e = 0; e < in.Edges.Size; ++e) {
+    ImUmlGraphEdge ed = in.Edges[e];
+    if (ed.FromCluster >= 0) {
+      ed.From = info.Bottom[ed.FromCluster];
+    }
+    if (ed.ToCluster >= 0) {
+      ed.To = info.Top[ed.ToCluster];
+    }
+    ext.Edges.push_back(ed);
+  }
+  info.HiddenStart = ext.Edges.Size;
+  auto hidden = [&](int from, int to) {
+    ImUmlGraphEdge h;
+    h.From = from;
+    h.To = to;
+    ext.Edges.push_back(h);
+  };
+  for (int v = 0; v < n; ++v) {
+    const int k = in.Nodes[v].Cluster;
+    if (k >= 0) {
+      hidden(info.Top[k], v);
+      hidden(v, info.Bottom[k]);
+    }
+  }
+  for (int k = 0; k < nc; ++k) {
+    hidden(info.Top[k], info.Bottom[k]);
+    if (info.Parent[k] >= 0) {
+      hidden(info.Top[info.Parent[k]], info.Top[k]);
+      hidden(info.Bottom[k], info.Bottom[info.Parent[k]]);
+    }
+  }
+  LayoutCore(ext, out, &info);
+  out->NodePos.resize(n);
+  out->NodeRank.resize(n);
+  out->NodeOrder.resize(n);
+  out->Edges.resize(in.Edges.Size);
 }

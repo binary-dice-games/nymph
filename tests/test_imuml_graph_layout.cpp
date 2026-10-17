@@ -4,6 +4,7 @@
 ///        positions and routes of the dot-style graph layout. Pure: no ImGui
 ///        context.
 #include <gtest/gtest.h>
+#include <algorithm>
 #include <cmath>
 #include <cstdint>
 #include <vector>
@@ -375,6 +376,105 @@ TEST(imuml_layout, SplinesBendOnlyWherePathsDo) {
     const float cross = (b.x - a.x) * (c.y - a.y) - (b.y - a.y) * (c.x - a.x);
     EXPECT_NEAR(cross / std::sqrt(ImLengthSqr(b - a)), 0.0f, 1.0f);
   }
+}
+
+// ── Clusters ─────────────────────────────────────────────────────────────────
+
+/// The media player of examples/uml_state.yaml: start -> stopped,
+/// stopped -> playing (inside Active), paused (inside) -> stopped,
+/// stopped -> end, and inside Active: a0 -> playing <-> paused.
+ImUmlGraphInput media_player(ImUmlDirection dir = ImUmlDirection_TopDown) {
+  // 0 start, 1 stopped, 2 end, 3 a0, 4 playing, 5 paused
+  ImUmlGraphInput in = graph(6, {{0, 1}, {1, 4}, {5, 1}, {1, 2}, {3, 4}, {4, 5}, {5, 4}}, 60, 24);
+  in.Direction = dir;
+  ImUmlGraphCluster active;
+  active.HeaderSize = ImVec2(80, 20);
+  in.Clusters.push_back(active);
+  for (int v = 3; v <= 5; ++v) {
+    in.Nodes[v].Cluster = 0;
+  }
+  return in;
+}
+
+TEST(imuml_clusters, MembersInsideOthersOutside) {
+  for (ImUmlDirection dir : {ImUmlDirection_TopDown, ImUmlDirection_LeftRight, ImUmlDirection_BottomUp}) {
+    const ImUmlGraphInput in = media_player(dir);
+    ImUmlGraphOutput out;
+    ImUml::LayoutGraph(in, &out);
+    ASSERT_EQ(out.ClusterRects.Size, 1);
+    const ImRect box = out.ClusterRects[0];
+    for (int v = 0; v < 6; ++v) {
+      const ImRect r = node_rect(in, out, v);
+      if (in.Nodes[v].Cluster == 0) {
+        EXPECT_TRUE(box.Contains(r)) << "member " << v << " direction " << dir;
+      } else {
+        EXPECT_FALSE(box.Overlaps(r)) << "outsider " << v << " direction " << dir;
+      }
+    }
+    expect_no_overlap(in, out);
+  }
+}
+
+TEST(imuml_clusters, EdgesLeavingABoxGoAroundIt) {
+  ImUmlGraphInput in = media_player();
+  in.EdgeStyle = ImUmlEdgeStyle_Polyline;
+  ImUmlGraphOutput out;
+  ImUml::LayoutGraph(in, &out);
+  EXPECT_LE(out.Crossings, 2); // only the two edges that enter the box cross its border
+  ImRect box = out.ClusterRects[0];
+  box.Expand(-2.0f);
+  // paused -> stopped: every point after the start (on paused, inside the
+  // box) lies outside the box, and no segment after the first crosses it.
+  const ImUmlGraphEdgeOut& stop = out.Edges[2];
+  for (int i = 1; i < stop.PointCount; ++i) {
+    EXPECT_FALSE(box.Contains(out.Points[stop.PointStart + i])) << "point " << i;
+  }
+  // stopped -> end never enters the box.
+  const ImUmlGraphEdgeOut& eject = out.Edges[3];
+  for (int i = 0; i < eject.PointCount; ++i) {
+    EXPECT_FALSE(box.Contains(out.Points[eject.PointStart + i]));
+  }
+}
+
+TEST(imuml_clusters, NestedBoxesAndEdgesToABox) {
+  // 0 outside, 1 in A, 2 in B (B inside A); edges: 0 -> box A, 2 -> 0.
+  ImUmlGraphInput in = graph(3, {{0, 0}, {2, 0}, {1, 2}}, 50, 20);
+  in.Edges[0].ToCluster = 0;
+  in.Edges[0].From = 0;
+  in.Edges[0].To = 0;
+  ImUmlGraphCluster a, b;
+  b.Parent = 0;
+  in.Clusters.push_back(a);
+  in.Clusters.push_back(b);
+  in.Nodes[1].Cluster = 0;
+  in.Nodes[2].Cluster = 1;
+  in.EdgeStyle = ImUmlEdgeStyle_Polyline;
+  ImUmlGraphOutput out;
+  ImUml::LayoutGraph(in, &out);
+  ASSERT_EQ(out.ClusterRects.Size, 2);
+  EXPECT_TRUE(out.ClusterRects[0].Contains(out.ClusterRects[1]));
+  EXPECT_TRUE(out.ClusterRects[1].Contains(node_rect(in, out, 2)));
+  EXPECT_FALSE(out.ClusterRects[1].Overlaps(node_rect(in, out, 1)));
+  // The edge to box A ends on its border.
+  const ImUmlGraphEdgeOut& to_box = out.Edges[0];
+  ASSERT_GE(to_box.PointCount, 2);
+  const ImVec2 end = out.Points[to_box.PointStart + to_box.PointCount - 1];
+  const ImRect a_box = out.ClusterRects[0];
+  const float d = std::min({std::fabs(end.x - a_box.Min.x), std::fabs(end.x - a_box.Max.x),
+                            std::fabs(end.y - a_box.Min.y), std::fabs(end.y - a_box.Max.y)});
+  EXPECT_LE(d, 1.0f);
+}
+
+TEST(imuml_clusters, Deterministic) {
+  ImUmlGraphOutput a, b;
+  ImUml::LayoutGraph(media_player(), &a);
+  ImUml::LayoutGraph(media_player(), &b);
+  ASSERT_EQ(a.Points.Size, b.Points.Size);
+  for (int i = 0; i < a.Points.Size; ++i) {
+    EXPECT_EQ(a.Points[i].x, b.Points[i].x);
+    EXPECT_EQ(a.Points[i].y, b.Points[i].y);
+  }
+  EXPECT_EQ(a.ClusterRects[0].Min.x, b.ClusterRects[0].Min.x);
 }
 
 TEST(imuml_layout, LeftRightIsTopDownTransposed) {

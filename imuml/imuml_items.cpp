@@ -380,26 +380,6 @@ bool InScope(const ImUmlDiagram* d, int node, int scope) {
   return false;
 }
 
-/// The ancestor of `node` (or itself) whose parent is `scope`.
-int ChildOfScope(const ImUmlDiagram* d, int node, int scope) {
-  int v = node;
-  while (v >= 0 && d->Nodes[v].Parent != scope) {
-    v = d->Nodes[v].Parent;
-  }
-  return v;
-}
-
-int EdgeScope(const ImUmlDiagram* d, int from, int to) {
-  for (int a = d->Nodes[from].Parent;; a = d->Nodes[a].Parent) {
-    if (InScope(d, to, a)) {
-      return a;
-    }
-    if (a < 0) {
-      return -1;
-    }
-  }
-}
-
 /// A note link edge per attached node (appended to d->Edges; recorded
 /// with Type NoteLink so they are drawn dashed).
 void AddNoteLinks(ImUmlDiagram* d, const ImGuiStorage& ids) {
@@ -431,66 +411,67 @@ void AddNoteLinks(ImUmlDiagram* d, const ImGuiStorage& ids) {
   }
 }
 
-struct GraphScope {
-  ImVector<int> Nodes; ///< Diagram node indices.
-  ImVector<int> Edges; ///< Diagram edge indices.
-};
-
-/// Lays out the nodes whose parent is `scope` (after their composites'
-/// insides), in coordinates relative to the scope's content origin.
-/// Returns the scope's content size.
-ImVec2 LayoutScope(ImUmlDiagram* d, int scope, const ImVector<int>& edge_scope, ImVector<ImVec2>* local_pos,
-                   ImVector<ImVec2>* points, ImVector<ImUmlGraphEdgeOut>* edge_out) {
-  GraphScope s;
-  for (int i = 0; i < d->Nodes.Size; ++i) {
-    if (d->Nodes[i].Parent == scope) {
-      s.Nodes.push_back(i);
-    }
-  }
-  for (int e = 0; e < d->Edges.Size; ++e) {
-    if (edge_scope[e] == scope && d->Edges[e].From >= 0) {
-      s.Edges.push_back(e);
-    }
-  }
+/// Lays out every node and edge of a graph diagram as one graph, composite
+/// states as clusters (spec/03_uml_diagrams/DESIGN.md section 4): an edge
+/// leaving a composite is routed around it like any other. Node positions
+/// and edge points are relative to the content's top-left corner.
+/// Returns the content size.
+ImVec2 LayoutAll(ImUmlDiagram* d) {
   const ImVec2 pad = d->Style.NodePadding;
-  for (int k = 0; k < s.Nodes.Size; ++k) {
-    ImUmlNodeRec& n = d->Nodes[s.Nodes[k]];
-    if (n.Composite) {
-      const ImVec2 inner = LayoutScope(d, s.Nodes[k], edge_scope, local_pos, points, edge_out);
-      n.HeaderHeight = CompositeHeader(d, n);
-      const float name_w = TextSize(n.Text, 1.0f, StrBegin(d, n.Name), StrEnd(d, n.Name)).x + pad.x * 2.0f;
-      n.Size = CeilPx(ImVec2(ImMax(inner.x + pad.x * 4.0f, name_w), inner.y + n.HeaderHeight + pad.y * 3.0f));
-      n.Shape = ImUmlShape_Box;
-    }
-  }
   ImUmlGraphInput in;
   in.Direction = d->Direction;
   in.EdgeStyle = d->EdgeStyle;
   in.NodeSpacing = d->NodeSpacing;
   in.RankSpacing = d->RankSpacing;
-  ImGuiStorage local;
-  int next_group = d->RankGroups.Data.Size;
-  for (int k = 0; k < s.Nodes.Size; ++k) {
-    const ImUmlNodeRec& n = d->Nodes[s.Nodes[k]];
+  ImVector<int> layout_of, cluster_of;
+  layout_of.resize(d->Nodes.Size);
+  cluster_of.resize(d->Nodes.Size);
+  for (int i = 0; i < d->Nodes.Size; ++i) {
+    layout_of[i] = cluster_of[i] = -1;
+  }
+  // Composites become clusters; a parent is always submitted before its
+  // children, so cluster parents come first as LayoutGraph() expects.
+  for (int i = 0; i < d->Nodes.Size; ++i) {
+    ImUmlNodeRec& n = d->Nodes[i];
+    if (!n.Composite) {
+      continue;
+    }
+    n.HeaderHeight = CompositeHeader(d, n);
+    n.Shape = ImUmlShape_Box;
+    ImUmlGraphCluster gc;
+    gc.Parent = n.Parent >= 0 ? cluster_of[n.Parent] : -1;
+    gc.HeaderSize = ImVec2(TextSize(n.Text, 1.0f, StrBegin(d, n.Name), StrEnd(d, n.Name)).x + pad.x * 2.0f, n.HeaderHeight);
+    gc.Padding = pad.x * 2.0f;
+    cluster_of[i] = in.Clusters.Size;
+    in.Clusters.push_back(gc);
+  }
+  for (int i = 0; i < d->Nodes.Size; ++i) {
+    const ImUmlNodeRec& n = d->Nodes[i];
+    if (n.Composite) {
+      continue;
+    }
     ImUmlGraphNode gn;
     gn.Size = n.Size;
     gn.Shape = n.Shape;
     gn.RankGroup = n.RankGroup;
+    gn.Cluster = n.Parent >= 0 ? cluster_of[n.Parent] : -1;
     if (n.Type == ImUmlNodeType_Actor) {
       gn.Pin = n.Side == ImUmlSide_Right ? 2 : 1;
     }
-    local.SetInt((ImGuiID)s.Nodes[k] + 1, k + 1);
+    layout_of[i] = in.Nodes.Size;
     in.Nodes.push_back(gn);
   }
-  // A note shares the rank of the first node it is attached to.
-  for (int k = 0; k < s.Edges.Size; ++k) {
-    const ImUmlEdgeRec& e = d->Edges[s.Edges[k]];
-    if (e.Type != ImUmlEdgeType_NoteLink) {
+  // A note shares the rank of the first node it is attached to, in its
+  // cluster.
+  int next_group = d->RankGroups.Data.Size;
+  for (int e = 0; e < d->Edges.Size; ++e) {
+    const ImUmlEdgeRec& er = d->Edges[e];
+    if (er.Type != ImUmlEdgeType_NoteLink || er.From < 0) {
       continue;
     }
-    const int note = local.GetInt((ImGuiID)e.From + 1, 0) - 1;
-    const int target = local.GetInt((ImGuiID)e.To + 1, 0) - 1;
-    if (note < 0 || target < 0 || in.Nodes[note].RankGroup >= 0 || in.Nodes[note].Pin != 0) {
+    const int note = layout_of[er.From], target = layout_of[er.To];
+    if (note < 0 || target < 0 || in.Nodes[note].RankGroup >= 0 || in.Nodes[note].Pin != 0 ||
+        in.Nodes[note].Cluster != in.Nodes[target].Cluster) {
       continue;
     }
     if (in.Nodes[target].RankGroup < 0) {
@@ -498,18 +479,22 @@ ImVec2 LayoutScope(ImUmlDiagram* d, int scope, const ImVector<int>& edge_scope, 
     }
     in.Nodes[note].RankGroup = in.Nodes[target].RankGroup;
   }
+  ImVector<int> edge_of; // diagram edge -> layout edge, or -1
   ImVector<bool> swapped;
-  for (int k = 0; k < s.Edges.Size; ++k) {
-    const ImUmlEdgeRec& e = d->Edges[s.Edges[k]];
-    const EdgeLook look = LookOf(d, e);
+  edge_of.resize(d->Edges.Size);
+  for (int e = 0; e < d->Edges.Size; ++e) {
+    ImUmlEdgeRec& er = d->Edges[e];
+    edge_of[e] = -1;
+    if (er.From < 0) {
+      continue;
+    }
+    const EdgeLook look = LookOf(d, er);
     ImUmlGraphEdge ge;
-    int from = local.GetInt((ImGuiID)ChildOfScope(d, e.From, scope) + 1, 0) - 1;
-    int to = local.GetInt((ImGuiID)ChildOfScope(d, e.To, scope) + 1, 0) - 1;
     bool swap = look.RankToFirst;
     // Use case associations: from the left actor in, out to the right one.
-    if (e.Type == ImUmlEdgeType_UseCaseLink) {
-      const ImUmlNodeRec& a = d->Nodes[e.From];
-      const ImUmlNodeRec& b = d->Nodes[e.To];
+    if (er.Type == ImUmlEdgeType_UseCaseLink) {
+      const ImUmlNodeRec& a = d->Nodes[er.From];
+      const ImUmlNodeRec& b = d->Nodes[er.To];
       if (a.Type == ImUmlNodeType_Actor && b.Type == ImUmlNodeType_Actor) {
         ge.Constraint = false;
       } else if (a.Type == ImUmlNodeType_Actor) {
@@ -518,124 +503,48 @@ ImVec2 LayoutScope(ImUmlDiagram* d, int scope, const ImVector<int>& edge_scope, 
         swap = b.Side != ImUmlSide_Right;
       }
     }
-    if (swap) {
-      const int t = from;
-      from = to;
-      to = t;
+    const int from = swap ? er.To : er.From, to = swap ? er.From : er.To;
+    ge.From = ImMax(0, layout_of[from]);
+    ge.To = ImMax(0, layout_of[to]);
+    ge.FromCluster = cluster_of[from];
+    ge.ToCluster = cluster_of[to];
+    ge.Weight = er.Weight;
+    ge.MinLen = er.MinLen;
+    ge.Constraint = ge.Constraint && er.Constraint;
+    if (!er.Label.Empty()) {
+      ge.LabelSize = CeilPx(TextSize(er.Text, 1.0f, StrBegin(d, er.Label), StrEnd(d, er.Label)) + ImVec2(6.0f, 2.0f));
     }
+    er.LabelSize = ge.LabelSize;
+    edge_of[e] = in.Edges.Size;
     swapped.push_back(swap);
-    ge.From = from;
-    ge.To = to;
-    ge.Weight = e.Weight;
-    ge.MinLen = e.MinLen;
-    ge.Constraint = ge.Constraint && e.Constraint;
-    if (!e.Label.Empty()) {
-      ge.LabelSize = CeilPx(TextSize(e.Text, 1.0f, StrBegin(d, e.Label), StrEnd(d, e.Label)) + ImVec2(6.0f, 2.0f));
-    }
-    d->Edges[s.Edges[k]].LabelSize = ge.LabelSize;
     in.Edges.push_back(ge);
   }
   ImUmlGraphOutput out;
   ImUml::LayoutGraph(in, &out);
-  for (int k = 0; k < s.Nodes.Size; ++k) {
-    (*local_pos)[s.Nodes[k]] = out.NodePos[k];
-  }
-  for (int k = 0; k < s.Edges.Size; ++k) {
-    const ImUmlGraphEdgeOut& eo = out.Edges[k];
-    ImUmlGraphEdgeOut& dst = (*edge_out)[s.Edges[k]];
-    dst = eo;
-    dst.PointStart = points->Size;
-    if (swapped[k]) {
-      for (int i = eo.PointCount - 1; i >= 0; --i) {
-        points->push_back(out.Points[eo.PointStart + i]);
-      }
+  for (int i = 0; i < d->Nodes.Size; ++i) {
+    ImUmlNodeRec& n = d->Nodes[i];
+    if (n.Composite) {
+      const ImRect& r = out.ClusterRects[cluster_of[i]];
+      n.Pos = r.GetCenter();
+      n.Size = r.GetSize();
     } else {
-      for (int i = 0; i < eo.PointCount; ++i) {
-        points->push_back(out.Points[eo.PointStart + i]);
-      }
+      n.Pos = out.NodePos[layout_of[i]];
+    }
+  }
+  for (int e = 0; e < d->Edges.Size; ++e) {
+    if (edge_of[e] < 0) {
+      continue;
+    }
+    const ImUmlGraphEdgeOut& eo = out.Edges[edge_of[e]];
+    ImUmlGraphEdgeOut& dst = d->CacheEdges[e];
+    dst = eo;
+    dst.PointStart = d->Points.Size;
+    for (int i = 0; i < eo.PointCount; ++i) {
+      const int k = swapped[edge_of[e]] ? eo.PointCount - 1 - i : i;
+      d->Points.push_back(out.Points[eo.PointStart + k]);
     }
   }
   return out.Size;
-}
-
-/// Moves a scope's nodes (and, recursively, its composites' insides) from
-/// local to diagram coordinates.
-void PlaceScope(ImUmlDiagram* d, int scope, const ImVec2& origin, const ImVector<ImVec2>& local_pos,
-                const ImVector<int>& edge_scope, ImVector<ImUmlGraphEdgeOut>* edge_out, ImVector<ImVec2>* points) {
-  const ImVec2 pad = d->Style.NodePadding;
-  for (int i = 0; i < d->Nodes.Size; ++i) {
-    ImUmlNodeRec& n = d->Nodes[i];
-    if (n.Parent != scope) {
-      continue;
-    }
-    n.Pos = origin + local_pos[i];
-    if (n.Composite) {
-      const ImVec2 inner(n.Pos.x - n.Size.x * 0.5f + pad.x * 2.0f, n.Pos.y - n.Size.y * 0.5f + n.HeaderHeight + pad.y);
-      PlaceScope(d, i, inner, local_pos, edge_scope, edge_out, points);
-    }
-  }
-  for (int e = 0; e < d->Edges.Size; ++e) {
-    if (edge_scope[e] != scope || d->Edges[e].From < 0) {
-      continue;
-    }
-    ImUmlGraphEdgeOut& eo = (*edge_out)[e];
-    for (int i = 0; i < eo.PointCount; ++i) {
-      (*points)[eo.PointStart + i] += origin;
-    }
-    eo.LabelPos += origin;
-  }
-}
-
-/// An edge drawn to a node inside a composite ends at the composite in its
-/// scope's layout. Its path is rebuilt to end on the inner node instead:
-/// the end point on the composite's border is replaced by the inner node's
-/// border and the whole path is smoothed again, so it has no corner where
-/// it enters the composite.
-void ExtendIntoComposites(ImUmlDiagram* d, const ImVector<int>& edge_scope, ImVector<ImUmlGraphEdgeOut>* edge_out,
-                          ImVector<ImVec2>* points) {
-  ImVector<ImVec2> line, smooth;
-  for (int e = 0; e < d->Edges.Size; ++e) {
-    const ImUmlEdgeRec& er = d->Edges[e];
-    if (er.From < 0) {
-      continue;
-    }
-    const int scope = edge_scope[e];
-    const bool deep_from = ChildOfScope(d, er.From, scope) != er.From;
-    const bool deep_to = ChildOfScope(d, er.To, scope) != er.To;
-    ImUmlGraphEdgeOut& eo = (*edge_out)[e];
-    if ((!deep_from && !deep_to) || eo.PointCount < 2) {
-      continue;
-    }
-    // The points the path passes through (a Bézier chain's every third).
-    line.resize(0);
-    const int step = eo.Bezier ? 3 : 1;
-    for (int i = 0; i < eo.PointCount; i += step) {
-      line.push_back((*points)[eo.PointStart + i]);
-    }
-    if (line.Size < 2) {
-      continue;
-    }
-    if (deep_to) {
-      const ImUmlNodeRec& n = d->Nodes[er.To];
-      const ImVec2 q = ImUml::ClipToShape(n.Shape, n.Pos, n.Size, line[line.Size - 2]);
-      line.back() = ImVec2(RoundPx(q.x), RoundPx(q.y));
-    }
-    if (deep_from) {
-      const ImUmlNodeRec& n = d->Nodes[er.From];
-      const ImVec2 q = ImUml::ClipToShape(n.Shape, n.Pos, n.Size, line[1]);
-      line[0] = ImVec2(RoundPx(q.x), RoundPx(q.y));
-    }
-    const ImVector<ImVec2>* out = &line;
-    if (eo.Bezier) {
-      ImUml::SmoothPath(line, &smooth, !Across(d));
-      out = &smooth;
-    }
-    eo.PointStart = points->Size;
-    eo.PointCount = out->Size;
-    for (int i = 0; i < out->Size; ++i) {
-      points->push_back((*out)[i]);
-    }
-  }
 }
 
 /// The graph diagrams' layout; fills node Pos/Size and d->CacheEdges /
@@ -668,14 +577,6 @@ ImVec2 LayoutGraphDiagram(ImUmlDiagram* d) {
       MeasureNode(d, d->Nodes[i]);
     }
   }
-  ImVector<int> edge_scope;
-  edge_scope.resize(d->Edges.Size);
-  for (int e = 0; e < d->Edges.Size; ++e) {
-    const ImUmlEdgeRec& er = d->Edges[e];
-    edge_scope[e] = er.From >= 0 ? EdgeScope(d, er.From, er.To) : -2;
-  }
-  ImVector<ImVec2> local_pos;
-  local_pos.resize(d->Nodes.Size);
   d->CacheEdges.resize(d->Edges.Size);
   for (int e = 0; e < d->Edges.Size; ++e) {
     ImUmlGraphEdgeOut& eo = d->CacheEdges[e];
@@ -684,7 +585,7 @@ ImVec2 LayoutGraphDiagram(ImUmlDiagram* d) {
     eo.LabelPos = ImVec2(0, 0);
   }
   d->Points.resize(0);
-  ImVec2 size = LayoutScope(d, -1, edge_scope, &local_pos, &d->Points, &d->CacheEdges);
+  ImVec2 size = LayoutAll(d);
 
   // The use case boundary: room around the use cases, between the actors.
   ImVec2 origin(kMargin, kMargin);
@@ -695,8 +596,15 @@ ImVec2 LayoutGraphDiagram(ImUmlDiagram* d) {
   if (boundary) {
     origin.y += boundary_header;
   }
-  PlaceScope(d, -1, origin, local_pos, edge_scope, &d->CacheEdges, &d->Points);
-  ExtendIntoComposites(d, edge_scope, &d->CacheEdges, &d->Points);
+  for (int i = 0; i < d->Nodes.Size; ++i) {
+    d->Nodes[i].Pos += origin;
+  }
+  for (int i = 0; i < d->Points.Size; ++i) {
+    d->Points[i] += origin;
+  }
+  for (int e = 0; e < d->CacheEdges.Size; ++e) {
+    d->CacheEdges[e].LabelPos += origin;
+  }
   size.y += boundary_header;
   d->Boundary = ImRect(0, 0, 0, 0);
   if (boundary) {

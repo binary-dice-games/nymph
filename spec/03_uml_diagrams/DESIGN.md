@@ -500,14 +500,43 @@ centres, edge paths and label positions out. No ImGui context.
    `rankdir`).
 9. **Pixels**: every coordinate is rounded to a whole logical pixel.
 
-**Composite states** are dot's clusters, laid out inside-out rather than
-by dot's cluster-aware mincross: a composite's children are laid out first
-(in its own direction), and the composite becomes a node of that size plus
-its header in the parent's layout. The use case system boundary is a
-cluster too, drawn around the use cases' bounding box. A transition that
-crosses a composite's border is ranked in the parent between the
-composite and the outer node; its path then ends on the inner node instead
-of the composite's border and is smoothed again as one curve.
+**Composite states** are dot's clusters (`ImUmlGraphInput::Clusters`,
+`ImUmlGraphNode::Cluster`), laid out with the whole graph, not on their
+own, so every edge is ranked, ordered and routed knowing every box:
+
+1. **Extended graph.** Each cluster gets a top and a bottom node. Hidden
+   edges (weight 1, drawn never) keep the top node above and the bottom
+   node below every member and nested cluster, so a cluster spans
+   consecutive ranks and stays compact. The top node's rank holds the
+   header band (the bottom node's for `BottomUp`; for `LeftRight` /
+   `RightLeft` the band is margin on the rank-start side). An edge to a
+   composite ends at the box side facing its other end, chosen after
+   ranking.
+2. **Membership.** A node belongs to its innermost cluster; an edge's
+   virtual nodes belong to the innermost cluster holding both ends, so an
+   edge leaving a box has its route points outside it.
+3. **Borders.** Every rank a cluster spans gets a left and a right border
+   node, joined rank to rank by weightless segments: the ordering then
+   counts an edge passing over a box as crossings.
+4. **Ordering** sorts each rank hierarchically (dot's recursive mincross,
+   simplified): nodes and sibling boxes by median, a box by its members'
+   mean, then each box's contents; a box's borders stay first and last.
+   Transpose swaps only within one cluster, or moves a node across a whole
+   neighbouring box. A final pair of sweeps (down, then up) moves each
+   edge's run of virtual nodes to one side of a box, which single moves
+   cannot do because each only shifts where the edge would cross; the
+   order with the fewest crossings is kept.
+5. **Position.** Borders are separated from contents by the cluster's
+   padding, aligned rank to rank by heavy auxiliary edges (weight 1000,
+   so a box is a rectangle), and the header rank is at least as wide as
+   the header.
+6. **Box and routes.** A box spans its borders across and its contents
+   plus padding and header along the ranks. Edge ends at a box are
+   clipped to it; a segment still crossing a box neither end belongs to
+   (between two ranks) bends around the box's nearest corner, or two.
+
+The use case system boundary is drawn around the use cases' bounding box,
+not as a cluster.
 
 **Notes** with `attach` are placed as nodes in the rank of their first
 attached node, next to it (a dashed connector, no ranking edge); a note
@@ -642,9 +671,16 @@ prints one.
   transpose is dot's crossing reduction. Rejected: longest-path ranking
   with barycentre placement (the first draft: wider, more uneven layouts);
   Brandes-Köpf placement (a second algorithm to write, and dot's results
-  are the reference); dot's box-constrained spline router and
-  cluster-aware mincross (much of dot's code, small gain on diagrams of
-  tens of nodes; both stay possible behind the same function).
+  are the reference); dot's box-constrained spline router (much of dot's
+  code; corner detours cover the cases clusters leave).
+- **Clusters in the whole layout, not composites laid out inside-out.**
+  The first version laid out each composite's insides alone and treated
+  the composite as one big node outside: an edge from an inner state to
+  an outer one was seen by neither layout, so it was drawn straight across
+  other states and edges. Laying out one graph with cluster constraints
+  (dot's approach) lets ranking, ordering and routing see the whole edge,
+  so it goes around the box. Cost: the hierarchical ordering, border
+  nodes, and the side sweeps.
 - **Monotone splines, not rank-axis tangents everywhere.** The first
   version gave every path point a tangent along the rank axis (the shape
   of dot's splines near virtual nodes); with no box router to go with it,
