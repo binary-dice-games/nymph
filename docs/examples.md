@@ -891,3 +891,79 @@ root:
     - {type: UseCaseRelation, from: coupon, to: pay, kind: Extend}
     - {type: UseCaseRelation, from: pay, to: bank}
 ```
+
+## Flowchart
+
+Every node shape, a `FlowGroup` around the deploy steps that links end at, labelled decision branches, a thick, a dotted, a plain and a two-headed link, and a note.
+
+![Flowchart](../examples/flowchart.png)
+
+[`examples/flowchart.yaml`](../examples/flowchart.yaml):
+
+```yaml
+nymph: 1
+description: How a push to main reaches production, with the deploy steps grouped.
+image: {width: 720, height: 560}
+root:
+  type: Flowchart
+  title: Deploy pipeline
+  children:
+    - {type: FlowNode, id: start, text: Push to main, shape: Stadium}
+    - {type: FlowNode, id: build, text: Build}
+    - {type: FlowNode, id: tests, text: Tests pass?, shape: Diamond}
+    - {type: FlowNode, id: fix, text: "Fix and\npush again", shape: Rounded}
+    - type: FlowGroup
+      id: prod
+      title: Production
+      children:
+        - {type: FlowNode, id: deploy, text: Deploy, shape: Subroutine}
+        - {type: FlowNode, id: db, text: Migrate DB, shape: Cylinder}
+        - {type: FlowLink, from: deploy, to: db, line: Dotted}
+    - {type: FlowNode, id: notify, text: Notify team, shape: Parallelogram}
+    - {type: FlowNode, id: prep, text: Prepare, shape: Hexagon}
+    - {type: FlowNode, id: done, text: Done, shape: Circle}
+    - {type: FlowLink, from: start, to: build, line: Thick}
+    - {type: FlowLink, from: build, to: tests}
+    - {type: FlowLink, from: tests, to: prep, label: "yes"}
+    - {type: FlowLink, from: prep, to: prod}
+    - {type: FlowLink, from: tests, to: fix, label: "no"}
+    - {type: FlowLink, from: fix, to: build, arrow: None}
+    - {type: FlowLink, from: prod, to: notify, arrow: Both}
+    - {type: FlowLink, from: notify, to: done}
+    - {type: Note, text: runs on every push, attach: [build]}
+```
+
+## Gantt chart
+
+Three sections with their own colours, tasks placed by `after` (drawn as arrows), `Done` / `Active` / `Critical` statuses, two milestones and a `today` line.
+
+![Gantt chart](../examples/gantt.png)
+
+[`examples/gantt.yaml`](../examples/gantt.yaml):
+
+```yaml
+nymph: 1
+description: Release 2.0 schedule in three phases, with dependencies, a code-freeze milestone and today marked.
+image: {width: 760, height: 420}
+root:
+  type: GanttChart
+  title: Release 2.0
+  today: 2026-03-12
+  children:
+    - type: GanttSection
+      name: Design
+      children:
+        - {type: GanttTask, id: spec, name: Write spec, start: 2026-03-02, duration: 4, status: Done}
+        - {type: GanttTask, id: review, name: Review, after: [spec], duration: 2, status: Done}
+    - type: GanttSection
+      name: Build
+      children:
+        - {type: GanttTask, id: api, name: API, after: [review], duration: 6, status: Active}
+        - {type: GanttTask, id: ui, name: UI, after: [review], duration: 8, status: Critical}
+        - {type: GanttTask, id: freeze, name: Code freeze, after: [api, ui], milestone: true}
+    - type: GanttSection
+      name: Ship
+      children:
+        - {type: GanttTask, id: qa, name: QA, after: [freeze], end: 2026-03-27}
+        - {type: GanttTask, name: Release, after: [qa], milestone: true}
+```

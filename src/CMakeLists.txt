@@ -20,6 +20,7 @@ add_library(nymph STATIC
   core/limits.hpp
   png/png_meta.hpp
   png/png_meta.cpp
+  core/dates.hpp
   core/error.hpp
   core/suggest.hpp
   fonts/embedded_fonts.hpp
@@ -36,6 +37,8 @@ add_library(nymph STATIC
   elements/plot2d.cpp
   elements/plot3d.hpp
   elements/plot3d.cpp
+  elements/gantt.hpp
+  elements/gantt.cpp
   elements/layout_elements.hpp
   elements/layout_elements.cpp
   elements/uml/uml.hpp
@@ -46,6 +49,7 @@ add_library(nymph STATIC
   elements/uml/state_diagram.cpp
   elements/uml/activity_diagram.cpp
   elements/uml/usecase_diagram.cpp
+  elements/uml/flowchart.cpp
   layout/layout.hpp
   layout/layout.cpp
   cli/cli.hpp

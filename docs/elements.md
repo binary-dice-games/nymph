@@ -74,11 +74,54 @@ Goes in: root, HorizontalLayout, VerticalLayout.
 | `font_size` | number | `0` | Text size in pixels for this element and everything inside it. 0 (default) inherits the enclosing element's size, or image.font_size. (0 to 96) |
 | `text_color` | colour | `""` | Text colour ("#RRGGBB" or "#RRGGBBAA") for this element and everything inside it: titles, axis and tick labels, legends and labels. Empty (default) inherits, or uses the theme's. |
 
+## Flowchart
+
+A flowchart or any node-and-link diagram (process, decision tree, dependency or architecture graph, mermaid's flowchart), laid out automatically (Graphviz dot's layered layout). Children: FlowNode, FlowGroup, FlowLink, Note.
+
+Goes in: root, HorizontalLayout, VerticalLayout. Children: FlowGroup, FlowLink, FlowNode, Note.
+
+| Field | Type | Default | Description |
+|---|---|---|---|
+| `title` | text | `""` | Title drawn above the diagram, at the full text size; empty for none. |
+| `width` | number | `0` | Width in pixels. 0 (default) is the natural width in a layout; as root it fills the image. In a HorizontalLayout a negative value is a stretch weight. (-1000 to 8192) |
+| `height` | number | `0` | Height in pixels. 0 (default) is the natural height in a layout; as root it fills the image. In a VerticalLayout a negative value is a stretch weight. (-1000 to 8192) |
+| `direction` | name | `TopDown` | Direction of the ranks (Graphviz dot's rankdir; mermaid's TB, BT, LR, RL). (one of: TopDown, BottomUp, LeftRight, RightLeft) |
+| `edge_style` | name | `Spline` | Shape of the edges: smooth curves (Spline) or straight segments (Polyline). (one of: Spline, Polyline) |
+| `node_spacing` | number | `0` | Pixels between nodes in one rank (dot's nodesep); 0 uses the default (30). (0 to 500) |
+| `rank_spacing` | number | `0` | Pixels between ranks (dot's ranksep); 0 uses the default (46). (0 to 500) |
+| `min_zoom` | number | `0.5` | Smallest scale the diagram may be drawn at to fit its space. Needing less is an error that gives the size the diagram needs. (0.05 to 1) |
+| `max_zoom` | number | `1` | Largest scale: 1 (default) never enlarges a small diagram; 2 lets it grow to fill a large space. (0.1 to 8) |
+| `line_color` | colour | `""` | Default colour of edges and node outlines; empty for the theme's. |
+| `fill_color` | colour | `""` | Default fill of nodes; empty for the theme's. |
+| `font` | text | `""` | Font of this element's text and of everything inside it: an embedded font file name (default, FiraMono-Bold.ttf, FiraMono-Regular.ttf, FiraSans-Bold.ttf, FiraSans-Italic.ttf, FiraSans-Regular.ttf, PT_Serif-Web-Bold.ttf, PT_Serif-Web-Italic.ttf, PT_Serif-Web-Regular.ttf). Empty (default) inherits the enclosing element's font, or image.font. |
+| `font_size` | number | `0` | Text size in pixels for this element and everything inside it. 0 (default) inherits the enclosing element's size, or image.font_size. (0 to 96) |
+| `text_color` | colour | `""` | Text colour ("#RRGGBB" or "#RRGGBBAA") for this element and everything inside it: titles, axis and tick labels, legends and labels. Empty (default) inherits, or uses the theme's. |
+
+## GanttChart
+
+A Gantt chart: tasks as bars on a time axis, one row each, top to bottom, in sections with a colour each. Children: GanttSection, GanttTask.
+
+Goes in: root, HorizontalLayout, VerticalLayout. Children: GanttTask, GanttSection.
+
+| Field | Type | Default | Description |
+|---|---|---|---|
+| `title` | text | `""` | Title above the chart; empty for none. |
+| `width` | number | `0` | Width in pixels; 0 (default) is 600 in a HorizontalLayout and fills elsewhere. In a HorizontalLayout a negative value is a stretch weight. (-1000 to 8192) |
+| `height` | number | `0` | Height in pixels; 0 (default) is the natural height (enough for every row) in a VerticalLayout, and fills elsewhere. In a VerticalLayout a negative value is a stretch weight. (-1000 to 8192) |
+| `x_label` | text | `""` | Label under the time axis; empty for none. |
+| `today` | text | `""` | Draws a red line marked "today" at this time: a date (YYYY-MM-DD, or YYYY-MM-DD HH:MM in UTC) or a number, like the tasks'. Empty for none. |
+| `colormap` | name | `Default` | Colormap for this plot: the colours series take in turn when they set none, and the scale of heatmaps and surfaces. Deep (the usual default), Dark, Pastel, Paired, Viridis, Plasma, Hot, Cool, Pink, Jet, Twilight, RdBu, BrBG, PiYG, Spectral or Greys. Default leaves the current colormap. (one of: Default, Deep, Dark, Pastel, Paired, Viridis, Plasma, Hot, Cool, Pink, Jet, Twilight, RdBu, BrBG, PiYG, Spectral, Greys) |
+| `bar_height` | number | `0.6` | Height of a bar as a fraction of its row. (0.1 to 1) |
+| `show_dependencies` | true/false | `true` | When true, draws an arrow from each task in after. |
+| `font` | text | `""` | Font of this element's text and of everything inside it: an embedded font file name (default, FiraMono-Bold.ttf, FiraMono-Regular.ttf, FiraSans-Bold.ttf, FiraSans-Italic.ttf, FiraSans-Regular.ttf, PT_Serif-Web-Bold.ttf, PT_Serif-Web-Italic.ttf, PT_Serif-Web-Regular.ttf). Empty (default) inherits the enclosing element's font, or image.font. |
+| `font_size` | number | `0` | Text size in pixels for this element and everything inside it. 0 (default) inherits the enclosing element's size, or image.font_size. (0 to 96) |
+| `text_color` | colour | `""` | Text colour ("#RRGGBB" or "#RRGGBBAA") for this element and everything inside it: titles, axis and tick labels, legends and labels. Empty (default) inherits, or uses the theme's. |
+
 ## HorizontalLayout
 
 Arranges children left-to-right.
 
-Goes in: root, HorizontalLayout, VerticalLayout. Children: ActivityDiagram, ClassDiagram, ColorScale, HorizontalLayout, Label, Plot, Plot3D, Separator, SeparatorText, SequenceDiagram, Spring, StateDiagram, UseCaseDiagram, VerticalLayout.
+Goes in: root, HorizontalLayout, VerticalLayout. Children: ActivityDiagram, ClassDiagram, ColorScale, Flowchart, GanttChart, HorizontalLayout, Label, Plot, Plot3D, Separator, SeparatorText, SequenceDiagram, Spring, StateDiagram, UseCaseDiagram, VerticalLayout.
 
 | Field | Type | Default | Description |
 |---|---|---|---|
@@ -279,7 +322,7 @@ Goes in: root, HorizontalLayout, VerticalLayout. Children: Actor, UseCase, UseCa
 
 Stacks children top-to-bottom.
 
-Goes in: root, HorizontalLayout, VerticalLayout. Children: ActivityDiagram, ClassDiagram, ColorScale, HorizontalLayout, Label, Plot, Plot3D, Separator, SeparatorText, SequenceDiagram, Spring, StateDiagram, UseCaseDiagram, VerticalLayout.
+Goes in: root, HorizontalLayout, VerticalLayout. Children: ActivityDiagram, ClassDiagram, ColorScale, Flowchart, GanttChart, HorizontalLayout, Label, Plot, Plot3D, Separator, SeparatorText, SequenceDiagram, Spring, StateDiagram, UseCaseDiagram, VerticalLayout.
 
 | Field | Type | Default | Description |
 |---|---|---|---|
@@ -292,6 +335,35 @@ Goes in: root, HorizontalLayout, VerticalLayout. Children: ActivityDiagram, Clas
 | `font` | text | `""` | Font of this element's text and of everything inside it: an embedded font file name (default, FiraMono-Bold.ttf, FiraMono-Regular.ttf, FiraSans-Bold.ttf, FiraSans-Italic.ttf, FiraSans-Regular.ttf, PT_Serif-Web-Bold.ttf, PT_Serif-Web-Italic.ttf, PT_Serif-Web-Regular.ttf). Empty (default) inherits the enclosing element's font, or image.font. |
 | `font_size` | number | `0` | Text size in pixels for this element and everything inside it. 0 (default) inherits the enclosing element's size, or image.font_size. (0 to 96) |
 | `text_color` | colour | `""` | Text colour ("#RRGGBB" or "#RRGGBBAA") for this element and everything inside it: titles, axis and tick labels, legends and labels. Empty (default) inherits, or uses the theme's. |
+
+## GanttSection
+
+A group of tasks (a phase, a team) sharing a colour and a legend entry. Children: GanttTask.
+
+Goes in: GanttChart. Children: GanttTask.
+
+| Field | Type | Default | Description |
+|---|---|---|---|
+| `name` | text | `""` | Section name, shown in the legend. |
+| `color` | colour | `""` | Colour of its tasks; empty takes the next colour of the chart's colormap. |
+
+## GanttTask
+
+A task (a bar from start to end) or a milestone of a GanttChart, on its own row.
+
+Goes in: GanttChart, GanttSection.
+
+| Field | Type | Default | Description |
+|---|---|---|---|
+| `id` | text | `""` | Id that other tasks' after names; optional unless named. |
+| `name` | text | `""` | Name shown on the task's row; empty shows the id. |
+| `start` | text | `""` | When the task starts: a date (YYYY-MM-DD, or YYYY-MM-DD HH:MM in UTC) or a number. Leave empty and give after instead. |
+| `end` | text | `""` | When the task ends, in the same form as start (a date means its midnight: 2026-03-02 to 2026-03-05 is three days). Leave empty and give duration instead. |
+| `duration` | number | `0` | Length of the task instead of end: days when start is a date, else start's units. (0 to 1e+09) |
+| `after` | list of texts | `[]` | Ids of the tasks this one waits for: it starts when the last of them ends, with an arrow from each (mermaid's after). |
+| `milestone` | true/false | `false` | When true, the task is a moment, drawn as a diamond at its start. |
+| `status` | name | `None` | Done (pale), Active (outlined), Critical (red outline) or None. (one of: None, Done, Active, Critical) |
+| `color` | colour | `""` | Bar colour; empty uses its section's colour. |
 
 ## PlotAnnotation
 
@@ -909,11 +981,57 @@ Goes in: ClassDiagram.
 | `constraint` | true/false | `true` | false: the edge is drawn but does not influence the ranks (dot's constraint). |
 | `color` | colour | `""` | Line colour; empty for the diagram's. |
 
+## FlowGroup
+
+A group of nodes in a titled box (mermaid's subgraph), such as a service, a team or a phase. Children: FlowNode, FlowGroup, FlowLink, Note; links inside may also join nodes outside.
+
+Goes in: FlowGroup, Flowchart. Children: FlowGroup, FlowLink, FlowNode, Note.
+
+| Field | Type | Default | Description |
+|---|---|---|---|
+| `id` | text | `""` | Unique id; links may name a group to end at its box. |
+| `title` | text | `""` | Title at the top of the box; empty shows the id. |
+| `color` | colour | `""` | Outline colour; empty for the diagram's. |
+| `fill_color` | colour | `""` | Fill colour; empty for the diagram's. |
+
+## FlowLink
+
+A link between two nodes or groups of a flowchart.
+
+Goes in: FlowGroup, Flowchart.
+
+| Field | Type | Default | Description |
+|---|---|---|---|
+| `from` | text | `""` | Id of the node or group the link leaves. |
+| `to` | text | `""` | Id of the node or group it reaches. |
+| `label` | text | `""` | Text in the middle of the link, such as a decision's answer. |
+| `line` | name | `Solid` | Solid (default), Dotted (dashed: optional or asynchronous) or Thick (the main path). (one of: Solid, Dotted, Thick) |
+| `arrow` | name | `End` | Arrowheads: End (at to, default), None (a plain line) or Both. (one of: End, None, Both) |
+| `weight` | number | `1` | How strongly the layout keeps this edge short and straight (Graphviz dot's weight). (0 to 100) |
+| `min_length` | integer | `1` | Least number of ranks between the two ends (dot's minlen); 0 allows one rank. (0 to 10) |
+| `constraint` | true/false | `true` | false: the edge is drawn but does not influence the ranks (dot's constraint). |
+| `color` | colour | `""` | Line colour; empty for the diagram's. |
+
+## FlowNode
+
+A node of a flowchart.
+
+Goes in: FlowGroup, Flowchart.
+
+| Field | Type | Default | Description |
+|---|---|---|---|
+| `id` | text | `""` | Unique id that links and notes name. |
+| `text` | text | `""` | Text in the node (a line break starts a new line); empty shows the id. |
+| `shape` | name | `Box` | Box (a step, default), Rounded, Stadium (start / end), Diamond (decision), Circle, Parallelogram (input / output), Hexagon (preparation), Cylinder (database) or Subroutine (a predefined process). (one of: Box, Rounded, Stadium, Diamond, Circle, Parallelogram, Hexagon, Cylinder, Subroutine) |
+| `rank` | text | `""` | Nodes with the same rank text are placed in one rank (Graphviz dot's rank=same); empty for none. |
+| `color` | colour | `""` | Outline colour; empty for the diagram's. |
+| `fill_color` | colour | `""` | Fill colour; empty for the diagram's. |
+
 ## Note
 
 A note. In a graph diagram it sits beside the nodes it is attached to; in a sequence diagram it takes a row, over participants or beside one.
 
-Goes in: ActivityDiagram, ClassDiagram, Fragment, SequenceDiagram, State, StateDiagram, UseCaseDiagram.
+Goes in: ActivityDiagram, ClassDiagram, FlowGroup, Flowchart, Fragment, SequenceDiagram, State, StateDiagram, UseCaseDiagram.
 
 | Field | Type | Default | Description |
 |---|---|---|---|

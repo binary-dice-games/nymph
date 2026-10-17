@@ -163,8 +163,8 @@ registered element classes (section 4). In the first release:
   `Plot3DTriangle`, `Plot3DQuad`, `Plot3DMesh`, `Plot3DText`.
 - `VerticalLayout` and `HorizontalLayout`, with any of the elements in
   this list except series as children; `Spring`, `Label`, `Separator`,
-  `SeparatorText`; `ColorScale` (added later, see "Axes and annotations"
-  below).
+  `SeparatorText`; `ColorScale` and `GanttChart` (added later, see
+  "Axes and annotations" and "Gantt charts" below).
 
 `root` is any element except a series. A series must be a direct child of
 its kind of plot (section 4, slots). Fields, defaults and enum/flag names
@@ -277,6 +277,31 @@ wish drew something silently wrong, nymph reports an error):
   drew nothing); `Plot3DMesh.indices` must be a non-zero multiple of 3,
   each within the vertex count. wish passed the indices to ImPlot3D
   unchecked, so an out-of-range index read past the vertex arrays.
+
+**Gantt charts** (added after the first release, not in wish):
+`GanttChart` (a `figure` element, in `src/elements/gantt.cpp`) with
+`GanttTask` children, directly or in `GanttSection`s.
+
+- Drawn with ImPlot, not ImUml: a schedule is a plot (a time axis, rows,
+  a legend) rather than a graph, and ImPlot already gives the axes, the
+  theme and the text style. Rows are Y ticks (inverted, task names as
+  labels); each section is a legend item made with `ImPlot::BeginItem` /
+  `EndItem` (internal API: `PlotDummy` cannot take a colour) whose colour
+  its bars take; bars, milestone diamonds and dependency elbows are drawn
+  on the plot's draw list.
+- Times are ISO dates (`src/core/dates.hpp`: pure arithmetic, UTC, no
+  locale) or plain numbers, one kind per chart. A task starts at `start`
+  or when the last task in `after` ends (mermaid's `after`), and ends at
+  `end` or after `duration` (days for dates). `schedule_of()` resolves
+  every task in dependency order and is the one place errors come from
+  (missing or doubled start / end, unknown or circular `after`, end
+  before start, mixed kinds), so `check()` and drawing cannot disagree.
+- Date axes get nymph's own ticks (whole hours, days, Mondays, months or
+  years, labelled `2026-03-08`, `2026-03`, ...) chosen to fit the width,
+  instead of ImPlot's Time scale, whose ISO day labels read `--03-08`.
+- Natural height: 1.8 text lines per row plus title, axis and legend, so
+  a chart in a `VerticalLayout` grows with its tasks; as root it fills.
+- At most `kMaxGanttTasks` (500) tasks.
 
 **Axes and annotations** (added after the first release; ImPlot v1.0
 features wish did not expose):

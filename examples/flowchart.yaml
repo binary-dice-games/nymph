@@ -1,0 +1,30 @@
+nymph: 1
+description: How a push to main reaches production, with the deploy steps grouped.
+image: {width: 720, height: 560}
+root:
+  type: Flowchart
+  title: Deploy pipeline
+  children:
+    - {type: FlowNode, id: start, text: Push to main, shape: Stadium}
+    - {type: FlowNode, id: build, text: Build}
+    - {type: FlowNode, id: tests, text: Tests pass?, shape: Diamond}
+    - {type: FlowNode, id: fix, text: "Fix and\npush again", shape: Rounded}
+    - type: FlowGroup
+      id: prod
+      title: Production
+      children:
+        - {type: FlowNode, id: deploy, text: Deploy, shape: Subroutine}
+        - {type: FlowNode, id: db, text: Migrate DB, shape: Cylinder}
+        - {type: FlowLink, from: deploy, to: db, line: Dotted}
+    - {type: FlowNode, id: notify, text: Notify team, shape: Parallelogram}
+    - {type: FlowNode, id: prep, text: Prepare, shape: Hexagon}
+    - {type: FlowNode, id: done, text: Done, shape: Circle}
+    - {type: FlowLink, from: start, to: build, line: Thick}
+    - {type: FlowLink, from: build, to: tests}
+    - {type: FlowLink, from: tests, to: prep, label: "yes"}
+    - {type: FlowLink, from: prep, to: prod}
+    - {type: FlowLink, from: tests, to: fix, label: "no"}
+    - {type: FlowLink, from: fix, to: build, arrow: None}
+    - {type: FlowLink, from: prod, to: notify, arrow: Both}
+    - {type: FlowLink, from: notify, to: done}
+    - {type: Note, text: runs on every push, attach: [build]}

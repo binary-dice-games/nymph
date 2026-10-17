@@ -285,8 +285,10 @@ root:
 | `StateDiagram` | `State` (composite when it has children) | `Transition` |
 | `ActivityDiagram` | `Action`, `ActivityControl` | `Flow` |
 | `UseCaseDiagram` | `Actor`, `UseCase` | `UseCaseRelation` |
+| `Flowchart` | `FlowNode`, `FlowGroup` (a box around nodes, mermaid's subgraph) | `FlowLink` |
 
-`Note` goes in every diagram.
+`Note` goes in every diagram. `Flowchart` is not UML: it draws any
+node-and-link diagram, with mermaid's flowchart shapes and link styles.
 
 - **Ids.** Every node has an `id`, unique in the diagram; `name` (or
   `text`) is what is shown and defaults to the id. Edges name nodes by id
@@ -312,6 +314,30 @@ root:
   final one, `Else` only inside an `Alt`, `Par` or `Critical` fragment,
   `Include` only between use cases, a `deactivate` needs an open
   activation, and so on.
+
+## Gantt charts
+
+`GanttChart` is a schedule: `GanttTask` children (optionally inside
+`GanttSection`s, which give them a colour and a legend entry), one row
+each, top to bottom.
+
+```yaml
+root:
+  type: GanttChart
+  today: 2026-03-04
+  children:
+    - {type: GanttTask, id: a, name: Design, start: 2026-03-02, duration: 3}
+    - {type: GanttTask, name: Build, after: [a], end: 2026-03-12}
+```
+
+- **Times** are ISO dates (`2026-03-02`, `2026-03-02 14:00`, in UTC) or
+  plain numbers; one chart uses one kind. A date `end` is its midnight.
+- **Start**: `start`, or `after` (ids of tasks it waits for: it starts
+  when the last ends, and an arrow is drawn from each). **End**: `end`,
+  or `duration` (days for dates). A `milestone` has a start only.
+- **Errors**: a task without a start or an end, both `start` and
+  `after`, an unknown or circular `after`, an end before the start,
+  dates mixed with numbers.
 
 ## Errors
 

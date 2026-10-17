@@ -384,6 +384,38 @@ written. Each can be `root` or a layout child.
   fit, the error gives the size it needs: enlarge the image, lower
   `min_zoom`, or split the diagram.
 
+### Flowcharts
+
+`Flowchart` draws any node-and-link diagram: a process, a decision tree,
+a dependency or architecture graph (mermaid's `flowchart`). It is laid
+out like the UML diagrams and takes the same diagram fields (`direction`,
+spacing, zoom, colours) and `Note`.
+
+| Type | Fields | Draws |
+|---|---|---|
+| `FlowNode` | `id`, `text` (empty shows the id; `"a\nb"` for two lines), `shape`, `rank`, `color`, `fill_color` | A node. `shape`: `Box` (a step, default), `Rounded`, `Stadium` (start / end), `Diamond` (decision), `Circle`, `Parallelogram` (input / output), `Hexagon`, `Cylinder` (database), `Subroutine`. |
+| `FlowGroup` | `id`, `title`, `color`, `fill_color`, `children` (nodes, groups, links, notes) | A titled box around its nodes (mermaid's subgraph): a service, a team, a phase. Links may name the group to end at its box. |
+| `FlowLink` | `from`, `to` (node or group ids), `label`, `line` (`Solid`, `Dotted`, `Thick`), `arrow` (`End`, `None`, `Both`), `weight`, `min_length`, `constraint`, `color` | A link; `label` sits in its middle (a decision's answer). |
+
+### Gantt charts
+
+`GanttChart` draws a schedule: one row per task, top to bottom, bars on a
+time axis. It can be `root` or a layout child.
+
+| Type | Fields | Draws |
+|---|---|---|
+| `GanttChart` | `title`, `x_label`, `today` (a red line), `colormap`, `bar_height` (0.6 of a row), `show_dependencies` (true), `width`, `height` | The chart. Children: `GanttSection`, `GanttTask`. |
+| `GanttSection` | `name` (legend entry), `color`, `children` (tasks) | A phase or team: its tasks share a colour. |
+| `GanttTask` | `id`, `name`, `start` or `after: [ids]`, `end` or `duration`, `milestone`, `status` (`Done` pale, `Active` outlined, `Critical` red outline), `color` | A bar from start to end, or a diamond for a milestone. `after` starts the task when the last of those tasks ends, with an arrow from each. |
+
+- Times are dates, `2026-03-02` or `2026-03-02 14:00` (UTC), or plain
+  numbers (days, sprints) for a relative plan; one chart uses one kind.
+  `duration` counts days for dates.
+- An `end` date means its midnight: `start: 2026-03-02, end: 2026-03-05`
+  is three days.
+- With no `height`, a chart in a `VerticalLayout` is as tall as its rows
+  need; as `root` it fills the image.
+
 ### Fonts and text style
 
 Fonts are built into nymph; name one by its file name (`nymph fonts`
@@ -804,6 +836,54 @@ data: |
   2, 2, 0.0
 ```
 
+### Flowchart
+
+```yaml
+description: How a pull request gets merged.
+root:
+  type: Flowchart
+  direction: LeftRight
+  children:
+    - {type: FlowNode, id: open, text: PR opened, shape: Stadium}
+    - {type: FlowNode, id: ci, text: CI green?, shape: Diamond}
+    - {type: FlowNode, id: fix, text: Fix}
+    - type: FlowGroup
+      id: review
+      title: Review
+      children:
+        - {type: FlowNode, id: read, text: Read the diff}
+        - {type: FlowNode, id: ok, text: Approve, shape: Rounded}
+        - {type: FlowLink, from: read, to: ok}
+    - {type: FlowNode, id: merge, text: Merge, shape: Stadium}
+    - {type: FlowLink, from: open, to: ci}
+    - {type: FlowLink, from: ci, to: fix, label: "no"}
+    - {type: FlowLink, from: fix, to: ci, line: Dotted}
+    - {type: FlowLink, from: ci, to: review, label: "yes"}
+    - {type: FlowLink, from: review, to: merge, line: Thick}
+```
+
+### Gantt chart
+
+```yaml
+description: Website relaunch plan.
+image: {width: 760, height: 360}
+root:
+  type: GanttChart
+  title: Relaunch
+  today: 2026-03-10
+  children:
+    - type: GanttSection
+      name: Design
+      children:
+        - {type: GanttTask, id: wire, name: Wireframes, start: 2026-03-02, duration: 5, status: Done}
+        - {type: GanttTask, id: look, name: Visual design, after: [wire], duration: 4, status: Active}
+    - type: GanttSection
+      name: Build
+      children:
+        - {type: GanttTask, id: dev, name: Development, after: [look], duration: 10}
+        - {type: GanttTask, name: Launch, after: [dev], milestone: true}
+```
+
 ### Class diagram
 
 ```yaml
@@ -916,6 +996,12 @@ State, activity and use case diagrams follow the same pattern: see
 | `does not apply to a Time axis` | Remove the `_format` of a `Time` axis; its ticks show dates. |
 | `not a whole number of groups` | `PlotBarGroups.values` needs one value per label in each group. |
 | `give err, or neg and pos` | `PlotErrorBars` needs `err`, or both `neg` and `pos`, as long as `ys`. |
+| `joins a FlowGroup with a node inside it` | A link from a group to its own node; link the inner nodes instead. |
+| `GanttTask.start is empty: give start, or after` | Every task needs a `start`, or `after: [ids]` of the tasks it waits for. |
+| `GanttTask.end is empty: give end, or a duration` | Give `end` or `duration` (or set `milestone: true`). |
+| `is not a date (YYYY-MM-DD ...` | Write dates as `2026-03-02` or `2026-03-02 14:00`, or use plain numbers throughout. |
+| `uses dates; a chart uses one or the other` | Mixed dates and numbers in one `GanttChart`. |
+| `makes a cycle` | Tasks wait for each other in a loop through `after`. |
 | `CSV row has N cells, the header has M` | A row is too short or too long, or a value with a comma is not quoted. |
 | `'>' joins the CSV lines` | Write `data: |`, not `data: >`. |
 | `needs 620 px of height, has 484` | The fixed sizes in a layout do not fit. Use `height: -1` on plots, reduce sizes, or enlarge the image. |

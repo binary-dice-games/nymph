@@ -4,8 +4,8 @@
 ///
 /// A diagram is a Begin/End scope. Between them, the program submits the
 /// diagram's nodes and edges every frame; End lays them out automatically
-/// (a layered layout after Graphviz's dot for class, state, activity and
-/// use case diagrams, a grid for sequence diagrams), scales the result to
+/// (a layered layout after Graphviz's dot for class, state, activity, use
+/// case diagrams and flowcharts, a grid for sequence diagrams), scales the result to
 /// fit the space reserved, and draws it on the window's draw list.
 ///
 ///     if (ImUml::BeginClassDiagram("Animals")) {
@@ -52,6 +52,8 @@ typedef int ImUmlActionKind; // -> enum ImUmlActionKind_
 typedef int ImUmlControlKind; // -> enum ImUmlControlKind_
 typedef int ImUmlSide; // -> enum ImUmlSide_
 typedef int ImUmlUseCaseLinkKind; // -> enum ImUmlUseCaseLinkKind_
+typedef int ImUmlFlowShape; // -> enum ImUmlFlowShape_
+typedef int ImUmlFlowLinkFlags; // -> enum ImUmlFlowLinkFlags_
 
 // ── Enums ────────────────────────────────────────────────────────────────────
 
@@ -209,6 +211,28 @@ enum ImUmlUseCaseLinkKind_ {
   ImUmlUseCaseLinkKind_Generalization,
 };
 
+/// @brief Flowchart node shapes (mermaid's flowchart shapes).
+enum ImUmlFlowShape_ {
+  ImUmlFlowShape_Box, ///< Rectangle: a process step.
+  ImUmlFlowShape_Rounded, ///< Rounded rectangle.
+  ImUmlFlowShape_Stadium, ///< Pill: start or end.
+  ImUmlFlowShape_Diamond, ///< Decision.
+  ImUmlFlowShape_Circle,
+  ImUmlFlowShape_Parallelogram, ///< Input or output.
+  ImUmlFlowShape_Hexagon, ///< Preparation.
+  ImUmlFlowShape_Cylinder, ///< Database or storage.
+  ImUmlFlowShape_Subroutine, ///< Rectangle with double sides: a predefined process.
+};
+
+/// @brief Flowchart link look (mermaid's -->, ---, -.->, ==>, <-->).
+enum ImUmlFlowLinkFlags_ {
+  ImUmlFlowLinkFlags_None = 0, ///< Solid line, arrow at `to`.
+  ImUmlFlowLinkFlags_Dotted = 1 << 0, ///< Dashed line.
+  ImUmlFlowLinkFlags_Thick = 1 << 1, ///< Twice the line weight.
+  ImUmlFlowLinkFlags_NoArrow = 1 << 2, ///< No arrowhead.
+  ImUmlFlowLinkFlags_BothArrows = 1 << 3, ///< Arrowheads at both ends.
+};
+
 // ── Style ────────────────────────────────────────────────────────────────────
 
 struct ImUmlStyle {
@@ -309,6 +333,8 @@ IMGUI_API void EndActivityDiagram();
 IMGUI_API bool
 BeginUseCaseDiagram(const char* title_id, const ImVec2& size = ImVec2(-1, 0), ImUmlDiagramFlags flags = 0);
 IMGUI_API void EndUseCaseDiagram();
+IMGUI_API bool BeginFlowchart(const char* title_id, const ImVec2& size = ImVec2(-1, 0), ImUmlDiagramFlags flags = 0);
+IMGUI_API void EndFlowchart();
 
 // ── Setup (after Begin*, before the first item) ──────────────────────────────
 
@@ -410,6 +436,20 @@ IMGUI_API void Actor(const char* id, const char* name = nullptr, ImUmlSide side 
 IMGUI_API void UseCase(const char* id, const char* name = nullptr);
 IMGUI_API void
 UseCaseLink(const char* from, const char* to, ImUmlUseCaseLinkKind kind = ImUmlUseCaseLinkKind_Association);
+
+// ── Flowcharts ───────────────────────────────────────────────────────────────
+
+/// @brief A node: `text` (lines split at '\n') in `shape`; `text` null
+///        shows the id.
+IMGUI_API void FlowNode(const char* id, const char* text = nullptr, ImUmlFlowShape shape = ImUmlFlowShape_Box);
+/// @brief A group (mermaid's subgraph): a titled box around the nodes,
+///        groups and notes submitted before EndFlowGroup(). Links may name
+///        a group: they end at its box.
+IMGUI_API void BeginFlowGroup(const char* id, const char* title = nullptr);
+IMGUI_API void EndFlowGroup();
+/// @brief A link from `from` to `to` (nodes or groups) with an optional
+///        `label` in the middle.
+IMGUI_API void FlowLink(const char* from, const char* to, const char* label = nullptr, ImUmlFlowLinkFlags flags = 0);
 
 // ── Queries ──────────────────────────────────────────────────────────────────
 

@@ -18,7 +18,7 @@
 
 namespace bdg::nymph::uml {
 
-enum class diagram_kind { class_diagram, sequence, state, activity, use_case };
+enum class diagram_kind { class_diagram, sequence, state, activity, use_case, flowchart };
 
 /// @brief The kind of the diagram whose ImUml scope is open, so `Note`
 ///        calls the matching ImUml function.
@@ -167,5 +167,6 @@ void register_sequence_diagram(registry& reg);
 void register_state_diagram(registry& reg);
 void register_activity_diagram(registry& reg);
 void register_usecase_diagram(registry& reg);
+void register_flowchart(registry& reg);
 
 } // namespace bdg::nymph::uml

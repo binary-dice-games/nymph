@@ -40,6 +40,7 @@ Diagrams in this project, the most used UML kinds (mermaid has each):
 | State | `StateDiagram` | `State` (composite when it has children), `Transition`, `Note` |
 | Activity | `ActivityDiagram` | `Action`, `ActivityControl`, `Flow`, `Note` |
 | Use case | `UseCaseDiagram` | `Actor`, `UseCase`, `UseCaseRelation`, `Note` |
+| Flowchart (added later; not UML) | `Flowchart` | `FlowNode`, `FlowGroup`, `FlowLink`, `Note` |
 
 Not in this project (section 10 lists where they would go): component,
 deployment, object, package, timing and communication diagrams; activity
@@ -323,6 +324,46 @@ root:
 Errors: `Include` / `Extend` not between use cases, `Association` not
 between an actor and a use case, `Generalization` between different kinds.
 
+### Flowchart
+
+Added after the UML diagrams, for what agents draw most that is not UML:
+processes, decision trees, dependency and architecture graphs (mermaid's
+`flowchart`). Same layout, fields and `Note` as the graph diagrams.
+
+```yaml
+root:
+  type: Flowchart
+  children:
+    - {type: FlowNode, id: start, text: Push, shape: Stadium}
+    - {type: FlowNode, id: ok, text: Tests pass?, shape: Diamond}
+    - type: FlowGroup
+      id: prod
+      title: Production
+      children:
+        - {type: FlowNode, id: deploy, text: Deploy}
+    - {type: FlowLink, from: start, to: ok}
+    - {type: FlowLink, from: ok, to: prod, label: "yes", line: Thick}
+```
+
+- `FlowNode`: `id`, `text` (default the id; `\n` breaks lines), `shape`
+  (`Box`, `Rounded`, `Stadium`, `Diamond`, `Circle`, `Parallelogram`,
+  `Hexagon`, `Cylinder`, `Subroutine`: mermaid's common shapes), `rank`.
+  A diamond is twice as wide as tall around its text; a circle's
+  diameter is its text box's diagonal.
+- `FlowGroup`: `id`, `title`; children are nodes, groups, links and notes.
+  A group with children is a cluster, exactly as a composite state (the
+  same code path: `Parent` and `OpenStates`); an empty one is a titled
+  box. Its inside is drawn halfway between the background and the node
+  fill, so its nodes stand out.
+- `FlowLink`: `from`, `to` (nodes or groups: a link to a group ends at
+  its box, as a transition to a composite state), `label`, `line`
+  (`Solid`, `Dotted`, `Thick`: twice the line weight), `arrow` (`End`,
+  `None`, `Both`), and the edge layout fields. mermaid's `-->`, `---`,
+  `-.->`, `==>`, `<-->`.
+
+Errors: a link between a group and a node inside it (as between a
+composite state and its states). Links may cross group borders freely.
+
 ### `Note`
 
 One element class for every diagram (slot `uml.note`): `text`, `attach`
@@ -398,6 +439,7 @@ text colour with each item, so ImGui's push stacks apply per item:
 | State | `BeginState(id, name, kind)`, `StateActivity(text)`, `EndState()` (states and transitions between them are nested children), `Transition(from, to, label)` |
 | Activity | `Action(id, text, kind)`, `ControlNode(id, kind, label)`, `Flow(from, to, guard)` |
 | Use case | `Actor(id, name, side)`, `UseCase(id, name)`, `UseCaseLink(from, to, kind)` |
+| Flowchart | `FlowNode(id, text, shape)`, `BeginFlowGroup(id, title)` / `EndFlowGroup()`, `FlowLink(from, to, label, flags)` |
 | Any graph | `Note(text, attach_ids, count)` |
 
 Ids are strings hashed with `ImHashStr` into `ImGuiID`s within the
@@ -575,11 +617,13 @@ diagram is a grid, not a graph:
 | `state_diagram.cpp` | `StateDiagram`, `State`, `Transition`. |
 | `activity_diagram.cpp` | `ActivityDiagram`, `Action`, `ActivityControl`, `Flow`. |
 | `usecase_diagram.cpp` | `UseCaseDiagram`, `Actor`, `UseCase`, `UseCaseRelation`. |
+| `flowchart.cpp` | `Flowchart`, `FlowNode`, `FlowGroup`, `FlowLink`. |
 | `uml.hpp` | `register_uml(registry&)` and the slot names. |
 
 Slots: each diagram has slot `figure` and accepts its item slot and
 `uml.note`: `uml.class.item`, `uml.sequence.item`, `uml.state.item`,
-`uml.activity.item`, `uml.usecase.item`. `Fragment` accepts
+`uml.activity.item`, `uml.usecase.item`, `uml.flow.item` (`FlowGroup`
+accepts it too). `Fragment` accepts
 `uml.sequence.item` and `uml.note`; `State` accepts `uml.state.item` and
 `uml.note`. Everything else accepts nothing.
 
