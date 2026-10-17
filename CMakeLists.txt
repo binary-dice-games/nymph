@@ -5,7 +5,7 @@ cmake_minimum_required(VERSION 3.14...3.28)
 project(
   Nymph
   VERSION 0.1.0
-  LANGUAGES CXX)
+  LANGUAGES C CXX)
 
 option(NYMPH_BUILD_TESTS "Build the nymph tests" ${PROJECT_IS_TOP_LEVEL})
 
@@ -31,6 +31,10 @@ function(nymph_ensure_submodules)
     endif()
   endif()
 endfunction()
+
+# ── third-party dependencies ──────────────────────────────────────────────────
+
+include(cmake/NymphDependencies.cmake)
 
 # ── nymph — core library ──────────────────────────────────────────────────────
 

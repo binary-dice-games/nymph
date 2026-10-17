@@ -9,3 +9,4 @@ target_include_directories(nymph PUBLIC
   ${CMAKE_CURRENT_SOURCE_DIR}
   ${CMAKE_CURRENT_BINARY_DIR}/generated
 )
+target_link_libraries(nymph PUBLIC nymph_imgui PRIVATE yaml nymph_stb)
