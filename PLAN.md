@@ -395,7 +395,7 @@ plus: a `Plot3D` inside a `Plot` is a slot error.
 (the files are `layout_elements.*`, not `elements/layout/`),
 `element_class::hints / measure / arrange`, `layout_figure()`;
 `tests/test_layout.cpp` (6 tests), `tests/test_layout_elements.cpp`
-(15 tests) and 5 samples in `tests/data/layout/`, all looked at.
+(14 tests) and 5 samples in `tests/data/layout/`, all looked at.
 Decisions: natural sizes are measured at the width the child will get,
 during arrange, rather than in a separate bottom-up pass (a wrapped
 label's height depends on it); a root's positive width/height is honoured
