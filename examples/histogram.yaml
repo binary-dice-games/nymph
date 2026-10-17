@@ -1,0 +1,18 @@
+nymph: 1
+description: Distribution of 40 API response times, in milliseconds.
+image: {width: 640, height: 400}
+root:
+  type: Plot
+  title: Response time
+  x_label: ms
+  y_label: requests
+  children:
+    - type: PlotHistogram
+      label: latency
+      values: $ms
+      bins: 8
+data:
+  ms: [118, 131, 96, 143, 110, 125, 88, 138, 121, 114,
+       102, 127, 119, 133, 109, 98, 122, 117, 141, 129,
+       112, 105, 124, 136, 115, 120, 93, 126, 111, 130,
+       107, 123, 116, 150, 101, 128, 113, 134, 119, 104]

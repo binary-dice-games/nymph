@@ -1,0 +1,13 @@
+description: A square pyramid as an indexed mesh.
+image: {width: 480, height: 360}
+root:
+  type: Plot3D
+  title: Pyramid
+  children:
+    - type: Plot3DMesh
+      label: pyramid
+      xs: [0, 1, 1, 0, 0.5]
+      ys: [0, 0, 1, 1, 0.5]
+      zs: [0, 0, 0, 0, 1]
+      indices: [0, 1, 4, 1, 2, 4, 2, 3, 4, 3, 0, 4, 0, 1, 2, 0, 2, 3]
+      fill_alpha: 0.8

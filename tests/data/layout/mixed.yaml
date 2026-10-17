@@ -1,0 +1,35 @@
+description: A dashboard-like page with a 3D plot, a pie and notes.
+image: {width: 800, height: 600}
+root:
+  type: VerticalLayout
+  spacing: 8
+  children:
+    - {type: SeparatorText, label: Overview}
+    - type: HorizontalLayout
+      height: -1
+      spacing: 8
+      children:
+        - type: Plot3D
+          title: Surface
+          width: -1
+          height: -1
+          colormap: Viridis
+          children:
+            - {type: Plot3DSurface, label: s, x_count: 3, y_count: 3, xs: [0, 1, 2, 0, 1, 2, 0, 1, 2], ys: [0, 0, 0, 1, 1, 1, 2, 2, 2], zs: [0, 1, 0, 1, 2, 1, 0, 1, 0]}
+        - type: Plot
+          title: Share
+          width: -1
+          height: -1
+          flags: Equal
+          x_flags: NoDecorations
+          y_flags: NoDecorations
+          x_min: 0
+          x_max: 1
+          y_min: 0
+          y_max: 1
+          children:
+            - {type: PlotPieChart, labels: "a\nb\nc", values: [50, 30, 20], normalize: true, label_fmt: "%.0f%%"}
+    - {type: Separator}
+    - type: Label
+      wrap: true
+      text: "Notes: the surface is a coarse 3x3 grid; the pie shows normalized shares of three categories. This text wraps to the width of the image."

@@ -1,0 +1,6 @@
+image: {width: 480, height: 320}
+root:
+  type: Plot
+  title: Sales by quarter
+  children:
+    - {type: PlotBars, label: sales, ys: [12, 18, 15, 22], bar_size: 0.6}

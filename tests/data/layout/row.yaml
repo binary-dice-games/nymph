@@ -1,0 +1,16 @@
+description: Two plots side by side, the right one twice as wide.
+image: {width: 720, height: 320}
+root:
+  type: HorizontalLayout
+  spacing: 8
+  children:
+    - type: Plot
+      title: North
+      width: -1
+      children:
+        - {type: PlotBars, label: north, ys: [3, 5, 4]}
+    - type: Plot
+      title: South
+      width: -2
+      children:
+        - {type: PlotBars, label: south, ys: [6, 2, 7], color: "#C0392B"}

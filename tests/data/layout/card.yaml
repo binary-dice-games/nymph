@@ -1,0 +1,14 @@
+image: {width: 480, height: 360, theme: dark}
+root:
+  type: VerticalLayout
+  card: true
+  padding: 16
+  spacing: 8
+  children:
+    - {type: SeparatorText, label: Summary}
+    - {type: Label, text: "Revenue grew 18% over the quarter while costs stayed flat.", wrap: true, text_color_dark: "#9DB8D9", text_color_light: "#1F4E8C"}
+    - type: Plot
+      height: -1
+      flags: NoLegend
+      children:
+        - {type: PlotLine, ys: [10, 11, 13, 12, 15, 18], color: "#2E8B57", line_weight: 2}

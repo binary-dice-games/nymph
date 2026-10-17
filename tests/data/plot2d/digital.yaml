@@ -1,0 +1,6 @@
+image: {width: 480, height: 320}
+root:
+  type: Plot
+  title: Door sensor
+  children:
+    - {type: PlotDigital, label: open, xs: [0, 1, 2, 3, 4, 5, 6, 7], ys: [0, 1, 1, 0, 0, 1, 0, 0]}

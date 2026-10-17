@@ -1,0 +1,36 @@
+nymph: 1
+description: Height against weight for two groups of 8 people.
+image: {width: 640, height: 440}
+root:
+  type: Plot
+  title: Height and weight
+  x_label: height (cm)
+  y_label: weight (kg)
+  legend_location: SouthEast
+  x_min: 155
+  x_max: 195
+  y_min: 50
+  y_max: 95
+  children:
+    - type: PlotScatter
+      label: group A
+      xs: $height_a
+      ys: $weight_a
+      marker: Circle
+      marker_size: 5
+    - type: PlotScatter
+      label: group B
+      xs: $height_b
+      ys: $weight_b
+      marker: Square
+      marker_size: 5
+data: |
+  height_a, weight_a, height_b, weight_b
+  158, 54, 166, 63
+  162, 57, 171, 68
+  165, 61, 174, 72
+  168, 60, 177, 75
+  171, 66, 180, 79
+  174, 69, 183, 82
+  177, 71, 186, 88
+  181, 76, 190, 91

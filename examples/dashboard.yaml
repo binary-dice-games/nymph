@@ -1,0 +1,67 @@
+nymph: 1
+description: >-
+  Greenhouse sensors on 12 March: temperature and humidity through the day,
+  next to the share of time each vent was open.
+image: {width: 900, height: 560}
+root:
+  type: VerticalLayout
+  spacing: 6
+  children:
+    - type: Label
+      text: Greenhouse sensors, 12 March
+    - type: Separator
+    - type: HorizontalLayout
+      spacing: 8
+      height: -1
+      children:
+        - type: VerticalLayout
+          spacing: 6
+          width: -2
+          children:
+            - type: Plot
+              title: Temperature
+              height: -1
+              y_label: C
+              flags: NoLegend
+              children:
+                - {type: PlotLine, label: temp, xs: $hour, ys: $temp, color: "#C0392B", line_weight: 2}
+            - type: Plot
+              title: Humidity
+              height: -1
+              x_label: hour
+              y_label: "%"
+              flags: NoLegend
+              children:
+                - {type: PlotShaded, label: humidity, xs: $hour, ys: $hum, color: "#2471A3", fill_alpha: 0.25}
+                - {type: PlotLine, label: humidity, xs: $hour, ys: $hum, color: "#2471A3", line_weight: 2}
+        - type: Plot
+          title: Vent open time
+          width: -1
+          height: -1
+          flags: Equal
+          legend_location: South
+          legend_flags: Horizontal
+          x_flags: NoDecorations
+          y_flags: NoDecorations
+          x_min: 0
+          x_max: 1
+          children:
+            - {type: PlotPieChart, labels: "north\nsouth\nroof", values: [45, 35, 20], label_fmt: "%.0f%%"}
+    - type: Label
+      text: "Source: station 14. Readings every 2 hours."
+      text_color_light: "#666666"
+      text_color_dark: "#AAAAAA"
+data: |
+  hour, temp, hum
+  0, 12.8, 73
+  2, 12.1, 75
+  4, 11.6, 77
+  6, 14.9, 66
+  8, 18.4, 58
+  10, 21.7, 50
+  12, 23.2, 47
+  14, 24.0, 45
+  16, 22.8, 48
+  18, 21.0, 52
+  20, 17.3, 61
+  22, 14.6, 68

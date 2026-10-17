@@ -1,0 +1,30 @@
+nymph: 1
+description: Tickets closed per team last sprint, against a target of 30.
+image: {width: 640, height: 400}
+root:
+  type: Plot
+  title: Tickets closed
+  x_label: team number
+  y_label: tickets
+  x_min: 0.5
+  x_max: 4.5
+  y_min: 0
+  y_max: 40
+  children:
+    - type: PlotBars
+      label: closed
+      xs: $team
+      ys: $closed
+      bar_size: 0.6
+    - type: PlotInfLines
+      label: target
+      values: [30]
+      horizontal: true
+      color: "#C0392B"
+      line_weight: 2
+data: |
+  team, closed
+  1, 31
+  2, 24
+  3, 37
+  4, 18

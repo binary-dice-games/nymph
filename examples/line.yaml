@@ -1,0 +1,32 @@
+nymph: 1
+description: CPU and memory use during the load test, per minute.
+image: {width: 800, height: 420}
+root:
+  type: Plot
+  title: Load test
+  x_label: minute
+  y_label: "%"
+  y_min: 0
+  y_max: 100
+  children:
+    - type: PlotLine
+      label: cpu
+      xs: $minute
+      ys: $cpu
+      color: "#C0392B"
+      line_weight: 2
+      marker: Circle
+    - type: PlotLine
+      label: memory
+      xs: $minute
+      ys: $mem
+      color: "#2471A3"
+      line_weight: 2
+data: |
+  minute, cpu, mem
+  0, 12, 40
+  1, 35, 42
+  2, 71, 47
+  3, 88, 55
+  4, 64, 58
+  5, 30, 57

@@ -1,0 +1,6 @@
+image: {width: 480, height: 320}
+root:
+  type: Plot
+  title: Votes
+  children:
+    - {type: PlotBarsH, label: votes, ys: [5, 9, 3, 7], color: "#2E8B57"}

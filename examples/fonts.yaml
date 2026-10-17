@@ -1,0 +1,54 @@
+nymph: 1
+description: >-
+  Quarterly revenue and costs in 2025, styled with embedded fonts: a serif
+  heading, an italic note, and monospaced numbers in the cost chart.
+image: {width: 760, height: 460, font: FiraSans-Regular.ttf, font_size: 15}
+root:
+  type: VerticalLayout
+  spacing: 6
+  children:
+    - {type: Label, text: Quarterly report 2025, font: PT_Serif-Web-Bold.ttf, font_size: 28, text_color: "#1F3A5F"}
+    - type: Label
+      text: "All figures in kUSD. Source: finance export, 3 January 2026."
+      font: FiraSans-Italic.ttf
+      text_color_light: "#666666"
+      text_color_dark: "#AAAAAA"
+    - type: HorizontalLayout
+      spacing: 8
+      height: -1
+      children:
+        - type: Plot
+          title: Revenue
+          width: -1
+          height: -1
+          x_label: quarter
+          x_min: 0.5
+          x_max: 4.5
+          y_min: 0
+          y_max: 200
+          flags: NoLegend
+          children:
+            - {type: PlotLine, label: revenue, xs: $quarter, ys: $revenue, line_weight: 2, marker: Circle}
+            - {type: PlotText, text: record, x: 4, y: 182, font: FiraSans-Bold.ttf, text_color: "#C0392B"}
+        - type: Plot
+          title: Costs
+          width: -1
+          height: -1
+          x_label: quarter
+          x_min: 0.5
+          x_max: 4.5
+          y_min: 0
+          y_max: 200
+          flags: NoLegend
+          font: FiraMono-Regular.ttf
+          text_color: "#2471A3"
+          children:
+            - {type: PlotBars, label: costs, xs: $quarter, ys: $cost, bar_size: 0.6}
+    - {type: SeparatorText, label: Fonts, font: FiraSans-Bold.ttf, font_size: 13}
+    - {type: Label, text: "PT Serif Bold, Fira Sans (regular, italic, bold) and Fira Mono, embedded in nymph.", font_size: 13}
+data: |
+  quarter, revenue, cost
+  1, 121, 96
+  2, 138, 101
+  3, 152, 108
+  4, 171, 112

@@ -1,0 +1,12 @@
+description: Height against weight for twelve people.
+image: {width: 480, height: 320}
+root:
+  type: Plot
+  title: Height and weight
+  x_label: cm
+  y_label: kg
+  children:
+    - {type: PlotScatter, label: people, xs: $h, ys: $w, marker: Diamond, marker_size: 5}
+data:
+  h: [158, 162, 165, 168, 170, 172, 175, 177, 180, 183, 186, 190]
+  w: [52, 58, 61, 60, 66, 70, 72, 71, 78, 82, 85, 91]

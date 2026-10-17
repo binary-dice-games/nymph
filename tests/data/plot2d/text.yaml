@@ -1,0 +1,7 @@
+image: {width: 480, height: 320}
+root:
+  type: Plot
+  title: Annotated peak
+  children:
+    - {type: PlotLine, label: signal, ys: [1, 3, 7, 4, 2]}
+    - {type: PlotText, text: peak, x: 2, y: 6.5, offset_x: 24}

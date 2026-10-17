@@ -1,0 +1,25 @@
+description: Temperature and humidity over a day.
+image: {width: 640, height: 560}
+root:
+  type: VerticalLayout
+  spacing: 6
+  children:
+    - {type: Label, text: "Temperature and humidity, 12 March", text_color: "#555555"}
+    - type: Plot
+      title: Temperature
+      height: -1
+      children:
+        - {type: PlotLine, label: temp, xs: $hour, ys: $temp}
+    - type: Plot
+      title: Humidity
+      height: -1
+      children:
+        - {type: PlotShaded, label: humidity, xs: $hour, ys: $hum}
+    - {type: Separator}
+    - {type: Label, text: "Source: station 14.", wrap: true}
+data: |
+  hour, temp, hum
+  0, 12.8, 73
+  6, 14.9, 66
+  12, 23.2, 47
+  18, 21.0, 52

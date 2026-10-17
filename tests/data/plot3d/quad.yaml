@@ -1,0 +1,6 @@
+image: {width: 480, height: 360}
+root:
+  type: Plot3D
+  title: A tilted square
+  children:
+    - {type: Plot3DQuad, label: square, xs: [0, 1, 1, 0], ys: [0, 0, 1, 1], zs: [0, 0, 1, 1], color: "#2E8B57"}

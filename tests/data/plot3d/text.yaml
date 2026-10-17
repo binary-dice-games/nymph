@@ -1,0 +1,7 @@
+image: {width: 480, height: 360}
+root:
+  type: Plot3D
+  title: Labelled point
+  children:
+    - {type: Plot3DScatter, label: origin, xs: [0, 1], ys: [0, 1], zs: [0, 1]}
+    - {type: Plot3DText, text: summit, x: 1, y: 1, z: 1, offset_y: -10}
