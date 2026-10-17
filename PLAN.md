@@ -57,8 +57,8 @@ texel lookup or white-pixel assumption.
   id; `apply(ImTextureData&)` for `WantCreate` / `WantUpdates` /
   `WantDestroy`, setting `TexID` and status.
 - `src/render/soft_rasterizer.hpp`/`.cpp`: `rasterize(const ImDrawData&,
-  const texture_store&, ImU32 clear_color, raster_options = {}) -> image`. General path first
-  (fixed-point edges, top-left rule, affine interpolation, bilinear
+  const texture_store&, ImU32 clear_color, raster_options = {}) ->
+  image`. General path first (fixed-point edges, top-left rule, affine interpolation, bilinear
   sampling, integer blending, clip rectangles, `IdxOffset` / `VtxOffset`,
   `FramebufferScale`), then the four fast paths. The header credits
   imgui_sw as the reference.
