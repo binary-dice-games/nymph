@@ -5,6 +5,7 @@
 
 #include <imgui.h>
 #include "render/image_options.hpp"
+#include "schema/node.hpp"
 
 namespace bdg::nymph {
 
@@ -24,8 +25,7 @@ struct rect {
 ///        figure's full-display ImGui window, with the private ImGui, ImPlot
 ///        and ImPlot3D contexts current.
 ///
-/// Element drawing (`draw_children`, per-node rectangles) is added by the
-/// element and layout steps of the plan; this is the frame-level part.
+/// Per-node rectangles are added by the layout step of the plan.
 class draw_context {
  public:
   explicit draw_context(const image_options& options) : options_(options) {}
@@ -39,6 +39,9 @@ class draw_context {
   float scale() const {
     return static_cast<float>(options_.scale);
   }
+
+  /// @brief Draws each child of `n`, in order, through its class's draw().
+  void draw_children(const node& n);
 
   /// @brief The image minus `image.padding` on every side: where the root
   ///        element goes.

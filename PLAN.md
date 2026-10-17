@@ -253,6 +253,15 @@ positions.
 
 ### 7. Element schema and registry
 
+*Result: done.* `src/schema/` (`value`, `name_table`, `field_desc` with
+builder functions, `node`, `element_class`, `registry`, `convert`) and
+`draw_context::draw_children`; `tests/test_schema.cpp` (16 tests). The
+layout hooks shown in DESIGN.md (`measure`, `hints`, `arrange`) are left
+to step 11, where they are first used. Typing rules settled here: yes/no
+and on/off are booleans; an enumeration accepts only its own values; NaN
+and infinity are not numbers; a quoted number gets a "remove the quotes"
+hint.
+
 **Goal:** element classes can be declared and looked up, and YAML values
 convert to field values by field type.
 

@@ -298,35 +298,61 @@ NaN); `find_column()` resolves a name, else a 1-based position.
 enum class field_type { boolean, integer, number, text, color,
                         enumeration, flags, number_array, integer_array };
 
+// value = variant<bool, int64_t, double, std::string,
+//                 std::vector<double>, std::vector<int64_t>>
 struct field_desc {
   std::string name;
   field_type type;
-  value default_value;            // value = variant<bool, int64_t, double,
-                                  //   std::string, vector<double>, vector<int64_t>>
-  std::string description;        // shown by `nymph schema`
-  const name_table* names;        // enumeration / flags names, or null
-  std::optional<range> limits;
+  value default_value;
+  std::string description;           // shown by `nymph schema`
+  const name_table* names;           // enumeration / flags names, or null
+  std::optional<value_range> limits; // integer / number
+};
+// Builders keep registrations short: bool_field, int_field, number_field,
+// text_field, color_field, enum_field, flags_field, numbers_field,
+// integers_field.
+
+struct node {                        // one bound element
+  const element_class* cls;
+  std::vector<value> values;         // values[i] is field i
+  std::vector<node> children;
+  int line, column;
+  template <class T> const T& get(size_t i) const;
 };
 
 class element_class {
  public:
+  element_class(name, slot, accepts, fields, description);
   std::string_view name() const;          // "PlotLine"
   std::string_view slot() const;          // what it is: "plot2d.item"
-  std::span<const std::string_view> accepts() const;  // child slots, e.g. {"plot2d.item"}
+  std::span<const std::string> accepts() const;  // child slots
   std::span<const field_desc> fields() const;
-  /// Natural size (`figure` slot only): the size of a 0 hint.
-  virtual ImVec2 measure(const node& n, layout_context& lc,
-                         float avail_width) const;
-  /// Size hints (`figure` slot only); default reads `width` / `height`
-  /// fields if the class has them, else {0, 0}.
-  virtual size_hints hints(const node& n) const;
-  /// Arrange the children inside `rect` (containers only).
-  virtual void arrange(const node& n, layout_context& lc, ImRect rect) const;
+  int field_index(std::string_view) const;
+  node make_node() const;                 // every field at its default
   virtual void draw(const node& n, draw_context& dc) const = 0;
+  // Added with the layout engine (plan step 11): measure(), hints(),
+  // arrange() for `figure` elements.
 };
 ```
 
-- **`registry`**: name → `element_class`. Built explicitly by
+`name_table` holds an enumeration's or flag set's names in order:
+`parse_flags("A|B")`, `format_enum()`, `format_flags()` (single bits are
+preferred, so tables list them before composites, as wish's do).
+
+`convert_value(yaml_node, field_desc, "Type.field") -> value` applies
+section 3's typing rules: booleans are unquoted `true/false`, `yes/no`,
+`on/off`; integers are unquoted whole numbers in the 32-bit range; numbers
+are unquoted and parsed with `std::from_chars` (no locale; NaN and
+infinity are refused); a quoted number or boolean is an error whose
+message says "remove the quotes"; text keeps any scalar as written and
+`$$` at its start stands for `$`; an enumeration takes a name or one of
+its values, never an arbitrary integer; flags take `A|B` or any integer;
+an unquoted empty, `~` or `null` item in a number list is NaN (a gap).
+Limits are checked for integers and numbers. Every error is positioned at
+the value, or at the list item, and names `Type.field`.
+
+- **`registry`**: name → `element_class`; `add()` throws
+  `std::logic_error` for a duplicate class or field name. Built explicitly by
   `register_builtin_elements(registry&)`, which calls
   `register_plot2d(registry&)`, `register_plot3d(registry&)` and
   `register_layout(registry&)`. A plain

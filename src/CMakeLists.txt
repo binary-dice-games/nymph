@@ -10,6 +10,7 @@ add_library(nymph STATIC
   render/soft_rasterizer.cpp
   render/image_options.hpp
   render/draw_context.hpp
+  render/draw_context.cpp
   render/figure_renderer.hpp
   render/figure_renderer.cpp
   core/limits.hpp
@@ -20,6 +21,16 @@ add_library(nymph STATIC
   document/yaml_doc.cpp
   document/table.hpp
   document/table.cpp
+  schema/value.hpp
+  schema/name_table.hpp
+  schema/name_table.cpp
+  schema/field_desc.hpp
+  schema/node.hpp
+  schema/element_class.hpp
+  schema/registry.hpp
+  schema/schema.cpp
+  schema/convert.hpp
+  schema/convert.cpp
 )
 add_library(nymph::nymph ALIAS nymph)
 target_include_directories(nymph PUBLIC
