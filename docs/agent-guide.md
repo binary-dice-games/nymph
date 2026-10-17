@@ -17,7 +17,10 @@ sentence: trends over time, comparisons, distributions, proportions.
 
 If `nymph` is not on `PATH`, use the full path to the binary (in a source
 checkout: `build/app/nymph`). It needs no window, display or GPU and
-takes well under a second.
+takes well under a second. It uses the GPU through OpenGL when there is
+one and falls back to the CPU silently; nothing to configure. Add
+`--rasterizer software` when two images must compare byte for byte (for
+example across machines): OpenGL output can differ slightly between GPUs.
 
 | Command | Result |
 |---|---|

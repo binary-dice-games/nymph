@@ -14,8 +14,10 @@ namespace bdg::nymph {
 ///
 /// Commands: `<in> [-o <out>]` (render YAML, or extract from a PNG, chosen
 /// by the input's first bytes), `render`, `extract`, `check`,
-/// `schema [<Type>] [--markdown]`, `fonts [--licenses]`, `--version`,
-/// `--help`. `-` as input is
+/// `schema [<Type>] [--markdown]`, `fonts [--licenses]`, `rasterizers`,
+/// `--version`, `--help`. Rendering takes `--rasterizer software|opengl`
+/// (default `opengl`, falling back to software when OpenGL cannot be used;
+/// spec/02_opengl_rasterizer/DESIGN.md section 4). `-` as input is
 /// `in`; `-o -` writes to `out`. Files are written through a temporary file
 /// and a rename, so a failure never leaves a partial or changed output.
 ///
@@ -29,5 +31,16 @@ namespace bdg::nymph {
 ///         source) or `nymph: <file>: <message>` on `err`; 2 with the usage
 ///         for bad arguments.
 int run_cli(std::span<const std::string_view> args, std::istream& in, std::ostream& out, std::ostream& err);
+
+struct renderer_test_options;
+
+/// @brief run_cli() with the OpenGL renderer created with `gl_options`
+///        (tests: simulate a machine without OpenGL, allow llvmpipe).
+int run_cli(
+    std::span<const std::string_view> args,
+    std::istream& in,
+    std::ostream& out,
+    std::ostream& err,
+    const renderer_test_options& gl_options);
 
 } // namespace bdg::nymph

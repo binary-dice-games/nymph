@@ -10,6 +10,7 @@
 #include "render/draw_context.hpp"
 #include "render/image.hpp"
 #include "render/image_options.hpp"
+#include "render/raster_backend.hpp"
 
 namespace bdg::nymph {
 
@@ -37,15 +38,24 @@ inline constexpr float kFigureFontSize = 16.0f;
 /// @param options Size, scale, theme and padding; validated here.
 /// @param draw    Called once per frame inside a borderless window covering
 ///                the display, with no window padding.
+/// @param backend Draws the last frame; its name() is ImGui's
+///                `BackendRendererName` while the frames run.
 /// @return The opaque RGBA image.
 /// @throws std::invalid_argument if an option is out of range or the theme
-///         is unknown; std::runtime_error from the rasterizer; anything
-///         `draw` throws.
+///         is unknown; std::runtime_error (raster_unavailable included,
+///         for the caller to fall back) from the backend; anything `draw`
+///         throws.
+image render_frames(const image_options& options, const draw_fn& draw, raster_backend& backend);
+
+/// @brief render_frames() with the software rasterizer.
 image render_frames(const image_options& options, const draw_fn& draw);
 
 /// @brief Renders a bound figure: render_frames() with `f.image`, drawing
 ///        `f.root` in the content rectangle (the image minus padding).
 /// @throws as render_frames().
+image render_figure(const figure& f, raster_backend& backend);
+
+/// @brief render_figure() with the software rasterizer.
 image render_figure(const figure& f);
 
 /// @brief Runs one frame of `f` with only the layout pass: every `figure`

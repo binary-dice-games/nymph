@@ -12,6 +12,7 @@
 #include <string>
 #include "fonts/embedded_fonts.hpp"
 #include "layout/layout.hpp"
+#include "render/raster_backend.hpp"
 #include "render/soft_rasterizer.hpp"
 #include "render/text_style.hpp"
 #include "render/texture_store.hpp"
@@ -110,12 +111,12 @@ class context_scope {
 };
 
 /// Configures the current (fresh) context as nymph's backend.
-void configure(const theme& t) {
+void configure(const theme& t, const char* renderer_name) {
   ImGuiIO& io = ImGui::GetIO();
   io.IniFilename = nullptr;
   io.LogFilename = nullptr;
   io.BackendPlatformName = "nymph";
-  io.BackendRendererName = "nymph_soft_rasterizer";
+  io.BackendRendererName = renderer_name;
   io.BackendFlags |= ImGuiBackendFlags_RendererHasTextures | ImGuiBackendFlags_RendererHasVtxOffset;
   ImGui::GetPlatformIO().DrawCallback_ResetRenderState = &reset_render_state_callback;
 
@@ -198,10 +199,10 @@ void run_frames(
 
 } // namespace
 
-image render_frames(const image_options& options, const draw_fn& draw) {
+image render_frames(const image_options& options, const draw_fn& draw, raster_backend& backend) {
   check_options(options);
   context_scope scope;
-  configure(*find_theme(options.theme));
+  configure(*find_theme(options.theme), backend.name());
   texture_store textures;
   draw_context ctx(options);
   load_fonts(ctx);
@@ -209,20 +210,33 @@ image render_frames(const image_options& options, const draw_fn& draw) {
 
   ImVec4 bg = ImGui::GetStyle().Colors[ImGuiCol_WindowBg];
   bg.w = 1.0f; // the image is opaque
-  return rasterize(*ImGui::GetDrawData(), textures, ImGui::ColorConvertFloat4ToU32(bg));
+  return backend.rasterize(*ImGui::GetDrawData(), textures, ImGui::ColorConvertFloat4ToU32(bg));
+}
+
+image render_frames(const image_options& options, const draw_fn& draw) {
+  software_backend software;
+  return render_frames(options, draw, software);
+}
+
+image render_figure(const figure& f, raster_backend& backend) {
+  return render_frames(
+      f.image,
+      [&](draw_context& dc) {
+        layout_root(f.root, dc);
+        dc.draw_node(f.root);
+      },
+      backend);
 }
 
 image render_figure(const figure& f) {
-  return render_frames(f.image, [&](draw_context& dc) {
-    layout_root(f.root, dc);
-    dc.draw_node(f.root);
-  });
+  software_backend software;
+  return render_figure(f, software);
 }
 
 std::unordered_map<const node*, rect> layout_figure(const figure& f) {
   check_options(f.image);
   context_scope scope;
-  configure(*find_theme(f.image.theme));
+  configure(*find_theme(f.image.theme), "nymph_soft_rasterizer");
   texture_store textures;
   draw_context ctx(f.image);
   load_fonts(ctx);

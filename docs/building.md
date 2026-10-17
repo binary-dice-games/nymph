@@ -19,7 +19,7 @@ optional.
 
 | Submodule | Version | Used for |
 |-----------|---------|----------|
-| `extern/imgui` | v1.92.9b | Frame generation and fonts (no backend: nymph rasterizes on the CPU) |
+| `extern/imgui` | v1.92.9b | Frame generation and fonts (no ImGui backend: nymph has its own CPU and OpenGL rasterizers) |
 | `extern/implot` | v1.0 | 2D plots |
 | `extern/implot3d` | v0.4 | 3D plots |
 | `extern/libyaml` | 0.2.5 | Parsing the YAML source |
@@ -73,6 +73,36 @@ Outputs:
 |--------|---------|-------------|
 | `NYMPH_BUILD_TESTS` | `ON` when top-level | Build the GoogleTest suite |
 | `NYMPH_FONTS_DIR` | `fonts/` | Folder whose `*.ttf` / `*.otf` fonts and `*.txt` licences are compiled into nymph |
+| `NYMPH_OPENGL` | `ON` | Build the optional OpenGL rasterizer. `OFF` leaves only the software rasterizer; `--rasterizer opengl` then falls back with the reason "nymph was built without OpenGL support". |
+
+---
+
+## OpenGL rasterizer
+
+Building it needs **no OpenGL package, header or SDK**: nymph declares the
+few GL, EGL and WGL functions it uses itself and opens the libraries at
+run time, so the executable links none of them (the `nymph_no_gl_linkage`
+test checks this with `objdump` or `dumpbin`) and runs on machines with no
+OpenGL at all.
+
+At run time it uses, when present:
+
+- **Linux:** `libEGL.so.1` (headless: no X or Wayland display needed) and
+  a GPU driver with OpenGL 3.3. Mesa's CPU drivers (llvmpipe, softpipe)
+  are not used: they are slower than nymph's own rasterizer.
+- **Windows / MSYS2:** `opengl32.dll` and a GPU driver with OpenGL 3.3. A
+  remote desktop session or VM without a GPU driver falls back to the
+  software rasterizer.
+
+`nymph rasterizers` prints whether OpenGL is available and, if not, why.
+
+The OpenGL tests run on any OpenGL 3.3 device, Mesa llvmpipe included, and
+skip (with the reason) when there is none. To run them on a Linux machine
+without a GPU, install Mesa's EGL, e.g. on Debian / Ubuntu:
+
+```sh
+sudo apt install libegl1 libegl-mesa0 libgl1-mesa-dri
+```
 
 ---
 
