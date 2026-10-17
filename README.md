@@ -7,8 +7,8 @@ ImGui, ImPlot and ImPlot3D and rasterizes them on the CPU with its own
 software rasterizer: no GPU, window or display needed.
 It is meant for AI agents that need to show information as a chart.
 
-It is a standalone version of wish's `nymph` module, with no wish or bison
-dependency, and reads images made by wish's module too. **Status: first
+It started as wish's `nymph` module and is now standalone, with no wish or
+bison dependency (and no compatibility with wish's format). **Status: first
 version complete on Linux**; MSYS2 and MSVC builds are not yet verified
 (see [PLAN.md](PLAN.md)).
 
@@ -86,7 +86,7 @@ carries its source: `bdg::nymph::extract_source(png)` returns it.
 | Concept | Description |
 |---------|-------------|
 | **Source** | One YAML document: `description`, `image` options, a `root` element tree, `data`, and optional `source`. |
-| **Elements** | `Plot` / `Plot3D` and their series, plus `VerticalLayout` / `HorizontalLayout`, `Spring`, `Label` and separators to combine them, with the same fields as wish's widgets. New types register a class; see [DESIGN.md](DESIGN.md#9-extension-points). |
+| **Elements** | `Plot` / `Plot3D` and their series, plus `VerticalLayout` / `HorizontalLayout`, `Spring`, `Label` and separators to combine them. New types register a class; see [DESIGN.md](DESIGN.md#9-extension-points). |
 | **Data** | `data` holds one table, or several named tables, as CSV text or columns. |
 | **Column references** | `$name` / `$2` in a field takes data from a column; `$table:name` from a named table. |
 | **Provenance** | An optional `source` key records the prompt, query or code that made the data; it travels in the PNG for the next edit. |

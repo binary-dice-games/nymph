@@ -486,7 +486,12 @@ after the gtest test):
 - `check` prints nothing on a valid source.
 - `schema PlotLine` lists `xs`, `ys` and `color`; `schema Nope` exits 1.
 
-### 13. wish nymph images
+### 13. wish nymph images (removed)
+
+*Removed afterwards:* wish compatibility is not a goal, so
+`src/document/legacy`, `tests/test_legacy.cpp` and `tests/data/legacy/`
+were deleted and `extract_source()` returns the embedded text as it is.
+The record below is kept for history.
 
 *Result: done.* `src/document/legacy` (`is_wish_source`,
 `convert_wish_source`), used by `extract_source()`; wish's three test
@@ -633,8 +638,8 @@ code that produced its data, kept verbatim through the PNG round trip.
       nothing.
 - [x] The `nymph` binary links no SDL, OpenGL, wish or bison symbols
       (`nm` / `dumpbin` check).
-- [x] Every element type and field wish nymph accepted (2D and 3D plots,
-      layouts, `Spring`, `Label`, `Separator`) is accepted with the same
-      name and default, and wish's three test charts render after
-      `extract` converts them.
+- [x] The element types of wish nymph (2D and 3D plots, layouts,
+      `Spring`, `Label`, `Separator`) exist with their fields. (Reading
+      wish nymph images was dropped after step 13; wish compatibility is
+      not a goal.)
 - [x] README, `docs/`, CHANGELOG and DESIGN.md match the code.

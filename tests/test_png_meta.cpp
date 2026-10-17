@@ -9,6 +9,7 @@
 #include <string>
 #include <vector>
 #include "core/limits.hpp"
+#include "nymph.hpp"
 #include "png/png_meta.hpp"
 
 // A private stb_image to decode pixels, test-only and with internal linkage.
@@ -88,6 +89,14 @@ TEST(png_meta, SmallSourceRoundTripsAndStaysReadable) {
   EXPECT_EQ(*back, source);
   // Stored as is, so plain text tools can find it in the file.
   EXPECT_NE(as_string(png).find(source), std::string::npos);
+}
+
+TEST(png_meta, ExtractSourceReturnsAnyEmbeddedTextVerbatim) {
+  // A wish nymph three-part text is not converted: nymph does not read
+  // wish's format.
+  const std::string wish_text = "A chart.\n--\nroot: {type: Plot}\n--\nv\n1\n";
+  const bytes_t png = encode_png(gradient(4, 4), wish_text, "");
+  EXPECT_EQ(extract_source(png).value_or(""), wish_text);
 }
 
 TEST(png_meta, LineEndingsAndMissingFinalNewlineArePreserved) {

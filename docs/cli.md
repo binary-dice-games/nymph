@@ -55,13 +55,6 @@ renamed over the target only once it is complete, so an existing output
 file is left as it was. A symbolic link as `-o` is followed, and a
 device or pipe (`-o /dev/null`) is written directly.
 
-## Images made by wish
-
-PNGs made by wish's nymph module work too: `nymph image.png` prints their
-source converted to nymph's YAML (description, format and CSV data become
-`description`, the same `image` / `root` keys, and `data: |`), and
-`render` / `check` use that YAML.
-
 ## Metadata survives only exact copies
 
 The YAML is stored in the PNG as a text chunk. Tools that re-encode images

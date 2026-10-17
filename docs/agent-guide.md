@@ -54,8 +54,7 @@ To change an existing nymph image when you no longer have its source, run
 `nymph chart.png -o chart.yaml`, edit the YAML, and render again. If the
 YAML has a `source` key, read it first: it says how the data was made, so
 you can rerun that prompt, query or code for fresh data instead of
-guessing. Keep `source` up to date when you change the data. PNGs made
-by wish's nymph module work too: their source comes back as nymph YAML.
+guessing. Keep `source` up to date when you change the data.
 
 ## Source format
 

@@ -3,7 +3,6 @@
 /// @brief Library-wide entry points.
 #include "nymph.hpp"
 #include "document/bind.hpp"
-#include "document/legacy.hpp"
 #include "elements/register_builtin.hpp"
 #include "png/png_meta.hpp"
 #include "render/figure_renderer.hpp"
@@ -27,14 +26,7 @@ void check_source(std::string_view source) {
 }
 
 std::optional<std::string> extract_source(std::span<const uint8_t> png) {
-  std::optional<std::string> source = read_source(png);
-  if (source) {
-    // A wish nymph image: give back the equivalent nymph YAML.
-    if (std::optional<std::string> converted = convert_wish_source(*source)) {
-      return converted;
-    }
-  }
-  return source;
+  return read_source(png);
 }
 
 } // namespace bdg::nymph

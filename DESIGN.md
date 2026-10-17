@@ -13,8 +13,10 @@ own source file. Its main users are AI agents that need to show
 information as a chart: they write YAML, run one command, and reference the
 PNG from markdown or a reply.
 
-It is the `bdg/dev/nymph` module of wish (`wish/modules/bdg/dev/nymph/`),
-extracted into a standalone program:
+It started as the `bdg/dev/nymph` module of wish
+(`wish/modules/bdg/dev/nymph/`), extracted into a standalone program. It
+is not compatible with wish: it neither reads wish nymph's three-part
+sources nor promises to keep wish's schema. Compared with wish nymph:
 
 - **No wish, no bison.** The element schema, the YAML binding and the
   plot drawing that wish provides through its widget registry are
@@ -45,11 +47,11 @@ element types and direct drawing commands on an `ImDrawList`.
    bytes: no clock, no input, no threads in the rasterizer. Which pixels a
    triangle covers is decided in integer arithmetic, so it does not vary
    between compilers either.
-4. **Compatible with wish nymph.** The `image` options, element types,
-   field names, defaults and `$column` references are wish nymph's, so a
-   wish nymph chart moves to this tool by changing only its outer
-   structure (section 3), and wish nymph images can be read back (section
-   6, `extract`).
+4. **A familiar schema, not a compatible one.** The `image` options,
+   element types, field names, defaults and `$column` references start
+   from wish nymph's, which were tried with agents. They are nymph's own
+   now: they may change where nymph benefits, and wish nymph sources and
+   images are not read.
 5. **Strict.** An unknown key, field, type, enum name or column is an
    error, never silently ignored: an agent cannot see a wrong image.
 6. **Small and self-contained.** One static executable built from
@@ -166,7 +168,7 @@ data: |
 
 ### Layout
 
-Layouts follow wish's size hints, so wish nymph sources keep their look:
+Layouts use wish's size hints:
 
 - **Hints.** Every element in a layout has a `width` and a `height`
   (layouts and plots have the fields; `Label`, `Separator`,
@@ -213,9 +215,8 @@ Layouts follow wish's size hints, so wish nymph sources keep their look:
 wish layout fields that need a live window (`scroll`) are not part of the
 schema.
 
-Differences from wish's 2D elements, all stricter or additive (a source
-that renders in wish nymph renders the same here, or gets an error where
-wish drew something silently wrong):
+Differences from wish's 2D elements, all stricter or additive (where
+wish drew something silently wrong, nymph reports an error):
 
 - Rules between fields are errors: an empty series, `xs` and `ys` (or
   `ys2`) of different lengths, `PlotHeatmap.values` not `rows x cols`
@@ -687,8 +688,8 @@ struct error : std::runtime_error { int line; int column; };
 std::vector<uint8_t> render_png(std::string_view source);
 /// Validate only; throws error.
 void check_source(std::string_view source);
-/// The source a nymph PNG carries (converted to YAML if it is a wish nymph
-/// three-part source); nullopt if bytes is not a nymph PNG.
+/// The source a nymph PNG carries, byte for byte; nullopt if bytes is
+/// not a nymph PNG.
 std::optional<std::string> extract_source(std::span<const uint8_t> png);
 }
 ```
@@ -716,8 +717,8 @@ in-process; `app/main.cpp` only forwards `argv` and the standard streams
 **PNG → YAML** (`nymph chart.png`):
 
 1. Read the file; `read_source()`. No `nymph` chunk → "not a nymph image".
-2. If the text is a wish nymph three-part source (section 6), convert it.
-3. Write it to stdout, or to `-o` through the same temp-and-rename.
+2. Write the text verbatim to stdout, or to `-o` through the same
+   temp-and-rename.
 
 ## 6. Public Contract: the command line
 
@@ -739,17 +740,10 @@ Exit code 0 on success, 1 on failure with one line on stderr:
 `nymph: <file>: <message>` otherwise; 2 with the usage text for bad
 arguments.
 
-**wish nymph images.** wish stores a three-part text (description, `--`,
-format YAML, `--`, CSV) in the same chunk. `extract_source()` (and so
-`extract`, `render` and `check` on a PNG) recognises it — two separator
-lines `--`, and the text is not a YAML mapping with a `root` key, so a
-nymph source with `--` lines inside a block scalar is never mistaken for
-one — and converts it mechanically (`src/document/legacy`): `nymph: 1`,
-`description: |-` with the first part, the format part verbatim, `data: |`
-with the CSV indented (an indentation indicator is added when the first
-line starts with a space; CRLF becomes LF in the blocks; empty parts are
-left out). As in wish, only the first two separator lines split. wish's
-three test charts convert and render unchanged.
+**wish nymph images** use the same chunk keyword but hold a three-part
+text (description, `--`, format YAML, `--`, CSV). nymph does not convert
+them: `extract` prints that text as it is, and `render` / `check` report
+it as an invalid source.
 
 ## 7. Design Decisions
 
@@ -791,7 +785,7 @@ three test charts convert and render unchanged.
   parser and one position scheme instead of three. The CSV keeps its
   compact form inside a block scalar, and the columns-as-mapping form lets
   a program emit data without writing CSV. Cost: data lines are indented
-  under `data: |`, and wish nymph texts need the conversion in section 6.
+  under `data: |`.
 - **Named tables inside `data`, told apart by value kind.** Charts often
   combine data of different shapes (a time series and a summary), which
   one rectangular table forces into padding with empty cells. Keeping
@@ -811,7 +805,7 @@ three test charts convert and render unchanged.
   descriptions, and that is all; a fixed `std::vector<value>` per node
   indexed by field position is enough and keeps `draw()` free of map
   lookups. The schema data (names, defaults, descriptions, flag tables)
-  is copied from wish's registrations so that Goal 4 holds.
+  started as a copy of wish's registrations (Goal 4).
 - **Slots, not a fixed allow list.** wish nymph had an allow list because
   wish's registry contains widgets that read files. Here the registry
   contains only what nymph registers, so the registry is the allow list;
