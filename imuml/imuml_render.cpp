@@ -230,3 +230,148 @@ void ImUml::RenderCardinality(ImDrawList* dl, ImUmlCardinality cardinality, cons
     bar(size * 1.1f);
   }
 }
+
+void ImUml::RenderDeviceIcon(ImDrawList* dl, ImUmlDeviceKind kind, const ImVec2& a, const ImVec2& b, ImU32 line,
+                             ImU32 fill, float lw) {
+  const float w = b.x - a.x, h = b.y - a.y;
+  const ImVec2 c((a.x + b.x) * 0.5f, (a.y + b.y) * 0.5f);
+  auto px = [&](float fx, float fy) { return ImVec2(a.x + w * fx, a.y + h * fy); };
+  auto box = [&](const ImVec2& p0, const ImVec2& p1, float rounding) {
+    dl->AddRectFilled(p0, p1, fill, rounding);
+    dl->AddRect(p0, p1, line, rounding, ImDrawFlags_None, lw);
+  };
+  auto arrow = [&](const ImVec2& from, const ImVec2& to) {
+    const ImVec2 d = to - from;
+    const float len = ImSqrt(ImLengthSqr(d));
+    if (len <= 0.0f) {
+      return;
+    }
+    const ImVec2 u = d * (1.0f / len);
+    const float head = ImMin(len * 0.45f, h * 0.18f);
+    dl->AddLine(from, to - u * (head * 0.5f), line, lw);
+    RenderMarker(dl, ImUmlMarker_Filled, to, u, head, line, fill, lw);
+  };
+  switch (kind) {
+    case ImUmlDeviceKind_Database:
+      RenderCylinder(dl, px(0.2f, 0.0f), px(0.8f, 1.0f), fill, line, lw);
+      break;
+    case ImUmlDeviceKind_Storage: {
+      // Stacked disks.
+      for (int i = 0; i < 3; ++i) {
+        const float y0 = 0.05f + i * 0.31f;
+        box(px(0.15f, y0), px(0.85f, y0 + 0.26f), 2.0f);
+        dl->AddCircleFilled(px(0.75f, y0 + 0.13f), ImMax(1.0f, h * 0.03f), line, 8);
+      }
+      break;
+    }
+    case ImUmlDeviceKind_Router: {
+      const float r = ImMin(w, h) * 0.48f;
+      dl->AddCircleFilled(c, r, fill, CircleSegments(r));
+      dl->AddCircle(c, r, line, CircleSegments(r), lw);
+      const float in = r * 0.18f, out = r * 0.8f;
+      arrow(c + ImVec2(-in, -in), c + ImVec2(-out, -out) * 0.75f);
+      arrow(c + ImVec2(in, in), c + ImVec2(out, out) * 0.75f);
+      arrow(c + ImVec2(-out, out) * 0.75f, c + ImVec2(-in, in));
+      arrow(c + ImVec2(out, -out) * 0.75f, c + ImVec2(in, -in));
+      break;
+    }
+    case ImUmlDeviceKind_Switch: {
+      const ImVec2 p0 = px(0.0f, 0.25f), p1 = px(1.0f, 0.75f);
+      box(p0, p1, 3.0f);
+      const float y1 = a.y + h * 0.42f, y2 = a.y + h * 0.58f;
+      arrow(ImVec2(a.x + w * 0.2f, y1), ImVec2(a.x + w * 0.8f, y1));
+      arrow(ImVec2(a.x + w * 0.8f, y2), ImVec2(a.x + w * 0.2f, y2));
+      break;
+    }
+    case ImUmlDeviceKind_Firewall: {
+      // A brick wall.
+      const ImVec2 p0 = px(0.05f, 0.05f), p1 = px(0.95f, 0.95f);
+      box(p0, p1, 0.0f);
+      const int rows = 4;
+      for (int r = 1; r < rows; ++r) {
+        const float y = p0.y + (p1.y - p0.y) * r / rows;
+        dl->AddLine(ImVec2(p0.x, y), ImVec2(p1.x, y), line, lw);
+      }
+      for (int r = 0; r < rows; ++r) {
+        const float y0 = p0.y + (p1.y - p0.y) * r / rows, y1 = p0.y + (p1.y - p0.y) * (r + 1) / rows;
+        const float offset = (r % 2 == 0) ? 0.33f : 0.16f;
+        for (float fx = offset; fx < 0.99f; fx += 0.34f) {
+          const float x = p0.x + (p1.x - p0.x) * fx;
+          dl->AddLine(ImVec2(x, y0), ImVec2(x, y1), line, lw);
+        }
+      }
+      break;
+    }
+    case ImUmlDeviceKind_LoadBalancer: {
+      box(px(0.0f, 0.2f), px(1.0f, 0.8f), 3.0f);
+      const ImVec2 hub = px(0.4f, 0.5f);
+      dl->AddLine(px(0.1f, 0.5f), hub, line, lw);
+      arrow(hub, px(0.88f, 0.32f));
+      arrow(hub, px(0.88f, 0.5f));
+      arrow(hub, px(0.88f, 0.68f));
+      break;
+    }
+    case ImUmlDeviceKind_AccessPoint: {
+      box(px(0.2f, 0.62f), px(0.8f, 0.95f), 3.0f);
+      dl->AddCircleFilled(px(0.5f, 0.55f), ImMax(1.5f, h * 0.04f), line, 8);
+      for (int i = 1; i <= 3; ++i) {
+        const float r = h * 0.14f * i;
+        dl->PathArcTo(px(0.5f, 0.55f), r, IM_PI * 1.2f, IM_PI * 1.8f, 12);
+        dl->PathStroke(line, ImDrawFlags_None, lw);
+      }
+      break;
+    }
+    case ImUmlDeviceKind_Cloud:
+    case ImUmlDeviceKind_Internet: {
+      // Overlapping circles: outlines first, slightly larger, then fills on
+      // top, so only the outer outline shows.
+      const ImVec2 centres[5] = {px(0.25f, 0.62f), px(0.42f, 0.42f), px(0.62f, 0.36f), px(0.78f, 0.58f), px(0.5f, 0.68f)};
+      const float radii[5] = {0.2f, 0.24f, 0.26f, 0.2f, 0.22f};
+      for (int pass = 0; pass < 2; ++pass) {
+        for (int i = 0; i < 5; ++i) {
+          const float r = radii[i] * ImMin(w, h * 1.5f) + (pass == 0 ? lw : 0.0f);
+          dl->AddCircleFilled(centres[i], r, pass == 0 ? line : fill, CircleSegments(r));
+        }
+      }
+      if (kind == ImUmlDeviceKind_Internet) {
+        // A globe's meridian and equator on the cloud.
+        const float r = ImMin(w, h) * 0.2f;
+        const ImVec2 g = px(0.52f, 0.56f);
+        dl->AddCircle(g, r, line, CircleSegments(r), lw);
+        dl->AddEllipse(g, ImVec2(r * 0.45f, r), line, 0.0f, CircleSegments(r), lw);
+        dl->AddLine(g - ImVec2(r, 0), g + ImVec2(r, 0), line, lw);
+      }
+      break;
+    }
+    case ImUmlDeviceKind_Workstation:
+      box(px(0.1f, 0.0f), px(0.9f, 0.68f), 2.0f);
+      dl->AddLine(px(0.5f, 0.68f), px(0.5f, 0.86f), line, lw * 1.5f);
+      dl->AddLine(px(0.28f, 0.9f), px(0.72f, 0.9f), line, lw * 1.5f);
+      break;
+    case ImUmlDeviceKind_Laptop: {
+      box(px(0.18f, 0.1f), px(0.82f, 0.7f), 2.0f);
+      const ImVec2 base[4] = {px(0.05f, 0.92f), px(0.18f, 0.74f), px(0.82f, 0.74f), px(0.95f, 0.92f)};
+      dl->AddConvexPolyFilled(base, 4, fill);
+      dl->AddPolyline(base, 4, line, ImDrawFlags_Closed, lw);
+      break;
+    }
+    case ImUmlDeviceKind_Mobile:
+      box(px(0.32f, 0.0f), px(0.68f, 1.0f), ImMin(w, h) * 0.08f);
+      dl->AddCircle(px(0.5f, 0.88f), ImMax(1.0f, h * 0.04f), line, 8, lw);
+      dl->AddLine(px(0.38f, 0.12f), px(0.62f, 0.12f), line, lw);
+      break;
+    case ImUmlDeviceKind_User:
+      RenderActorFigure(dl, px(0.3f, 0.0f), px(0.7f, 1.0f), line, lw);
+      break;
+    default: {
+      // Server: a tower with drive slots and a light.
+      box(px(0.25f, 0.0f), px(0.75f, 1.0f), 2.0f);
+      for (int i = 0; i < 3; ++i) {
+        const float y = 0.15f + i * 0.14f;
+        dl->AddLine(px(0.33f, y), px(0.67f, y), line, lw);
+      }
+      dl->AddCircleFilled(px(0.5f, 0.8f), ImMax(1.5f, h * 0.05f), line, 8);
+      break;
+    }
+  }
+}

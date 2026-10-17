@@ -47,6 +47,8 @@ add_library(nymph STATIC
   elements/uml/activity_diagram.cpp
   elements/uml/usecase_diagram.cpp
   elements/uml/er_diagram.cpp
+  elements/uml/dataflow_diagram.cpp
+  elements/uml/network_diagram.cpp
   layout/layout.hpp
   layout/layout.cpp
   cli/cli.hpp

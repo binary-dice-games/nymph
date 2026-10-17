@@ -55,6 +55,10 @@ typedef int ImUmlUseCaseLinkKind; // -> enum ImUmlUseCaseLinkKind_
 typedef int ImUmlCardinality; // -> enum ImUmlCardinality_
 typedef int ImUmlAttributeKeys; // -> enum ImUmlAttributeKeys_
 typedef int ImUmlRelationshipFlags; // -> enum ImUmlRelationshipFlags_
+typedef int ImUmlDataFlowFlags; // -> enum ImUmlDataFlowFlags_
+typedef int ImUmlDeviceKind; // -> enum ImUmlDeviceKind_
+typedef int ImUmlLinkKind; // -> enum ImUmlLinkKind_
+typedef int ImUmlLinkFlags; // -> enum ImUmlLinkFlags_
 
 // ── Enums ────────────────────────────────────────────────────────────────────
 
@@ -232,6 +236,40 @@ enum ImUmlRelationshipFlags_ {
   ImUmlRelationshipFlags_NonIdentifying = 1 << 0, ///< Dashed line (mermaid's `..`); identifying is solid (`--`).
 };
 
+enum ImUmlDataFlowFlags_ {
+  ImUmlDataFlowFlags_None = 0,
+  ImUmlDataFlowFlags_Bidirectional = 1 << 0, ///< Arrowheads at both ends.
+};
+
+/// The icon a network device is drawn with.
+enum ImUmlDeviceKind_ {
+  ImUmlDeviceKind_Server,
+  ImUmlDeviceKind_Database,
+  ImUmlDeviceKind_Storage,
+  ImUmlDeviceKind_Router,
+  ImUmlDeviceKind_Switch,
+  ImUmlDeviceKind_Firewall,
+  ImUmlDeviceKind_LoadBalancer,
+  ImUmlDeviceKind_AccessPoint,
+  ImUmlDeviceKind_Cloud,
+  ImUmlDeviceKind_Internet,
+  ImUmlDeviceKind_Workstation,
+  ImUmlDeviceKind_Laptop,
+  ImUmlDeviceKind_Mobile,
+  ImUmlDeviceKind_User,
+};
+
+enum ImUmlLinkKind_ {
+  ImUmlLinkKind_Wired, ///< Solid line.
+  ImUmlLinkKind_Wireless, ///< Short dashes.
+  ImUmlLinkKind_Vpn, ///< Long dashes, a thicker line.
+};
+
+enum ImUmlLinkFlags_ {
+  ImUmlLinkFlags_None = 0,
+  ImUmlLinkFlags_Directed = 1 << 0, ///< An arrowhead at the `to` end.
+};
+
 // ── Style ────────────────────────────────────────────────────────────────────
 
 struct ImUmlStyle {
@@ -335,6 +373,15 @@ IMGUI_API void EndUseCaseDiagram();
 /// @brief An entity-relationship diagram (database structure, mermaid's erDiagram).
 IMGUI_API bool BeginERDiagram(const char* title_id, const ImVec2& size = ImVec2(-1, 0), ImUmlDiagramFlags flags = 0);
 IMGUI_API void EndERDiagram();
+/// @brief A data flow diagram (DFD): external entities, processes, data
+///        stores and the data flowing between them.
+IMGUI_API bool
+BeginDataFlowDiagram(const char* title_id, const ImVec2& size = ImVec2(-1, 0), ImUmlDiagramFlags flags = 0);
+IMGUI_API void EndDataFlowDiagram();
+/// @brief A network diagram: devices drawn as icons, links, and zones.
+IMGUI_API bool
+BeginNetworkDiagram(const char* title_id, const ImVec2& size = ImVec2(-1, 0), ImUmlDiagramFlags flags = 0);
+IMGUI_API void EndNetworkDiagram();
 
 // ── Setup (after Begin*, before the first item) ──────────────────────────────
 
@@ -458,6 +505,45 @@ IMGUI_API void Relationship(
     ImUmlCardinality to_cardinality,
     const char* label = nullptr,
     ImUmlRelationshipFlags flags = 0);
+
+// ── Groups (data flow and network diagrams) ──────────────────────────────────
+
+/// @brief A dashed box around the nodes submitted before EndGroup(): a
+///        data flow diagram's trust boundary, a network zone (a subnet, a
+///        DMZ). Groups nest; edges never end at a group.
+IMGUI_API void BeginGroup(const char* id, const char* label = nullptr);
+IMGUI_API void EndGroup();
+
+// ── Data flow diagrams ───────────────────────────────────────────────────────
+
+/// @brief A source or sink outside the system: a box.
+IMGUI_API void ExternalEntity(const char* id, const char* name = nullptr);
+/// @brief A process transforming data: a circle, `number` ("1.2") on top.
+IMGUI_API void Process(const char* id, const char* name = nullptr, const char* number = nullptr);
+/// @brief Data at rest: an open-ended box, `number` ("D1") in its left cell.
+IMGUI_API void DataStore(const char* id, const char* name = nullptr, const char* number = nullptr);
+/// @brief Data moving from `from` to `to`, labelled with what flows.
+IMGUI_API void DataFlow(const char* from, const char* to, const char* label = nullptr, ImUmlDataFlowFlags flags = 0);
+
+// ── Network diagrams ─────────────────────────────────────────────────────────
+
+/// @brief A device: an icon of `kind`, its name below, and `address` (an IP,
+///        a host name) under the name.
+IMGUI_API void Device(
+    const char* id,
+    const char* name = nullptr,
+    ImUmlDeviceKind kind = ImUmlDeviceKind_Server,
+    const char* address = nullptr);
+/// @brief A link between two devices; `from_label` / `to_label` (ports,
+///        interfaces) are drawn next to each end.
+IMGUI_API void Link(
+    const char* from,
+    const char* to,
+    ImUmlLinkKind kind = ImUmlLinkKind_Wired,
+    const char* label = nullptr,
+    const char* from_label = nullptr,
+    const char* to_label = nullptr,
+    ImUmlLinkFlags flags = 0);
 
 // ── Queries ──────────────────────────────────────────────────────────────────
 

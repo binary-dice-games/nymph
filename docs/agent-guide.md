@@ -342,7 +342,7 @@ something off.
 
 ### UML diagrams
 
-Five diagram elements draw UML from a list of nodes and edges, like
+Diagram elements draw UML, database, data flow and network diagrams from a list of nodes and edges, like
 mermaid; positions are computed (Graphviz `dot`-style layers), never
 written. Each can be `root` or a layout child.
 
@@ -354,6 +354,8 @@ written. Each can be `root` or a layout child.
 | `ActivityDiagram` | `Action` (`id`, `text`, `kind`: Action/Send/Receive), `ActivityControl` (`id`, `kind`: Initial/Final/FlowFinal/Decision/Merge/Fork/Join, `label`), `Flow` (`from`, `to`, `guard`) |
 | `UseCaseDiagram` (`system`: boundary title) | `Actor` (`id`, `name`, `side`: Left/Right), `UseCase` (`id`, `name`), `UseCaseRelation` (`from`, `to`, `kind`: Association/Include/Extend/Generalization) |
 | `ERDiagram` (database structure) | `Entity` (`id`, `name`, `attributes`: `"type name PK, FK \"comment\""`), `Relationship` (`from`, `to`, `from_cardinality` / `to_cardinality`: ExactlyOne/ZeroOrOne/ZeroOrMore/OneOrMore, `label`, `identifying`) |
+| `DataFlowDiagram` | `ExternalEntity`, `Process`, `DataStore` (`id`, `name`, `number`), `DataFlow` (`from`, `to`, `label`, `bidirectional`; one end a Process), `TrustBoundary` (`id`, `name`, children) |
+| `NetworkDiagram` | `Device` (`id`, `name`, `kind`: Server/Database/Storage/Router/Switch/Firewall/LoadBalancer/AccessPoint/Cloud/Internet/Workstation/Laptop/Mobile/User, `address`), `Link` (`from`, `to`, `kind`: Wired/Wireless/Vpn, `label`, `from_label`, `to_label`, `directed`), `Zone` (`id`, `name`, children) |
 
 `Note` (`text`, `attach: [ids]`; in sequence diagrams `over: [a, b]` or
 `attach: [a]` with `side`) works in all of them.
@@ -749,7 +751,28 @@ root:
     - {type: Relationship, from: user, to: post, from_cardinality: ExactlyOne, to_cardinality: ZeroOrMore, label: writes}
 ```
 
-State, activity and use case diagrams follow the same pattern: see
+### Network diagram
+
+```yaml
+description: Home network.
+image: {width: 520, height: 420}
+root:
+  type: NetworkDiagram
+  children:
+    - {type: Device, id: isp, name: Internet, kind: Internet}
+    - {type: Device, id: router, name: Router, kind: Router, address: 192.168.1.1}
+    - type: Zone
+      id: home
+      name: Home LAN
+      children:
+        - {type: Device, id: nas, name: NAS, kind: Storage}
+        - {type: Device, id: phone, name: Phone, kind: Mobile}
+    - {type: Link, from: isp, to: router}
+    - {type: Link, from: router, to: nas}
+    - {type: Link, from: router, to: phone, kind: Wireless}
+```
+
+State, activity, use case and data flow diagrams follow the same pattern: see
 [examples.md](examples.md).
 
 ## Making a good chart
@@ -807,6 +830,8 @@ State, activity and use case diagrams follow the same pattern: see
 | `id 'x' is already used` | Two nodes of one diagram share an id. |
 | `ClassDiagram needs W x H px (at min_zoom ...)` | The diagram does not fit even scaled down: enlarge the image or its space, lower `min_zoom`, or split it. |
 | `only the keys PK, FK and UK` / `needs a type and a name` | An ER attribute is `"type name"`, then optional `PK`, `FK`, `UK` and a `"comment"`. |
+| `one end of a data flow must be a Process` | A `DataFlow` joins a Process to anything; entity-to-store flows go through a Process. |
+| `must name a Device, not a Zone` / `names a TrustBoundary` | Edges name the nodes inside a group, not the group. |
 | `declared after the first message` | In a sequence diagram, list every `Participant` before the messages. |
 | `'abc' is not a number` | A referenced column has a non-numeric value at the reported row. |
 | `xs has 3 values but ys has 2` | Series lists must be equally long. |

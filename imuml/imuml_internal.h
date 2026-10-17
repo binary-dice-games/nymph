@@ -225,6 +225,8 @@ enum ImUmlDiagramKind_ {
   ImUmlDiagramKind_Activity,
   ImUmlDiagramKind_UseCase,
   ImUmlDiagramKind_ER,
+  ImUmlDiagramKind_DataFlow,
+  ImUmlDiagramKind_Network,
 };
 
 enum ImUmlNodeType_ {
@@ -235,6 +237,11 @@ enum ImUmlNodeType_ {
   ImUmlNodeType_Actor,
   ImUmlNodeType_UseCase,
   ImUmlNodeType_Entity,
+  ImUmlNodeType_Group,
+  ImUmlNodeType_ExternalEntity,
+  ImUmlNodeType_Process,
+  ImUmlNodeType_DataStore,
+  ImUmlNodeType_Device,
   ImUmlNodeType_Note,
   ImUmlNodeType_Participant,
 };
@@ -245,6 +252,8 @@ enum ImUmlEdgeType_ {
   ImUmlEdgeType_Flow,
   ImUmlEdgeType_UseCaseLink,
   ImUmlEdgeType_Relationship,
+  ImUmlEdgeType_DataFlow,
+  ImUmlEdgeType_Link,
   ImUmlEdgeType_NoteLink,
 };
 
@@ -280,7 +289,7 @@ struct ImUmlNodeRec {
   ImGuiID Id;
   int Type; ///< ImUmlNodeType_
   int Kind;
-  ImUmlStr Name, Stereotype, Generic;
+  ImUmlStr Name, Stereotype, Generic; ///< Stereotype also holds a process / store number, a device address.
   int FirstLine, LineCount;
   int FirstAttach, AttachCount; ///< Notes: ids in AttachIds.
   int Parent; ///< Composite state containing it, or -1.
@@ -452,6 +461,8 @@ float MarkerLength(ImUmlMarker marker, float size);
 /// @brief An ER cardinality end (crow's foot notation) at `tip`, the line
 ///        arriving along `dir` (unit, pointing at the tip). The line runs
 ///        through it to the tip; circles are filled with `bg`.
+/// @brief The icon of a network device, filling `a`..`b`.
+void RenderDeviceIcon(ImDrawList* dl, ImUmlDeviceKind kind, const ImVec2& a, const ImVec2& b, ImU32 line, ImU32 fill, float lw);
 void RenderCardinality(
     ImDrawList* dl,
     ImUmlCardinality cardinality,

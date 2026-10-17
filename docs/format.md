@@ -63,7 +63,8 @@ containers, a `children` list of elements:
   layouts, `Label`, `Separator`, `SeparatorText` and `Spring`.
 - UML diagrams hold their nodes and edges: `ClassDiagram`,
   `SequenceDiagram`, `StateDiagram`, `ActivityDiagram`, `UseCaseDiagram`,
-  and `ERDiagram` for database structure (see [UML diagrams](#uml-diagrams)).
+  `ERDiagram` for database structure, `DataFlowDiagram` and
+  `NetworkDiagram` (see [UML diagrams](#uml-diagrams)).
 
 A series goes directly inside its kind of plot; anything else can be
 `root`. [elements.md](elements.md) lists every type with its fields,
@@ -286,6 +287,8 @@ root:
 | `ActivityDiagram` | `Action`, `ActivityControl` | `Flow` |
 | `UseCaseDiagram` | `Actor`, `UseCase` | `UseCaseRelation` |
 | `ERDiagram` (database) | `Entity` (a table) | `Relationship` (crow's foot) |
+| `DataFlowDiagram` | `ExternalEntity`, `Process`, `DataStore` | `DataFlow`, `TrustBoundary` (groups nodes) |
+| `NetworkDiagram` | `Device` (icon by `kind`) | `Link`, `Zone` (groups devices) |
 
 `Note` goes in every diagram.
 
@@ -308,6 +311,13 @@ root:
   A `Relationship` sets `from_cardinality` / `to_cardinality`
   (`ExactlyOne`, `ZeroOrOne`, `ZeroOrMore`, `OneOrMore`), drawn at each
   end; `identifying: false` draws it dashed.
+- **Data flows** join two nodes, one of them a `Process`, never a
+  `TrustBoundary`; `bidirectional: true` draws both arrowheads. A
+  `TrustBoundary` (or a network `Zone`) is a dashed box around its
+  children; links and flows name the nodes inside it.
+- **Network links** join two `Device`s. `kind` is `Wired` (solid),
+  `Wireless` (dashed) or `Vpn` (long dashes); `from_label` / `to_label`
+  name the ports, `directed: true` adds an arrow.
 - **Order.** In a sequence diagram the children are time, top to bottom;
   declare every `Participant` first. Elsewhere order only breaks ties.
 - **Size.** In a layout a diagram with `width` / `height` 0 takes its
