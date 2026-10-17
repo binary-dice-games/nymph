@@ -488,6 +488,17 @@ after the gtest test):
 
 ### 13. wish nymph images
 
+*Result: done.* `src/document/legacy` (`is_wish_source`,
+`convert_wish_source`), used by `extract_source()`; wish's three test
+charts in `tests/data/legacy/`; `tests/test_legacy.cpp` (7 tests).
+Detection departs from the first plan: a text is a wish source when it has
+two `--` lines and is *not* a YAML mapping with `root` (sturdier than
+"the first part is not a mapping"). All three wish charts convert to
+YAML with the same description, element tree, options and data, and
+render through `nymph render` on a wish-style PNG (looked at). Limitation:
+no PNG actually produced by wish was available; the test PNGs come from
+nymph's encoder, whose chunk layout is ported from wish's.
+
 **Goal:** `extract` turns a wish nymph three-part source into equivalent
 nymph YAML.
 

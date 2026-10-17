@@ -1,6 +1,6 @@
 # nymph — Architecture & Design
 
-**Status: in progress, plan steps 1-12 done.** [PLAN.md](PLAN.md) is the ordered
+**Status: in progress, plan steps 1-13 done.** [PLAN.md](PLAN.md) is the ordered
 implementation plan.
 
 ## 1. Purpose / Scope
@@ -681,11 +681,16 @@ Exit code 0 on success, 1 on failure with one line on stderr:
 arguments.
 
 **wish nymph images.** wish stores a three-part text (description, `--`,
-format YAML, `--`, CSV) in the same chunk. `extract` recognises it (two
-separator lines `--`, and the first part is not a YAML mapping) and
-converts it mechanically: `nymph: 1`, `description: |` with the first
-part, the format part verbatim, `data: |` with the CSV indented. The
-result renders with this tool when it uses only the elements nymph has.
+format YAML, `--`, CSV) in the same chunk. `extract_source()` (and so
+`extract`, `render` and `check` on a PNG) recognises it — two separator
+lines `--`, and the text is not a YAML mapping with a `root` key, so a
+nymph source with `--` lines inside a block scalar is never mistaken for
+one — and converts it mechanically (`src/document/legacy`): `nymph: 1`,
+`description: |-` with the first part, the format part verbatim, `data: |`
+with the CSV indented (an indentation indicator is added when the first
+line starts with a space; CRLF becomes LF in the blocks; empty parts are
+left out). As in wish, only the first two separator lines split. wish's
+three test charts convert and render unchanged.
 
 ## 7. Design Decisions
 

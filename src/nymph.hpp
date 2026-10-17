@@ -28,7 +28,8 @@ std::vector<uint8_t> render_png(std::string_view source);
 /// @throws nymph::error for the first problem found.
 void check_source(std::string_view source);
 
-/// @brief The source a nymph PNG carries.
+/// @brief The source a nymph PNG carries. An image made by wish nymph
+///        (three-part text) comes back converted to nymph YAML.
 /// @return nullopt if `png` is not a PNG or has no nymph source.
 /// @throws std::runtime_error for a corrupt or truncated PNG.
 std::optional<std::string> extract_source(std::span<const uint8_t> png);

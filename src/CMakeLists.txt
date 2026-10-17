@@ -23,6 +23,8 @@ add_library(nymph STATIC
   document/table.cpp
   document/bind.hpp
   document/bind.cpp
+  document/legacy.hpp
+  document/legacy.cpp
   elements/plot_style.hpp
   elements/plot_style.cpp
   elements/plot2d.hpp
