@@ -1,6 +1,6 @@
 # nymph — Architecture & Design
 
-**Status: in progress, plan steps 1-11 done.** [PLAN.md](PLAN.md) is the ordered
+**Status: in progress, plan steps 1-12 done.** [PLAN.md](PLAN.md) is the ordered
 implementation plan.
 
 ## 1. Purpose / Scope
@@ -670,6 +670,10 @@ in-process; `app/main.cpp` only forwards `argv` and the standard streams
 | `nymph check <in>` | Validate only: bind and lay out, no rasterizing. Exit 0 and no output when valid. |
 | `nymph schema [<Type>] [--markdown]` | Print the element reference from the registry: every type, its slot, fields, types, defaults, names and descriptions. `--markdown` prints the form kept in `docs/elements.md`. |
 | `nymph --version`, `nymph --help` | Version, usage. |
+
+`-o -` writes to standard output (for pipes). `check` and `render` also
+take a nymph PNG and use the YAML it carries. Argument errors are reported
+before any file is read. User documentation: [docs/cli.md](docs/cli.md).
 
 Exit code 0 on success, 1 on failure with one line on stderr:
 `nymph: <file>:<line>:<column>: <message>` for a bad source,

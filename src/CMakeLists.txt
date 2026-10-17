@@ -33,6 +33,10 @@ add_library(nymph STATIC
   elements/layout_elements.cpp
   layout/layout.hpp
   layout/layout.cpp
+  cli/cli.hpp
+  cli/cli.cpp
+  cli/schema_doc.hpp
+  cli/schema_doc.cpp
   elements/register_builtin.hpp
   elements/register_builtin.cpp
   schema/value.hpp

@@ -8,8 +8,9 @@ software rasterizer: no GPU, window or display needed.
 It is meant for AI agents that need to show information as a chart.
 
 It is a standalone version of wish's `nymph` module, with no wish or bison
-dependency. **Status: in progress** (2D and 3D plots, layouts and labels
-render through the library API; the command line is next) -- see
+dependency. **Status: in progress** (the `nymph` command and the library
+render 2D and 3D plots, layouts and labels; wish image import and the
+agent documentation are next) -- see
 [DESIGN.md](DESIGN.md) and [PLAN.md](PLAN.md).
 
 ## Quick Build
@@ -24,6 +25,21 @@ See [docs/building.md](docs/building.md) for prerequisites, CMake options,
 and platform notes.
 
 ## Quick Start
+
+```sh
+cat > chart.yaml <<'YAML'
+root:
+  type: Plot
+  title: Revenue
+  children:
+    - {type: PlotLine, label: revenue, ys: $revenue}
+data: {revenue: [12, 15, 11, 18]}
+YAML
+nymph chart.yaml        # writes chart.png (no display or GPU needed)
+nymph chart.png         # prints the YAML back
+```
+
+See [docs/cli.md](docs/cli.md) for every command. As a library:
 
 ```cpp
 #include <nymph.hpp>
@@ -70,6 +86,7 @@ carries its source: `bdg::nymph::extract_source(png)` returns it.
 | File | Contents |
 |------|----------|
 | [docs/building.md](docs/building.md) | Prerequisites, CMake options, build commands |
+| [docs/cli.md](docs/cli.md) | The `nymph` command: render, extract, check, schema, exit codes, errors |
 | [DESIGN.md](DESIGN.md) | Architecture, source format, key abstractions, design decisions |
 | [PLAN.md](PLAN.md) | Ordered implementation steps and their tests |
 | [CHANGELOG.md](CHANGELOG.md) | User-facing changes between releases |

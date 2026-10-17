@@ -40,3 +40,4 @@ target_compile_definitions(test_plot3d PRIVATE NYMPH_SOURCE_DIR="${PROJECT_SOURC
 nymph_add_test(test_layout test_layout.cpp)
 nymph_add_test(test_layout_elements test_layout_elements.cpp)
 target_compile_definitions(test_layout_elements PRIVATE NYMPH_SOURCE_DIR="${PROJECT_SOURCE_DIR}")
+nymph_add_test(test_cli test_cli.cpp)

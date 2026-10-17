@@ -453,6 +453,16 @@ image with wish's layout hints.
 
 ### 12. Command line
 
+*Result: done.* `src/cli/cli` (`run_cli`), `src/cli/schema_doc` (text and
+Markdown reference from the registry, used by `schema`), `app/main.cpp`,
+`docs/cli.md`; `tests/test_cli.cpp` (11 tests). Additions: `-o -` for
+standard output; `check` and `render` accept a nymph PNG; a PNG on stdin
+is extracted without `-o`. Found by the tests: an argument error (`check
+a.yaml -o x`) was reported as "no such file" because the input was read
+first; arguments are now all checked before any file access. The binary
+links only the C/C++ runtime (`ldd`) and renders with `DISPLAY` and
+`WAYLAND_DISPLAY` unset.
+
 **Goal:** the `nymph` executable implements DESIGN.md section 6.
 
 **Deliverables:**
