@@ -113,6 +113,8 @@ carries its source: `bdg::nymph::extract_source(png)` returns it.
 | [spec/01_core_features/PLAN.md](spec/01_core_features/PLAN.md) | Ordered implementation steps and their tests |
 | [spec/02_opengl_rasterizer/DESIGN.md](spec/02_opengl_rasterizer/DESIGN.md) | The OpenGL rasterizer: run-time loading, headless contexts, fallback, `--rasterizer` |
 | [spec/02_opengl_rasterizer/PLAN.md](spec/02_opengl_rasterizer/PLAN.md) | Its implementation steps and tests |
+| [spec/03_uml_diagrams/DESIGN.md](spec/03_uml_diagrams/DESIGN.md) | UML diagrams and the ImUml library (design in progress) |
+| [spec/03_uml_diagrams/PLAN.md](spec/03_uml_diagrams/PLAN.md) | Its implementation steps and tests |
 | [CHANGELOG.md](CHANGELOG.md) | User-facing changes between releases |
 | [CLAUDE.md](CLAUDE.md) | Coding style and project rules for AI agents and contributors |
 
