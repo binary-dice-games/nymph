@@ -480,17 +480,24 @@ and ImGui option windows.
 
 ### `png` (`src/png/`)
 
-`encode_png(image, source, description) -> bytes` and
-`read_source(bytes) -> optional<string>`, as in wish nymph: pixels encoded
-by `stb_image_write`; the source in an `iTXt` chunk with keyword `nymph`
-directly after `IHDR`, uncompressed up to 64 KiB (readable with `strings`)
-and zlib-compressed above; the description in a second `iTXt` chunk with
-the standard keyword `Description`. CRC-32 is nymph's own (a table-driven
-function); zlib compression and decompression come from stb
-(`stbi_zlib_compress`, `stbi_zlib_decode_malloc_guesssize`).
-`read_source` checks the signature and every chunk CRC and never decodes
-pixels. Keeping wish nymph's chunk layout means each tool can read the
-other's images.
+`encode_png(image, source, description) -> std::vector<uint8_t>` and
+`read_source(std::span<const uint8_t>) -> optional<string>`, as in wish
+nymph: pixels encoded by `stb_image_write` (deterministic, compression
+level 8); the source in an `iTXt` chunk with keyword `nymph` directly after
+`IHDR`, uncompressed up to 64 KiB (readable with `strings`) and
+zlib-compressed above (`stbi_zlib_compress`); the description in a second
+`iTXt` chunk with the standard keyword `Description`, omitted when empty.
+CRC-32 is nymph's own table-driven `crc32()`. `read_source` checks the
+signature and every chunk CRC and never decodes pixels; it returns
+`nullopt` for "not a PNG" and "no `nymph` chunk", and throws for a
+truncated file, a bad CRC or an undecompressible chunk, so the CLI can tell
+"not a nymph image" from "corrupt PNG". Decompression goes into a fixed
+16 MiB buffer (`stbi_zlib_decode_buffer`), so a crafted chunk cannot make
+it allocate without limit. stb is compiled into `png_meta.cpp` with
+internal linkage (`STB_IMAGE_WRITE_STATIC`, `STB_IMAGE_STATIC`), so a
+program linking nymph can have its own stb. Keeping wish nymph's chunk
+layout means each tool can read the other's images; PIL and ImageMagick
+read nymph's chunks too.
 
 ### Library API (`src/nymph.hpp`)
 

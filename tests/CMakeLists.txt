@@ -25,3 +25,6 @@ nymph_add_test(test_dependencies test_dependencies.cpp)
 target_link_libraries(test_dependencies PRIVATE yaml nymph_stb)
 nymph_add_test(test_soft_rasterizer test_soft_rasterizer.cpp)
 nymph_add_test(test_figure_renderer test_figure_renderer.cpp)
+nymph_add_test(test_png_meta test_png_meta.cpp)
+# Decodes pixels with its own copy of stb_image.
+target_link_libraries(test_png_meta PRIVATE nymph_stb)

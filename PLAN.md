@@ -162,6 +162,14 @@ the sampling or atlas handling here before going on.
 
 ### 4. PNG encoding and metadata
 
+*Result: done.* `src/png/png_meta`, `src/core/limits.hpp`;
+`tests/test_png_meta.cpp` (14 tests). Bytes are `std::vector<uint8_t>` /
+`std::span<const uint8_t>` rather than wish's `std::string`; `crc32()` is
+public so a test checks it against the standard check value and against
+stb's IHDR CRC. Outside the test suite, PNGs from `encode_png` were read
+by Python's PIL (inline and compressed source, description) and by
+ImageMagick (`identify -verbose`, no warnings).
+
 **Goal:** an image plus a source text becomes a PNG that gives the text
 back.
 
@@ -178,8 +186,10 @@ back.
 - A source up to 64 KiB appears verbatim in the PNG bytes; the `nymph`
   chunk directly follows `IHDR`.
 - The description is in an `iTXt` chunk with keyword `Description`.
-- Non-PNG bytes, a PNG without the chunk, and a PNG with one corrupted CRC
-  all give `nullopt`.
+- Non-PNG bytes and a PNG without the chunk give `nullopt`; a PNG with
+  one corrupted CRC, a truncated PNG and a corrupt compressed chunk throw
+  `std::runtime_error` (as wish nymph does), so the CLI can say "corrupt
+  PNG" instead of "not a nymph image".
 - The pixels decode back (with `stb_image`, test-only) to the input image.
 
 ### 5. YAML document with positions

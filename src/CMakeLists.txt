@@ -12,6 +12,9 @@ add_library(nymph STATIC
   render/draw_context.hpp
   render/figure_renderer.hpp
   render/figure_renderer.cpp
+  core/limits.hpp
+  png/png_meta.hpp
+  png/png_meta.cpp
 )
 add_library(nymph::nymph ALIAS nymph)
 target_include_directories(nymph PUBLIC
