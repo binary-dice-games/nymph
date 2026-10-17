@@ -362,21 +362,31 @@ validator of content; `render_figure()` trusts its result.
 
 ### `render_figure()` (`src/render/figure_renderer`)
 
-`render_figure(const figure&) -> image{width, height, rgba}`. For one call
-it owns a private ImGui context (with its own font atlas), an ImPlot
-context and an ImPlot3D context, and destroys them on return, including on
-exception. Per call:
+`render_figure(const figure&) -> image{width, height, rgba}`, built on
+`render_frames(const image_options&, draw_fn) -> image`, the frame driver
+that knows nothing about elements (`draw_fn` receives a `draw_context`).
+For one call it owns a private ImGui context (with its own font atlas), an
+ImPlot context and an ImPlot3D context, and destroys them on return,
+including on exception; the contexts current before the call are current
+again afterwards, so it can run inside another open ImGui frame.
+`render_frames` validates `image_options` itself (`std::invalid_argument`)
+as a second line behind `bind()`. Per call:
 
 - `io.DisplaySize = {width, height}`, `io.DisplayFramebufferScale =
   {scale, scale}`, `ImGuiBackendFlags_RendererHasTextures` set,
   `IniFilename` / `LogFilename` null, fixed `DeltaTime`, mouse at
   `-FLT_MAX`. No platform or renderer backend is installed; nymph plays
-  both roles.
+  both roles (`BackendPlatformName` `nymph`, `BackendRendererName`
+  `nymph_soft_rasterizer`, `PlatformIO.DrawCallback_ResetRenderState` set
+  to the rasterizer's no-op).
 - Font: `AddFontDefaultVector()` at 16 px (the embedded scalable font;
   wish uses ImGui's default at 16 px too). ImGui bakes glyphs at the
   framebuffer scale, so text stays sharp at `scale: 2`.
-- Style: the `image.theme` ImGui and ImPlot styles, with
-  `AntiAliasedLinesUseTex = false` (see section 7).
+- Style: the `image.theme` ImGui, ImPlot and ImPlot3D styles
+  (`StyleColorsLight` / `Dark` / `Classic`), with
+  `AntiAliasedLinesUseTex = false` (see section 7) and window rounding,
+  border and padding 0. The image is cleared to the theme's `WindowBg`,
+  made opaque.
 - One window covering the display (no decoration, no saved settings, no
   padding) in which the layout engine runs and `root` is drawn.
 - Three frames are run and the third is kept: ImPlot fits axes one frame

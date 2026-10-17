@@ -8,6 +8,10 @@ add_library(nymph STATIC
   render/texture_store.cpp
   render/soft_rasterizer.hpp
   render/soft_rasterizer.cpp
+  render/image_options.hpp
+  render/draw_context.hpp
+  render/figure_renderer.hpp
+  render/figure_renderer.cpp
 )
 add_library(nymph::nymph ALIAS nymph)
 target_include_directories(nymph PUBLIC

@@ -121,6 +121,16 @@ frame):
 
 ### 3. Offscreen frame driver
 
+*Result: done.* `src/render/figure_renderer`, `image_options`,
+`draw_context` (with `content_rect()`); `tests/test_figure_renderer.cpp`
+(8 tests). Departures: the previous contexts are saved and restored, not
+assumed null, with a test rendering inside another open frame and one
+where drawing throws; options are validated here too. Visual check of a
+2D and a 3D plot in both themes at scale 1 and 2: text sharp, lines even,
+bars solid. Text at scale 2 is re-baked, not stretched: fully inked
+pixels are 37% of text pixels at 2x against 5.6% at 1x, and the test
+checks that ratio. Four 640x420 images (two at 2x) render in about 0.5 s.
+
 **Goal:** a drawing function rendered through a private ImGui / ImPlot /
 ImPlot3D context comes out as an image, with no window or display.
 
