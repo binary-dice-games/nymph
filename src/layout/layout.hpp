@@ -1,8 +1,8 @@
 // MIT License © 2026 Binary Dice Games
 /// @file layout.hpp
 /// @brief The layout engine: shares space among `figure` elements before
-///        anything is drawn (DESIGN.md section 3 "Layout", section 4
-///        "Layout engine").
+///        anything is drawn (spec/01_core_features/DESIGN.md section 3 "Layout",
+///        section 4 "Layout engine").
 #pragma once
 
 #include <span>

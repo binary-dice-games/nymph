@@ -4,9 +4,9 @@
 ///        each with its source position, converted to numbers per column on
 ///        demand.
 ///
-/// Two source forms give the same table (DESIGN.md section 3, `data`): CSV
-/// text, usually a `|` block scalar, and a YAML mapping of column name to a
-/// list of values. `data` may also map table names to tables in either
+/// Two source forms give the same table (spec/01_core_features/DESIGN.md
+/// section 3, `data`): CSV text, usually a `|` block scalar, and a YAML
+/// mapping of column name to a list of values. `data` may also map table names to tables in either
 /// form: a `data_set`.
 #pragma once
 

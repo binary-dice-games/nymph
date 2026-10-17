@@ -143,7 +143,7 @@ const char* const kExample =
     "  1, 12, 9\n" // 21
     "  2, 15, 9.5\n"; // 22
 
-/// The DESIGN.md example with `from` replaced by `to`.
+/// The spec/01_core_features/DESIGN.md example with `from` replaced by `to`.
 std::string example_with(const std::string& from, const std::string& to) {
   std::string s = kExample;
   const size_t at = s.find(from);

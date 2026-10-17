@@ -1,7 +1,7 @@
 // MIT License © 2026 Binary Dice Games
 /// @file limits.hpp
 /// @brief Input size limits, checked before the allocations they bound
-///        (DESIGN.md section 8).
+///        (spec/01_core_features/DESIGN.md section 8).
 #pragma once
 
 #include <cstddef>

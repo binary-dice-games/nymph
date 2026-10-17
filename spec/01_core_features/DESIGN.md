@@ -774,7 +774,7 @@ in-process; `app/main.cpp` only forwards `argv` and the standard streams
 
 `-o -` writes to standard output (for pipes). `check` and `render` also
 take a nymph PNG and use the YAML it carries. Argument errors are reported
-before any file is read. User documentation: [docs/cli.md](docs/cli.md).
+before any file is read. User documentation: [docs/cli.md](../../docs/cli.md).
 
 Exit code 0 on success, 1 on failure with one line on stderr:
 `nymph: <file>:<line>:<column>: <message>` for a bad source,

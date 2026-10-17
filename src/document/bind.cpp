@@ -198,8 +198,8 @@ class binder {
     fail(ref, "unknown table '" + name + "'" + did_you_mean(name, names) + " (tables: " + data_->name_list() + ")");
   }
 
-  /// Resolves `$column`, `$table:column` (DESIGN.md section 3, column
-  /// references).
+  /// Resolves `$column`, `$table:column` (spec/01_core_features/DESIGN.md
+  /// section 3, column references).
   column_ref column(const yaml_node& ref) const {
     const std::string text = ref.text.substr(1);
     if (data_ == nullptr || data_->tables.empty() || (!data_->named() && data_->tables[0].headers.empty())) {
@@ -347,7 +347,7 @@ class binder {
 // ── Top level ────────────────────────────────────────────────────────────────
 
 /// `source` (how the data was made) is accepted as any value and never
-/// looked at (DESIGN.md section 3).
+/// looked at (spec/01_core_features/DESIGN.md section 3).
 constexpr std::string_view kTopKeys[] = {"nymph", "description", "image", "root", "data", "source"};
 constexpr std::string_view kImageKeys[] =
     {"width", "height", "scale", "theme", "padding", "font", "font_size", "text_color"};

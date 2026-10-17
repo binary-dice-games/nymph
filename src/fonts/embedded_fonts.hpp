@@ -1,7 +1,7 @@
 // MIT License © 2026 Binary Dice Games
 /// @file embedded_fonts.hpp
 /// @brief The fonts compiled into nymph from the `fonts/` folder, found by
-///        file name (DESIGN.md section 3, "Text style").
+///        file name (spec/01_core_features/DESIGN.md section 3, "Text style").
 ///
 /// The table behind embedded_fonts() and embedded_licenses() is generated
 /// at build time by `cmake/NymphFonts.cmake`; the binary reads no font file

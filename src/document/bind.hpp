@@ -24,7 +24,7 @@ struct figure {
   node root;
 };
 
-/// @brief Parses and checks a source (DESIGN.md section 3).
+/// @brief Parses and checks a source (spec/01_core_features/DESIGN.md section 3).
 ///
 /// Reads the top-level keys (`nymph`, `description`, `image`, `root`,
 /// `data`, and `source`, which is accepted as any value and ignored),

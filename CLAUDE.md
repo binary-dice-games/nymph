@@ -31,33 +31,67 @@ Rules:
 
 Maintain clear, concise doc comments in code, especially for public APIs, classes, and module-level contracts. Prefer brief Doxygen comments that explain intent, parameters, return values, and failure modes.
 
-## DESIGN.md — directory architecture docs
+## spec/ — project specifications
 
-Some directories contain a `DESIGN.md` file that describes the architecture, key abstractions, and design decisions for the code in that directory.
+Design and plan documents live in `spec/`, one folder per project, never
+next to the code. A project is a coherent piece of work with its own
+design and plan (the first one is `spec/01_core_features`; a next one
+could be `spec/02_opengl_rasterizer`). Grouping each project's files keeps
+an agent's context on what the current project needs.
 
-**Contents:** Overview of the subsystem's purpose, a diagram or summary of key abstractions and their relationships, the public API contract, and the *why* behind non-obvious design decisions (trade-offs, constraints, alternatives rejected). Do not restate what the code already says — explain intent and reasoning.
+```
+spec/
+  INDEX.md                 one row per project: status, summary, topics
+  01_core_features/
+    DESIGN.md
+    PLAN.md
+  02_<descriptive_name>/
+    ...
+```
 
-**When to read:** Before making any change in a directory that has a `DESIGN.md`. Understanding the intended design prevents changes that technically compile but violate the subsystem's contracts or invariants.
+- **Folder names:** a two-digit number in the order projects start, an
+  underscore, and a short snake_case description (`03_svg_output`). Never
+  renumber or rename an existing folder; other files link to it.
+- **`spec/INDEX.md`:** a table with one row per project: folder, status,
+  a one-sentence summary, and the topics it covers (subsystems, features,
+  file areas). Add the row when you create the folder; update the status
+  and topics as the project progresses. It must stay short enough to read
+  in full.
+- **Which files to read:** start with `spec/INDEX.md`, then read only the
+  folder of the project you work on, plus folders whose topics match the
+  code you change. Do not read the whole `spec/` folder.
+- **A new project:** create its folder (next number) when the user asks
+  for a design or plan for new work. Its `DESIGN.md` describes what this
+  project adds or changes and links to earlier projects' documents for
+  the rest, rather than copying them.
+- **Links:** code comments and docs cite the file by its path, for
+  example `spec/01_core_features/DESIGN.md section 3`.
 
-**When to update:** After any change that affects the architecture, the public API surface, or a key design decision documented there. Keep it accurate; a stale `DESIGN.md` is worse than none.
+### DESIGN.md — project architecture
+
+**Contents:** Overview of the project's purpose and scope, a diagram or summary of key abstractions and their relationships, the public API contract, and the *why* behind non-obvious design decisions (trade-offs, constraints, alternatives rejected). Do not restate what the code already says — explain intent and reasoning.
+
+**When to read:** Before changing code a project's DESIGN.md covers (find it through `spec/INDEX.md`). Understanding the intended design prevents changes that technically compile but violate the subsystem's contracts or invariants.
+
+**When to update:** After any change that affects the architecture, the public API surface, or a key design decision documented there. Keep it accurate; a stale `DESIGN.md` is worse than none. A change made within a later project updates that project's DESIGN.md; also correct an earlier project's document where it would otherwise mislead.
 
 **When to create:** Only when explicitly asked (the `/design` skill runs an interactive design session). Do not create a `DESIGN.md` speculatively.
 
-## PLAN.md — feature implementation plans
+### PLAN.md — project implementation plans
 
-Some features or directories contain a `PLAN.md` file that describes the ordered sequence of steps for implementing the feature. Each step is a self-contained, testable deliverable small enough for a human to review comfortably before the next step begins.
+A project's `PLAN.md` describes the ordered sequence of steps for implementing it. Each step is a self-contained, testable deliverable small enough for a human to review comfortably before the next step begins.
 
-**Contents:** An introductory note pointing to the relevant `DESIGN.md`, then a numbered list of steps. Each step has a **Goal** (one sentence stating what is true when this step is done), **Deliverables** (the exact files created or changed and what each must contain), and **Tests** (the specific assertions that must pass before moving on). A **Completion Criteria** section at the end lists the overall pass/fail conditions for the entire feature.
+**Contents:** An introductory note pointing to the project's `DESIGN.md`, then a numbered list of steps. Each step has a **Goal** (one sentence stating what is true when this step is done), **Deliverables** (the exact files created or changed and what each must contain), and **Tests** (the specific assertions that must pass before moving on). A **Completion Criteria** section at the end lists the overall pass/fail conditions for the entire project.
 
-**When to read:** Before implementing any step of a planned feature. If a `PLAN.md` exists, follow it — do not skip steps or reorder them without a clear reason. If a step is already done, verify its tests pass before continuing.
+**When to read:** Before implementing any step of the project. Follow it — do not skip steps or reorder them without a clear reason. If a step is already done, verify its tests pass before continuing.
 
-**When to update:** If implementation reveals that a step's deliverables or tests need adjustment, update the plan *before* diverging from it, so the document stays authoritative. Check off or remove completed steps when the feature ships.
+**When to update:** If implementation reveals that a step's deliverables or tests need adjustment, update the plan *before* diverging from it, so the document stays authoritative. Record each step's result when it is done, and update the project's status in `spec/INDEX.md` when the project ships.
 
 **When to create:** Only when explicitly asked. Do not create a `PLAN.md` speculatively.
 
 ## Startup reading
 
-At the start of every new conversation, always read `README.md` to understand the project's structure and goals. When task-specific details are needed, read the relevant `docs/` file and the in-code documentation.
+At the start of every new conversation, always read `README.md` to understand the project's structure and goals, and `spec/INDEX.md` to know which specification folder covers the work at hand. When task-specific details are needed, read that `spec/` folder, the relevant `docs/` file and the in-code documentation.
 
 ## Tests
 

@@ -9,8 +9,8 @@
 
 namespace bdg::nymph {
 
-/// @brief Output image options (DESIGN.md section 3, `image`). Defaults are
-///        wish nymph's.
+/// @brief Output image options (spec/01_core_features/DESIGN.md section 3,
+///        `image`). Defaults are wish nymph's.
 struct image_options {
   int width = 800; ///< Logical width in pixels, 16-4096.
   int height = 500; ///< Logical height in pixels, 16-4096.

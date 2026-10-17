@@ -4,9 +4,9 @@
 ///
 /// Written for ImGui 1.92. emilk's imgui_software_renderer
 /// (https://github.com/emilk/imgui_software_renderer, public domain) was the
-/// reference for the structure and the fast paths; see DESIGN.md section 4,
-/// "soft_rasterizer", for what was taken from it and what is done
-/// differently.
+/// reference for the structure and the fast paths; see
+/// spec/01_core_features/DESIGN.md section 4, "soft_rasterizer", for what was
+/// taken from it and what is done differently.
 #pragma once
 
 #include <imgui.h>

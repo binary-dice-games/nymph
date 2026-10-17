@@ -1,7 +1,7 @@
 // MIT License © 2026 Binary Dice Games
 /// @file cli.hpp
 /// @brief The `nymph` command line as a function, so it is tested in-process
-///        (DESIGN.md section 6).
+///        (spec/01_core_features/DESIGN.md section 6).
 #pragma once
 
 #include <iosfwd>

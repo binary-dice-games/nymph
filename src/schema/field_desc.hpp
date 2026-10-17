@@ -13,7 +13,7 @@
 
 namespace bdg::nymph {
 
-/// @brief How a field's YAML value is read (DESIGN.md section 3).
+/// @brief How a field's YAML value is read (spec/01_core_features/DESIGN.md section 3).
 enum class field_type {
   boolean, ///< true / false (also yes/no, on/off), unquoted.
   integer, ///< Whole number in the 32-bit range, unquoted.

@@ -18,9 +18,9 @@ namespace bdg::nymph {
 /// @brief Slot of elements that can be `root` or a layout child.
 inline constexpr std::string_view kFigureSlot = "figure";
 
-/// @brief Layout size hints of a `figure` element (DESIGN.md section 3,
-///        "Layout"): positive is fixed pixels, 0 the natural size, negative
-///        a stretch weight.
+/// @brief Layout size hints of a `figure` element
+///        (spec/01_core_features/DESIGN.md section 3, "Layout"): positive is fixed
+///        pixels, 0 the natural size, negative a stretch weight.
 struct size_hints {
   float width = 0.0f;
   float height = 0.0f;

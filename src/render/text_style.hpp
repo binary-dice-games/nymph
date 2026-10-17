@@ -2,7 +2,7 @@
 /// @file text_style.hpp
 /// @brief Font, font size and text colour: the `image` defaults and the
 ///        per-element overrides, inherited down the element tree
-///        (DESIGN.md section 3, "Text style").
+///        (spec/01_core_features/DESIGN.md section 3, "Text style").
 #pragma once
 
 #include <string>

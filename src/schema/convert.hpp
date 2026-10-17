@@ -12,7 +12,8 @@ namespace bdg::nymph {
 
 /// @brief Converts a literal YAML value for field `field`.
 ///
-/// Typing follows the field, not YAML's guess (DESIGN.md section 3):
+/// Typing follows the field, not YAML's guess
+/// (spec/01_core_features/DESIGN.md section 3):
 /// - boolean: unquoted true/false, yes/no, on/off (any of their usual
 ///   capitalisations).
 /// - integer: an unquoted whole number in the 32-bit range.
