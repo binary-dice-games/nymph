@@ -286,6 +286,16 @@ test):
 
 ### 8. Binding
 
+*Result: done.* `src/document/bind` (`bind_source()`, `figure`);
+`tests/test_bind.cpp` (20 tests) with fake element classes. Departures:
+the function is `bind_source`, not `bind` (argument-dependent lookup on a
+`std::string` argument chose `std::bind`, which surfaced as a compile
+error in the test); the root-fill rule is an `element_class::adjust_root`
+hook instead of a check for `Plot` in the binder; the theme list moved to
+`image_options.hpp` so binding needs no renderer; errors carry "did you
+mean" suggestions. The public `check_source()` in `src/nymph.hpp` moves
+to step 9, where the built-in registry it needs is created.
+
 **Goal:** `bind(source, registry)` produces a fully checked `figure` or a
 positioned error.
 
@@ -324,7 +334,8 @@ and defaults.
 - `src/layout/layout_context.hpp`/`.cpp`, first form: rectangles per
   node; `root` gets the image minus `image.padding`. The axis arithmetic
   comes in step 11.
-- `src/nymph.hpp`: `render_png()` using the built-in registry.
+- `src/nymph.hpp`: `render_png()` and `check_source()` using the built-in
+  registry (`check_source` moved here from step 8).
 - `tests/data/`: one YAML source per 2D series.
 
 **Tests** (`tests/test_plot2d.cpp`):

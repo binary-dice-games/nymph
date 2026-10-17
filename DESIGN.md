@@ -403,14 +403,36 @@ correctly laid out.
 
 ### `figure` (`src/document/bind`)
 
-`bind(source, registry) -> figure` where `figure = {image_options,
-description, node root}` and `node = {const element_class*, values,
-children, position}`. It reads the top-level keys, parses `data`, walks
-the element tree, checks every type, slot, field, type conversion, name,
-range and colour, and replaces every column reference with literal data.
-Throws `nymph::error{line, column, message}` (1-based positions in the
-whole file). It is pure: no file access, no ImGui. It is the only
-validator of content; `render_figure()` trusts its result.
+`bind_source(source, registry) -> figure` (called `bind()` in this
+document; not named `bind` in code because, with a `std::string`
+argument, argument-dependent lookup picks `std::bind`). `figure =
+{image_options, description, node root}`. It reads the top-level keys,
+parses `data`, walks the element tree, checks every type, slot, field,
+type conversion, name, range and colour, and replaces every column
+reference with literal data. Throws `nymph::error{line, column, message}`
+(1-based positions in the whole file). It is pure: no file access, no
+ImGui. It is the only validator of content; `render_figure()` trusts its
+result.
+
+Details:
+
+- `children` is a list of elements, or a mapping of name to element
+  (wish's named-children form; the names are dropped). An element whose
+  class accepts no slot cannot have `children`.
+- Errors suggest the closest name within two edits for an unknown type,
+  field, top-level key, `image` option or column ("unknown column
+  'revenu' (did you mean 'revenue'?) (columns: month, revenue, cost)"),
+  and say where a misplaced element goes ("'PlotLine' cannot be placed in
+  VerticalLayout; it goes inside: Plot").
+- A `$column` into an integer list rounds each value (as wish does); an
+  empty cell there is an error.
+- `image` options are checked with the same limits as `render_frames()`;
+  the "width or height times scale above 8192" error is reported at
+  `scale`, the padding error at `padding`.
+- After the root element is bound, its class's `adjust_root(node,
+  explicitly_set)` hook runs. `Plot` and `Plot3D` use it for wish's rule
+  that a root plot without `height` fills the image; `bind_source()`
+  itself never names an element type.
 
 ### `render_figure()` (`src/render/figure_renderer`)
 

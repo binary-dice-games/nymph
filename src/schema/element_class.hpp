@@ -66,6 +66,15 @@ class element_class {
   /// @brief A node of this class with every field at its default.
   node make_node() const;
 
+  /// @brief Called by bind() on the `root` node only, after its fields are
+  ///        set. `explicitly_set[i]` tells whether field `i` was written in
+  ///        the source. Default: nothing. `Plot` uses it to fill the image
+  ///        when its `height` was left out (wish nymph's rule).
+  virtual void adjust_root(node& n, const std::vector<bool>& explicitly_set) const {
+    (void)n;
+    (void)explicitly_set;
+  }
+
   /// @brief Draws `n` (a node of this class) into the open figure frame.
   virtual void draw(const node& n, draw_context& dc) const = 0;
 

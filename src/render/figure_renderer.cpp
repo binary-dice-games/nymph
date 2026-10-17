@@ -136,10 +136,6 @@ void set_frame_inputs(const image_options& options) {
 
 } // namespace
 
-bool is_known_theme(const std::string& name) {
-  return find_theme(name) != nullptr;
-}
-
 image render_frames(const image_options& options, const draw_fn& draw) {
   check_options(options);
   const theme& t = *find_theme(options.theme);

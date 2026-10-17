@@ -21,6 +21,8 @@ add_library(nymph STATIC
   document/yaml_doc.cpp
   document/table.hpp
   document/table.cpp
+  document/bind.hpp
+  document/bind.cpp
   schema/value.hpp
   schema/name_table.hpp
   schema/name_table.cpp

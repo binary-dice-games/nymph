@@ -3,7 +3,9 @@
 /// @brief The `image:` section of a nymph source: output size and look.
 #pragma once
 
+#include <array>
 #include <string>
+#include <string_view>
 
 namespace bdg::nymph {
 
@@ -16,5 +18,18 @@ struct image_options {
   std::string theme = "light"; ///< "light", "dark" or "classic".
   int padding = 8; ///< Logical pixels between the image edge and the content.
 };
+
+/// @brief The themes `image.theme` accepts.
+inline constexpr std::array<std::string_view, 3> kThemeNames{"light", "dark", "classic"};
+
+/// @brief Whether `name` is one of kThemeNames.
+inline bool is_known_theme(std::string_view name) {
+  for (std::string_view t : kThemeNames) {
+    if (t == name) {
+      return true;
+    }
+  }
+  return false;
+}
 
 } // namespace bdg::nymph

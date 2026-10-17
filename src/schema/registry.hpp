@@ -32,6 +32,10 @@ class registry {
   ///        error messages.
   std::string names_in_slot(std::string_view slot) const;
 
+  /// @brief Names of the classes that accept children of slot `slot`, "A,
+  ///        B", for "X goes in: ..." messages.
+  std::string names_accepting(std::string_view slot) const;
+
  private:
   std::map<std::string, std::unique_ptr<element_class>, std::less<>> classes_;
 };

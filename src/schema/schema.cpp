@@ -116,4 +116,14 @@ std::string registry::names_in_slot(std::string_view slot) const {
   return out;
 }
 
+std::string registry::names_accepting(std::string_view slot) const {
+  std::string out;
+  for (const auto& [name, cls] : classes_) {
+    if (cls->accepts_slot(slot)) {
+      out += (out.empty() ? "" : ", ") + name;
+    }
+  }
+  return out;
+}
+
 } // namespace bdg::nymph

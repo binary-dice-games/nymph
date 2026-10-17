@@ -41,7 +41,4 @@ inline constexpr float kFigureFontSize = 16.0f;
 ///         `draw` throws.
 image render_frames(const image_options& options, const draw_fn& draw);
 
-/// @brief Whether `name` is a theme render_frames() accepts.
-bool is_known_theme(const std::string& name);
-
 } // namespace bdg::nymph
