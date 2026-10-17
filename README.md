@@ -108,6 +108,8 @@ carries its source: `bdg::nymph::extract_source(png)` returns it.
 | [spec/INDEX.md](spec/INDEX.md) | Index of the project specifications (one folder per project, with its DESIGN.md and PLAN.md) |
 | [spec/01_core_features/DESIGN.md](spec/01_core_features/DESIGN.md) | Architecture, source format, key abstractions, design decisions |
 | [spec/01_core_features/PLAN.md](spec/01_core_features/PLAN.md) | Ordered implementation steps and their tests |
+| [spec/02_opengl_rasterizer/DESIGN.md](spec/02_opengl_rasterizer/DESIGN.md) | Planned OpenGL rasterizer: run-time loading, fallback, `--rasterizer` |
+| [spec/02_opengl_rasterizer/PLAN.md](spec/02_opengl_rasterizer/PLAN.md) | Its implementation steps and tests |
 | [CHANGELOG.md](CHANGELOG.md) | User-facing changes between releases |
 | [CLAUDE.md](CLAUDE.md) | Coding style and project rules for AI agents and contributors |
 
