@@ -15,4 +15,19 @@ inline constexpr size_t kMaxSourceBytes = 16u * 1024u * 1024u;
 /// @brief Largest number of data rows in a source's `data`.
 inline constexpr size_t kMaxDataRows = 1000000u;
 
+/// @brief Largest number of nodes (elements with an `id`) in one UML diagram
+///        (spec/03_uml_diagrams/DESIGN.md section 8).
+inline constexpr size_t kMaxUmlNodes = 500u;
+
+/// @brief Largest number of edges (relations, transitions, flows) in one UML
+///        graph diagram.
+inline constexpr size_t kMaxUmlEdges = 2000u;
+
+/// @brief Largest number of rows (messages, notes, fragment parts) in one
+///        sequence diagram.
+inline constexpr size_t kMaxUmlRows = 2000u;
+
+/// @brief Deepest nesting of composite states or sequence fragments.
+inline constexpr size_t kMaxUmlNesting = 8u;
+
 } // namespace bdg::nymph

@@ -78,3 +78,8 @@ if(NYMPH_OPENGL)
   nymph_add_test(test_gl_rasterizer test_gl_rasterizer.cpp)
   target_compile_definitions(test_gl_rasterizer PRIVATE NYMPH_SOURCE_DIR="${PROJECT_SOURCE_DIR}")
 endif()
+
+# ── UML diagrams (spec/03_uml_diagrams) ──────────────────────────────────────
+
+nymph_add_test(test_imuml_graph_layout test_imuml_graph_layout.cpp)
+nymph_add_test(test_imuml_sequence_layout test_imuml_sequence_layout.cpp)
