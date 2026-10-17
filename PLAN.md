@@ -14,6 +14,18 @@ test is a GoogleTest file in `tests/`, added with `nymph_add_test()`.
 
 ### 1. Dependencies and build wiring
 
+*Result: done.* Departures from the plan as first written: libyaml is
+compiled from its eight C files in `cmake/NymphDependencies.cmake`, not
+through its own `CMakeLists.txt` (that file requires CMake 3.0, which
+CMake 4 rejects, and adds CTest tests and install/export rules);
+`IMGUI_DISABLE_OBSOLETE_FUNCTIONS` is not set because ImPlot v1.0 still
+calls `ImDrawList` overloads it deletes; the test runs two frames, since
+ImGui hides a new auto-sized window on its first. Fresh-clone check done:
+a clone without `--recursive` checks out the pinned commits on configure,
+builds, and passes. Lesson: `git submodule add` records the remote's
+default branch; the pinned commit must be staged (`git add extern/<name>`)
+or the configure-time `git submodule update` moves it back.
+
 **Goal:** ImGui, ImPlot, ImPlot3D, libyaml and stb build from submodules
 and link into the `nymph` library with no system packages.
 
@@ -23,7 +35,7 @@ and link into the `nymph` library with no system packages.
   submodules with `branch` entries in `.gitmodules`.
 - `cmake/NymphDependencies.cmake`: `nymph_ensure_submodules()` for each;
   static targets `nymph_imgui` (imgui core + implot + implot3d sources, no
-  backends) and `yaml` (libyaml's own CMake, tests and install off); an
+  backends) and `yaml` (libyaml's C sources, no tests or install); an
   interface target `nymph_stb` for the stb include path. All in the
   `extern` IDE folder.
 - Root `CMakeLists.txt` includes it; `src/CMakeLists.txt` links `nymph`
@@ -32,9 +44,11 @@ and link into the `nymph` library with no system packages.
 
 **Tests:**
 - `tests/test_dependencies.cpp`: creates and destroys an ImGui, ImPlot and
-  ImPlot3D context; runs one `NewFrame()` / `Render()` with a fixed
-  display size and an Alpha8 atlas built; parses a one-line YAML string
-  with libyaml.
+  ImPlot3D context; runs `NewFrame()` / `Render()` with a fixed
+  display size, checking that ImGui requests the font atlas as an Alpha8
+  texture (`ImTextureStatus_WantCreate`) and that text and plots produce
+  geometry; parses a YAML string with libyaml and checks node positions;
+  encodes a PNG with stb.
 - A fresh clone without `--recursive` configures and builds (manual check,
   recorded in the step's result).
 

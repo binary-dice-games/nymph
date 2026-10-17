@@ -607,8 +607,9 @@ result renders with this tool when it uses only the elements nymph has.
 - Metadata survives only byte-exact copies; services that re-encode images
   drop it. The README says so.
 
-Dependencies (git submodules in `extern/`, built from source, initialised
-lazily by `nymph_ensure_submodules()`):
+Dependencies (git submodules in `extern/`, built from source by
+`cmake/NymphDependencies.cmake`, initialised lazily by
+`nymph_ensure_submodules()`):
 
 | Submodule | Why | Pin |
 |---|---|---|
@@ -618,6 +619,12 @@ lazily by `nymph_ensure_submodules()`):
 | `libyaml` | YAML parsing with positions | `0.2.5` |
 | `stb` | `stb_image_write` (PNG), zlib for compressed `iTXt` | wish's `extern/stb` commit |
 | `googletest` | Tests only | `v1.15.2` |
+
+libyaml is compiled from its C files rather than through its own
+`CMakeLists.txt` (CMake 3.0 minimum, rejected by CMake 4; CTest and install
+rules). ImGui is built with `IMGUI_DISABLE_WIN32_FUNCTIONS` and
+`IMGUI_DISABLE_DEFAULT_SHELL_FUNCTIONS` (no clipboard, IME or shell calls)
+but not `IMGUI_DISABLE_OBSOLETE_FUNCTIONS`, which ImPlot v1.0 still needs.
 
 ImPlot and ImPlot3D are ImGui extensions, and libyaml and stb are small
 vendored C libraries; none of them is a system or GPU dependency. Pinning

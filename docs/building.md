@@ -12,9 +12,24 @@ nymph targets **Linux, MSYS2, and native Windows (MSVC)**.
 | C++ compiler | C++20 | GCC 10+, Clang 12+, MSVC 2022 |
 | Git | any | Required to check out submodules |
 
-Dependencies live in `extern/` as git submodules. Configuring from a git
-checkout initializes the ones the chosen options need, so
-`git submodule update --init --recursive` is optional.
+Dependencies live in `extern/` as git submodules and are compiled from
+source; no system packages are needed. Configuring from a git checkout
+initializes them, so `git submodule update --init --recursive` is
+optional.
+
+| Submodule | Version | Used for |
+|-----------|---------|----------|
+| `extern/imgui` | v1.92.9b | Frame generation and fonts (no backend: nymph rasterizes on the CPU) |
+| `extern/implot` | v1.0 | 2D plots |
+| `extern/implot3d` | v0.4 | 3D plots |
+| `extern/libyaml` | 0.2.5 | Parsing the YAML source |
+| `extern/stb` | `31c1ad3` | PNG encoding, zlib |
+| `extern/googletest` | v1.15.2 | Tests only (`NYMPH_BUILD_TESTS`) |
+
+To move a dependency to another version, check out the new commit inside
+the submodule **and stage it** (`git add extern/<name>`): configuring runs
+`git submodule update`, which resets every submodule to the staged
+commit.
 
 ### MSYS2 (Windows host)
 
@@ -46,6 +61,7 @@ Outputs:
 | Target | Output |
 |--------|--------|
 | `nymph` | Static library |
+| `nymph_imgui`, `yaml` | Static libraries of the dependencies |
 | `nymph-cli` | `build/app/nymph` executable |
 | `test_*` | GoogleTest executables under `build/tests/` |
 

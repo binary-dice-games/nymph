@@ -7,12 +7,12 @@
 // STB_IMAGE_WRITE_STATIC keeps it from clashing with nymph's own (step 4).
 #define STB_IMAGE_WRITE_STATIC
 #define STB_IMAGE_WRITE_IMPLEMENTATION
+#include <gtest/gtest.h>
 #include <imgui.h>
 #include <implot.h>
 #include <implot3d.h>
 #include <stb_image_write.h>
 #include <yaml.h>
-#include <gtest/gtest.h>
 #include <cstdint>
 #include <cstring>
 #include <string>
