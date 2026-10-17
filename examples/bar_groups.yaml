@@ -1,0 +1,23 @@
+nymph: 1
+description: Revenue per quarter in two regions, in millions.
+image: {width: 640, height: 400}
+root:
+  type: Plot
+  title: Revenue by quarter
+  y_label: revenue
+  y_format: "%.0fM"
+  x_ticks: [0, 1, 2, 3]
+  x_tick_labels: $quarter
+  y_min: 0
+  y_max: 30
+  legend_location: NorthWest
+  children:
+    - type: PlotBarGroups
+      labels: [north, south]
+      values: [$north, $south]
+data: |
+  quarter, north, south
+  Q1, 12, 9
+  Q2, 18, 14
+  Q3, 15, 17
+  Q4, 22, 19

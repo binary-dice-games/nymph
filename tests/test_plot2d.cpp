@@ -6,6 +6,7 @@
 #include <algorithm>
 #include <array>
 #include <cstdint>
+#include <cstring>
 #include <filesystem>
 #include <fstream>
 #include <map>
@@ -111,11 +112,19 @@ std::vector<std::string> sorted(std::vector<std::string> v) {
   return v;
 }
 
-/// Fields of wish's PlotItem base, inherited by every series.
+/// Fields of wish's PlotItem base, inherited by every series, plus the 2D
+/// series' `y_axis`.
 std::vector<std::string> with_item_fields(std::vector<std::string> own) {
   own.insert(
       own.end(),
-      {"label=''", "color=''", "fill_color=''", "line_weight=1", "fill_alpha=-1", "marker=-3", "marker_size=0"});
+      {"label=''",
+       "color=''",
+       "fill_color=''",
+       "line_weight=1",
+       "fill_alpha=-1",
+       "marker=-3",
+       "marker_size=0",
+       "y_axis=0"});
   return sorted(own);
 }
 
@@ -142,7 +151,23 @@ TEST(plot2d, SchemaIsPinned) {
             "y_max=0",
             "legend_location=-1",
             "legend_flags=0",
-            "colormap=-1"})},
+            "colormap=-1",
+            "x_scale=0",
+            "y_scale=0",
+            "x_format=''",
+            "y_format=''",
+            "x_ticks=[]",
+            "x_tick_labels=[]",
+            "y_ticks=[]",
+            "y_tick_labels=[]",
+            "y2_label=''",
+            "y2_flags=0",
+            "y2_min=0",
+            "y2_max=0",
+            "y2_scale=0",
+            "y2_format=''",
+            "y2_ticks=[]",
+            "y2_tick_labels=[]"})},
       {"PlotLine", with_item_fields({"xs=[]", "ys=[]"})},
       {"PlotScatter", with_item_fields({"xs=[]", "ys=[]"})},
       {"PlotStairs", with_item_fields({"xs=[]", "ys=[]"})},
@@ -180,6 +205,12 @@ TEST(plot2d, SchemaIsPinned) {
        with_item_fields(
            {"font=''", "font_size=0", "text_color=''", "text=''", "x=0", "y=0", "offset_x=0", "offset_y=0"})},
       {"PlotInfLines", with_item_fields({"values=[]", "horizontal=false"})},
+      {"PlotAnnotation", with_item_fields({"text=''", "x=0", "y=0", "offset_x=10", "offset_y=-10", "clamp=true"})},
+      {"PlotTag", with_item_fields({"value=0", "axis=1", "text=''"})},
+      {"PlotErrorBars",
+       with_item_fields({"xs=[]", "ys=[]", "err=[]", "neg=[]", "pos=[]", "horizontal=false", "cap_size=4"})},
+      {"PlotBarGroups",
+       with_item_fields({"labels=[]", "values=[]", "group_size=0.67", "shift=0", "horizontal=false", "stacked=false"})},
   };
   for (const auto& [type, fields] : expected) {
     EXPECT_EQ(schema_of(type), fields) << type;
@@ -189,6 +220,20 @@ TEST(plot2d, SchemaIsPinned) {
     plot2d_classes += (cls->slot() == "plot2d.item" || cls->name() == "Plot") ? 1 : 0;
   }
   EXPECT_EQ(plot2d_classes, expected.size());
+  EXPECT_EQ(
+      schema_of("ColorScale"),
+      sorted(
+          {"label=''",
+           "scale_min=0",
+           "scale_max=1",
+           "colormap=-1",
+           "format='%g'",
+           "flags=0",
+           "width=0",
+           "height=300",
+           "font=''",
+           "font_size=0",
+           "text_color=''"}));
 }
 
 TEST(plot2d, SeriesGoOnlyInAPlot) {
@@ -211,7 +256,7 @@ std::vector<fs::path> samples() {
 
 TEST(plot2d, EverySampleRendersAndDrawsSomething) {
   const std::vector<fs::path> files = samples();
-  ASSERT_EQ(files.size(), 14u) << "one sample per 2D series";
+  ASSERT_EQ(files.size(), 18u) << "one sample per 2D series";
   for (const fs::path& file : files) {
     SCOPED_TRACE(file.filename().string());
     const std::string source = read_file(file);
@@ -335,6 +380,197 @@ TEST(plot2d, PrintfFormatsAreValidated) {
   }
   const error pie = source_error(with_child("{type: PlotPieChart, labels: a, values: [1], label_fmt: \"%s\"}"));
   EXPECT_NE(std::string(pie.what()).find("PlotPieChart.label_fmt"), std::string::npos) << pie.what();
+}
+
+// ── Axes: scales, formats, ticks, second Y axis ──────────────────────────────
+
+/// A 300 x 200 Plot with `plot_fields` (", key: value" pairs) and `children`.
+std::string plot_with(const std::string& plot_fields, const std::string& children) {
+  return "image: {width: 300, height: 200}\nroot:\n  type: Plot\n  flags: NoLegend\n" + plot_fields + "  children:\n" +
+      children;
+}
+
+const char* const kRising = "    - {type: PlotLine, xs: [1, 10, 100, 1000], ys: [1, 10, 100, 1000]}\n";
+
+TEST(plot2d, AxisScalesFormatsAndTicksChangeTheImage) {
+  const image linear = render(plot_with("", kRising));
+  for (const char* fields :
+       {"  x_scale: Log10\n",
+        "  y_scale: SymLog\n",
+        "  x_scale: Time\n",
+        "  y_format: \"%.0f ms\"\n",
+        "  x_ticks: [0, 500, 1000]\n",
+        "  x_ticks: [0, 500, 1000]\n  x_tick_labels: [low, mid, high]\n"}) {
+    SCOPED_TRACE(fields);
+    const image changed = render(plot_with(fields, kRising));
+    EXPECT_FALSE(changed.rgba == linear.rgba);
+    EXPECT_TRUE(render(plot_with(fields, kRising)).rgba == changed.rgba); // deterministic
+  }
+  // A Log10 axis makes the decades evenly spaced: the line becomes straight
+  // on log-log axes, so it differs from linear-log.
+  const image log_log = render(plot_with("  x_scale: Log10\n  y_scale: Log10\n", kRising));
+  const image lin_log = render(plot_with("  y_scale: Log10\n", kRising));
+  EXPECT_FALSE(log_log.rgba == lin_log.rgba);
+}
+
+TEST(plot2d, SecondYAxisAppearsOnTheRightForItsSeries) {
+  const std::string two =
+      "    - {type: PlotLine, ys: [1, 2, 3]}\n"
+      "    - {type: PlotLine, ys: [100, 300, 200], y_axis: Y2}\n";
+  const std::string one =
+      "    - {type: PlotLine, ys: [1, 2, 3]}\n"
+      "    - {type: PlotLine, ys: [100, 300, 200]}\n";
+  const image with_y2 = render(plot_with("", two));
+  const image without = render(plot_with("", one));
+  // Tick labels of Y2 fill a strip down the right side of the plot.
+  EXPECT_GT(distinct_colors(with_y2, 250, 20, 300, 180), distinct_colors(without, 250, 20, 300, 180));
+  // Any y2_ field shows the axis without a series on it.
+  const image labelled = render(plot_with("  y2_label: rate\n", one));
+  EXPECT_FALSE(labelled.rgba == without.rgba);
+  EXPECT_NO_THROW(render(plot_with("  y2_scale: Log10\n  y2_min: 1\n  y2_max: 100\n", two)));
+}
+
+TEST(plot2d, AxisFieldsAreChecked) {
+  const error labels = source_error(plot_with("  x_ticks: [1, 2]\n  x_tick_labels: [a, b, c]\n", kRising));
+  EXPECT_NE(
+      std::string(labels.what()).find("Plot.x_tick_labels has 3 labels but x_ticks has 2 values"), std::string::npos)
+      << labels.what();
+  const error log = source_error(plot_with("  y_scale: Log10\n  y_min: 0\n  y_max: 10\n", kRising));
+  EXPECT_NE(std::string(log.what()).find("Plot.y_min must be above 0 on a Log10 axis"), std::string::npos)
+      << log.what();
+  const error time = source_error(plot_with("  x_scale: Time\n  x_format: \"%.1f\"\n", kRising));
+  EXPECT_NE(std::string(time.what()).find("Plot.x_format does not apply to a Time axis"), std::string::npos)
+      << time.what();
+  const error y2 = source_error(plot_with("  y2_ticks: [1]\n  y2_tick_labels: [a, b]\n", kRising));
+  EXPECT_NE(std::string(y2.what()).find("Plot.y2_tick_labels has 2 labels"), std::string::npos) << y2.what();
+  const error fmt = source_error(plot_with("  y_format: \"%s\"\n", kRising));
+  EXPECT_NE(std::string(fmt.what()).find("Plot.y_format"), std::string::npos) << fmt.what();
+}
+
+// ── Error bars, annotations, tags ────────────────────────────────────────────
+
+const rgba kRed{255, 0, 0, 255};
+
+TEST(plot2d, ErrorBarsTakeThePreviousSeriesColour) {
+  const std::string line = "    - {type: PlotLine, ys: [5, 5, 5], color: \"#FF0000\"}\n";
+  const std::string bars = "    - {type: PlotErrorBars, ys: [5, 5, 5], err: [3, 3, 3], line_weight: 3}\n";
+  const std::string limits = "  y_min: 0\n  y_max: 10\n";
+  const size_t line_only = count_color(render(plot_with(limits, line)), kRed);
+  const size_t with_bars = count_color(render(plot_with(limits, line + bars)), kRed);
+  EXPECT_GT(with_bars, line_only + 50);
+}
+
+TEST(plot2d, ErrorBarsDoNotUseUpAColormapColour) {
+  // Series b keeps the colour it has without the error bars before it.
+  const std::string a = "    - {type: PlotLine, ys: [1, 1, 1]}\n";
+  const std::string a_bars = "    - {type: PlotErrorBars, ys: [1, 1, 1], err: [0.2, 0.2, 0.2]}\n";
+  const std::string b = "    - {type: PlotLine, ys: [9, 9, 9], line_weight: 3}\n";
+  const std::string limits = "  y_min: 0\n  y_max: 10\n";
+  const image plain = render(plot_with(limits, a + b));
+  const image with_bars = render(plot_with(limits, a + a_bars + b));
+  // The top of the plot holds only line b.
+  const int y0 = 20;
+  const int y1 = 60;
+  for (int y = y0; y < y1; ++y) {
+    for (int x = 60; x < 280; ++x) {
+      ASSERT_EQ(std::memcmp(plain.at(x, y), with_bars.at(x, y), 4), 0) << x << ", " << y;
+    }
+  }
+}
+
+TEST(plot2d, AnnotationsAndTagsTakeTheirColour) {
+  const std::string limits = "  x_min: 0\n  x_max: 10\n  y_min: 0\n  y_max: 10\n";
+  const std::string red_line = "    - {type: PlotLine, xs: [0, 10], ys: [1, 1], color: \"#FF0000\"}\n";
+  const size_t line_only = count_color(render(plot_with(limits, red_line)), kRed);
+  // Without a color: the previous series' colour fills the box.
+  const size_t annotated =
+      count_color(render(plot_with(limits, red_line + "    - {type: PlotAnnotation, x: 5, y: 5, text: here}\n")), kRed);
+  EXPECT_GT(annotated, line_only + 100);
+  // Error bars in between pass the line's colour on.
+  const std::string bars = "    - {type: PlotErrorBars, xs: [0, 10], ys: [1, 1], err: [0.5, 0.5]}\n";
+  const size_t after_bars = count_color(
+      render(plot_with(limits, red_line + bars + "    - {type: PlotAnnotation, x: 5, y: 5, text: here}\n")), kRed);
+  EXPECT_GT(after_bars, line_only + 100);
+  const size_t tagged = count_color(render(plot_with(limits, red_line + "    - {type: PlotTag, value: 5}\n")), kRed);
+  EXPECT_GT(tagged, line_only + 50);
+  // An explicit colour wins; the plot's first item has no previous colour.
+  const image green =
+      render(plot_with(limits, "    - {type: PlotTag, value: 5, axis: X, text: now, color: \"#00FF00\"}\n"));
+  EXPECT_GT(count_color(green, {0, 255, 0, 255}), 50u);
+  EXPECT_NO_THROW(render(plot_with(limits, "    - {type: PlotAnnotation, x: 5, y: 5}\n")));
+}
+
+TEST(plot2d, ErrorBarsNeedMatchingErrors) {
+  expect_error(
+      with_child("{type: PlotErrorBars, ys: [1, 2]}"), "{", "PlotErrorBars.err is empty: give err, or neg and pos");
+  expect_error(
+      with_child("{type: PlotErrorBars, ys: [1, 2], err: [1]}"), "[1]}", "PlotErrorBars.err has 1 values but ys has 2");
+  expect_error(
+      with_child("{type: PlotErrorBars, ys: [1, 2], err: [1, 1], neg: [1, 1]}"),
+      "[1, 1]}",
+      "PlotErrorBars.neg cannot be used with err");
+  expect_error(
+      with_child("{type: PlotErrorBars, ys: [1, 2], neg: [1, 1]}"),
+      "{",
+      "PlotErrorBars.pos is empty: asymmetric errors need both neg and pos");
+  expect_error(
+      with_child("{type: PlotErrorBars, ys: [1, 2], neg: [1, 1], pos: [1]}"),
+      "[1]}",
+      "PlotErrorBars.pos has 1 values but ys has 2");
+}
+
+// ── Bar groups ───────────────────────────────────────────────────────────────
+
+TEST(plot2d, BarGroupsTakeOneRowPerGroup) {
+  // Two labels, two groups, group_size 0.5: ImPlot places bar i of group g
+  // at g - 0.125 + 0.25 i, 0.25 wide; the same bars drawn one by one with
+  // PlotBars give the same image.
+  const std::string limits = "  x_min: -0.5\n  x_max: 1.5\n  y_min: 0\n  y_max: 5\n";
+  const image groups =
+      render(plot_with(limits, "    - {type: PlotBarGroups, labels: [a, b], values: [3, 1, 2, 4], group_size: 0.5}\n"));
+  const image bars = render(plot_with(
+      limits,
+      "    - {type: PlotBars, label: a, xs: [-0.125, 0.875], ys: [3, 2], bar_size: 0.25}\n"
+      "    - {type: PlotBars, label: b, xs: [0.125, 1.125], ys: [1, 4], bar_size: 0.25}\n"));
+  EXPECT_TRUE(groups.rgba == bars.rgba);
+  const image stacked = render(plot_with(
+      limits, "    - {type: PlotBarGroups, labels: [a, b], values: [3, 1, 2, 4], group_size: 0.5, stacked: true}\n"));
+  EXPECT_FALSE(stacked.rgba == groups.rgba);
+}
+
+TEST(plot2d, BarGroupsNeedAWholeNumberOfGroups) {
+  expect_error(with_child("{type: PlotBarGroups, values: [1, 2]}"), "{", "PlotBarGroups.labels is empty");
+  expect_error(
+      with_child("{type: PlotBarGroups, labels: [a, b], values: [1, 2, 3]}"),
+      "[1, 2, 3]}",
+      "PlotBarGroups.values has 3 values, not a whole number of groups of 2");
+}
+
+// ── ColorScale ───────────────────────────────────────────────────────────────
+
+TEST(plot2d, ColorScaleDrawsTheColormapBesideAPlot) {
+  const std::string row =
+      "image: {width: 400, height: 300}\n"
+      "root:\n"
+      "  type: HorizontalLayout\n"
+      "  children:\n"
+      "    - {type: Plot, width: -1, colormap: Viridis}\n"
+      "    - {type: ColorScale, label: level, scale_min: 0, scale_max: 10, colormap: Viridis}\n";
+  const image img = render(row);
+  // The gradient: many colours in a narrow strip on the right.
+  EXPECT_GT(distinct_colors(img, 300, 40, 400, 260), 50u);
+  const figure f = bind_source(row, builtin_registry());
+  EXPECT_NO_THROW(
+      render("root: {type: ColorScale, scale_min: -1, scale_max: 1, colormap: RdBu, flags: Invert|Opposite}\n"));
+  EXPECT_EQ(f.root.children[1].get<double>(7), 300.0); // height: lines up with a Plot's default
+  const figure root = bind_source("root: {type: ColorScale}\n", builtin_registry());
+  EXPECT_EQ(root.root.get<double>(7), -1.0); // a root ColorScale fills the image
+}
+
+TEST(plot2d, ColorScaleNeedsARange) {
+  const error e = source_error("root: {type: ColorScale, scale_min: 2, scale_max: 2}\n");
+  EXPECT_NE(std::string(e.what()).find("ColorScale.scale_max must differ from scale_min"), std::string::npos)
+      << e.what();
 }
 
 } // namespace

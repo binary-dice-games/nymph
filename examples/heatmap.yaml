@@ -2,21 +2,36 @@ nymph: 1
 description: Activity by weekday (columns) and time of day (rows, morning at the top).
 image: {width: 520, height: 360}
 root:
-  type: Plot
-  title: Activity
-  colormap: Viridis
-  flags: NoLegend
-  x_flags: NoDecorations
-  y_flags: NoDecorations
+  type: HorizontalLayout
+  spacing: 8
   children:
-    - type: PlotHeatmap
-      label: activity
-      rows: 4
-      cols: 5
-      values: [$mon, $tue, $wed, $thu, $fri]
+    - type: Plot
+      title: Activity
+      width: -1
+      height: -1
+      colormap: Viridis
+      flags: NoLegend
+      x_flags: NoGridLines|NoTickMarks
+      y_flags: NoGridLines|NoTickMarks
+      x_ticks: [0.1, 0.3, 0.5, 0.7, 0.9]
+      x_tick_labels: [Mon, Tue, Wed, Thu, Fri]
+      y_ticks: [0.875, 0.625, 0.375, 0.125]
+      y_tick_labels: $slot
+      children:
+        - type: PlotHeatmap
+          label: activity
+          rows: 4
+          cols: 5
+          values: [$mon, $tue, $wed, $thu, $fri]
+          scale_min: 0
+          scale_max: 10
+          format: "%.0f"
+    - type: ColorScale
+      label: events
+      height: -1
       scale_min: 0
       scale_max: 10
-      format: "%.0f"
+      colormap: Viridis
 data: |
   slot, mon, tue, wed, thu, fri
   morning, 2, 4, 6, 3, 1

@@ -156,12 +156,15 @@ registered element classes (section 4). In the first release:
 - `Plot`, with children `PlotLine`, `PlotScatter`, `PlotStairs`,
   `PlotStems`, `PlotShaded`, `PlotBars`, `PlotBarsH`, `PlotHistogram`,
   `PlotHistogram2D`, `PlotHeatmap`, `PlotPieChart`, `PlotDigital`,
-  `PlotText`, `PlotInfLines`.
+  `PlotText`, `PlotInfLines`, and (added after the first release, not
+  in wish) `PlotBarGroups`, `PlotErrorBars`, `PlotAnnotation`,
+  `PlotTag`.
 - `Plot3D`, with children `Plot3DLine`, `Plot3DScatter`, `Plot3DSurface`,
   `Plot3DTriangle`, `Plot3DQuad`, `Plot3DMesh`, `Plot3DText`.
 - `VerticalLayout` and `HorizontalLayout`, with any of the elements in
   this list except series as children; `Spring`, `Label`, `Separator`,
-  `SeparatorText`.
+  `SeparatorText`; `ColorScale` (added later, see "Axes and annotations"
+  below).
 
 `root` is any element except a series. A series must be a direct child of
 its kind of plot (section 4, slots). Fields, defaults and enum/flag names
@@ -274,6 +277,39 @@ wish drew something silently wrong, nymph reports an error):
   drew nothing); `Plot3DMesh.indices` must be a non-zero multiple of 3,
   each within the vertex count. wish passed the indices to ImPlot3D
   unchecked, so an out-of-range index read past the vertex arrays.
+
+**Axes and annotations** (added after the first release; ImPlot v1.0
+features wish did not expose):
+
+- `Plot` has, per axis, `_scale` (`Linear`, `Time`, `Log10`, `SymLog`),
+  `_format` (a checked printf format), `_ticks` and `_tick_labels`, and
+  a second Y axis through the `y2_` fields. Flat fields rather than a
+  nested axis mapping keep the schema one level deep like the rest of
+  it. A tick label count other than the tick count, a fixed limit at or
+  below 0 on a `Log10` axis and a format on a `Time` axis are errors.
+- `Time` axes read UNIX seconds and are labelled in UTC, ISO 8601 and a
+  24-hour clock (`ImPlotStyle::UseLocalTime` stays false), so an image
+  does not depend on the machine's time zone.
+- Every 2D series has `y_axis` (`Y1` / `Y2`, its last field). The `Plot`
+  enables Y2 (on the right, ImPlot's `AuxDefault`) when a `y2_` field is
+  set or a child uses it, since ImPlot asserts on selecting a disabled
+  axis.
+- `PlotBarGroups.values` is one row per group, so `[$a, $b]` (columns
+  interleaved by row) gives it directly from a table of one column per
+  series; it is transposed to ImPlot's one row per item.
+- `PlotErrorBars`, `PlotAnnotation` and `PlotTag` without a `color` take
+  the previous item's colour (`ImPlot::GetLastItemColor()`), since they
+  describe the series written before them. ImPlot v1.0 gives a new
+  error-bar item the next colormap colour although it draws it in its
+  line colour; nymph restores the colormap index and sets the item's
+  colour to the drawn one (through `implot_internal.h`), so error bars
+  do not shift the colours of later series.
+- `ColorScale` is a `figure` element (ImPlot's `ColormapScale`) rather
+  than a `Plot` option: it is placed by the layout engine beside any plot,
+  2D or 3D. Its default height (300) matches a `Plot`'s, so the two line
+  up in a row; as root it fills the image.
+- Candlestick (OHLC) charts are not available: ImPlot v1.0 has no such
+  item.
 
 Scalar typing follows the registered field type, not YAML's guess: a value
 assigned to a text field stays text (`title: 2025`); a quoted value

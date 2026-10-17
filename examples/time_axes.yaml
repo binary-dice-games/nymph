@@ -1,0 +1,36 @@
+nymph: 1
+description: Requests per hour (log scale, left) and error rate (right) over one day, times in UTC.
+image: {width: 720, height: 400}
+root:
+  type: Plot
+  title: Traffic on 2026-03-02
+  x_scale: Time
+  y_scale: Log10
+  y_label: requests per hour
+  y2_label: error rate
+  y2_format: "%.1f%%"
+  y2_min: 0
+  y2_max: 5
+  children:
+    - type: PlotLine
+      label: requests
+      xs: $time
+      ys: $requests
+      line_weight: 2
+    - type: PlotLine
+      label: errors
+      xs: $time
+      ys: $errors
+      y_axis: Y2
+      marker: Circle
+data: |
+  time, requests, errors
+  1772409600, 120, 0.4
+  1772416800, 60, 0.3
+  1772424000, 900, 0.6
+  1772431200, 8500, 1.1
+  1772438400, 21000, 1.8
+  1772445600, 18000, 3.9
+  1772452800, 9000, 1.2
+  1772460000, 2500, 0.7
+  1772467200, 400, 0.5

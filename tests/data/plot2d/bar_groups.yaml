@@ -1,0 +1,9 @@
+image: {width: 480, height: 320}
+root:
+  type: Plot
+  title: Sales by quarter
+  x_ticks: [0, 1, 2, 3]
+  x_tick_labels: [Q1, Q2, Q3, Q4]
+  children:
+    - {type: PlotBarGroups, labels: [north, south], values: [$north, $south]}
+data: {north: [12, 18, 15, 22], south: [9, 14, 17, 19]}

@@ -139,6 +139,10 @@ void configure(const theme& t, const char* renderer_name) {
   ImGuiStyle& style = ImGui::GetStyle();
   t.imgui(&style);
   t.implot(&ImPlot::GetStyle());
+  // Time axes: unambiguous ISO 8601 dates and a 24-hour clock, in UTC
+  // (UseLocalTime stays false, so images do not depend on the machine).
+  ImPlot::GetStyle().UseISO8601 = true;
+  ImPlot::GetStyle().Use24HourClock = true;
   t.implot3d(&ImPlot3D::GetStyle());
   t.imuml(&ImUml::GetStyle());
   style.FontSizeBase = kFigureFontSize;

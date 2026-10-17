@@ -1,0 +1,45 @@
+nymph: 1
+description: Median request latency per build, with the 10th to 90th percentile spread, against a 40 ms budget.
+image: {width: 640, height: 400}
+root:
+  type: Plot
+  title: Latency per build
+  x_label: build
+  y_label: latency
+  y_format: "%.0f ms"
+  x_ticks: [1, 2, 3, 4, 5, 6]
+  y_min: 0
+  y_max: 60
+  children:
+    - type: PlotLine
+      label: median
+      xs: $build
+      ys: $median
+      marker: Circle
+      line_weight: 2
+    - type: PlotErrorBars
+      xs: $build
+      ys: $median
+      neg: $below
+      pos: $above
+    - type: PlotAnnotation
+      x: 4
+      y: 34
+      text: cache disabled
+    - type: PlotInfLines
+      label: budget
+      values: [40]
+      horizontal: true
+      color: "#C0392B"
+      line_weight: 2
+    - type: PlotTag
+      value: 40
+      text: budget
+data: |
+  build, median, below, above
+  1, 21, 4, 9
+  2, 22, 5, 8
+  3, 20, 4, 10
+  4, 34, 7, 15
+  5, 23, 5, 9
+  6, 19, 3, 7

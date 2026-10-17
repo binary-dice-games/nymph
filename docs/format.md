@@ -331,6 +331,6 @@ pie label per value, a mesh index within its vertices, and so on.
 - At most 16 MiB of source and 1,000,000 data rows.
 - A UML diagram has at most 500 nodes, 2,000 edges (sequence diagrams:
   2,000 rows) and 8 levels of composite states or fragments.
-- Axis ticks are numbers: no date or category axes.
+- Dates on a `Time` axis are UNIX seconds, always shown in UTC.
 - The YAML stays in the PNG only while the file is copied byte for byte;
   services that re-encode images drop it. Keep the YAML too.
