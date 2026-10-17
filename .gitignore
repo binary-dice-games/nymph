@@ -1,0 +1,10 @@
+.vs/
+.vscode/settings.json
+out/
+bin/
+obj/
+build**/
+_deps/
+__pycache__/
+*.pyc
+*.pyo
