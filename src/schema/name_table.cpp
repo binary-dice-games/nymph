@@ -82,6 +82,9 @@ std::string name_table::format_flags(int64_t value) const {
     }
     return "0";
   }
+  if (value < 0) {
+    return format_enum(value); // a sentinel such as -1, not a set of bits
+  }
   std::string out;
   int64_t left = value;
   for (const name_entry& e : entries_) {

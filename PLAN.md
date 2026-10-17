@@ -518,6 +518,21 @@ nymph YAML.
 
 ### 14. Documentation and examples
 
+*Result: done.* `docs/format.md`, `docs/elements.md` (generated),
+`docs/agent-guide.md` (ported from wish's guide: YAML form, this CLI,
+recipes, advice, limits, and an error table built from nymph's actual
+messages), eight `examples/` with PNGs and `docs/examples.md`;
+`tests/test_docs.cpp` (3 tests: the reference matches
+`schema --markdown`, examples render deterministically and round-trip,
+`examples.md` quotes each example and each committed PNG carries its
+current source). Every recipe in the guide and `format.md` renders
+(looked at). Departures: wish's "one-pixel flat lines come out pale"
+limit does not apply to nymph's rasterizer and was dropped; the pie
+recipe fixes only the X range so `Equal` keeps the pie round in any cell.
+Found while documenting: a negative flags default (`legend_location: -1`)
+was printed as `North|South|West|East|-16`; `format_flags` now prints
+negative values as numbers.
+
 **Goal:** a person or an agent can use nymph from the docs alone.
 
 **Deliverables:**
@@ -541,19 +556,19 @@ nymph YAML.
 
 ## Completion Criteria
 
-- [ ] All tests pass under `ctest -j` three times in a row.
+- [x] All tests pass under `ctest -j` three times in a row.
 - [ ] Builds and tests pass on Linux (GCC), MSYS2 and native Windows
-      (MSVC).
-- [ ] `nymph <example>.yaml` works with no display: `DISPLAY` and
+      (MSVC). *Linux (GCC) verified; MSYS2 and MSVC not yet.*
+- [x] `nymph <example>.yaml` works with no display: `DISPLAY` and
       `WAYLAND_DISPLAY` unset, no GPU driver.
-- [ ] For every example, `extract(render(text)) == text`, and rendering
+- [x] For every example, `extract(render(text)) == text`, and rendering
       twice gives identical PNG bytes.
-- [ ] A bad source exits 1 with one positioned line on stderr and writes
+- [x] A bad source exits 1 with one positioned line on stderr and writes
       nothing.
-- [ ] The `nymph` binary links no SDL, OpenGL, wish or bison symbols
+- [x] The `nymph` binary links no SDL, OpenGL, wish or bison symbols
       (`nm` / `dumpbin` check).
-- [ ] Every element type and field wish nymph accepted (2D and 3D plots,
+- [x] Every element type and field wish nymph accepted (2D and 3D plots,
       layouts, `Spring`, `Label`, `Separator`) is accepted with the same
       name and default, and wish's three test charts render after
       `extract` converts them.
-- [ ] README, `docs/`, CHANGELOG and DESIGN.md match the code.
+- [x] README, `docs/`, CHANGELOG and DESIGN.md match the code.

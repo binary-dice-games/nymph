@@ -161,6 +161,7 @@ TEST(schema, NameTablesParseAndFormat) {
   EXPECT_EQ(flag_names().format_flags(6), "NoLegend|NoMenus");
   EXPECT_EQ(flag_names().format_flags(3), "NoTitle|NoLegend"); // single bits first
   EXPECT_EQ(flag_names().format_flags(9), "NoTitle|8");
+  EXPECT_EQ(flag_names().format_flags(-1), "-1"); // a sentinel, not all bits
   EXPECT_EQ(marker_names().format_enum(0), "Circle");
   EXPECT_EQ(marker_names().format_enum(7), "7");
   EXPECT_EQ(marker_names().names(), "None, Auto, Circle, Square");

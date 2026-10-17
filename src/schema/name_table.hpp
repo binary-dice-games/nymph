@@ -49,8 +49,9 @@ class name_table {
   std::string format_enum(int64_t value) const;
 
   /// @brief `value` as `A|B`, taking names in table order whose bits are all
-  ///        still unexplained; leftover bits are appended as a number. 0 is
-  ///        the name with value 0, or "0".
+  ///         still unexplained; leftover bits are appended as a number. 0 is
+  ///         the name with value 0, or "0"; a negative value (a sentinel,
+  ///         not bits) is its name or its decimal form.
   std::string format_flags(int64_t value) const;
 
  private:

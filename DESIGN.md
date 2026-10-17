@@ -1,6 +1,7 @@
 # nymph — Architecture & Design
 
-**Status: in progress, plan steps 1-13 done.** [PLAN.md](PLAN.md) is the ordered
+**Status: first version complete (plan steps 1-14 done); builds on MSYS2
+and MSVC are not yet verified.** [PLAN.md](PLAN.md) is the ordered
 implementation plan.
 
 ## 1. Purpose / Scope
