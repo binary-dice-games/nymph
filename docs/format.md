@@ -35,7 +35,8 @@ supported.
 | `description` | no | Plain text saying what the chart shows. Stored in the PNG as its description (alt text). |
 | `image` | no | Size and look of the PNG, below. |
 | `root` | yes | The element to draw. |
-| `data` | no | Columns that fields refer to with `$name`. |
+| `data` | no | The table, or named tables, that fields refer to with `$column` / `$table:column`. |
+| `source` | no | How the data was made: the prompt, query or code. Kept in the PNG, never drawn. |
 
 Any other key is an error.
 
@@ -120,7 +121,8 @@ the theme.
 
 ## `data`
 
-The data is a table of named columns, written in one of two ways.
+`data` holds one table, or several named tables. A table has named
+columns and is written in one of two ways.
 
 **CSV text**, in a literal block (`|`):
 
@@ -152,6 +154,26 @@ In both forms an empty cell in a column used as numbers is a gap in the
 chart, and any other value that is not a number is an error naming its
 row. Columns nothing refers to are not checked, so text columns are fine.
 
+**Named tables.** For data of different shapes (a monthly series and a
+per-region summary), give each table a name: a `data` mapping whose
+values are tables, in either form.
+
+```yaml
+data:
+  monthly: |
+    month, revenue
+    1, 92
+    2, 88
+    3, 104
+  regions:
+    name: [north, south]
+    share: [60, 40]
+```
+
+Tables may have different numbers of rows and the same column names.
+Names cannot contain `:`. A `data` mapping is either all columns (lists)
+or all tables (text or mappings), never a mix.
+
 ## Column references
 
 A value starting with `$` takes data from a column:
@@ -164,9 +186,35 @@ A value starting with `$` takes data from a column:
 | `values: [$mon, $tue, $wed]` | Several columns interleaved row by row (row 1 of each, then row 2, ...): the row-major grid `PlotHeatmap.values` and `Plot3DSurface.zs` expect. |
 | `labels: $name` | In a text field: the column's cells, one per line (pie slice names). |
 | `title: $$5 per unit` | `$$` is a literal `$`. |
+| `ys: $monthly:revenue` | Column `revenue` of the table named `monthly`. |
+| `ys: $monthly:2` | The second column of `monthly`. |
 
 Only list fields and text fields take references. A list is either all
 numbers or all references, never a mix.
+
+With named tables, write `$table:column`. A bare `$column` works only
+when there is a single table; with several, nymph asks which one (and
+lists the tables that have that column). `[$a:x, $b:y]` may combine
+columns from tables with the same number of rows.
+
+## `source`
+
+`source` records how the data was made, so whoever changes the chart
+later (often an AI agent reading the PNG back) can regenerate or update
+it: the prompt, a query, a command, or the code. nymph keeps it in the
+PNG with the rest of the YAML and never draws or checks it, so it can
+be any YAML; text or a mapping of text reads best:
+
+```yaml
+source:
+  prompt: Chart 2025 revenue by month, and each region's share.
+  code: |
+    df = pd.read_csv("orders_2025.csv", parse_dates=["date"])
+    monthly = df.groupby(df.date.dt.month).revenue.sum() / 1000
+  language: python
+```
+
+A `$` inside `source` is plain text, not a column reference.
 
 ## Errors
 

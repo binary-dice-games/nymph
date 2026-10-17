@@ -216,5 +216,65 @@ TEST(table, QuotedSingleLineCsvWorks) {
   EXPECT_EQ(t.numbers(1), (std::vector<double>{2.0}));
 }
 
+// ── Named tables ─────────────────────────────────────────────────────────────
+
+/// The data_set of a whole source's `data` key.
+data_set set_of(const std::string& source) {
+  const yaml_node doc = parse_yaml(source);
+  const yaml_node* data = doc.find("data");
+  EXPECT_NE(data, nullptr);
+  return parse_data_set(*data);
+}
+
+TEST(table, SingleTableFormsHaveOneUnnamedTable) {
+  for (const char* source : {"data: |\n  a, b\n  1, 2\n", "data: {a: [1], b: [2]}\n"}) {
+    SCOPED_TRACE(source);
+    const data_set d = set_of(source);
+    ASSERT_EQ(d.tables.size(), 1u);
+    EXPECT_FALSE(d.named());
+    EXPECT_EQ(d.names[0].text, "");
+    EXPECT_EQ(d.tables[0].header_list(), "a, b");
+  }
+}
+
+TEST(table, NamedTablesKeepKeyOrderAndTheirOwnPositions) {
+  const data_set d = set_of(
+      "data:\n" // 1
+      "  sales: |\n" // 2
+      "    month, revenue\n" // 3
+      "    1, 12\n" // 4
+      "    2, x\n" // 5
+      "  costs:\n" // 6
+      "    month: [1, 2, 3]\n" // 7
+      "    cost: [9, 9.5, 10]\n"); // 8
+  ASSERT_TRUE(d.named());
+  ASSERT_EQ(d.tables.size(), 2u);
+  EXPECT_EQ(d.name_list(), "sales, costs");
+  EXPECT_EQ(d.find_table("costs"), 1);
+  EXPECT_EQ(d.find_table("nope"), -1);
+  EXPECT_EQ(d.tables[0].row_count(), 2u); // different lengths coexist
+  EXPECT_EQ(d.tables[1].row_count(), 3u);
+  EXPECT_EQ(d.tables[1].numbers(1), (std::vector<double>{9, 9.5, 10}));
+  const error bad = expect_error([&] { d.tables[0].numbers(1); });
+  EXPECT_EQ(bad.line(), 5);
+  EXPECT_EQ(bad.column(), 8);
+}
+
+TEST(table, NamedTableErrors) {
+  const error mixed = expect_error([] { set_of("data:\n  a: [1, 2]\n  t: |\n    x\n    1\n"); });
+  EXPECT_EQ(mixed.line(), 3);
+  EXPECT_NE(std::string(mixed.what()).find("mixes columns and named tables"), std::string::npos);
+  const error mixed2 = expect_error([] { set_of("data:\n  t: |\n    x\n    1\n  a: [1, 2]\n"); });
+  EXPECT_EQ(mixed2.line(), 5);
+  const error colon = expect_error([] { set_of("data:\n  \"a:b\": |\n    x\n    1\n"); });
+  EXPECT_EQ(colon.line(), 2);
+  EXPECT_NE(std::string(colon.what()).find("must not contain ':'"), std::string::npos);
+  const error empty = expect_error([] { set_of("data:\n  \"\": |\n    x\n    1\n"); });
+  EXPECT_NE(std::string(empty.what()).find("needs a name"), std::string::npos);
+  const error nested = expect_error([] { set_of("data:\n  t:\n    inner: {x: [1]}\n"); });
+  EXPECT_EQ(nested.line(), 3);
+  EXPECT_NE(std::string(nested.what()).find("must be a list"), std::string::npos);
+}
+
 } // namespace
 } // namespace bdg::nymph

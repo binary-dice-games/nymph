@@ -27,10 +27,11 @@ struct figure {
 /// @brief Parses and checks a source (DESIGN.md section 3).
 ///
 /// Reads the top-level keys (`nymph`, `description`, `image`, `root`,
-/// `data`), parses `data`, walks the element tree checking every type,
-/// placement (slot), field, value, name, range and colour, and replaces
-/// every `$column` reference with literal data. Pure: no file access, no
-/// ImGui.
+/// `data`, and `source`, which is accepted as any value and ignored),
+/// parses `data` (one table or named tables), walks the element tree
+/// checking every type, placement (slot), field, value, name, range and
+/// colour, and replaces every `$column` / `$table:column` reference with
+/// literal data. Pure: no file access, no ImGui.
 ///
 /// @param source The whole source text.
 /// @param reg    The element types the source may use.

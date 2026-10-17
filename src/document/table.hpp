@@ -6,7 +6,8 @@
 ///
 /// Two source forms give the same table (DESIGN.md section 3, `data`): CSV
 /// text, usually a `|` block scalar, and a YAML mapping of column name to a
-/// list of values.
+/// list of values. `data` may also map table names to tables in either
+/// form: a `data_set`.
 #pragma once
 
 #include <cstddef>
@@ -73,5 +74,32 @@ table table_from_mapping(const yaml_node& data);
 /// @throws nymph::error for a sequence, a folded (`>`) scalar (folding
 ///         joins CSV lines), or any error of the two parsers.
 table parse_data(const yaml_node& data);
+
+/// @brief Every table of a source's `data`.
+///
+/// The single-table forms give one table with an empty name; named tables
+/// keep their key order. A source without `data` has no tables.
+struct data_set {
+  std::vector<cell> names; ///< Table names with their key positions.
+  std::vector<table> tables; ///< Same size as `names`.
+
+  /// @brief True when `data` used the named-tables form.
+  bool named() const {
+    return !names.empty() && !names[0].text.empty();
+  }
+
+  /// @brief The index of the table called `name`, or -1.
+  int find_table(std::string_view name) const;
+
+  /// @brief Table names joined as "a, b, c", for error messages.
+  std::string name_list() const;
+};
+
+/// @brief The `data` value of a source: one table (parse_data()), or named
+///        tables when every value of a `data` mapping is text or a mapping.
+/// @throws nymph::error for a mapping mixing lists with tables (at the
+///         first value whose kind differs from the first one's), a table
+///         name that is empty or contains ':', or any parse_data() error.
+data_set parse_data_set(const yaml_node& data);
 
 } // namespace bdg::nymph

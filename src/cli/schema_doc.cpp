@@ -141,7 +141,8 @@ std::string schema_markdown(const registry& reg) {
      << "checks that this file matches the program).\n\n"
      << "Every element is a mapping with a `type`, any of the fields below, and\n"
      << "`children` when it takes them. List fields also take a `$column`\n"
-     << "reference; text fields take one too (the cells joined by newlines).\n";
+     << "(or `$table:column`) reference; text fields take one too (the cells\n"
+     << "joined by newlines).\n";
   for (const element_class* c : classes_in_doc_order(reg)) {
     os << "\n## " << c->name() << "\n\n" << md_escape(std::string(c->description())) << "\n\n";
     os << "Goes in: " << goes_in(*c, reg) << ".";

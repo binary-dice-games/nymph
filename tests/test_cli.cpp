@@ -245,5 +245,67 @@ TEST_F(cli, VersionAndHelp) {
   EXPECT_NE(help.out.find("usage:"), std::string::npos);
 }
 
+// ── source and named tables ──────────────────────────────────────────────────
+
+TEST_F(cli, SourceKeyAndNamedTablesRoundTrip) {
+  const std::string with_source =
+      "source:\n"
+      "  prompt: Chart weekly sales against costs.\n"
+      "  code: |\n"
+      "    rows = db.query(\"select week, sales from $table\")\n"
+      "  language: python\n"
+      "image: {width: 200, height: 150}\n"
+      "root:\n"
+      "  type: Plot\n"
+      "  children:\n"
+      "    - {type: PlotLine, label: sales, ys: $sales:v}\n"
+      "    - {type: PlotLine, label: costs, ys: $costs:v}\n"
+      "data:\n"
+      "  sales: {v: [1, 3, 2]}\n"
+      "  costs: |\n"
+      "    v\n"
+      "    2\n"
+      "    1\n";
+  write("chart.yaml", with_source);
+  ASSERT_EQ(run({path("chart.yaml")}).code, 0);
+  const run_result extract = run({path("chart.png")});
+  EXPECT_EQ(extract.code, 0);
+  EXPECT_EQ(extract.out, with_source);
+
+  // The same chart without source draws the same pixels: only the
+  // embedded text differs.
+  std::string without = with_source.substr(with_source.find("image:"));
+  write("plain.yaml", without);
+  ASSERT_EQ(run({path("plain.yaml")}).code, 0);
+  const std::string a = read("chart.png");
+  const std::string b = read("plain.png");
+  EXPECT_NE(a, b);
+  EXPECT_EQ(a.substr(a.find("IDAT")), b.substr(b.find("IDAT")));
+}
+
+// ── Output targets ───────────────────────────────────────────────────────────
+
+TEST_F(cli, OutputThroughASymlinkReplacesTheFileItPointsTo) {
+  write("chart.yaml", kSource);
+  write("real.png", "old");
+  std::error_code ec;
+  fs::create_symlink(dir_ / "real.png", dir_ / "link.png", ec);
+  if (ec) {
+    GTEST_SKIP() << "symbolic links unavailable: " << ec.message();
+  }
+  ASSERT_EQ(run({path("chart.yaml"), "-o", path("link.png")}).code, 0);
+  EXPECT_TRUE(fs::is_symlink(dir_ / "link.png"));
+  EXPECT_EQ(read("real.png").substr(1, 3), "PNG");
+}
+
+TEST_F(cli, OutputThatIsNotARegularFileIsNotReplaced) {
+  write("chart.yaml", kSource);
+  fs::create_directories(dir_ / "out.png");
+  const run_result r = run({path("chart.yaml"), "-o", path("out.png")});
+  EXPECT_EQ(r.code, 1);
+  EXPECT_NE(r.err.find("cannot be written"), std::string::npos) << r.err;
+  EXPECT_TRUE(fs::is_directory(dir_ / "out.png"));
+}
+
 } // namespace
 } // namespace bdg::nymph

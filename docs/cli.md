@@ -52,7 +52,8 @@ nymph: missing.yaml: no such file
 
 On failure nothing is written: output goes to a temporary file that is
 renamed over the target only once it is complete, so an existing output
-file is left as it was.
+file is left as it was. A symbolic link as `-o` is followed, and a
+device or pipe (`-o /dev/null`) is written directly.
 
 ## Images made by wish
 

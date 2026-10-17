@@ -42,6 +42,8 @@ the command again.
 ## Workflow
 
 1. Write the source file (format below), with the extension `.yaml`.
+   If you computed or fetched the data, record how in `source` (the
+   prompt, query or code), so the chart can be updated later.
 2. Run `nymph chart.yaml`.
 3. If the exit code is 1, read the error line, fix the source, run again.
 4. Look at the PNG if you can view images, and adjust the source if the
@@ -49,7 +51,10 @@ the command again.
 5. Reference the PNG as a normal image: `![Revenue by month](chart.png)`.
 
 To change an existing nymph image when you no longer have its source, run
-`nymph chart.png -o chart.yaml`, edit the YAML, and render again. PNGs made
+`nymph chart.png -o chart.yaml`, edit the YAML, and render again. If the
+YAML has a `source` key, read it first: it says how the data was made, so
+you can rerun that prompt, query or code for fresh data instead of
+guessing. Keep `source` up to date when you change the data. PNGs made
 by wish's nymph module work too: their source comes back as nymph YAML.
 
 ## Source format
@@ -87,7 +92,8 @@ data: |
 | `description` | Plain text saying what the chart shows. It becomes the image's alt text. |
 | `image` | Optional size and look, below. |
 | `root` | Required. The element to draw. |
-| `data` | The table that `$column` values refer to. Optional if every number is written inline. |
+| `data` | The table (or named tables) that `$column` values refer to. Optional if every number is written inline. |
+| `source` | Optional. How the data was made: the prompt, query, command or code. Never drawn; kept in the PNG for the next edit. |
 
 Rules that cause most errors:
 
@@ -134,6 +140,7 @@ A value that starts with `$` means "this column of the data".
 | `values: [$a, $b, $c]` | Several columns interleaved row by row: row 1 of a, b, c, then row 2, and so on. This is how a grid is given to `PlotHeatmap` and `Plot3DSurface`. |
 | `labels: $name` | On a text field: the column's cells, one per line. Used for pie slice names. |
 | `ys: [1, 2.5, 4]` | Numbers written directly, no data needed. |
+| `ys: $monthly:revenue` | Column `revenue` of the table named `monthly` (see "Several tables"). |
 
 A list is either all numbers or all `$` references, never a mix. Only
 list and text fields take references (`x_min: $a` is an error). To start a
@@ -158,6 +165,53 @@ data:
   minute: [0, 1, 2, 3]
   cpu: [12, 35, 71, 88]
 ```
+
+### Several tables
+
+When the charts need data of different shapes (a monthly series and a
+per-region summary), do not pad one table with empty cells: give each
+table a name under `data`, in either form, and refer to its columns as
+`$table:column`.
+
+```yaml
+data:
+  monthly: |
+    month, revenue
+    1, 92
+    2, 88
+  regions:
+    name: [north, south]
+    share: [60, 40]
+```
+
+- `ys: $monthly:revenue`, `labels: $regions:name`, `ys: $monthly:2`.
+- With several tables a bare `$revenue` is an error that tells you which
+  tables have that column; with one table it still works.
+- Tables can have different numbers of rows. Table names cannot contain
+  `:`.
+- A `data` mapping holds either columns (lists) or tables (CSV text or
+  mappings), never both.
+
+### `source`
+
+Record how the data was made, so you (or another agent) can update the
+chart after reading the PNG back. nymph never reads it; any YAML works,
+and this shape is the clearest:
+
+```yaml
+source:
+  prompt: Chart 2025 revenue by month, and each region's share.
+  code: |
+    df = pd.read_csv("orders_2025.csv", parse_dates=["date"])
+    monthly = df.groupby(df.date.dt.month).revenue.sum() / 1000
+  language: python
+```
+
+Use `prompt` for the request you were answering, `code` (with
+`language`) or `query` or `command` for what produced the numbers, and
+`notes` for anything else (sources, dates, assumptions). Leave out
+secrets such as passwords and API keys: the YAML travels inside the
+image.
 
 ## Elements
 
@@ -487,6 +541,58 @@ data: |
   4, 372, 125
 ```
 
+### Two tables side by side
+
+A monthly series and a per-region summary have different lengths, so
+each gets its own table; `source` says where the numbers came from.
+
+```yaml
+description: Monthly revenue in 2025 next to each region's share of the total.
+source:
+  prompt: Chart 2025 revenue by month, and each region's share of the total.
+  query: select month, sum(revenue) from orders group by month
+image: {width: 900, height: 420}
+root:
+  type: HorizontalLayout
+  spacing: 8
+  children:
+    - type: Plot
+      title: Revenue per month
+      width: -2
+      height: -1
+      x_label: month
+      y_label: kUSD
+      x_min: 0.5
+      x_max: 4.5
+      y_min: 0
+      y_max: 120
+      flags: NoLegend
+      children:
+        - {type: PlotBars, label: revenue, xs: $monthly:month, ys: $monthly:revenue}
+    - type: Plot
+      title: Share by region
+      width: -1
+      height: -1
+      flags: Equal
+      legend_location: South
+      x_flags: NoDecorations
+      y_flags: NoDecorations
+      x_min: 0
+      x_max: 1
+      children:
+        - {type: PlotPieChart, labels: $regions:name, values: $regions:share, label_fmt: "%.0f%%"}
+data:
+  monthly: |
+    month, revenue
+    1, 92
+    2, 88
+    3, 104
+    4, 111
+  regions:
+    name: [north, south, east, west]
+    share: [34, 21, 28, 17]
+```
+
 ### 3D surface
 
 The data lists the grid row by row: all X values for the first Y, then
@@ -551,6 +657,10 @@ data: |
 | Message contains | Cause and fix |
 |---|---|
 | `unknown column 'x'` | `$x` does not match a data header. The message lists the headers and suggests the closest. |
+| `needs a table, as there are several` | With named tables write `$table:column`; the message names the tables that have the column. |
+| `unknown table 'x'` | The part before `:` is not a table name under `data`. |
+| `data mixes columns and named tables` | Under `data`, use either lists (one table of columns) or CSV text / mappings (named tables). |
+| `interleaved columns need the same number of rows` | `[$a:x, $b:y]` takes columns from tables of different lengths. |
 | `unknown element type 'X'` | `X` is misspelled; the message lists the types allowed there. |
 | `'X' cannot be placed in Y; it goes inside: Z` | A series is at the wrong level. Put it in a `Z`'s `children`. |
 | `cannot be the root` | `root` is a series. Wrap it in a `Plot` or `Plot3D`. |

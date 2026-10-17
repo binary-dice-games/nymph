@@ -554,6 +554,72 @@ negative values as numbers.
 - Every `examples/*.yaml` renders, and extracting its PNG gives the file
   back byte for byte.
 
+### 15. Named data tables
+
+*Result: done.* `data_set` / `parse_data_set()` in `src/document/table`;
+references resolve through it in `bind.cpp`; `examples/tables.yaml`
+(looked at). Tests: 3 in `test_table.cpp`, 6 in `test_bind.cpp`, and
+named tables in the CLI round trip. Every existing source and test is
+unchanged. Found along the way: `-o /dev/null` (as root) replaced the
+device with a regular file through the temp-and-rename write; `-o` now
+follows symbolic links and writes devices and pipes directly (2 tests in
+`test_cli.cpp`).
+
+**Goal:** `data` can hold several named tables, and `$table:column`
+references a column of one of them (DESIGN.md section 3, `data` and
+column references); every existing source keeps its meaning.
+
+**Deliverables:**
+- `src/document/table.hpp`/`.cpp`: `data_set` (table names and tables)
+  and `parse_data_set()`, classifying the `data` value.
+- `src/document/bind.cpp`: references resolve through the `data_set`
+  (`$table:column`, `$table:2`, bare `$column` with one table),
+  interleaving across tables of equal row count, errors for an unknown
+  table and an ambiguous bare reference.
+- `examples/tables.yaml` (two named tables in one figure) with its PNG;
+  `docs/format.md`, `docs/agent-guide.md`, `docs/examples.md`, README
+  and CHANGELOG updated.
+
+**Tests** (`tests/test_table.cpp`, `tests/test_bind.cpp`):
+- CSV text and a mapping of lists still give one unnamed table; a mapping
+  of CSV texts and column mappings gives named tables in key order, each
+  with positions in its own part of the file.
+- Mixing list and table values, a name with `:`, an empty name, and a
+  table nested in a named table's columns are errors at the offending
+  key or value.
+- `$sales:revenue`, `$sales:2` and `$costs:cost` bind to the right
+  columns; tables of different lengths coexist.
+- A bare `$column` works with one named table and is an error with
+  several, naming the tables that have the column.
+- `$salse:revenue` is an unknown table with a suggestion; `$sales:revnue`
+  an unknown column of `sales`; a header containing `:` still resolves
+  in a single table.
+- `[$a:x, $b:y]` interleaves equal-length columns from two tables and is
+  an error for different lengths.
+
+### 16. `source` provenance key
+
+*Result: done.* `source` is a top-level key taking any value; 1 test in
+`test_bind.cpp` (text, mapping, list; `$` not resolved) and the CLI round
+trip, which also checks the image data is identical with and without
+`source`.
+
+**Goal:** a source may carry a `source` key with the prompt, query or
+code that produced its data, kept verbatim through the PNG round trip.
+
+**Deliverables:**
+- `src/document/bind.cpp`: `source` accepted as a top-level key, any
+  value, not interpreted (a `$` in it is not a reference).
+- `docs/format.md`, `docs/agent-guide.md` (when and how to fill it, and
+  to read it back from an extracted PNG), README and CHANGELOG.
+
+**Tests** (`tests/test_bind.cpp`, `tests/test_cli.cpp`):
+- A `source` given as text, as a mapping of text, or as a list binds and
+  renders the same image as without it.
+- `$x` inside `source` is not resolved, even with no data.
+- `nymph chart.yaml` then `nymph chart.png` returns the file, `source`
+  included, byte for byte.
+
 ## Completion Criteria
 
 - [x] All tests pass under `ctest -j` three times in a row.

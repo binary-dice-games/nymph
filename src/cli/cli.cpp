@@ -109,15 +109,42 @@ bytes_t read_input(const std::string& path, std::istream& in) {
   return data;
 }
 
+/// Writes `data` straight to an existing file that is not a regular file
+/// (a device such as /dev/null, a pipe): a rename would replace it.
+void write_in_place(const fs::path& target, const std::string& path, const std::string_view data) {
+  std::ofstream f(target, std::ios::binary);
+  f.write(data.data(), static_cast<std::streamsize>(data.size()));
+  f.close();
+  if (!f) {
+    throw cli_failure{path, "cannot be written"};
+  }
+}
+
 /// Writes `data` to `path` ("-" for `out`) through a temporary file and a
-/// rename, so the target is either the new content or untouched.
+/// rename, so the target is either the new content or untouched. A
+/// symbolic link is followed (the file it points to is replaced, not the
+/// link); a device or pipe is written directly.
 void write_output(const std::string& path, const std::string_view data, std::ostream& out) {
   if (path == "-") {
     out.write(data.data(), static_cast<std::streamsize>(data.size()));
     out.flush();
     return;
   }
-  const fs::path target(path);
+  fs::path target(path);
+  std::error_code ec;
+  const fs::file_status status = fs::status(target, ec); // follows links
+  if (fs::exists(status)) {
+    if (!fs::is_regular_file(status)) {
+      write_in_place(target, path, data);
+      return;
+    }
+    if (fs::is_symlink(fs::symlink_status(target, ec))) {
+      target = fs::canonical(target, ec);
+      if (ec) {
+        throw cli_failure{path, "cannot be resolved"};
+      }
+    }
+  }
   fs::path temp = target;
   temp += ".nymph-tmp";
   {
@@ -133,7 +160,6 @@ void write_output(const std::string& path, const std::string_view data, std::ost
       throw cli_failure{path, "could not be written completely"};
     }
   }
-  std::error_code ec;
   fs::rename(temp, target, ec);
   if (ec) {
     fs::remove(temp, ec);

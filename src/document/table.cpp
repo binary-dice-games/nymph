@@ -337,4 +337,68 @@ table parse_data(const yaml_node& data) {
   return {};
 }
 
+// ── Named tables ─────────────────────────────────────────────────────────────
+
+int data_set::find_table(std::string_view name) const {
+  for (size_t i = 0; i < names.size(); ++i) {
+    if (names[i].text == name) {
+      return static_cast<int>(i);
+    }
+  }
+  return -1;
+}
+
+std::string data_set::name_list() const {
+  std::string out;
+  for (const cell& n : names) {
+    out += (out.empty() ? "" : ", ") + n.text;
+  }
+  return out;
+}
+
+data_set parse_data_set(const yaml_node& data) {
+  data_set out;
+  // Named tables: a mapping whose values are tables (text or mappings)
+  // rather than columns (lists). The first value decides; a value of the
+  // other kind is an error.
+  const bool named = data.is_mapping() && !data.children.empty() && !data.children[0].is_sequence();
+  for (size_t i = 1; data.is_mapping() && i < data.children.size(); ++i) {
+    const yaml_node& value = data.children[i];
+    if (value.is_sequence() == named) {
+      const std::string& column = named ? data.keys[i].text : data.keys[0].text;
+      const std::string& table_name = named ? data.keys[0].text : data.keys[i].text;
+      throw error(
+          value.line,
+          value.column,
+          "data mixes columns and named tables: '" + column + "' is a list (a column), '" + table_name +
+              "' a table; use either columns ({x: [1, 2]}) or named tables ({sales: |, ...})");
+    }
+  }
+  if (!named) {
+    out.names.push_back(cell{});
+    out.tables.push_back(parse_data(data));
+    return out;
+  }
+  size_t total_rows = 0;
+  for (size_t i = 0; i < data.keys.size(); ++i) {
+    const yaml_node& key = data.keys[i];
+    const yaml_node& value = data.children[i];
+    if (key.text.empty()) {
+      throw error(key.line, key.column, "a data table needs a name");
+    }
+    if (key.text.find(':') != std::string::npos) {
+      throw error(
+          key.line, key.column, "data table name '" + key.text + "' must not contain ':' (it separates $table:column)");
+    }
+    table t = parse_data(value);
+    total_rows += t.row_count();
+    if (total_rows > kMaxDataRows) {
+      too_many_rows(value.line, value.column);
+    }
+    out.names.push_back(cell{key.text, key.line, key.column});
+    out.tables.push_back(std::move(t));
+  }
+  return out;
+}
+
 } // namespace bdg::nymph

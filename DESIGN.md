@@ -1,7 +1,7 @@
 # nymph — Architecture & Design
 
-**Status: first version complete (plan steps 1-14 done); builds on MSYS2
-and MSVC are not yet verified.** [PLAN.md](PLAN.md) is the ordered
+**Status: plan steps 1-16 done; builds on MSYS2 and MSVC are not yet
+verified.** [PLAN.md](PLAN.md) is the ordered
 implementation plan.
 
 ## 1. Purpose / Scope
@@ -98,7 +98,8 @@ Top-level keys (any other key is an error):
 | `description` | string | no | Plain text. Stored as the PNG `Description` chunk (alt text). Never parsed. |
 | `image` | mapping | no | Output options, below. |
 | `root` | mapping | yes | The element tree to draw. |
-| `data` | string or mapping | no | The data the tree refers to, below. |
+| `data` | string or mapping | no | The data the tree refers to: one table, or several named tables, below. |
+| `source` | any | no | How the data was made (the prompt, query, command or code that produced it), for whoever edits the chart next. Kept verbatim, never interpreted. |
 
 ### `image`
 
@@ -248,7 +249,7 @@ caused by one is reported as an error rather than read as "automatic".
 
 ### `data`
 
-Two forms:
+`data` holds one table or several named tables. One table, two forms:
 
 - **CSV text** (usually a `|` block scalar): comma-separated, header first,
   RFC 4180 quoting, blank lines skipped, whitespace around unquoted cells
@@ -263,11 +264,56 @@ Two forms:
 Both forms produce the same `table` (section 4); nothing after parsing
 knows which form was used.
 
+**Named tables.** When every value of the `data` mapping is CSV text or a
+mapping of columns (rather than a list), each key is a table name and
+each value one table in either form:
+
+```yaml
+data:
+  sales: |
+    month, revenue
+    1, 12
+    2, 15
+  costs:
+    month: [1, 2, 3]
+    cost: [9, 9.5, 10]
+```
+
+The kind of the values decides: all lists is one table of columns, all
+text or mappings is named tables, and a mix is an error that says which
+value is the odd one. Table names are non-empty and contain no `:` (the
+reference separator); tables may have different row counts and share
+column names. A table nested inside a named table is an error (a named
+table's columns must be lists).
+
+### `source`
+
+Free-form provenance: the prompt, query, command or code that produced
+the data, so an agent that later reads the PNG back can regenerate or
+update it. Any YAML value; the convention documented for agents is text,
+or a mapping of text such as `{prompt: ..., code: ..., language: python}`.
+nymph checks only that it is valid YAML (inside the usual size and depth
+limits), keeps it in the embedded YAML like everything else, and never
+renders or interprets it. A `$` in it is not a column reference.
+
 ### Column references
 
 As in wish nymph: a string value starting with `$` names a column by header
 (`$revenue`, `"$unit price"`) or by 1-based position (`$2`); `$$` is a
-literal `$`. Resolution depends on the field's registered type:
+literal `$`. With named tables, `$table:column` (`$sales:revenue`,
+`$sales:2`) names a column of one table:
+
+- If the text before the first `:` is a table name, the rest names a
+  column of that table (by header, else position).
+- Otherwise the whole text names a column of *the* table: the single
+  table, named or not (so a header containing `:` still works with one
+  table). With several named tables a bare `$column` is an error that
+  lists the tables having that column (`write $sales:revenue`), rather
+  than a guess that would change meaning when a table is added.
+- A prefix that is not a table, with no such column either, is reported
+  as an unknown table, with a suggestion.
+
+Resolution then depends on the field's registered type:
 
 | Field type | Value | Result |
 |---|---|---|
@@ -276,9 +322,11 @@ literal `$`. Resolution depends on the field's registered type:
 | text | `$col` | The cells joined with `\n` (`PlotPieChart.labels`). |
 | anything else | `$col` | Error. |
 
-A list mixing references and numbers is an error. In a column used as
-numbers an empty cell is NaN (a gap) and any other non-number is an error
-naming its position. Columns nothing refers to are never checked.
+A list mixing references and numbers is an error. `[$a, $b]` may take
+columns from different tables when they have the same number of rows;
+otherwise it is an error naming both counts. In a column used as numbers
+an empty cell is NaN (a gap) and any other non-number is an error naming
+its position. Columns and tables nothing refers to are never checked.
 
 ## 4. Key Abstractions
 
@@ -328,6 +376,12 @@ plain scalar to `parse_csv()` at its own position; a folded (`>`) scalar
 and a sequence are errors. `numbers(column)` converts one column on
 demand during binding (`std::from_chars`, so no locale; an empty cell is
 NaN); `find_column()` resolves a name, else a 1-based position.
+
+`data_set` is what `data` holds: `tables` with their `names` (one entry
+with an empty name for the single-table forms, none without `data`).
+`parse_data_set(const yaml_node&)` classifies the `data` value (section
+3) and calls `parse_data()` once per table, so each table's positions are
+its own place in the file. `parse_data()` keeps its single-table meaning.
 
 ### Element schema (`src/schema/`)
 
@@ -456,8 +510,9 @@ correctly laid out.
 `bind_source(source, registry) -> figure` (called `bind()` in this
 document; not named `bind` in code because, with a `std::string`
 argument, argument-dependent lookup picks `std::bind`). `figure =
-{image_options, description, node root}`. It reads the top-level keys,
-parses `data`, walks the element tree, checks every type, slot, field,
+{image_options, description, node root}`. It reads the top-level keys
+(`source` is accepted as any value and not looked at),
+parses `data` into a `data_set`, walks the element tree, checks every type, slot, field,
 type conversion, name, range and colour, and replaces every column
 reference with literal data. Throws `nymph::error{line, column, message}`
 (1-based positions in the whole file). It is pure: no file access, no
@@ -652,8 +707,11 @@ in-process; `app/main.cpp` only forwards `argv` and the standard streams
 2. `bind()` → `figure` (errors stop here, before any ImGui work).
 3. `render_figure()` → RGBA image.
 4. `encode_png(image, source text verbatim, description)`.
-5. Write `<out>.tmp`, rename over `<out>`. On any failure nothing is
-   written and an existing output file is untouched.
+5. Write `<out>.nymph-tmp`, rename over `<out>`. On any failure nothing
+   is written and an existing output file is untouched. A symbolic link
+   is followed (the file it points to is replaced, not the link); an
+   existing non-regular file (`/dev/null`, a pipe) is written directly,
+   since a rename would replace the device itself.
 
 **PNG → YAML** (`nymph chart.png`):
 
@@ -734,6 +792,20 @@ three test charts convert and render unchanged.
   compact form inside a block scalar, and the columns-as-mapping form lets
   a program emit data without writing CSV. Cost: data lines are indented
   under `data: |`, and wish nymph texts need the conversion in section 6.
+- **Named tables inside `data`, told apart by value kind.** Charts often
+  combine data of different shapes (a time series and a summary), which
+  one rectangular table forces into padding with empty cells. Keeping
+  them under `data` (not a new `tables` key) leaves one place to look for
+  data, and the value kind (list = column, text or mapping = table) is
+  unambiguous, so every existing source keeps its meaning. `$table:column`
+  reads naturally and needs no quoting in YAML (libyaml takes `$a:b` as a
+  plain scalar in block and flow style, since the `:` is not followed by
+  a space). A bare `$column` across several tables is an error rather
+  than a search: a search would silently change meaning when a later
+  table adds a column of the same name.
+- **`source` is free-form and unchecked.** Its readers are agents, not
+  nymph; any structure nymph imposed would be a convention nymph cannot
+  use, and an error in it would block rendering for no visual reason.
 - **A small typed schema of nymph's own, not a port of bison `dynamic`.**
   nymph needs field names, types, defaults, names for flags and
   descriptions, and that is all; a fixed `std::vector<value>` per node

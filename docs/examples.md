@@ -356,6 +356,79 @@ data: |
   2, 2, -0.01
 ```
 
+## Two named tables
+
+A monthly series and a per-region summary of different lengths, as two named tables under `data` referenced with `$table:column`; `source` records the prompt and code that produced the numbers.
+
+![Two named tables](../examples/tables.png)
+
+[`examples/tables.yaml`](../examples/tables.yaml):
+
+```yaml
+nymph: 1
+description: >-
+  Monthly revenue in 2025 next to each region's share of the year's total,
+  from two tables of different lengths.
+source:
+  prompt: Chart 2025 revenue by month, and each region's share of the total.
+  code: |
+    import pandas as pd
+    df = pd.read_csv("orders_2025.csv", parse_dates=["date"])
+    monthly = df.groupby(df.date.dt.month).revenue.sum() / 1000
+    regions = df.groupby("region").revenue.sum()
+    share = (100 * regions / regions.sum()).round()
+  language: python
+image: {width: 900, height: 420}
+root:
+  type: HorizontalLayout
+  spacing: 8
+  children:
+    - type: Plot
+      title: Revenue per month
+      width: -2
+      height: -1
+      x_label: month
+      y_label: kUSD
+      x_min: 0.5
+      x_max: 12.5
+      y_min: 0
+      y_max: 160
+      flags: NoLegend
+      children:
+        - {type: PlotBars, label: revenue, xs: $monthly:month, ys: $monthly:revenue, bar_size: 0.7}
+    - type: Plot
+      title: Share by region
+      width: -1
+      height: -1
+      flags: Equal
+      legend_location: South
+      legend_flags: Horizontal
+      x_flags: NoDecorations
+      y_flags: NoDecorations
+      x_min: 0
+      x_max: 1
+      children:
+        - {type: PlotPieChart, labels: $regions:name, values: $regions:share, label_fmt: "%.0f%%"}
+data:
+  monthly: |
+    month, revenue
+    1, 92
+    2, 88
+    3, 104
+    4, 111
+    5, 118
+    6, 126
+    7, 121
+    8, 115
+    9, 130
+    10, 138
+    11, 149
+    12, 155
+  regions:
+    name: [north, south, east, west]
+    share: [34, 21, 28, 17]
+```
+
 ## Several plots with labels
 
 A heading, a separator, two stacked plots next to a pie, and a source note: nested layouts with stretch sizes (`height: -1`, `width: -2`).

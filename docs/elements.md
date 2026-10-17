@@ -5,7 +5,8 @@ checks that this file matches the program).
 
 Every element is a mapping with a `type`, any of the fields below, and
 `children` when it takes them. List fields also take a `$column`
-reference; text fields take one too (the cells joined by newlines).
+(or `$table:column`) reference; text fields take one too (the cells
+joined by newlines).
 
 ## HorizontalLayout
 

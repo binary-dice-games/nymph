@@ -72,7 +72,7 @@ bool is_array(field_type t) {
 
 class binder {
  public:
-  binder(const registry& reg, const table* data) : reg_(reg), data_(data) {}
+  binder(const registry& reg, const data_set* data) : reg_(reg), data_(data) {}
 
   /// Binds element `n`. `parent` is null for `root`. `explicitly_set`
   /// receives which fields the source wrote.
@@ -206,28 +206,98 @@ class binder {
     return convert_value(v, f, what);
   }
 
-  int column(const yaml_node& ref) const {
-    const std::string name = ref.text.substr(1);
-    if (data_ == nullptr || data_->headers.empty()) {
-      fail(ref, "unknown column '" + name + "': the source has no data");
+  /// A resolved reference: a column of one table.
+  struct column_ref {
+    const table* t = nullptr;
+    int index = -1;
+  };
+
+  [[noreturn]] void
+  unknown_column(const yaml_node& ref, const std::string& name, const table& t, const std::string& where) const {
+    std::vector<std::string> names;
+    for (const cell& h : t.headers) {
+      names.push_back(h.text);
     }
-    const int index = data_->find_column(name);
-    if (index < 0) {
-      std::vector<std::string> names;
-      for (const cell& h : data_->headers) {
-        names.push_back(h.text);
+    fail(
+        ref,
+        "unknown column '" + name + "'" + where + did_you_mean(name, names) + " (columns: " + t.header_list() + ")");
+  }
+
+  [[noreturn]] void unknown_table(const yaml_node& ref, const std::string& name) const {
+    std::vector<std::string> names;
+    for (const cell& n : data_->names) {
+      names.push_back(n.text);
+    }
+    fail(ref, "unknown table '" + name + "'" + did_you_mean(name, names) + " (tables: " + data_->name_list() + ")");
+  }
+
+  /// Resolves `$column`, `$table:column` (DESIGN.md section 3, column
+  /// references).
+  column_ref column(const yaml_node& ref) const {
+    const std::string text = ref.text.substr(1);
+    if (data_ == nullptr || data_->tables.empty() || (!data_->named() && data_->tables[0].headers.empty())) {
+      fail(ref, "unknown column '" + text + "': the source has no data");
+    }
+    if (!data_->named()) {
+      const table& t = data_->tables[0];
+      const int index = t.find_column(text);
+      if (index < 0) {
+        unknown_column(ref, text, t, "");
+      }
+      return {&t, index};
+    }
+    // $table:column, when the text before the first ':' names a table.
+    const size_t colon = text.find(':');
+    if (colon != std::string::npos) {
+      const int ti = data_->find_table(text.substr(0, colon));
+      if (ti >= 0) {
+        const table& t = data_->tables[static_cast<size_t>(ti)];
+        const std::string name = text.substr(colon + 1);
+        const int index = t.find_column(name);
+        if (index < 0) {
+          unknown_column(ref, name, t, " in table '" + text.substr(0, colon) + "'");
+        }
+        return {&t, index};
+      }
+    }
+    // A bare name: fine with one table, ambiguous with several.
+    std::vector<size_t> having;
+    for (size_t i = 0; i < data_->tables.size(); ++i) {
+      if (data_->tables[i].find_column(text) >= 0) {
+        having.push_back(i);
+      }
+    }
+    if (data_->tables.size() == 1 && !having.empty()) {
+      return {&data_->tables[0], data_->tables[0].find_column(text)};
+    }
+    if (!having.empty()) {
+      std::string list;
+      for (size_t i : having) {
+        list += (list.empty() ? "" : ", ") + data_->names[i].text;
       }
       fail(
           ref,
-          "unknown column '" + name + "'" + did_you_mean(name, names) + " (columns: " + data_->header_list() + ")");
+          "'$" + text + "' needs a table, as there are several: write $" + data_->names[having[0]].text + ":" + text +
+              " (tables with column '" + text + "': " + list + ")");
     }
-    return index;
+    if (colon != std::string::npos) {
+      unknown_table(ref, text.substr(0, colon));
+    }
+    if (data_->tables.size() == 1) {
+      unknown_column(ref, text, data_->tables[0], " in table '" + data_->names[0].text + "'");
+    }
+    fail(
+        ref,
+        "unknown column '" + text + "'; with several tables write $table:column (tables: " + data_->name_list() + ")");
   }
 
-  /// Column `index` as whole numbers (values are rounded, as wish does).
-  std::vector<int64_t> integer_column(int index) const {
-    const std::vector<double> numbers = data_->numbers(index);
-    const std::vector<cell>& cells = data_->columns[static_cast<size_t>(index)];
+  /// Column `index` of `t` as whole numbers (values are rounded, as wish
+  /// does).
+  static std::vector<int64_t> integer_column(const column_ref& c) {
+    const table& t = *c.t;
+    const std::vector<double> numbers = t.numbers(c.index);
+    const std::vector<cell>& cells = t.columns[static_cast<size_t>(c.index)];
+    const std::string& header = t.headers[static_cast<size_t>(c.index)].text;
     std::vector<int64_t> out(numbers.size());
     for (size_t r = 0; r < numbers.size(); ++r) {
       const double v = numbers[r];
@@ -235,15 +305,13 @@ class binder {
         throw error(
             cells[r].line,
             cells[r].column,
-            "column '" + data_->headers[static_cast<size_t>(index)].text + "', row " + std::to_string(r + 1) +
-                ": an empty cell where a whole number is needed");
+            "column '" + header + "', row " + std::to_string(r + 1) + ": an empty cell where a whole number is needed");
       }
       if (v < std::numeric_limits<int32_t>::min() || v > std::numeric_limits<int32_t>::max()) {
         throw error(
             cells[r].line,
             cells[r].column,
-            "column '" + data_->headers[static_cast<size_t>(index)].text + "', row " + std::to_string(r + 1) + ": '" +
-                cells[r].text + "' is out of range");
+            "column '" + header + "', row " + std::to_string(r + 1) + ": '" + cells[r].text + "' is out of range");
       }
       out[r] = std::llround(v);
     }
@@ -254,29 +322,41 @@ class binder {
     if (!is_array(f.type) && f.type != field_type::text) {
       fail(ref, what + " cannot take a $column reference (only list and text fields can)");
     }
-    const int index = column(ref);
+    const column_ref c = column(ref);
     if (f.type == field_type::number_array) {
-      return data_->numbers(index);
+      return c.t->numbers(c.index);
     }
     if (f.type == field_type::integer_array) {
-      return integer_column(index);
+      return integer_column(c);
     }
     std::string joined; // text: the cells, one per line
-    const std::vector<cell>& cells = data_->columns[static_cast<size_t>(index)];
+    const std::vector<cell>& cells = c.t->columns[static_cast<size_t>(c.index)];
     for (size_t r = 0; r < cells.size(); ++r) {
       joined += (r ? "\n" : "") + cells[r].text;
     }
     return joined;
   }
 
-  /// `[$a, $b, $c]`: the columns interleaved by row, a row-major grid.
+  /// `[$a, $b, $c]`: the columns interleaved by row, a row-major grid. The
+  /// columns may come from different tables of the same length.
   value interleaved_references(const field_desc& f, const yaml_node& list) {
-    const size_t rows = data_ != nullptr ? data_->row_count() : 0;
-    const size_t width = list.children.size();
+    std::vector<column_ref> cols;
+    for (const yaml_node& item : list.children) {
+      cols.push_back(column(item));
+      if (cols.back().t->row_count() != cols[0].t->row_count()) {
+        fail(
+            item,
+            "'" + item.text + "' has " + std::to_string(cols.back().t->row_count()) + " rows but '" +
+                list.children[0].text + "' has " + std::to_string(cols[0].t->row_count()) +
+                "; interleaved columns need the same number of rows");
+      }
+    }
+    const size_t rows = cols.empty() ? 0 : cols[0].t->row_count();
+    const size_t width = cols.size();
     if (f.type == field_type::number_array) {
       std::vector<double> out(rows * width);
       for (size_t c = 0; c < width; ++c) {
-        const std::vector<double> col = data_->numbers(column(list.children[c]));
+        const std::vector<double> col = cols[c].t->numbers(cols[c].index);
         for (size_t r = 0; r < rows; ++r) {
           out[r * width + c] = col[r];
         }
@@ -285,7 +365,7 @@ class binder {
     }
     std::vector<int64_t> out(rows * width);
     for (size_t c = 0; c < width; ++c) {
-      const std::vector<int64_t> col = integer_column(column(list.children[c]));
+      const std::vector<int64_t> col = integer_column(cols[c]);
       for (size_t r = 0; r < rows; ++r) {
         out[r * width + c] = col[r];
       }
@@ -294,12 +374,14 @@ class binder {
   }
 
   const registry& reg_;
-  const table* data_;
+  const data_set* data_;
 };
 
 // ── Top level ────────────────────────────────────────────────────────────────
 
-constexpr std::string_view kTopKeys[] = {"nymph", "description", "image", "root", "data"};
+/// `source` (how the data was made) is accepted as any value and never
+/// looked at (DESIGN.md section 3).
+constexpr std::string_view kTopKeys[] = {"nymph", "description", "image", "root", "data", "source"};
 constexpr std::string_view kImageKeys[] = {"width", "height", "scale", "theme", "padding"};
 
 int image_int(const yaml_node& v, const field_desc& f) {
@@ -361,14 +443,14 @@ figure bind_source(std::string_view source, const registry& reg) {
   }
   const yaml_node doc = parse_yaml(source);
   if (!doc.is_mapping()) {
-    fail(doc, "a nymph source is a mapping with a 'root' key (and optionally description, image, data)");
+    fail(doc, "a nymph source is a mapping with a 'root' key (and optionally description, image, data, source)");
   }
   for (const yaml_node& key : doc.keys) {
     if (std::find(std::begin(kTopKeys), std::end(kTopKeys), key.text) == std::end(kTopKeys)) {
       fail(
           key,
           "unknown key '" + key.text + "'" + did_you_mean(key.text, kTopKeys) +
-              " (keys: nymph, description, image, root, data)");
+              " (keys: nymph, description, image, root, data, source)");
     }
   }
 
@@ -387,10 +469,10 @@ figure bind_source(std::string_view source, const registry& reg) {
   if (const yaml_node* image = doc.find("image")) {
     out.image = bind_image(*image);
   }
-  table data;
+  data_set data;
   const yaml_node* data_node = doc.find("data");
   if (data_node != nullptr) {
-    data = parse_data(*data_node);
+    data = parse_data_set(*data_node);
   }
   const yaml_node* root = doc.find("root");
   if (root == nullptr) {

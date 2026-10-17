@@ -342,5 +342,91 @@ TEST(bind, SizeLimitsComeBeforeParsing) {
   EXPECT_TRUE(contains(bind_error(rows), "more than 1000000 rows"));
 }
 
+// ── Named tables ─────────────────────────────────────────────────────────────
+
+const char* const kTables =
+    "data:\n"
+    "  sales: |\n"
+    "    month, revenue\n"
+    "    1, 12\n"
+    "    2, 15\n"
+    "  costs:\n"
+    "    month: [1, 2, 3]\n"
+    "    cost: [9, 9.5, 10]\n";
+
+/// A one-series source over kTables, with `series` as the series mapping.
+std::string with_tables(const std::string& series) {
+  return "root:\n  type: Plot\n  children:\n    - " + series + "\n" + kTables; // series on line 4
+}
+
+TEST(bind, TableColonColumnPicksTheTable) {
+  const figure f = bind_source(with_tables("{type: PlotLine, xs: $sales:month, ys: $sales:2}"), reg());
+  EXPECT_EQ(f.root.children[0].get<std::vector<double>>(1), (std::vector<double>{1, 2}));
+  EXPECT_EQ(f.root.children[0].get<std::vector<double>>(2), (std::vector<double>{12, 15}));
+  const figure g = bind_source(with_tables("{type: PlotLine, xs: $costs:month, ys: $costs:cost}"), reg());
+  EXPECT_EQ(g.root.children[0].get<std::vector<double>>(2), (std::vector<double>{9, 9.5, 10}));
+}
+
+TEST(bind, BareColumnWorksWithOneNamedTable) {
+  const figure f = bind_source(
+      "root:\n  type: Plot\n  children:\n    - {type: PlotLine, ys: $v}\ndata:\n  only: {v: [4, 5]}\n", reg());
+  EXPECT_EQ(f.root.children[0].get<std::vector<double>>(2), (std::vector<double>{4, 5}));
+}
+
+TEST(bind, BareColumnWithSeveralTablesNamesThem) {
+  expect_error_at(
+      with_tables("{type: PlotLine, ys: $month}"),
+      4,
+      28,
+      "'$month' needs a table, as there are several: write $sales:month (tables with column 'month': sales, costs)");
+  expect_error_at(with_tables("{type: PlotLine, ys: $nope}"), 4, 28, "with several tables write $table:column");
+}
+
+TEST(bind, UnknownTableAndUnknownColumnOfATable) {
+  expect_error_at(
+      with_tables("{type: PlotLine, ys: $salse:revenue}"),
+      4,
+      28,
+      "unknown table 'salse' (did you mean 'sales'?) (tables: sales, costs)");
+  expect_error_at(
+      with_tables("{type: PlotLine, ys: $sales:revnue}"),
+      4,
+      28,
+      "unknown column 'revnue' in table 'sales' (did you mean 'revenue'?) (columns: month, revenue)");
+}
+
+TEST(bind, HeaderWithColonResolvesInASingleTable) {
+  const figure f = bind_source(
+      "root:\n  type: Plot\n  children:\n    - {type: PlotLine, ys: $time:ms}\ndata: {\"time:ms\": [7, 8]}\n", reg());
+  EXPECT_EQ(f.root.children[0].get<std::vector<double>>(2), (std::vector<double>{7, 8}));
+}
+
+TEST(bind, InterleavingAcrossTablesNeedsEqualRows) {
+  const std::string source =
+      "root:\n  type: Plot\n  children:\n    - {type: PlotHeatmap, values: [$a:x, $b:y], rows: 2}\n"
+      "data:\n  a: {x: [1, 3]}\n  b: {y: [2, 4]}\n  c: {z: [5]}\n";
+  const figure f = bind_source(source, reg());
+  EXPECT_EQ(f.root.children[0].get<std::vector<double>>(0), (std::vector<double>{1, 2, 3, 4}));
+  std::string uneven = source;
+  uneven.replace(uneven.find("$b:y"), 4, "$c:z");
+  expect_error_at(
+      uneven, 4, 42, "'$c:z' has 1 rows but '$a:x' has 2; interleaved columns need the same number of rows");
+}
+
+// ── source ───────────────────────────────────────────────────────────────────
+
+TEST(bind, SourceKeyTakesAnyValueAndIsNotInterpreted) {
+  for (const char* source : {
+           "source: Fetched with $query from the sales database.\n",
+           "source:\n  prompt: |\n    Plot revenue by $month.\n  code: \"print($x)\"\n  language: python\n",
+           "source: [step one, {step: two}]\n",
+       }) {
+    SCOPED_TRACE(source);
+    // `$...` inside source is not a reference, even with no data.
+    const figure f = bind_source(std::string(source) + "root: {type: Plot, title: Sales}\n", reg());
+    EXPECT_EQ(f.root.get<std::string>(0), "Sales");
+  }
+}
+
 } // namespace
 } // namespace bdg::nymph

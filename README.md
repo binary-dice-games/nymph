@@ -85,9 +85,11 @@ carries its source: `bdg::nymph::extract_source(png)` returns it.
 
 | Concept | Description |
 |---------|-------------|
-| **Source** | One YAML document: `description`, `image` options, a `root` element tree, and `data` (CSV text or columns). |
+| **Source** | One YAML document: `description`, `image` options, a `root` element tree, `data`, and optional `source`. |
 | **Elements** | `Plot` / `Plot3D` and their series, plus `VerticalLayout` / `HorizontalLayout`, `Spring`, `Label` and separators to combine them, with the same fields as wish's widgets. New types register a class; see [DESIGN.md](DESIGN.md#9-extension-points). |
-| **Column references** | `$name` / `$2` in a field takes data from a column. |
+| **Data** | `data` holds one table, or several named tables, as CSV text or columns. |
+| **Column references** | `$name` / `$2` in a field takes data from a column; `$table:name` from a named table. |
+| **Provenance** | An optional `source` key records the prompt, query or code that made the data; it travels in the PNG for the next edit. |
 | **Round trip** | The PNG carries its YAML; `nymph image.png` prints it back byte for byte. |
 
 ## Further Documentation
