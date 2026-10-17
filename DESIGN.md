@@ -19,8 +19,9 @@ extracted into a standalone program:
   plot drawing that wish provides through its widget registry are
   reimplemented here, small and specific to charts.
 - **No GPU, no window, no display.** Frames are drawn by Dear ImGui and
-  rasterized on the CPU by nymph's own software rasterizer
-  (`src/render/soft_rasterizer`). No SDL, no OpenGL, no platform backend.
+  rasterized on the CPU by an adapted copy of emilk's
+  [imgui_software_renderer](https://github.com/emilk/imgui_software_renderer)
+  (`src/render/imgui_sw`). No SDL, no OpenGL, no platform backend.
 - **Only the silent mode.** wish nymph's `render` and `extract` commands
   exist here; its interactive `edit` and `view` modes do not (they need a
   window).
@@ -37,7 +38,9 @@ tables) and direct drawing commands on an `ImDrawList`.
    error is one line, `nymph: <file>:<line>:<column>: <message>`, and exit
    code 1. Nothing is written on failure.
 3. **Deterministic.** The same YAML and the same build give the same PNG
-   bytes: no clock, no input, no threads in the rasterizer.
+   bytes: no clock, no input, no threads in the rasterizer. (Different
+   compilers may differ in the last bit of an anti-aliased edge: the
+   rasterizer uses float arithmetic.)
 4. **Compatible with wish nymph.** The `image` options, element types,
    field names, defaults and `$column` references are wish nymph's, so a
    wish nymph chart moves to this tool by changing only its outer
@@ -171,7 +174,7 @@ naming its position. Columns nothing refers to are never checked.
                 (libyaml,     │  ▲        (image_options    │                          ▲
                  positions)   │  │         + node tree)     ▼                          │
                               │  registry             ImGui/ImPlot/ImPlot3D frame      source text
-                              ▼                        ──► ImDrawData ──► soft_rasterizer
+                              ▼                        ──► ImDrawData ──► imgui_sw
                             table (CSV or columns)
 ```
 
@@ -275,36 +278,56 @@ ImGui's current-context pointer is a process global, so `render_figure()`
 must not run on two threads at once. The CLI renders one figure per
 process.
 
-### `soft_rasterizer` (`src/render/soft_rasterizer`)
+### `imgui_sw` (`src/render/imgui_sw`)
 
 Turns `ImDrawData` into RGBA8 pixels on the CPU. It replaces the GPU or SDL
-backend wish uses and is the one part with no counterpart in wish.
+backend wish uses. It is emilk's
+[imgui_software_renderer](https://github.com/emilk/imgui_software_renderer)
+(commit `b5ae63a`, 2018, public domain), copied into the source tree
+rather than added as a submodule because it needs changes for ImGui 1.92
+and `extern/` code is never edited. The file header names the origin
+commit and lists the changes.
 
-- **Input**: `ImDrawData` plus a `texture_store` (texture id → RGBA8
-  pixels). `texture_store::apply(ImTextureData&)` handles the
-  `WantCreate` / `WantUpdates` / `WantDestroy` requests of ImGui ≥ 1.92;
-  the atlas is requested as RGBA32 so there is one pixel format.
-- **Geometry**: every draw command's triangles, positions mapped with
-  `(pos - DisplayPos) * FramebufferScale`, clipped to the command's clip
-  rectangle (mapped the same way, rounded to whole pixels) and the target.
-  Draw callbacks other than `ImDrawCallback_ResetRenderState` are an error
-  (neither ImPlot nor ImPlot3D emits any).
-- **Coverage**: edge functions in 64-bit fixed point (8 sub-pixel bits),
-  sampled at pixel centres, with the top-left fill rule so two triangles
-  sharing an edge never both cover a pixel. Integer arithmetic makes the
-  coverage exact and the same on every compiler.
-- **Attributes**: colour and UV are interpolated with barycentric weights
-  (affine; ImGui geometry is 2D). Anti-aliasing comes from ImGui's own
-  fringe geometry (vertex alpha fading to 0), so no multisampling is
-  needed; `image.scale` is the supersampling knob.
-- **Texture sampling**: bilinear, clamp to edge. Solid fills sample the
-  atlas's white pixel; glyphs are baked at the output density and drawn at
-  whole-pixel positions, so bilinear sampling of text lands on texel
-  centres and equals nearest sampling.
-- **Blending**: ImGui's `SRC_ALPHA, ONE_MINUS_SRC_ALPHA` on colour and
-  `ONE, ONE_MINUS_SRC_ALPHA` on alpha, in 8-bit integer arithmetic with a
-  fixed rounding rule. The target starts cleared to the theme's window
-  background, opaque, so the PNG is opaque.
+What it already does, kept as is:
+
+- Barycentric triangle filling at pixel centres, with a top-left-style
+  bias so two triangles sharing an edge do not both cover a pixel.
+- Clip rectangles; output scaled from `DisplaySize` to the target size
+  (so `image.scale` works like `DisplayFramebufferScale`).
+- Fast paths for axis-aligned solid rectangles and text quads, the bulk of
+  a plot frame.
+- Straight-alpha blending (`SRC_ALPHA, ONE_MINUS_SRC_ALPHA`) into a packed
+  `ImU32` buffer, which is RGBA byte order on the little-endian targets
+  nymph supports. Anti-aliasing comes from ImGui's own fringe geometry
+  (vertex alpha fading to 0); `image.scale` is the supersampling knob.
+
+Changes nymph makes (each covered by a plan step 2 test):
+
+1. **ImGui 1.92 textures.** The single global font `Texture` set up by
+   `bind_imgui_painting()` (`GetTexDataAsAlpha8`, `io.Fonts->TexID`) is
+   replaced by a `texture_store` passed to `paint()`: textures by
+   `pcmd.GetTexID()`, filled from the `ImTextureData` requests
+   (`WantCreate` / `WantUpdates` / `WantDestroy`) that ImGui issues when
+   `ImGuiBackendFlags_RendererHasTextures` is set. Textures stay Alpha8
+   (the atlas is asked for `ImTextureFormat_Alpha8`), the one format the
+   painter samples. This is what lets ImGui bake glyphs at the output
+   density, so text is sharp at `scale: 2`.
+2. **`VtxOffset` / `IdxOffset`** honoured. The original predates them;
+   without them a mesh over 64K vertices (a large `Plot3DSurface`) draws
+   wrong triangles. The backend sets `ImGuiBackendFlags_RendererHasVtxOffset`.
+3. **White pixel** taken from `ImFontAtlas::TexUvWhitePixel`, not assumed
+   at texel (0, 0) as in pre-1.92 atlases.
+4. **Texel lookup** at `floor(uv * size)`, the texel containing the sample,
+   instead of `round(uv * (size - 1))`, which is off by up to half a texel.
+5. **Callbacks:** `ImDrawCallback_ResetRenderState` is ignored and any
+   other callback throws, instead of being called (neither ImPlot nor
+   ImPlot3D emits one).
+6. **API trimmed** to `paint(const ImDrawData&, const texture_store&,
+   image&)`: the ImGui option/stats windows, the static stats and
+   `make_style_fast()` are removed; the target is cleared by the caller
+   to the theme's window background (opaque, so the PNG is opaque).
+7. **Style:** nymph's own `.clang-format` applied, so the file reads like
+   the rest of `src/`.
 
 ### `png` (`src/png/`)
 
@@ -383,23 +406,23 @@ result renders with this tool when it uses only the elements nymph has.
 
 ## 7. Design Decisions
 
-- **nymph owns a CPU rasterizer.** Dear ImGui ships no software renderer:
-  its backends are GPU APIs (OpenGL, Vulkan, DirectX, Metal, WebGPU, SDL
-  renderers) plus `imgui_impl_null`, which draws nothing. wish nymph used
-  SDL's software renderer through `imgui_impl_sdlrenderer3`; that brings
-  in SDL, which this tool must not depend on. wish nymph's DESIGN rejected
-  a hand-written `ImDrawData` rasterizer only because SDL was already
-  there and the rasterizer is subtle code; here it is the price of the
-  dependency goal. It stays small because ImGui's output is simple: 2D
-  triangles, one texture format, one blend mode, clip rectangles.
-  Rejected: third-party `imgui_sw`-style rasterizers (unmaintained, built
-  for pre-1.92 texture handling, float coverage that is not bit-exact
-  across compilers).
-- **Fixed-point coverage, integer blending.** Goal 3 asks for identical
-  bytes; float edge tests and float blending can differ across compilers
-  and FMA settings. Colour and UV interpolation stay in float (they do
-  not decide coverage), and the result is quantized once, with an explicit
-  rounding rule.
+- **An adapted copy of imgui_software_renderer as the rasterizer.** Dear
+  ImGui ships no software renderer: its backends are GPU APIs (OpenGL,
+  Vulkan, DirectX, Metal, WebGPU, SDL renderers) plus `imgui_impl_null`,
+  which draws nothing. wish nymph used SDL's software renderer through
+  `imgui_impl_sdlrenderer3`; that brings in SDL, which this tool must not
+  depend on. emilk's imgui_sw is about 700 lines, public domain, has no
+  dependency but ImGui, and already handles the hard parts (fill rule,
+  anti-aliased fringes, text fast path). Its gaps are all about ImGui
+  versions newer than 2018 and are listed in section 4. Rejected: a
+  rasterizer written from scratch (more new code for the same result) and
+  using imgui_sw unmodified as a submodule (it does not compile against
+  ImGui 1.92 and would draw large meshes wrong).
+- **Float arithmetic in the rasterizer is accepted.** imgui_sw computes
+  coverage and blending in float. Within one build the output is
+  repeatable (single thread, fixed order), which is what Goal 3 needs;
+  byte-identical PNGs across compilers are not a goal. If they become one,
+  the coverage test is the place to switch to fixed point.
 - **Geometry anti-aliasing, not textured lines**
   (`AntiAliasedLinesUseTex = false`). Learned in wish nymph: textured lines
   depend on GPU-exact bilinear filtering and came out uneven on a
@@ -464,6 +487,9 @@ lazily by `nymph_ensure_submodules()`):
 | `libyaml` | YAML parsing with positions | `0.2.5` |
 | `stb` | `stb_image_write` (PNG), zlib for compressed `iTXt` | wish's `extern/stb` commit |
 | `googletest` | Tests only | `v1.15.2` |
+
+Not a submodule: `src/render/imgui_sw.hpp`/`.cpp`, an adapted copy of
+emilk's imgui_software_renderer (section 4).
 
 ImPlot and ImPlot3D are ImGui extensions, and libyaml and stb are small
 vendored C libraries; none of them is a system or GPU dependency. Pinning

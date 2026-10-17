@@ -33,42 +33,53 @@ and link into the `nymph` library with no system packages.
 **Tests:**
 - `tests/test_dependencies.cpp`: creates and destroys an ImGui, ImPlot and
   ImPlot3D context; runs one `NewFrame()` / `Render()` with a fixed
-  display size and an RGBA32 atlas built; parses a one-line YAML string
+  display size and an Alpha8 atlas built; parses a one-line YAML string
   with libyaml.
 - A fresh clone without `--recursive` configures and builds (manual check,
   recorded in the step's result).
 
-### 2. Software rasterizer
+### 2. Software rasterizer (adapted imgui_sw)
 
-**Goal:** `ImDrawData` becomes exact, deterministic RGBA8 pixels on the
-CPU.
+**Goal:** `ImDrawData` from ImGui 1.92 becomes correct, repeatable RGBA8
+pixels on the CPU, using an adapted copy of emilk's
+imgui_software_renderer.
 
 **Deliverables:**
-- `src/render/texture_store.hpp`/`.cpp`: RGBA8 textures by id;
+- `src/render/imgui_sw.hpp`/`.cpp`: copied from
+  `emilk/imgui_software_renderer` commit `b5ae63a` (`src/imgui_sw.*`), with
+  a header stating the origin, its public-domain licence, and the changes
+  of DESIGN.md section 4 (`imgui_sw`), items 1-7. First commit the copy
+  as is plus only the formatting, then the changes, so the diff against
+  upstream stays reviewable.
+- `src/render/texture_store.hpp`/`.cpp`: Alpha8 textures by id;
   `apply(ImTextureData&)` for `WantCreate` / `WantUpdates` /
   `WantDestroy`, setting `TexID` and status.
-- `src/render/soft_rasterizer.hpp`/`.cpp`: `struct image {int width,
-  height; std::vector<uint8_t> rgba;}`; `rasterize(const ImDrawData&,
-  const texture_store&, ImU32 clear_color) -> image`. Fixed-point edge
-  functions (8 sub-pixel bits, top-left rule), affine colour/UV
-  interpolation, bilinear clamp-to-edge sampling, integer blending, clip
-  rectangles and `FramebufferScale` as in DESIGN.md section 4.
+- `src/render/image.hpp`: `struct image {int width, height;
+  std::vector<uint8_t> rgba;}`.
+- `THIRD_PARTY.md` (repository root): imgui_sw's origin and licence text.
 
-**Tests** (`tests/test_soft_rasterizer.cpp`, hand-built `ImDrawList`s
-with a 1x1 white texture and a 2x2 test texture, no ImGui frame):
+**Tests** (`tests/test_imgui_sw.cpp`, hand-built `ImDrawList`s with a
+small Alpha8 test texture whose white pixel is not at (0, 0), no ImGui
+frame):
 - An opaque axis-aligned rectangle covers exactly its pixels, with its
   colour, and nothing else changes.
 - Two triangles forming a square with alpha 0.5 give one uniform colour:
   no pixel along the shared diagonal is blended twice.
 - A triangle partly outside its clip rectangle changes no pixel outside it.
 - Blending a known colour at known alpha over a known background gives the
-  exact expected bytes (two or three hand-computed cases).
-- Sampling the 2x2 texture at texel centres returns the texel colours;
-  midway between two texels returns their average.
-- `FramebufferScale = 2` with a 10x10 display gives a 20x20 image and a
-  rectangle twice as large.
+  expected bytes (within 1 per channel).
+- A textured quad mapped 1:1 onto the texture reproduces its texels at the
+  right pixels (catches the texel-lookup fix).
+- A solid rectangle that samples the moved white pixel is painted solid.
+- A draw list over 65,536 vertices with `VtxOffset` set draws the same
+  pixels as the same shapes split into small lists.
+- Two textures in one frame are each sampled from their own pixels.
+- `texture_store` applies `WantCreate`, then a `WantUpdates` rectangle,
+  then `WantDestroy`, with the expected pixels and statuses.
+- A display of 10x10 painted into a 20x20 target draws a rectangle twice
+  as large.
 - A `ResetRenderState` callback is ignored; any other callback throws.
-- Rasterizing the same draw data twice gives identical bytes.
+- Painting the same draw data twice gives identical bytes.
 
 ### 3. Offscreen frame driver
 
@@ -79,7 +90,7 @@ ImPlot3D context comes out as an image, with no window or display.
 - `src/render/figure_renderer.hpp`/`.cpp`, first form:
   `render_frames(const image_options&, std::function<void(draw_context&)>)
   -> image`. Context trio created and destroyed per call (RAII guard),
-  `AddFontDefaultVector()` at 16 px, RGBA32 atlas, theme (`light`, `dark`,
+  `AddFontDefaultVector()` at 16 px, Alpha8 atlas, theme (`light`, `dark`,
   `classic`) with `AntiAliasedLinesUseTex = false`, the full-display
   window with `padding`, fixed `DeltaTime`, mouse at `-FLT_MAX`, three
   frames with texture requests applied after each, rasterize the third.
