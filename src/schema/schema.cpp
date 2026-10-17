@@ -30,6 +30,8 @@ const char* type_name(field_type type) {
       return "list of numbers";
     case field_type::integer_array:
       return "list of integers";
+    case field_type::text_array:
+      return "list of texts";
   }
   return "?";
 }

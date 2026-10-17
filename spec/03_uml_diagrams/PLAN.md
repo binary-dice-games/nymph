@@ -22,6 +22,10 @@ committed PNGs, except the examples.
 
 ### 1. `text_array` field type
 
+*Result: done.* `texts_field()`; the type prints as `list of texts`;
+references inside a text list are an error (the whole list takes one
+`$col`). 4 tests in `test_schema.cpp` / `test_bind.cpp`.
+
 **Goal:** element fields can hold a list of strings, including from a
 `$column`.
 
@@ -32,15 +36,14 @@ committed PNGs, except the examples.
 - `src/schema/convert.cpp`: a sequence of scalars, each converted with
   the `text` rules; a non-sequence or a nested item is an error at it.
 - `src/document/bind.cpp`: `$col` into `text_array` gives the cells.
-- `src/cli/schema_doc.cpp`: type name `text list`, default printed as a
-  YAML flow list.
+- `src/schema/schema.cpp`: type name `list of texts`; `nymph schema`
+  prints its default as `[]`.
 
 **Tests** (`tests/test_schema.cpp`, `tests/test_bind.cpp`):
 - `["a", b, 2025, "$$x"]` gives `{"a", "b", "2025", "$x"}`; `[]` is empty.
 - A scalar, a mapping or a nested list is an error positioned at it,
   naming `Type.field`.
 - `$col` gives the column's cells in row order; `[$a, $b]` is an error.
-- `nymph schema --markdown` prints a test class's `text_array` field.
 
 ### 2. ImUml library skeleton and context
 
