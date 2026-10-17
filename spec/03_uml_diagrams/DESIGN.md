@@ -12,8 +12,16 @@ nymph draws plots: `Plot` and `Plot3D` are elements whose children are
 series, drawn by ImPlot and ImPlot3D inside the figure's ImGui frame.
 This project adds UML diagrams the same way: a diagram is an element
 whose children are the diagram's nodes and edges, described in the YAML
-source and drawn inside the same frame. Mermaid is the reference for what
-an agent can say and how the result looks; the syntax is nymph's YAML, so
+source and drawn inside the same frame. Two references:
+
+- **Mermaid** for what an agent can say (the diagram kinds, their
+  vocabulary, the look of the shapes).
+- **Graphviz** (`dot`) for how a text description becomes a drawing: its
+  layered layout algorithm, the attributes that steer it without
+  coordinates (`rankdir`, `nodesep`, `ranksep`, `weight`, `minlen`,
+  `constraint`, `rank=same`), its clusters and its edge routing.
+
+The syntax is nymph's YAML, so
 a diagram can sit in a layout next to plots and labels, travels inside the
 PNG, and gets the same positioned, strict errors.
 
@@ -109,15 +117,25 @@ An empty list is allowed.
 |---|---|---|---|
 | `title` | text | `""` | Drawn above the diagram, like a plot title. |
 | `width`, `height` | number | `0` | Layout hints (core DESIGN section 3, "Layout"). |
-| `direction` | enum | per diagram | `TopDown`, `BottomUp`, `LeftRight`, `RightLeft` (graph diagrams only; mermaid's TB, BT, LR, RL). |
-| `edge_style` | enum | `Spline` | `Spline` or `Polyline` (graph diagrams only). |
-| `node_spacing`, `rank_spacing` | number | style | Pixels between nodes in a rank, and between ranks. |
+| `direction` | enum | per diagram | `TopDown`, `BottomUp`, `LeftRight`, `RightLeft` (graph diagrams only; dot's `rankdir`, mermaid's TB, BT, LR, RL). |
+| `edge_style` | enum | `Spline` | `Spline` or `Polyline` (graph diagrams only; dot's `splines`). |
+| `node_spacing`, `rank_spacing` | number | style | Pixels between nodes in a rank, and between ranks (dot's `nodesep`, `ranksep`). |
 | `min_zoom`, `max_zoom` | number | `0.5`, `1` | Allowed scale when fitting the rectangle (section 6). |
 | `line_color`, `fill_color` | colour | theme | Default edge and node colours of the whole diagram. |
 | `font`, `font_size`, `text_color` | | inherit | Text style. |
 
 Every node and edge also takes `color` (border or line) and `fill_color`
 (nodes), empty for the diagram's default.
+
+Layout hints, after dot's attributes, so an agent can steer the layout
+without coordinates (graph diagrams only):
+
+| Field | On | Default | dot | Meaning |
+|---|---|---|---|---|
+| `weight` | edges | `1` | `weight` | How strongly the edge is kept short and straight (integer 0–100). |
+| `min_length` | edges | `1` | `minlen` | Least number of ranks between the two ends (0 puts them in one rank). |
+| `constraint` | edges | `true` | `constraint` | `false`: the edge is drawn but does not influence ranks. |
+| `rank` | nodes | `""` | `rank=same` | Nodes with the same non-empty `rank` text are placed in one rank. |
 
 ### Class diagram
 
@@ -409,42 +427,67 @@ the geometry does not depend on ImGui's adaptive tessellation.
 ### Graph layout (`imuml_graph_layout.cpp`)
 
 The class, state, activity and use case diagrams share one layered
-(Sugiyama) layout, the family mermaid uses through dagre. It is a pure
-function: nodes with sizes, edges with label sizes and a direction in;
-node centres, edge polylines and label positions out. No ImGui context.
+layout: the algorithm of Graphviz's `dot`, as published in Gansner,
+Koutsofios, North and Vo, "A Technique for Drawing Directed Graphs"
+(IEEE TSE, 1993), implemented from the paper (Graphviz's source, under
+the Eclipse Public License, is read for behaviour, never copied; section
+7). mermaid's dagre is a port of the same paper. The layout is a pure
+function: nodes with sizes, edges with label sizes, weights, minimum
+lengths and constraint flags, rank groups and a direction in; node
+centres, edge paths and label positions out. No ImGui context.
 
 1. **Components**: connected components in order of their first node,
-   each laid out alone and placed side by side across the rank axis.
-2. **Cycles**: a depth-first search in submission order reverses back
-   edges for ranking; they are drawn with their real direction.
-3. **Ranks**: longest path from the sources, then nodes with no
-   predecessors are moved down next to their first successor (shorter
-   edges than plain longest path). Constraints: use case actors on the
-   first or last rank; per-kind "ranked first" end (section 3). A
-   self-loop is not ranked.
-4. **Dummies**: an edge spanning several ranks gets one dummy node per
-   rank crossed; a label adds its size to the gap it sits in.
-5. **Order**: initial order by DFS; then 24 alternating down / up sweeps
-   ordering each rank by the barycentre of its neighbours, ties by
-   current position (stable sort); the order with the fewest crossings is
-   kept.
-6. **Coordinates**: nodes packed by order with `node_spacing`; then a
-   fixed number of priority-method passes move each node towards the
-   barycentre of its neighbours without overlapping (dummies have the
-   lowest priority, so long edges straighten). Ranks are stacked with
-   `rank_spacing` plus the tallest node of each rank.
-7. **Edges**: polyline through dummy centres, ends clipped to the node's
-   shape (rectangle, ellipse, circle, diamond, bar); `Spline` turns it
-   into cubic Bézier segments through the same points. Parallel edges
-   between the same two nodes are fanned apart; self-loops are a loop on
-   the node's side away from the flow.
+   each laid out alone and packed side by side across the rank axis (dot
+   with `pack`).
+2. **Acyclic**: a depth-first search in submission order reverses back
+   edges for ranking; they are drawn with their real direction. Edges with
+   `constraint: false` and self-loops are left out of ranking.
+3. **Rank** (dot phase 1): minimise the sum of `weight * length` over
+   edges subject to `length >= min_length`, solved with **network
+   simplex**: a feasible tight spanning tree, then pivots on the tree edge
+   with a negative cut value, chosen by a cyclic search with dot's search
+   limit, until none is negative or the iteration cap is reached; ranks
+   normalised to start at 0 and balanced as in the paper. Nodes in one
+   `rank` group are merged into one ranking node first; use case actors
+   are pinned to the first or last rank by edges to a virtual source or
+   sink; the per-kind "ranked first" end of section 3 decides each edge's
+   direction.
+4. **Virtual nodes**: an edge spanning several ranks becomes a chain of
+   virtual nodes, one per rank crossed; an edge label becomes a virtual
+   node of the label's size in the middle rank (dot's label handling), so
+   ranks are spaced to fit labels.
+5. **Order** (dot phase 2, `mincross`): initial order by breadth-first
+   search from the first-rank nodes; then 24 iterations, alternating down
+   and up, each ordering a rank by the **weighted median** of its
+   neighbours' positions (nodes with no neighbours keep their place),
+   followed by **transpose**: swapping adjacent nodes while that lowers
+   the crossings. Ties are broken by current position, and the order with
+   the fewest crossings is kept.
+6. **Position** (dot phase 3): x coordinates by network simplex on dot's
+   auxiliary graph: each edge becomes a new node with two edges whose
+   weight is the edge's `weight` times dot's factor (1 between real nodes,
+   2 with one virtual end, 8 between two virtual nodes, so long edges
+   straighten), and neighbours in a rank are separated by half their
+   widths plus `node_spacing`. The same solver as step 3. y coordinates:
+   ranks stacked with `rank_spacing` plus the tallest node of each rank.
+7. **Edges** (dot phase 4, simplified): a path through the virtual node
+   centres, ends clipped to the node's shape (rectangle, ellipse, circle,
+   diamond, bar). `Polyline` keeps the straight segments; `Spline` fits
+   cubic Bézier segments through the same points with tangents along the
+   rank axis at each virtual node, so edges stay within the gap between
+   neighbours as dot's box-constrained splines do. Parallel edges between
+   the same two nodes are fanned apart; self-loops are a loop on the
+   node's side away from the flow.
 8. **Direction**: computed top-down; `BottomUp`, `LeftRight`, `RightLeft`
-   by swapping node width and height before and transforming after.
+   by swapping node width and height before and transforming after (dot's
+   `rankdir`).
 9. **Pixels**: every coordinate is rounded to a whole logical pixel.
 
-**Composite states** are laid out inside-out: a composite's children are
-laid out first (in its own direction), and the composite becomes a node
-of that size plus its header in the parent's layout. A transition that
+**Composite states** are dot's clusters, laid out inside-out rather than
+by dot's cluster-aware mincross: a composite's children are laid out first
+(in its own direction), and the composite becomes a node of that size plus
+its header in the parent's layout. The use case system boundary is a
+cluster too, drawn around the use cases' bounding box. A transition that
 crosses a composite's border is ranked in the parent between the
 composite and the outer node, and drawn to the inner node.
 
@@ -568,12 +611,26 @@ prints one.
   layout must know the natural size before drawing; submitting the same
   items with a flag reuses one code path, so measuring and drawing cannot
   disagree.
-- **Sugiyama with simple heuristics, not network simplex or
-  Brandes-Köpf.** Those give tighter layouts but are several times the
-  code; longest path plus pull-down, barycentre sweeps and the priority
-  method are deterministic, short, and good on the diagrams agents write
-  (tens of nodes). The layout is behind one function, so a better ranker
-  can replace it without touching anything else.
+- **dot's algorithm, implemented from its paper.** Graphviz's `dot` is
+  the reference for laying out a graph from text: its results are what
+  people expect a generated diagram to look like, and its attributes
+  (`weight`, `minlen`, `constraint`, `rank=same`) give an agent levers
+  that need no coordinates. Network simplex gives compact ranks (short
+  edges, few long ones) and, on the auxiliary graph, straight long edges
+  and balanced parents; one solver serves both phases. Median plus
+  transpose is dot's crossing reduction. Rejected: longest-path ranking
+  with barycentre placement (the first draft: wider, more uneven layouts);
+  Brandes-Köpf placement (a second algorithm to write, and dot's results
+  are the reference); dot's box-constrained spline router and
+  cluster-aware mincross (much of dot's code, small gain on diagrams of
+  tens of nodes; both stay possible behind the same function).
+- **Graphviz as a reference, not a dependency.** Linking `libgvc` /
+  `cgraph` would bring a large C library with plugins and its own
+  configuration, under the Eclipse Public License (weak copyleft) into an
+  MIT project that vendors only small libraries (core DESIGN goal 6), and
+  its layout could change between Graphviz versions. Writing the four
+  phases ourselves keeps them deterministic and in ImUml's style.
+  Graphviz code is never copied into nymph; the paper is the source.
 - **Fit by zoom with a floor.** mermaid scales its SVG to the page;
   doing the same keeps most diagrams usable at any image size, and the
   floor keeps text readable (Goal 5). Text is drawn at the zoomed size,
@@ -614,8 +671,11 @@ prints one.
   rendering stays callable inside another ImGui program.
 - Limits (in `src/core/limits.hpp`, checked in `check()`): at most 500
   nodes, 2000 edges and 2000 sequence rows per diagram, and composite
-  states nested at most 8 deep. The layout's cost is bounded by these and
-  its fixed iteration counts.
+  states nested at most 8 deep. The layout's cost is bounded by these, the
+  fixed mincross iterations and a network simplex iteration cap (dot's
+  `nslimit`); a capped solve is still a valid, deterministic layout.
+- Network simplex is deterministic: the initial tree, the entering and
+  leaving edge searches and every tie follow submission order.
 - No source text reaches printf: ImUml draws text with `AddText`, never
   through a format string.
 - Platform: plain C++ on ImGui types; no OS calls. Built and tested on
@@ -642,6 +702,8 @@ prints one.
 - **Activity swimlanes**: a `lane` field on activity nodes; the ordering
   step sorts each rank by lane first and the coordinate step confines
   each lane to a band.
+- **Orthogonal edges** (`edge_style: Orthogonal`, dot's `splines=ortho`),
+  and dot's box-constrained spline router for fewer edge-node overlaps.
 - **Concurrent state regions**: composite states with several child
   layouts stacked and separated by dashed lines.
 - **Interaction** in ImUml for live ImGui programs (hover highlight,

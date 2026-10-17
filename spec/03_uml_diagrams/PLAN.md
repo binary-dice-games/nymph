@@ -6,7 +6,8 @@ See [DESIGN.md](DESIGN.md) for the design this plan implements, and
 code it plugs into.
 
 Steps are ordered so the library's foundations come first (schema type,
-ImUml context, shapes, the layout engine, each testable alone), then one
+ImUml context, shapes, the dot-style layout engine in two steps, each
+testable alone), then one
 diagram kind per step, simplest graph diagram first, then the sequence
 diagram, then composite states, then documentation. Every step leaves all
 existing tests passing unmodified and the committed example PNGs
@@ -89,32 +90,57 @@ correctly at any zoom.
 - Drawing at zoom 0.5 covers half the extent of zoom 1 (± 1 px).
 - Rendering the same scene twice gives the same bytes.
 
-### 4. Graph layout engine
+### 4. Network simplex and ranking
 
-**Goal:** the layered layout of DESIGN section 4 as a pure function.
+**Goal:** dot's ranking phase (DESIGN section 4, graph layout steps 1-3)
+as a pure function, with the network simplex solver reusable by step 5.
 
 **Deliverables:**
-- `imuml/imuml_graph_layout.cpp`, `ImUml::LayoutGraph(const
-  ImUmlGraphInput&, ImUmlGraphOutput*)` in `imuml_internal.h`: components,
-  cycle reversal, ranking with constraints, dummies, ordering, coordinates,
-  edge routing and clipping, splines, directions, rounding.
+- `imuml/imuml_graph_layout.cpp`, declarations in `imuml_internal.h`:
+  `ImUmlNetworkSimplex` (feasible tree, cut values, cyclic entering-edge
+  search, iteration cap, normalise, balance), components, cycle reversal,
+  `ImUml::RankGraph()` with `weight`, `min_length`, `constraint`, rank
+  groups and first / last rank pins.
 
 **Tests** (`tests/test_imuml_graph_layout.cpp`, no ImGui context):
-- No two node rectangles overlap (plus spacing), for a set of fixed
-  graphs: chain, tree, diamond, K(3,3), a cycle, a self-loop, parallel
-  edges, two components.
-- Every non-reversed edge goes from a lower rank to a higher one; a cycle
-  is laid out with exactly one reversed edge.
+- On small graphs with a known optimum (chain, diamond, a tree with a
+  shortcut edge, a graph where longest-path ranking is not optimal), the
+  total `weight * length` equals the optimum.
+- `min_length` is respected (0 allows one rank); a `constraint: false`
+  edge does not change the ranks; nodes of one rank group share a rank;
+  pinned nodes are on the first / last rank.
+- A cycle is ranked with exactly one reversed edge; a self-loop is
+  ignored; two components are ranked independently.
+- Hitting the iteration cap still returns a feasible ranking.
+- The same input twice gives identical ranks.
+
+### 5. Ordering, positions and edge routing
+
+**Goal:** the complete dot-style layout (graph layout steps 4-9).
+
+**Deliverables:**
+- `imuml/imuml_graph_layout.cpp`: virtual nodes (edges and labels),
+  mincross (BFS init, weighted median, transpose, best order kept),
+  x positions by network simplex on the auxiliary graph, y by rank, edge
+  paths with shape clipping, splines, parallel edges and self-loops,
+  directions, rounding; `ImUml::LayoutGraph(const ImUmlGraphInput&,
+  ImUmlGraphOutput*)`.
+
+**Tests** (in `tests/test_imuml_graph_layout.cpp`):
+- No two node rectangles overlap (plus spacing) for chain, tree, diamond,
+  K(3,3), a cycle, a self-loop, parallel edges and two components.
 - A graph drawable without crossings (a tree, a ladder) is laid out with
-  0 crossings.
-- Rank constraints hold (pinned first and last ranks).
+  0 crossings; transpose never increases the crossing count.
+- A long edge's virtual nodes share one x coordinate when nothing else is
+  in the way (the 8x weight straightens it); a parent with two children
+  is centred above them.
 - Edge ends lie on their node's shape boundary (± 1 px) for rectangle,
-  ellipse, diamond and circle.
+  ellipse, diamond and circle; label nodes do not overlap real nodes.
 - `LeftRight` equals `TopDown` transposed.
 - The same input twice gives identical output; coordinates are whole
   numbers.
 
-### 5. Class diagram
+### 6. Class diagram
 
 **Goal:** `ClassDiagram`, `Class`, `ClassRelation` and graph `Note` render
 from YAML.
@@ -136,12 +162,15 @@ from YAML.
   suggestion; a `Class` outside a `ClassDiagram` says where it goes; too
   many nodes.
 - `Inheritance` places `to` above `from` (rectangles from the last layout).
+- The dot layout hints reach the layout: two classes with the same
+  `rank` share a y; `min_length: 2` puts a rank between the ends;
+  `weight` out of 0-100 is an error.
 - A diagram too big for its rectangle at `min_zoom` fails `check_source()`
   with the needed and available sizes; with a lower `min_zoom` it renders.
 - A diagram with 0 hints in a `VerticalLayout` gets its natural height.
 - `fill_color` on a class changes pixels inside its box only.
 
-### 6. State diagram (flat)
+### 7. State diagram (flat)
 
 **Goal:** `StateDiagram`, `State` (no children yet), `Transition` render.
 
@@ -153,12 +182,12 @@ the graph layout; `src/elements/uml/state_diagram.cpp`;
 **Tests** (`tests/test_uml_state.cpp`):
 - Example renders, round trip, determinism.
 - Transition into `Initial` / out of `Final` is an error at `to` /
-  `from`; children on a pseudo-state are rejected (until step 11, any
+  `from`; children on a pseudo-state are rejected (until step 12, any
   child state is rejected with "composite states are not supported yet").
 - An `Initial` state is drawn as a filled circle (centre pixel is the
   line colour), `Final` as a bullseye.
 
-### 7. Activity diagram
+### 8. Activity diagram
 
 **Goal:** `ActivityDiagram`, `Action`, `ActivityControl`, `Flow` render.
 
@@ -172,7 +201,7 @@ the graph layout; `src/elements/uml/state_diagram.cpp`;
 - `Fork` / `Join` bars are perpendicular to the flow in `TopDown` and
   `LeftRight`; guards are drawn (text pixels near the edge midpoint).
 
-### 8. Use case diagram
+### 9. Use case diagram
 
 **Goal:** `UseCaseDiagram`, `Actor`, `UseCase`, `UseCaseRelation` render,
 with the system boundary.
@@ -188,7 +217,7 @@ constraints; boundary around the use cases;
   use case is inside it; with an empty `system` no boundary is drawn.
 - Relation kind rules are errors with positions.
 
-### 9. Sequence diagram
+### 10. Sequence diagram
 
 **Goal:** `SequenceDiagram`, `Participant`, `Message` and sequence notes
 render, with activations, autonumber, create and destroy.
@@ -198,7 +227,7 @@ render, with activations, autonumber, create and destroy.
   `Begin/EndSequenceDiagram`, `SetupSequence`, `Participant`, `Message`,
   `NoteOver`, `NoteSide`.
 - `src/elements/uml/sequence_diagram.cpp` (without `Fragment` / `Else`);
-  `examples/uml_sequence.yaml` (fragments added in step 10).
+  `examples/uml_sequence.yaml` (fragments added in step 11).
 
 **Tests** (`tests/test_imuml_sequence_layout.cpp`,
 `tests/test_uml_sequence.cpp`):
@@ -211,7 +240,7 @@ render, with activations, autonumber, create and destroy.
   declared after a message, `over` on a graph note are errors with
   positions.
 
-### 10. Sequence fragments
+### 11. Sequence fragments
 
 **Goal:** `Fragment` and `Else` render, nested.
 
@@ -219,14 +248,14 @@ render, with activations, autonumber, create and destroy.
 and their rows; `Fragment` / `Else` elements; the sequence example gains
 an `Alt` and a `Loop`.
 
-**Tests** (in the step 9 files):
+**Tests** (in the step 10 files):
 - A fragment's rectangle contains every message inside it; a nested one
   lies inside its parent with the nesting margin; `over` overrides the
   span.
 - `Else` outside `Alt` / `Par` / `Critical`, or first or last, is an
   error.
 
-### 11. Composite states
+### 12. Composite states
 
 **Goal:** a `State` with children is drawn as a composite state.
 
@@ -241,7 +270,7 @@ example gains a composite state.
 - Ids are unique across nesting levels; nesting deeper than the limit is
   an error.
 
-### 12. Documentation and release
+### 13. Documentation and release
 
 **Goal:** agents can find, write and fix UML diagrams from the docs alone.
 
