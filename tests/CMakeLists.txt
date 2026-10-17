@@ -28,3 +28,4 @@ nymph_add_test(test_figure_renderer test_figure_renderer.cpp)
 nymph_add_test(test_png_meta test_png_meta.cpp)
 # Decodes pixels with its own copy of stb_image.
 target_link_libraries(test_png_meta PRIVATE nymph_stb)
+nymph_add_test(test_yaml_doc test_yaml_doc.cpp)

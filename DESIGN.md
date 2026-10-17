@@ -254,11 +254,27 @@ naming its position. Columns nothing refers to are never checked.
 
 ### `yaml_doc` (`src/document/yaml_doc`)
 
-The source parsed with libyaml's document API into an immutable tree of
-`yaml_node {kind (scalar/sequence/mapping), text, quoted, line, column,
-entries}`. It is the only place libyaml is used. Duplicate mapping keys,
-multiple documents and an empty document are errors here (wish nymph let
-the last duplicate win; an agent should hear about it).
+`parse_yaml(text) -> yaml_node`, over libyaml's document API, the only
+place libyaml is used. A `yaml_node` is a scalar (`text`, `style`: plain,
+single- or double-quoted, literal, folded), a sequence (`children`) or a
+mapping (`keys` and `children` as parallel vectors, in source order), with
+a 1-based `line` and `column` (columns count characters, as libyaml does).
+A literal or folded block scalar also records `content_line` /
+`content_column`, where its text starts, so a CSV error inside `data: |`
+can point at the right line of the file. Aliases are expanded into copies.
+
+Errors (all `nymph::error` with a position): libyaml's syntax errors, with
+the start of the enclosing construct added (libyaml notices a problem
+after its cause: "found unexpected end of stream (while scanning a quoted
+scalar that started at line 1, column 4)"); tab indentation, with its own
+message; a duplicate key, at the second one (wish nymph let the last one
+win; an agent should hear about it); a non-scalar key; a second document;
+an empty document; nesting deeper than 200; more than 4,000,000 nodes
+after alias expansion (a few nested aliases would otherwise expand
+exponentially).
+
+`src/core/error.hpp` defines `nymph::error : std::runtime_error` with
+`line()` and `column()` (0 when the error has no position).
 
 ### `table` (`src/document/table`)
 

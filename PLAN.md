@@ -194,6 +194,15 @@ back.
 
 ### 5. YAML document with positions
 
+*Result: done.* `src/core/error.hpp`, `src/document/yaml_doc`;
+`tests/test_yaml_doc.cpp` (18 tests). Additions beyond the plan: block
+scalars record where their text starts (`content_line` /
+`content_column`, needed by step 6); syntax errors name where the
+enclosing construct started; non-scalar keys, nesting over 200 levels and
+alias expansion beyond 4,000,000 nodes are errors. Mapping entries are two
+parallel vectors (`keys`, `children`) rather than a vector of pairs of an
+incomplete type, which MSVC handles less reliably.
+
 **Goal:** the source text becomes a positioned, immutable node tree.
 
 **Deliverables:**
