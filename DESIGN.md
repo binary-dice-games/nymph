@@ -219,7 +219,9 @@ Two forms:
   Error positions inside the CSV are mapped back to lines of the YAML file.
 - **Columns as a mapping**: `data: {month: [1, 2, 3], revenue: [12, 15, 11]}`.
   Each key is a column, each value a list of scalars; all lists the same
-  length. Position references (`$2`) follow key order.
+  length. Position references (`$2`) follow key order. An unquoted empty
+  value, `~` or `null` is an empty cell (a gap); quoted `'null'` is text.
+- A folded block (`data: >`) is an error: folding joins the CSV lines.
 
 Both forms produce the same `table` (section 4); nothing after parsing
 knows which form was used.
@@ -269,7 +271,9 @@ after its cause: "found unexpected end of stream (while scanning a quoted
 scalar that started at line 1, column 4)"); tab indentation, with its own
 message; a duplicate key, at the second one (wish nymph let the last one
 win; an agent should hear about it); a non-scalar key; a second document;
-an empty document; nesting deeper than 200; more than 4,000,000 nodes
+an empty document; an alias inside the node it refers to (`a: &x [1,
+*x]`, a cycle libyaml accepts), reported at the anchored node; nesting
+deeper than 200; more than 4,000,000 nodes
 after alias expansion (a few nested aliases would otherwise expand
 exponentially).
 
@@ -278,9 +282,15 @@ exponentially).
 
 ### `table` (`src/document/table`)
 
-Column names plus cells kept as strings, each with its source position.
-Built by `parse_csv()` or `table_from_mapping()`. Number conversion happens
-per column, on demand, during binding.
+Column names plus cells kept as strings (`cell{text, line, column}`),
+column-major, each with its position in the YAML file, so a data error
+points at its cell. `parse_data(const yaml_node&)` picks the form: a
+mapping goes to `table_from_mapping()`, a literal block scalar to
+`parse_csv(text, content_line, content_column)`, a single-line quoted or
+plain scalar to `parse_csv()` at its own position; a folded (`>`) scalar
+and a sequence are errors. `numbers(column)` converts one column on
+demand during binding (`std::from_chars`, so no locale; an empty cell is
+NaN); `find_column()` resolves a name, else a 1-based position.
 
 ### Element schema (`src/schema/`)
 

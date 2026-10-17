@@ -199,6 +199,19 @@ TEST(yaml_doc, DeepNestingIsAnError) {
   EXPECT_NE(std::string(e.what()).find("too deep"), std::string::npos);
 }
 
+TEST(yaml_doc, SelfReferencingAnchorDoesNotHang) {
+  // Ported from wish nymph: an alias inside its own anchor's node. libyaml
+  // accepts the cycle; expanding it would never end.
+  for (const char* text : {"a: &x [1, *x]\n", "a: &x {k: *x}\n"}) {
+    const error e = parse_error(text);
+    // libyaml replaces an alias with its target, so the position is the
+    // anchored node's (column 4), not the alias's own.
+    EXPECT_EQ(e.line(), 1);
+    EXPECT_EQ(e.column(), 4);
+    EXPECT_NE(std::string(e.what()).find("alias refers to a node that contains it"), std::string::npos) << e.what();
+  }
+}
+
 TEST(yaml_doc, AliasExpansionIsBounded) {
   // Each level refers to the previous one ten times: 10^7 nodes in total.
   std::string text = "l0: &l0 [x, x, x, x, x, x, x, x, x, x]\n";

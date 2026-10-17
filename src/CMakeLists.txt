@@ -18,6 +18,8 @@ add_library(nymph STATIC
   core/error.hpp
   document/yaml_doc.hpp
   document/yaml_doc.cpp
+  document/table.hpp
+  document/table.cpp
 )
 add_library(nymph::nymph ALIAS nymph)
 target_include_directories(nymph PUBLIC

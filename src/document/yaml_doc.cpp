@@ -154,7 +154,16 @@ class converter {
  public:
   converter(yaml_document_t& doc, const line_index& lines) : doc_(doc), lines_(lines) {}
 
-  yaml_node convert(const yaml_node_t& in, int depth) {
+  /// Converts node `id`. `open_` holds the ids being converted above it: a
+  /// child among them is an alias to its own ancestor, a cycle libyaml
+  /// accepts (`a: &x [1, *x]`).
+  yaml_node convert(int id, int depth) {
+    const yaml_node_t& in = *node(id);
+    for (int open : open_) {
+      if (open == id) {
+        throw error(to_line(in.start_mark), to_column(in.start_mark), "an alias refers to a node that contains it");
+      }
+    }
     if (depth > kMaxDepth) {
       throw error(to_line(in.start_mark), to_column(in.start_mark), "nesting is too deep");
     }
@@ -162,6 +171,7 @@ class converter {
       throw error(
           to_line(in.start_mark), to_column(in.start_mark), "the document is too large (too many nodes after aliases)");
     }
+    open_.push_back(id);
     yaml_node out;
     out.line = to_line(in.start_mark);
     out.column = to_column(in.start_mark);
@@ -177,21 +187,22 @@ class converter {
       case YAML_SEQUENCE_NODE:
         out.kind = yaml_node::kind_t::sequence;
         for (yaml_node_item_t* item = in.data.sequence.items.start; item < in.data.sequence.items.top; ++item) {
-          out.children.push_back(convert(*node(*item), depth + 1));
+          out.children.push_back(convert(*item, depth + 1));
         }
         break;
       case YAML_MAPPING_NODE:
         out.kind = yaml_node::kind_t::mapping;
         for (yaml_node_pair_t* pair = in.data.mapping.pairs.start; pair < in.data.mapping.pairs.top; ++pair) {
-          yaml_node key = convert(*node(pair->key), depth + 1);
+          yaml_node key = convert(pair->key, depth + 1);
           check_key(out, key);
           out.keys.push_back(std::move(key));
-          out.children.push_back(convert(*node(pair->value), depth + 1));
+          out.children.push_back(convert(pair->value, depth + 1));
         }
         break;
       default:
         throw error(out.line, out.column, "unsupported YAML node");
     }
+    open_.pop_back();
     return out;
   }
 
@@ -230,6 +241,7 @@ class converter {
   yaml_document_t& doc_;
   const line_index& lines_;
   size_t count_ = 0;
+  std::vector<int> open_;
 };
 
 } // namespace
@@ -249,7 +261,7 @@ yaml_node parse_yaml(std::string_view text) {
     throw error(1, 1, "the document is empty");
   }
   converter conv(first.doc, lines);
-  yaml_node out = conv.convert(*root, 0);
+  yaml_node out = conv.convert(static_cast<int>(root - first.doc.nodes.start) + 1, 0);
 
   // Exactly one document: anything after it is an error.
   document_guard second;

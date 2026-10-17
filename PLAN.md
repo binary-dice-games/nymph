@@ -220,6 +220,16 @@ incomplete type, which MSVC handles less reliably.
 
 ### 6. Data tables
 
+*Result: done.* `src/document/table`; `tests/test_table.cpp` (17 tests).
+Beyond the plan: every cell carries its own line and column (wish
+reported column 1 of the row); `parse_data()` chooses the form and maps a
+literal block's text back to file positions; in the mapping form `~` /
+`null` / an empty value is a gap; `data: >` and a list are errors. Also
+found here: libyaml accepts an alias inside its own anchor (`a: &x [1,
+*x]`), which the step 5 code only stopped through its depth limit with a
+misleading message; `parse_yaml()` now detects the cycle and says so
+(test in `test_yaml_doc.cpp`).
+
 **Goal:** both forms of `data` become the same column table with
 positions.
 
