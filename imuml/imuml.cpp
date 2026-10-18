@@ -487,6 +487,10 @@ bool ImUml::BeginUseCaseDiagram(const char* title_id, const ImVec2& size, ImUmlD
   return BeginDiagram(ImUmlDiagramKind_UseCase, title_id, size, flags);
 }
 
+bool ImUml::BeginFlowchart(const char* title_id, const ImVec2& size, ImUmlDiagramFlags flags) {
+  return BeginDiagram(ImUmlDiagramKind_Flowchart, title_id, size, flags);
+}
+
 // ── Setup ────────────────────────────────────────────────────────────────────
 
 void ImUml::SetupLayout(ImUmlDirection direction, ImUmlEdgeStyle edge_style) {
@@ -771,6 +775,35 @@ void ImUml::UseCaseLink(const char* from, const char* to, ImUmlUseCaseLinkKind k
                       : kind == ImUmlUseCaseLinkKind_Extend ? "\xC2\xAB" "extend\xC2\xBB"
                                                              : nullptr;
   AddEdge(d, ImUmlEdgeType_UseCaseLink, kind, from, to, label);
+}
+
+// ── Flowcharts ───────────────────────────────────────────────────────────────
+
+void ImUml::FlowNode(const char* id, const char* text, ImUmlFlowShape shape) {
+  ImUmlDiagram* d = CurrentDiagram();
+  IM_ASSERT(d->Kind == ImUmlDiagramKind_Flowchart);
+  AddNode(d, ImUmlNodeType_FlowNode, shape, id, text);
+}
+
+void ImUml::BeginFlowGroup(const char* id, const char* title) {
+  ImUmlDiagram* d = CurrentDiagram();
+  IM_ASSERT(d->Kind == ImUmlDiagramKind_Flowchart);
+  AddNode(d, ImUmlNodeType_FlowGroup, 0, id, title);
+  d->OpenStates.push_back(d->Nodes.Size - 1); // the parent of what follows, as BeginState()
+}
+
+void ImUml::EndFlowGroup() {
+  ImUmlDiagram* d = CurrentDiagram();
+  IM_ASSERT(!d->OpenStates.empty() && "EndFlowGroup() without BeginFlowGroup()");
+  if (!d->OpenStates.empty()) {
+    d->OpenStates.pop_back();
+  }
+}
+
+void ImUml::FlowLink(const char* from, const char* to, const char* label, ImUmlFlowLinkFlags flags) {
+  ImUmlDiagram* d = CurrentDiagram();
+  IM_ASSERT(d->Kind == ImUmlDiagramKind_Flowchart);
+  AddEdge(d, ImUmlEdgeType_FlowLink, flags, from, to, label);
 }
 
 // ── ER diagrams ──────────────────────────────────────────────────────────────

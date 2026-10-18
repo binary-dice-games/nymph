@@ -30,4 +30,11 @@ inline constexpr size_t kMaxUmlRows = 2000u;
 /// @brief Deepest nesting of composite states or sequence fragments.
 inline constexpr size_t kMaxUmlNesting = 8u;
 
+/// @brief Largest number of tasks in one GanttChart.
+inline constexpr size_t kMaxGanttTasks = 500u;
+
+/// @brief Largest number of nodes and of flows in one SankeyDiagram.
+inline constexpr size_t kMaxSankeyNodes = 500u;
+inline constexpr size_t kMaxSankeyFlows = 2000u;
+
 } // namespace bdg::nymph

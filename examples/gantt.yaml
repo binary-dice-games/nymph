@@ -1,0 +1,24 @@
+nymph: 1
+description: Release 2.0 schedule in three phases, with dependencies, a code-freeze milestone and today marked.
+image: {width: 760, height: 420}
+root:
+  type: GanttChart
+  title: Release 2.0
+  today: 2026-03-12
+  children:
+    - type: GanttSection
+      name: Design
+      children:
+        - {type: GanttTask, id: spec, name: Write spec, start: 2026-03-02, duration: 4, status: Done}
+        - {type: GanttTask, id: review, name: Review, after: [spec], duration: 2, status: Done}
+    - type: GanttSection
+      name: Build
+      children:
+        - {type: GanttTask, id: api, name: API, after: [review], duration: 6, status: Active}
+        - {type: GanttTask, id: ui, name: UI, after: [review], duration: 8, status: Critical}
+        - {type: GanttTask, id: freeze, name: Code freeze, after: [api, ui], milestone: true}
+    - type: GanttSection
+      name: Ship
+      children:
+        - {type: GanttTask, id: qa, name: QA, after: [freeze], end: 2026-03-27}
+        - {type: GanttTask, name: Release, after: [qa], milestone: true}

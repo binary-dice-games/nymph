@@ -200,6 +200,42 @@ bool Across(const ImUmlDiagram* d) {
   return d->Direction == ImUmlDirection_LeftRight || d->Direction == ImUmlDirection_RightLeft;
 }
 
+const float kSubroutineInset = 8.0f; // the inner sides of a subroutine box
+
+/// A flowchart node's size at zoom 1 for `shape`, around `text`.
+ImVec2 FlowNodeSize(const ImUmlDiagram* d, int shape, const ImVec2& text) {
+  const ImVec2 pad = d->Style.NodePadding;
+  const float w = text.x + pad.x * 2.0f, h = text.y + pad.y * 2.0f;
+  switch (shape) {
+    case ImUmlFlowShape_Rounded:
+      return ImVec2(ImMax(w + d->Style.NodeRounding, 50.0f), h);
+    case ImUmlFlowShape_Stadium:
+      return ImVec2(ImMax(w + h * 0.5f, 50.0f), h);
+    case ImUmlFlowShape_Diamond: {
+      // A diamond twice as wide as tall holding the text box (tw, th):
+      // half-diagonals A = tw / 2 + th and A / 2.
+      const float tw = text.x + pad.x, th = text.y + pad.y;
+      const float half = ImMax(tw * 0.5f + th, 24.0f);
+      return ImVec2(half * 2.0f, half);
+    }
+    case ImUmlFlowShape_Circle: {
+      const float tw = text.x + pad.x, th = text.y + pad.y;
+      const float diameter = ImMax(ImSqrt(tw * tw + th * th), 30.0f);
+      return ImVec2(diameter, diameter);
+    }
+    case ImUmlFlowShape_Parallelogram:
+      return ImVec2(ImMax(w + h * 0.5f, 50.0f), h);
+    case ImUmlFlowShape_Hexagon:
+      return ImVec2(ImMax(w + h, 50.0f), h);
+    case ImUmlFlowShape_Cylinder:
+      return ImVec2(ImMax(w, 50.0f), h + 12.0f);
+    case ImUmlFlowShape_Subroutine:
+      return ImVec2(ImMax(w + kSubroutineInset * 2.0f, 50.0f), h);
+    default:
+      return ImVec2(ImMax(w, 50.0f), h);
+  }
+}
+
 /// Size and shape of a node that is not a composite state, at zoom 1.
 void MeasureNode(const ImUmlDiagram* d, ImUmlNodeRec& n) {
   const ImVec2 pad = d->Style.NodePadding;
@@ -292,6 +328,15 @@ void MeasureNode(const ImUmlDiagram* d, ImUmlNodeRec& n) {
     }
     case ImUmlNodeType_Note:
       n.Size = ImVec2(text.x + pad.x * 2.0f + d->Style.NoteFold, text.y + pad.y * 2.0f);
+      break;
+    case ImUmlNodeType_FlowNode:
+      n.Size = FlowNodeSize(d, n.Kind, text);
+      n.Shape = n.Kind == ImUmlFlowShape_Diamond ? ImUmlShape_Diamond
+          : n.Kind == ImUmlFlowShape_Circle      ? ImUmlShape_Circle
+                                                 : ImUmlShape_Box;
+      break;
+    case ImUmlNodeType_FlowGroup: // a group with nothing in it: its title in a box
+      n.Size = ImVec2(ImMax(text.x + pad.x * 2.0f, 60.0f), text.y + pad.y * 2.0f);
       break;
     case ImUmlNodeType_Entity: {
       const EntityGeometry g = MeasureEntity(d, n);
@@ -401,6 +446,13 @@ EdgeLook LookOf(const ImUmlDiagram* d, const ImUmlEdgeRec& e) {
       break;
     case ImUmlEdgeType_NoteLink:
       l.Dashed = true;
+      break;
+    case ImUmlEdgeType_FlowLink:
+      l.Dashed = (e.Kind & ImUmlFlowLinkFlags_Dotted) != 0;
+      l.WeightScale = (e.Kind & ImUmlFlowLinkFlags_Thick) != 0 ? 2.0f : 1.0f;
+      l.AtTo = (e.Kind & ImUmlFlowLinkFlags_NoArrow) ? ImUmlMarker_None : ImUmlMarker_Filled;
+      l.AtFrom = (e.Kind & ImUmlFlowLinkFlags_BothArrows) && l.AtTo != ImUmlMarker_None ? ImUmlMarker_Filled
+                                                                                        : ImUmlMarker_None;
       break;
     case ImUmlEdgeType_Relationship:
       l.Dashed = ((e.Kind >> 8) & ImUmlRelationshipFlags_NonIdentifying) != 0;
@@ -1028,6 +1080,87 @@ void DrawPseudo(const Painter& pt, const ImUmlNodeRec& n, bool initial, bool fin
   }
 }
 
+/// Inside of a flowchart group: its fill colour, else halfway between the
+/// background and the node fill, so nodes stand out on it.
+ImU32 GroupFill(const Painter& pt, const ImUmlNodeRec& n) {
+  if (n.FillCol != 0) {
+    return n.FillCol;
+  }
+  const ImVec4 bg = ImGui::ColorConvertU32ToFloat4(pt.Col(ImUmlCol_Bg));
+  const ImVec4 node = ImGui::ColorConvertU32ToFloat4(pt.Col(ImUmlCol_NodeFill));
+  return ImGui::ColorConvertFloat4ToU32(ImLerp(bg, node, 0.5f));
+}
+
+void DrawFlowNode(const Painter& pt, const ImUmlNodeRec& n, ImU32 fill, ImU32 border) {
+  const ImUmlDiagram* d = pt.D;
+  const ImVec2 a = pt.P(n.Pos - n.Size * 0.5f), b = pt.P(n.Pos + n.Size * 0.5f);
+  const ImVec2 c = pt.P(n.Pos);
+  const float h = b.y - a.y;
+  const char* nb = StrBegin(d, n.Name);
+  const char* ne = StrEnd(d, n.Name);
+  const ImVec2 ts = TextSize(n.Text, pt.Zoom, nb, ne);
+  float text_y = (a.y + b.y - ts.y) * 0.5f;
+  switch (n.Kind) {
+    case ImUmlFlowShape_Rounded:
+    case ImUmlFlowShape_Stadium: {
+      const float r = n.Kind == ImUmlFlowShape_Stadium ? h * 0.5f : pt.S(d->Style.NodeRounding);
+      pt.DL->AddRectFilled(a, b, fill, r);
+      pt.DL->AddRect(a, b, border, r, ImDrawFlags_None, pt.LW);
+      break;
+    }
+    case ImUmlFlowShape_Diamond:
+      ImUml::RenderDiamond(pt.DL, c, n.Size * 0.5f * pt.Zoom, fill, border, pt.LW);
+      break;
+    case ImUmlFlowShape_Circle: {
+      const float r = (b.x - a.x) * 0.5f;
+      const int seg = ImUml::CircleSegments(r);
+      pt.DL->AddCircleFilled(c, r, fill, seg);
+      pt.DL->AddCircle(c, r - pt.LW * 0.5f, border, seg, pt.LW);
+      break;
+    }
+    case ImUmlFlowShape_Parallelogram:
+    case ImUmlFlowShape_Hexagon: {
+      ImVec2 pts[6];
+      int count = 0;
+      if (n.Kind == ImUmlFlowShape_Parallelogram) {
+        const float s = h * 0.5f;
+        pts[count++] = ImVec2(a.x + s, a.y);
+        pts[count++] = ImVec2(b.x, a.y);
+        pts[count++] = ImVec2(b.x - s, b.y);
+        pts[count++] = ImVec2(a.x, b.y);
+      } else {
+        const float s = h * 0.5f;
+        pts[count++] = ImVec2(a.x + s, a.y);
+        pts[count++] = ImVec2(b.x - s, a.y);
+        pts[count++] = ImVec2(b.x, c.y);
+        pts[count++] = ImVec2(b.x - s, b.y);
+        pts[count++] = ImVec2(a.x + s, b.y);
+        pts[count++] = ImVec2(a.x, c.y);
+      }
+      pt.DL->AddConvexPolyFilled(pts, count, fill);
+      pt.DL->AddPolyline(pts, count, border, ImDrawFlags_Closed, pt.LW);
+      break;
+    }
+    case ImUmlFlowShape_Cylinder:
+      ImUml::RenderCylinder(pt.DL, a, b, fill, border, pt.LW);
+      text_y += ImMin(h * 0.15f, 8.0f) * 0.5f; // below the top rim
+      break;
+    case ImUmlFlowShape_Subroutine: {
+      pt.DL->AddRectFilled(a, b, fill);
+      pt.DL->AddRect(a, b, border, 0.0f, ImDrawFlags_None, pt.LW);
+      const float inset = pt.S(kSubroutineInset);
+      pt.DL->AddLine(ImVec2(a.x + inset, a.y), ImVec2(a.x + inset, b.y), border, pt.LW);
+      pt.DL->AddLine(ImVec2(b.x - inset, a.y), ImVec2(b.x - inset, b.y), border, pt.LW);
+      break;
+    }
+    default:
+      pt.DL->AddRectFilled(a, b, fill);
+      pt.DL->AddRect(a, b, border, 0.0f, ImDrawFlags_None, pt.LW);
+      break;
+  }
+  TextCentered(pt.DL, n.Text, pt.Zoom, c.x, text_y, nb, ne, n.Text.Col);
+}
+
 void DrawNode(const Painter& pt, const ImUmlNodeRec& n) {
   const ImUmlDiagram* d = pt.D;
   const ImU32 fill = n.FillCol != 0 ? n.FillCol : pt.Col(ImUmlCol_NodeFill);
@@ -1161,6 +1294,21 @@ void DrawNode(const Painter& pt, const ImUmlNodeRec& n) {
       pt.DL->AddEllipseFilled(pt.P(n.Pos), r, fill, 0.0f, seg);
       pt.DL->AddEllipse(pt.P(n.Pos), r, border, 0.0f, seg, pt.LW);
       TextCentered(pt.DL, n.Text, pt.Zoom, cx, (a.y + b.y - ts.y) * 0.5f, nb, ne, n.Text.Col);
+      break;
+    }
+    case ImUmlNodeType_FlowNode:
+      DrawFlowNode(pt, n, fill, border);
+      break;
+    case ImUmlNodeType_FlowGroup: {
+      if (!n.Composite) {
+        pt.DL->AddRectFilled(a, b, GroupFill(pt, n));
+        pt.DL->AddRect(a, b, n.LineCol != 0 ? n.LineCol : pt.Col(ImUmlCol_Boundary), 0.0f, ImDrawFlags_None, pt.LW);
+        TextCentered(pt.DL, n.Text, pt.Zoom, cx, (a.y + b.y - ts.y) * 0.5f, nb, ne, n.Text.Col);
+        break;
+      }
+      pt.DL->AddRectFilled(a, b, GroupFill(pt, n));
+      pt.DL->AddRect(a, b, n.LineCol != 0 ? n.LineCol : pt.Col(ImUmlCol_Boundary), 0.0f, ImDrawFlags_None, pt.LW);
+      TextCentered(pt.DL, n.Text, pt.Zoom, cx, a.y + pt.S(pad.y), nb, ne, n.Text.Col);
       break;
     }
     case ImUmlNodeType_Group: {
@@ -1755,6 +1903,10 @@ void ImUml::EndActivityDiagram() {
 
 void ImUml::EndUseCaseDiagram() {
   EndDiagram(ImUmlDiagramKind_UseCase);
+}
+
+void ImUml::EndFlowchart() {
+  EndDiagram(ImUmlDiagramKind_Flowchart);
 }
 
 void ImUml::EndERDiagram() {

@@ -238,6 +238,11 @@ Full reference: [elements.md](elements.md), or `nymph schema <Type>`.
 | `legend_location` | top left | `Center`, `North`, `South`, `West`, `East`, `NorthWest`, `NorthEast`, `SouthWest`, `SouthEast`. |
 | `legend_flags` | none | `Outside` (legend outside the plot area), `Horizontal`, `Sort`, `Reverse`. |
 | `colormap` | `Deep` | The colours series take in turn, and the scale of heatmaps. See "Colours and style". |
+| `x_scale`, `y_scale` | `Linear` | `Log10` for values spanning several orders of magnitude (fixed limits must be above 0), `SymLog` for log-like with 0 and negatives, `Time` for UNIX seconds labelled as UTC dates and times. |
+| `x_format`, `y_format` | `"%g"` | Tick label format with one `%f`, `%e` or `%g`: `"%.0f ms"`, `"%.1f%%"`. Not on a `Time` axis. |
+| `x_ticks`, `y_ticks` | automatic | Tick positions, in data units. |
+| `x_tick_labels`, `y_tick_labels` | the values | Text for each tick, such as category names: `[Q1, Q2, Q3]` or a text column `$quarter`. Needs one label per tick. |
+| `y2_label`, `y2_min`, `y2_max`, `y2_scale`, `y2_format`, `y2_ticks`, `y2_tick_labels`, `y2_flags` | no second axis | A second Y axis, on the right, for a series in other units (`y_axis: Y2` on the series). Any of these, or such a series, shows it. |
 
 Several flags are joined with `|`: `flags: NoLegend|NoTitle`.
 
@@ -262,9 +267,16 @@ Every series has a `label` (its legend name) and the style fields in
 | `PlotDigital` | `xs`, `ys` (0 or 1) | A digital signal trace. |
 | `PlotInfLines` | `values`, `horizontal` (default false) | Lines across the whole plot: vertical at each X value, or horizontal at each Y value. Good for limits and targets. |
 | `PlotText` | `text`, `x`, `y`, `offset_x`, `offset_y` (pixels) | A text label at a plot coordinate. |
+| `PlotBarGroups` | `labels` (one per series), `values` (one row per group: `[$a, $b]`), `group_size` (default 0.67), `shift`, `horizontal`, `stacked` | Groups of bars side by side (or stacked), at 0, 1, 2, ...; name the groups with `x_ticks` and `x_tick_labels`. |
+| `PlotErrorBars` | `xs`, `ys`, and either `err` (symmetric) or `neg` and `pos`, `horizontal`, `cap_size` (pixels, default 4) | Error bars around each point. Write it after the line or bars it belongs to. |
+| `PlotAnnotation` | `text` (empty shows the coordinates), `x`, `y`, `offset_x`, `offset_y` (pixels, default 10 and -10), `clamp` | A callout box next to a point, to name an event or an outlier. |
+| `PlotTag` | `value`, `axis` (`Y`, default, or `X`), `text` (empty shows the value) | A coloured label on the axis at a value, such as the name of a limit drawn with `PlotInfLines`. |
 
 `xs` and `ys` must have the same length. With `ys` only, the points are
 drawn at x = 0, 1, 2, ...
+
+Every 2D series also has `y_axis`: `Y1` (default, left) or `Y2`, the
+plot's second Y axis on the right (see the `y2_` fields of `Plot`).
 
 ### `Plot3D` and 3D series
 
@@ -303,9 +315,10 @@ Fields on every series, 2D and 3D:
 **Colours are written `"#RRGGBB"` or `"#RRGGBBAA"`, always in quotes.**
 Colour names such as `red` are not accepted.
 
-`PlotHeatmap`, `PlotHistogram2D`, `PlotPieChart`, `PlotText` and
-`Plot3DText` ignore these fields. Heatmap cells, pie slices and surfaces
-are coloured by the plot's `colormap` instead:
+`PlotHeatmap`, `PlotHistogram2D`, `PlotPieChart`, `PlotBarGroups`,
+`PlotText` and `Plot3DText` ignore these fields. Heatmap cells, pie
+slices, bar groups and surfaces are coloured by the plot's `colormap`
+instead (a `ColorScale` shows what the colours of a heatmap mean):
 
 | `colormap` | Kind |
 |---|---|
@@ -314,6 +327,9 @@ are coloured by the plot's `colormap` instead:
 | `RdBu`, `BrBG`, `PiYG`, `Spectral`, `Twilight` | A scale with a distinct middle, for values around a centre such as zero. |
 
 `colormap` is set on the `Plot` or `Plot3D`, not on the series.
+
+`PlotErrorBars`, `PlotAnnotation` and `PlotTag` without a `color` take
+the colour of the series written just before them in the plot.
 
 ### Layout and text elements
 
@@ -325,6 +341,7 @@ are coloured by the plot's `colormap` instead:
 | `Separator` | none | A horizontal rule. |
 | `SeparatorText` | `label` | A rule with a text in it. |
 | `Spring` | `weight` | Invisible space that takes what is left; two around an element centre it. |
+| `ColorScale` | `label`, `scale_min`, `scale_max`, `colormap`, `format`, `height` (default 300, like a `Plot`) | A colour bar with ticks. Put it next to a heatmap's `Plot` in a `HorizontalLayout`, with the same `colormap`, `scale_min` and `scale_max`. |
 
 Sizes inside a layout, along its direction (`height` in a
 `VerticalLayout`, `width` in a `HorizontalLayout`):
@@ -369,6 +386,57 @@ written. Each can be `root` or a layout child.
 - A diagram shrinks to fit, down to `min_zoom` (0.5). If it still does not
   fit, the error gives the size it needs: enlarge the image, lower
   `min_zoom`, or split the diagram.
+
+### Flowcharts
+
+`Flowchart` draws any node-and-link diagram: a process, a decision tree,
+a dependency or architecture graph (mermaid's `flowchart`). It is laid
+out like the UML diagrams and takes the same diagram fields (`direction`,
+spacing, zoom, colours) and `Note`.
+
+| Type | Fields | Draws |
+|---|---|---|
+| `FlowNode` | `id`, `text` (empty shows the id; `"a\nb"` for two lines), `shape`, `rank`, `color`, `fill_color` | A node. `shape`: `Box` (a step, default), `Rounded`, `Stadium` (start / end), `Diamond` (decision), `Circle`, `Parallelogram` (input / output), `Hexagon`, `Cylinder` (database), `Subroutine`. |
+| `FlowGroup` | `id`, `title`, `color`, `fill_color`, `children` (nodes, groups, links, notes) | A titled box around its nodes (mermaid's subgraph): a service, a team, a phase. Links may name the group to end at its box. |
+| `FlowLink` | `from`, `to` (node or group ids), `label`, `line` (`Solid`, `Dotted`, `Thick`), `arrow` (`End`, `None`, `Both`), `weight`, `min_length`, `constraint`, `color` | A link; `label` sits in its middle (a decision's answer). |
+
+### Gantt charts
+
+`GanttChart` draws a schedule: one row per task, top to bottom, bars on a
+time axis. It can be `root` or a layout child.
+
+| Type | Fields | Draws |
+|---|---|---|
+| `GanttChart` | `title`, `x_label`, `today` (a red line), `colormap`, `bar_height` (0.6 of a row), `show_dependencies` (true), `width`, `height` | The chart. Children: `GanttSection`, `GanttTask`. |
+| `GanttSection` | `name` (legend entry), `color`, `children` (tasks) | A phase or team: its tasks share a colour. |
+| `GanttTask` | `id`, `name`, `start` or `after: [ids]`, `end` or `duration`, `milestone`, `status` (`Done` pale, `Active` outlined, `Critical` red outline), `color` | A bar from start to end, or a diamond for a milestone. `after` starts the task when the last of those tasks ends, with an arrow from each. |
+
+- Times are dates, `2026-03-02` or `2026-03-02 14:00` (UTC), or plain
+  numbers (days, sprints) for a relative plan; one chart uses one kind.
+  `duration` counts days for dates.
+- An `end` date means its midnight: `start: 2026-03-02, end: 2026-03-05`
+  is three days.
+- With no `height`, a chart in a `VerticalLayout` is as tall as its rows
+  need; as `root` it fills the image.
+
+### Sankey diagrams
+
+`SankeyDiagram` shows quantities flowing between nodes (energy, budget,
+traffic, a funnel) as bands as wide as the amount. Nodes are placed in
+columns automatically, from sources on the left to sinks on the right.
+
+| Type | Fields | Draws |
+|---|---|---|
+| `SankeyDiagram` | `from`, `to`, `values` (one entry per flow: `$source`, `$target`, `$amount` from a table), `title`, `colormap`, `link_color` (`Source`, `Target`, `Gray`), `show_values` (true), `value_format` (`"%g"`), `node_width`, `node_spacing`, `width`, `height` | The diagram. Children: `SankeyFlow`, `SankeyNode`. |
+| `SankeyFlow` | `from`, `to`, `value`, `color` | One more flow, instead of (or besides) the lists. |
+| `SankeyNode` | `id` (the name flows use), `name` (label), `color` | Optional: a node's label or colour; nodes are listed in this order. |
+
+- Nodes are created by the flows that name them (as in mermaid); a
+  misspelt name makes a separate node, so check the labels.
+- Values must be above 0, a flow cannot go from a node to itself, and
+  flows must not loop back (`makes a cycle`).
+- Each label shows the node's total (the larger of what enters and what
+  leaves) unless `show_values: false`.
 
 ### Fonts and text style
 
@@ -521,32 +589,125 @@ data: |
 One CSV column per grid column, one CSV row per grid row. `rows` and
 `cols` must match the data, and `scale_min` / `scale_max` should cover its
 range. Use a smooth `colormap` such as `Viridis`; `NoLegend` keeps the
-legend box off the first cell.
+legend box off the first cell. The grid spans 0 to 1 on both axes, so
+ticks at the cell centres (0.1, 0.3, ... for 5 columns) name the rows and
+columns. A `ColorScale` with the same colormap and range shows the
+values of the colours.
 
 ```yaml
 description: Activity by weekday (columns) and time of day (rows, morning at the top).
 image: {width: 520, height: 360}
 root:
-  type: Plot
-  title: Activity
-  colormap: Viridis
-  flags: NoLegend
-  x_flags: NoDecorations
-  y_flags: NoDecorations
+  type: HorizontalLayout
+  spacing: 8
   children:
-    - type: PlotHeatmap
-      rows: 4
-      cols: 5
-      values: [$mon, $tue, $wed, $thu, $fri]
-      scale_min: 0
-      scale_max: 10
-      format: "%.0f"
+    - type: Plot
+      title: Activity
+      width: -1
+      height: -1
+      colormap: Viridis
+      flags: NoLegend
+      x_flags: NoGridLines|NoTickMarks
+      y_flags: NoGridLines|NoTickMarks
+      x_ticks: [0.1, 0.3, 0.5, 0.7, 0.9]
+      x_tick_labels: [Mon, Tue, Wed, Thu, Fri]
+      y_ticks: [0.875, 0.625, 0.375, 0.125]
+      y_tick_labels: $slot
+      children:
+        - type: PlotHeatmap
+          rows: 4
+          cols: 5
+          values: [$mon, $tue, $wed, $thu, $fri]
+          scale_min: 0
+          scale_max: 10
+          format: "%.0f"
+    - {type: ColorScale, label: events, height: -1, scale_min: 0, scale_max: 10, colormap: Viridis}
 data: |
   slot, mon, tue, wed, thu, fri
   morning, 2, 4, 6, 3, 1
   noon, 5, 7, 9, 6, 4
   evening, 8, 9, 10, 7, 6
   night, 1, 2, 3, 2, 5
+```
+
+### Grouped bars with category names
+
+`values: [$north, $south]` gives one row per group, one value per label.
+The groups sit at 0, 1, 2, ...; `x_ticks` and `x_tick_labels` put the
+category names under them.
+
+```yaml
+description: Revenue per quarter in two regions, in millions.
+root:
+  type: Plot
+  title: Revenue by quarter
+  y_format: "%.0fM"
+  x_ticks: [0, 1, 2, 3]
+  x_tick_labels: $quarter
+  y_min: 0
+  y_max: 30
+  children:
+    - {type: PlotBarGroups, labels: [north, south], values: [$north, $south]}
+data: |
+  quarter, north, south
+  Q1, 12, 9
+  Q2, 18, 14
+  Q3, 15, 17
+  Q4, 22, 19
+```
+
+### Error bars and callouts
+
+Write the error bars right after their line so they take its colour.
+Give `err` for a symmetric error, or `neg` and `pos`.
+
+```yaml
+description: Median latency per build with its spread, against a 40 ms budget.
+root:
+  type: Plot
+  title: Latency per build
+  y_format: "%.0f ms"
+  y_min: 0
+  y_max: 60
+  children:
+    - {type: PlotLine, label: median, xs: $build, ys: $median, marker: Circle}
+    - {type: PlotErrorBars, xs: $build, ys: $median, neg: $below, pos: $above}
+    - {type: PlotAnnotation, x: 4, y: 34, text: cache disabled}
+    - {type: PlotInfLines, label: budget, values: [40], horizontal: true, color: "#C0392B", line_weight: 2}
+    - {type: PlotTag, value: 40, text: budget}
+data: |
+  build, median, below, above
+  1, 21, 4, 9
+  2, 22, 5, 8
+  3, 20, 4, 10
+  4, 34, 7, 15
+```
+
+### Dates, a log axis and a second Y axis
+
+With `x_scale: Time`, `xs` are UNIX seconds (UTC); the ticks show dates
+and times. `y_scale: Log10` suits values from tens to tens of thousands.
+A series with `y_axis: Y2` uses the axis on the right.
+
+```yaml
+description: Requests per hour (log scale) and error rate over one day, in UTC.
+root:
+  type: Plot
+  title: Traffic
+  x_scale: Time
+  y_scale: Log10
+  y_label: requests per hour
+  y2_label: error rate
+  y2_format: "%.1f%%"
+  children:
+    - {type: PlotLine, label: requests, xs: $time, ys: $requests}
+    - {type: PlotLine, label: errors, xs: $time, ys: $errors, y_axis: Y2}
+data: |
+  time, requests, errors
+  1772409600, 120, 0.4
+  1772424000, 900, 0.6
+  1772438400, 21000, 1.8
+  1772452800, 9000, 1.2
 ```
 
 ### Several charts
@@ -697,6 +858,75 @@ data: |
   2, 2, 0.0
 ```
 
+### Flowchart
+
+```yaml
+description: How a pull request gets merged.
+root:
+  type: Flowchart
+  direction: LeftRight
+  children:
+    - {type: FlowNode, id: open, text: PR opened, shape: Stadium}
+    - {type: FlowNode, id: ci, text: CI green?, shape: Diamond}
+    - {type: FlowNode, id: fix, text: Fix}
+    - type: FlowGroup
+      id: review
+      title: Review
+      children:
+        - {type: FlowNode, id: read, text: Read the diff}
+        - {type: FlowNode, id: ok, text: Approve, shape: Rounded}
+        - {type: FlowLink, from: read, to: ok}
+    - {type: FlowNode, id: merge, text: Merge, shape: Stadium}
+    - {type: FlowLink, from: open, to: ci}
+    - {type: FlowLink, from: ci, to: fix, label: "no"}
+    - {type: FlowLink, from: fix, to: ci, line: Dotted}
+    - {type: FlowLink, from: ci, to: review, label: "yes"}
+    - {type: FlowLink, from: review, to: merge, line: Thick}
+```
+
+### Gantt chart
+
+```yaml
+description: Website relaunch plan.
+image: {width: 760, height: 360}
+root:
+  type: GanttChart
+  title: Relaunch
+  today: 2026-03-10
+  children:
+    - type: GanttSection
+      name: Design
+      children:
+        - {type: GanttTask, id: wire, name: Wireframes, start: 2026-03-02, duration: 5, status: Done}
+        - {type: GanttTask, id: look, name: Visual design, after: [wire], duration: 4, status: Active}
+    - type: GanttSection
+      name: Build
+      children:
+        - {type: GanttTask, id: dev, name: Development, after: [look], duration: 10}
+        - {type: GanttTask, name: Launch, after: [dev], milestone: true}
+```
+
+### Sankey diagram
+
+```yaml
+description: Monthly budget, in euros.
+root:
+  type: SankeyDiagram
+  title: Budget
+  from: $from
+  to: $to
+  values: $eur
+  value_format: "%.0f"
+data: |
+  from, to, eur
+  Salary, Budget, 3000
+  Freelance, Budget, 800
+  Budget, Rent, 1200
+  Budget, Food, 600
+  Budget, Savings, 1000
+  Budget, Other, 1000
+```
+
 ### Class diagram
 
 ```yaml
@@ -780,9 +1010,13 @@ State, activity, use case and data flow diagrams follow the same pattern: see
 - Give every chart a `title` and axis labels with units.
 - Give every series a `label` when there is more than one.
 - Write a real `description`. It is the image's alt text.
-- For values that are not numbers on the X axis (names, dates), number the
-  rows in a column and plot against that column; say what the numbers mean
-  in `x_label` or the description. Axis ticks are always numeric.
+- For names on the X axis (categories), plot against 0, 1, 2, ... and
+  name the ticks with `x_ticks` and `x_tick_labels`. For dates and times,
+  give UNIX seconds and set `x_scale: Time`.
+- Use `y_scale: Log10` when values span several orders of magnitude, and
+  `y_format` to put the unit on the ticks (`"%.0f ms"`).
+- Show uncertainty with `PlotErrorBars` or a `PlotShaded` band; point out
+  events with `PlotAnnotation` instead of explaining them only in text.
 - Set `y_min: 0` (with a `y_max`) for bar charts, so bar lengths are honest.
 - An automatic range puts the extreme points exactly on the plot edge,
   where they are cut in half. Set `x_min`/`x_max` (and `y_min`/`y_max`) a
@@ -799,7 +1033,7 @@ State, activity, use case and data flow diagrams follow the same pattern: see
 
 - Pie slices, heatmap cells and surfaces cannot be given individual
   colours; choose a `colormap` for the plot instead.
-- Axis ticks are numbers only: no date or category axes.
+- Dates are UNIX seconds and are always shown in UTC.
 - The YAML stays in the PNG only while the file is copied unchanged.
   Services that re-encode images remove it. Keep the `.yaml` file when the
   chart may need changing later.
@@ -837,6 +1071,19 @@ State, activity, use case and data flow diagrams follow the same pattern: see
 | `xs has 3 values but ys has 2` | Series lists must be equally long. |
 | `is empty: the series has no data` | A series list is empty, or its column has no rows. |
 | `rows x cols needs` | `PlotHeatmap.values` does not hold `rows * cols` numbers. |
+| `x_tick_labels has 3 labels but x_ticks has 2 values` | Give one label per tick position. |
+| `must be above 0 on a Log10 axis` | A fixed limit of a `Log10` axis is 0 or negative; raise it or use `SymLog`. |
+| `does not apply to a Time axis` | Remove the `_format` of a `Time` axis; its ticks show dates. |
+| `not a whole number of groups` | `PlotBarGroups.values` needs one value per label in each group. |
+| `give err, or neg and pos` | `PlotErrorBars` needs `err`, or both `neg` and `pos`, as long as `ys`. |
+| `joins a FlowGroup with a node inside it` | A link from a group to its own node; link the inner nodes instead. |
+| `GanttTask.start is empty: give start, or after` | Every task needs a `start`, or `after: [ids]` of the tasks it waits for. |
+| `GanttTask.end is empty: give end, or a duration` | Give `end` or `duration` (or set `milestone: true`). |
+| `is not a date (YYYY-MM-DD ...` | Write dates as `2026-03-02` or `2026-03-02 14:00`, or use plain numbers throughout. |
+| `uses dates; a chart uses one or the other` | Mixed dates and numbers in one `GanttChart`. |
+| `makes a cycle` | Tasks wait for each other in a loop through `after`, or Sankey flows lead back to where they started. |
+| `has value 0; a flow's value must be above 0` | A Sankey flow of 0, negative or missing; leave such rows out. |
+| `is in no flow` | A `SankeyNode` whose `id` no flow names (often a spelling difference). |
 | `CSV row has N cells, the header has M` | A row is too short or too long, or a value with a comma is not quoted. |
 | `'>' joins the CSV lines` | Write `data: |`, not `data: >`. |
 | `needs 620 px of height, has 484` | The fixed sizes in a layout do not fit. Use `height: -1` on plots, reduce sizes, or enlarge the image. |

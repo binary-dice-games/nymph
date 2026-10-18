@@ -224,6 +224,7 @@ enum ImUmlDiagramKind_ {
   ImUmlDiagramKind_State,
   ImUmlDiagramKind_Activity,
   ImUmlDiagramKind_UseCase,
+  ImUmlDiagramKind_Flowchart,
   ImUmlDiagramKind_ER,
   ImUmlDiagramKind_DataFlow,
   ImUmlDiagramKind_Network,
@@ -244,6 +245,8 @@ enum ImUmlNodeType_ {
   ImUmlNodeType_Device,
   ImUmlNodeType_Note,
   ImUmlNodeType_Participant,
+  ImUmlNodeType_FlowNode, ///< Kind: ImUmlFlowShape_.
+  ImUmlNodeType_FlowGroup, ///< Composite (a cluster) when it has children.
 };
 
 enum ImUmlEdgeType_ {
@@ -255,6 +258,7 @@ enum ImUmlEdgeType_ {
   ImUmlEdgeType_DataFlow,
   ImUmlEdgeType_Link,
   ImUmlEdgeType_NoteLink,
+  ImUmlEdgeType_FlowLink, ///< Kind: ImUmlFlowLinkFlags_.
 };
 
 /// @brief A string in the diagram's text buffer (offsets survive growth).

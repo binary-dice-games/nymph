@@ -289,8 +289,10 @@ root:
 | `ERDiagram` (database) | `Entity` (a table) | `Relationship` (crow's foot) |
 | `DataFlowDiagram` | `ExternalEntity`, `Process`, `DataStore` | `DataFlow`, `TrustBoundary` (groups nodes) |
 | `NetworkDiagram` | `Device` (icon by `kind`) | `Link`, `Zone` (groups devices) |
+| `Flowchart` | `FlowNode`, `FlowGroup` (a box around nodes, mermaid's subgraph) | `FlowLink` |
 
-`Note` goes in every diagram.
+`Note` goes in every diagram. `Flowchart` is not UML: it draws any
+node-and-link diagram, with mermaid's flowchart shapes and link styles.
 
 - **Ids.** Every node has an `id`, unique in the diagram; `name` (or
   `text`) is what is shown and defaults to the id. Edges name nodes by id
@@ -330,6 +332,49 @@ root:
   `Include` only between use cases, a `deactivate` needs an open
   activation, and so on.
 
+## Gantt charts
+
+`GanttChart` is a schedule: `GanttTask` children (optionally inside
+`GanttSection`s, which give them a colour and a legend entry), one row
+each, top to bottom.
+
+```yaml
+root:
+  type: GanttChart
+  today: 2026-03-04
+  children:
+    - {type: GanttTask, id: a, name: Design, start: 2026-03-02, duration: 3}
+    - {type: GanttTask, name: Build, after: [a], end: 2026-03-12}
+```
+
+- **Times** are ISO dates (`2026-03-02`, `2026-03-02 14:00`, in UTC) or
+  plain numbers; one chart uses one kind. A date `end` is its midnight.
+- **Start**: `start`, or `after` (ids of tasks it waits for: it starts
+  when the last ends, and an arrow is drawn from each). **End**: `end`,
+  or `duration` (days for dates). A `milestone` has a start only.
+- **Errors**: a task without a start or an end, both `start` and
+  `after`, an unknown or circular `after`, an end before the start,
+  dates mixed with numbers.
+
+## Sankey diagrams
+
+`SankeyDiagram` draws flows between nodes as bands as wide as their
+value. Flows come from the lists `from`, `to` and `values` (so a table
+with one row per flow maps on with `$column`), and from `SankeyFlow`
+children; nodes are made by the flows that name them. `SankeyNode`
+optionally gives a node a label or colour.
+
+```yaml
+root:
+  type: SankeyDiagram
+  from: [Gas, Gas, Coal]
+  to: [Power, Heat, Power]
+  values: [30, 20, 50]
+```
+
+Values must be above 0, no flow may go from a node to itself, and the
+flows may not form a cycle.
+
 ## Errors
 
 Every problem is reported on one line with its position in the file:
@@ -348,6 +393,6 @@ pie label per value, a mesh index within its vertices, and so on.
 - At most 16 MiB of source and 1,000,000 data rows.
 - A UML diagram has at most 500 nodes, 2,000 edges (sequence diagrams:
   2,000 rows) and 8 levels of composite states or fragments.
-- Axis ticks are numbers: no date or category axes.
+- Dates on a `Time` axis are UNIX seconds, always shown in UTC.
 - The YAML stays in the PNG only while the file is copied byte for byte;
   services that re-encode images drop it. Keep the YAML too.

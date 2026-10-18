@@ -73,6 +73,8 @@ begin_fn begin_of(diagram_kind k) {
       return &ImUml::BeginActivityDiagram;
     case diagram_kind::use_case:
       return &ImUml::BeginUseCaseDiagram;
+    case diagram_kind::flowchart:
+      return &ImUml::BeginFlowchart;
     case diagram_kind::er:
       return &ImUml::BeginERDiagram;
     case diagram_kind::data_flow:
@@ -94,6 +96,8 @@ end_fn end_of(diagram_kind k) {
       return &ImUml::EndActivityDiagram;
     case diagram_kind::use_case:
       return &ImUml::EndUseCaseDiagram;
+    case diagram_kind::flowchart:
+      return &ImUml::EndFlowchart;
     case diagram_kind::er:
       return &ImUml::EndERDiagram;
     case diagram_kind::data_flow:
@@ -639,6 +643,7 @@ void register_uml(registry& reg) {
   uml::register_state_diagram(reg);
   uml::register_activity_diagram(reg);
   uml::register_usecase_diagram(reg);
+  uml::register_flowchart(reg);
   uml::register_er_diagram(reg);
   uml::register_dataflow_diagram(reg);
   uml::register_network_diagram(reg);

@@ -96,6 +96,143 @@ data: |
   4, 18
 ```
 
+## Grouped bars
+
+Two series side by side per quarter with `PlotBarGroups`: `values: [$north, $south]` gives one row per group; the Plot's `x_ticks` and `x_tick_labels` (here a text column) name the groups, and `y_format` adds the unit.
+
+![Grouped bars](../examples/bar_groups.png)
+
+[`examples/bar_groups.yaml`](../examples/bar_groups.yaml):
+
+```yaml
+nymph: 1
+description: Revenue per quarter in two regions, in millions.
+image: {width: 640, height: 400}
+root:
+  type: Plot
+  title: Revenue by quarter
+  y_label: revenue
+  y_format: "%.0fM"
+  x_ticks: [0, 1, 2, 3]
+  x_tick_labels: $quarter
+  y_min: 0
+  y_max: 30
+  legend_location: NorthWest
+  children:
+    - type: PlotBarGroups
+      labels: [north, south]
+      values: [$north, $south]
+data: |
+  quarter, north, south
+  Q1, 12, 9
+  Q2, 18, 14
+  Q3, 15, 17
+  Q4, 22, 19
+```
+
+## Error bars, annotations and tags
+
+Asymmetric error bars (`neg`, `pos`) that take the colour of the line before them, a callout on the outlier with `PlotAnnotation`, and a `PlotTag` naming the budget line on the Y axis.
+
+![Error bars, annotations and tags](../examples/error_bars.png)
+
+[`examples/error_bars.yaml`](../examples/error_bars.yaml):
+
+```yaml
+nymph: 1
+description: Median request latency per build, with the 10th to 90th percentile spread, against a 40 ms budget.
+image: {width: 640, height: 400}
+root:
+  type: Plot
+  title: Latency per build
+  x_label: build
+  y_label: latency
+  y_format: "%.0f ms"
+  x_ticks: [1, 2, 3, 4, 5, 6]
+  y_min: 0
+  y_max: 60
+  children:
+    - type: PlotLine
+      label: median
+      xs: $build
+      ys: $median
+      marker: Circle
+      line_weight: 2
+    - type: PlotErrorBars
+      xs: $build
+      ys: $median
+      neg: $below
+      pos: $above
+    - type: PlotAnnotation
+      x: 4
+      y: 34
+      text: cache disabled
+    - type: PlotInfLines
+      label: budget
+      values: [40]
+      horizontal: true
+      color: "#C0392B"
+      line_weight: 2
+    - type: PlotTag
+      value: 40
+      text: budget
+data: |
+  build, median, below, above
+  1, 21, 4, 9
+  2, 22, 5, 8
+  3, 20, 4, 10
+  4, 34, 7, 15
+  5, 23, 5, 9
+  6, 19, 3, 7
+```
+
+## Time and log axes, second Y axis
+
+`x_scale: Time` reads UNIX seconds and labels them in UTC; `y_scale: Log10` fits values from 60 to 21000; the error rate uses `y_axis: Y2`, the axis on the right, with its own range and format.
+
+![Time and log axes, second Y axis](../examples/time_axes.png)
+
+[`examples/time_axes.yaml`](../examples/time_axes.yaml):
+
+```yaml
+nymph: 1
+description: Requests per hour (log scale, left) and error rate (right) over one day, times in UTC.
+image: {width: 720, height: 400}
+root:
+  type: Plot
+  title: Traffic on 2026-03-02
+  x_scale: Time
+  y_scale: Log10
+  y_label: requests per hour
+  y2_label: error rate
+  y2_format: "%.1f%%"
+  y2_min: 0
+  y2_max: 5
+  children:
+    - type: PlotLine
+      label: requests
+      xs: $time
+      ys: $requests
+      line_weight: 2
+    - type: PlotLine
+      label: errors
+      xs: $time
+      ys: $errors
+      y_axis: Y2
+      marker: Circle
+data: |
+  time, requests, errors
+  1772409600, 120, 0.4
+  1772416800, 60, 0.3
+  1772424000, 900, 0.6
+  1772431200, 8500, 1.1
+  1772438400, 21000, 1.8
+  1772445600, 18000, 3.9
+  1772452800, 9000, 1.2
+  1772460000, 2500, 0.7
+  1772467200, 400, 0.5
+```
+
 ## Histogram
 
 Raw samples binned by nymph; the data is given as a column list instead of CSV.
@@ -127,7 +264,7 @@ data:
 
 ## Heatmap
 
-A 4 x 5 grid built from five CSV columns with `[$mon, $tue, ...]`, on the `Viridis` scale.
+A 4 x 5 grid built from five CSV columns with `[$mon, $tue, ...]`, on the `Viridis` scale. `x_ticks` / `y_ticks` with tick labels name the cells (the heatmap spans 0 to 1, so the cell centres are at 0.1, 0.3, ...), and a `ColorScale` beside the plot shows what the colours mean.
 
 ![Heatmap](../examples/heatmap.png)
 
@@ -138,21 +275,36 @@ nymph: 1
 description: Activity by weekday (columns) and time of day (rows, morning at the top).
 image: {width: 520, height: 360}
 root:
-  type: Plot
-  title: Activity
-  colormap: Viridis
-  flags: NoLegend
-  x_flags: NoDecorations
-  y_flags: NoDecorations
+  type: HorizontalLayout
+  spacing: 8
   children:
-    - type: PlotHeatmap
-      label: activity
-      rows: 4
-      cols: 5
-      values: [$mon, $tue, $wed, $thu, $fri]
+    - type: Plot
+      title: Activity
+      width: -1
+      height: -1
+      colormap: Viridis
+      flags: NoLegend
+      x_flags: NoGridLines|NoTickMarks
+      y_flags: NoGridLines|NoTickMarks
+      x_ticks: [0.1, 0.3, 0.5, 0.7, 0.9]
+      x_tick_labels: [Mon, Tue, Wed, Thu, Fri]
+      y_ticks: [0.875, 0.625, 0.375, 0.125]
+      y_tick_labels: $slot
+      children:
+        - type: PlotHeatmap
+          label: activity
+          rows: 4
+          cols: 5
+          values: [$mon, $tue, $wed, $thu, $fri]
+          scale_min: 0
+          scale_max: 10
+          format: "%.0f"
+    - type: ColorScale
+      label: events
+      height: -1
       scale_min: 0
       scale_max: 10
-      format: "%.0f"
+      colormap: Viridis
 data: |
   slot, mon, tue, wed, thu, fri
   morning, 2, 4, 6, 3, 1
@@ -864,4 +1016,115 @@ root:
     - {type: Link, from: ap, to: phone, kind: Wireless}
     - {type: Link, from: web1, to: db, label: SQL, directed: true, constraint: false}
     - {type: Link, from: remote, to: fw, kind: Vpn, label: VPN}
+```
+
+## Flowchart
+
+Every node shape, a `FlowGroup` around the deploy steps that links end at, labelled decision branches, a thick, a dotted, a plain and a two-headed link, and a note.
+
+![Flowchart](../examples/flowchart.png)
+
+[`examples/flowchart.yaml`](../examples/flowchart.yaml):
+
+```yaml
+nymph: 1
+description: How a push to main reaches production, with the deploy steps grouped.
+image: {width: 720, height: 560}
+root:
+  type: Flowchart
+  title: Deploy pipeline
+  children:
+    - {type: FlowNode, id: start, text: Push to main, shape: Stadium}
+    - {type: FlowNode, id: build, text: Build}
+    - {type: FlowNode, id: tests, text: Tests pass?, shape: Diamond}
+    - {type: FlowNode, id: fix, text: "Fix and\npush again", shape: Rounded}
+    - type: FlowGroup
+      id: prod
+      title: Production
+      children:
+        - {type: FlowNode, id: deploy, text: Deploy, shape: Subroutine}
+        - {type: FlowNode, id: db, text: Migrate DB, shape: Cylinder}
+        - {type: FlowLink, from: deploy, to: db, line: Dotted}
+    - {type: FlowNode, id: notify, text: Notify team, shape: Parallelogram}
+    - {type: FlowNode, id: prep, text: Prepare, shape: Hexagon}
+    - {type: FlowNode, id: done, text: Done, shape: Circle}
+    - {type: FlowLink, from: start, to: build, line: Thick}
+    - {type: FlowLink, from: build, to: tests}
+    - {type: FlowLink, from: tests, to: prep, label: "yes"}
+    - {type: FlowLink, from: prep, to: prod}
+    - {type: FlowLink, from: tests, to: fix, label: "no"}
+    - {type: FlowLink, from: fix, to: build, arrow: None}
+    - {type: FlowLink, from: prod, to: notify, arrow: Both}
+    - {type: FlowLink, from: notify, to: done}
+    - {type: Note, text: runs on every push, attach: [build]}
+```
+
+## Gantt chart
+
+Three sections with their own colours, tasks placed by `after` (drawn as arrows), `Done` / `Active` / `Critical` statuses, two milestones and a `today` line.
+
+![Gantt chart](../examples/gantt.png)
+
+[`examples/gantt.yaml`](../examples/gantt.yaml):
+
+```yaml
+nymph: 1
+description: Release 2.0 schedule in three phases, with dependencies, a code-freeze milestone and today marked.
+image: {width: 760, height: 420}
+root:
+  type: GanttChart
+  title: Release 2.0
+  today: 2026-03-12
+  children:
+    - type: GanttSection
+      name: Design
+      children:
+        - {type: GanttTask, id: spec, name: Write spec, start: 2026-03-02, duration: 4, status: Done}
+        - {type: GanttTask, id: review, name: Review, after: [spec], duration: 2, status: Done}
+    - type: GanttSection
+      name: Build
+      children:
+        - {type: GanttTask, id: api, name: API, after: [review], duration: 6, status: Active}
+        - {type: GanttTask, id: ui, name: UI, after: [review], duration: 8, status: Critical}
+        - {type: GanttTask, id: freeze, name: Code freeze, after: [api, ui], milestone: true}
+    - type: GanttSection
+      name: Ship
+      children:
+        - {type: GanttTask, id: qa, name: QA, after: [freeze], end: 2026-03-27}
+        - {type: GanttTask, name: Release, after: [qa], milestone: true}
+```
+
+## Sankey diagram
+
+Flows from a CSV table mapped on with `from: $from`, `to: $to`, `values: $twh`; nodes are placed in columns automatically, and a `SankeyNode` colours the losses grey.
+
+![Sankey diagram](../examples/sankey.png)
+
+[`examples/sankey.yaml`](../examples/sankey.yaml):
+
+```yaml
+nymph: 1
+description: Where the energy of a small grid comes from and where it goes, in TWh per year.
+image: {width: 760, height: 460}
+root:
+  type: SankeyDiagram
+  title: Energy flow (TWh)
+  from: $from
+  to: $to
+  values: $twh
+  value_format: "%.0f"
+  children:
+    - {type: SankeyNode, id: Losses, color: "#4D4D4D"}
+data: |
+  from, to, twh
+  Coal, Electricity, 120
+  Gas, Electricity, 90
+  Gas, Heating, 60
+  Solar, Electricity, 40
+  Wind, Electricity, 55
+  Electricity, Homes, 110
+  Electricity, Industry, 95
+  Electricity, Losses, 100
+  Heating, Homes, 45
+  Heating, Losses, 15
 ```

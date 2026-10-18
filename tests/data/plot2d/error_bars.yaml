@@ -1,0 +1,6 @@
+image: {width: 480, height: 320}
+root:
+  type: Plot
+  title: Mean with error
+  children:
+    - {type: PlotErrorBars, label: mean, xs: [1, 2, 3, 4], ys: [3, 5, 4, 6], err: [0.5, 1, 0.4, 0.8]}

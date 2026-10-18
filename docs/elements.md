@@ -54,6 +54,26 @@ Goes in: root, HorizontalLayout, VerticalLayout. Children: Class, ClassRelation,
 | `font_size` | number | `0` | Text size in pixels for this element and everything inside it. 0 (default) inherits the enclosing element's size, or image.font_size. (0 to 96) |
 | `text_color` | colour | `""` | Text colour ("#RRGGBB" or "#RRGGBBAA") for this element and everything inside it: titles, axis and tick labels, legends and labels. Empty (default) inherits, or uses the theme's. |
 
+## ColorScale
+
+A colour bar: the colormap from scale_min to scale_max with ticks, to read the values of a heatmap or surface. Put it beside the plot in a HorizontalLayout and give it the plot's colormap.
+
+Goes in: root, HorizontalLayout, VerticalLayout.
+
+| Field | Type | Default | Description |
+|---|---|---|---|
+| `label` | text | `""` | Label along the scale (rotated). Empty (default) for none. |
+| `scale_min` | number | `0` | Value at the low end of the colormap; match the heatmap's. |
+| `scale_max` | number | `1` | Value at the high end of the colormap; match the heatmap's. |
+| `colormap` | name | `Default` | Colormap for this plot: the colours series take in turn when they set none, and the scale of heatmaps and surfaces. Deep (the usual default), Dark, Pastel, Paired, Viridis, Plasma, Hot, Cool, Pink, Jet, Twilight, RdBu, BrBG, PiYG, Spectral or Greys. Default leaves the current colormap. (one of: Default, Deep, Dark, Pastel, Paired, Viridis, Plasma, Hot, Cool, Pink, Jet, Twilight, RdBu, BrBG, PiYG, Spectral, Greys) |
+| `format` | text | `"%g"` | printf format of the tick labels. |
+| `flags` | flags | `None` | NoLabel hides the label, Opposite puts the ticks on the left, Invert puts the low end at the top. (combine with '\|': None, NoLabel, Opposite, Invert) |
+| `width` | number | `0` | Width in pixels; 0 (default) is the natural width, enough for the tick labels. (-1000 to 8192) |
+| `height` | number | `300` | Height in pixels; the default 300 matches a Plot's, so the two line up side by side (give both the same height). A ColorScale used as root with no height fills the image. (-1000 to 8192) |
+| `font` | text | `""` | Font of this element's text and of everything inside it: an embedded font file name (default, FiraMono-Bold.ttf, FiraMono-Regular.ttf, FiraSans-Bold.ttf, FiraSans-Italic.ttf, FiraSans-Regular.ttf, PT_Serif-Web-Bold.ttf, PT_Serif-Web-Italic.ttf, PT_Serif-Web-Regular.ttf). Empty (default) inherits the enclosing element's font, or image.font. |
+| `font_size` | number | `0` | Text size in pixels for this element and everything inside it. 0 (default) inherits the enclosing element's size, or image.font_size. (0 to 96) |
+| `text_color` | colour | `""` | Text colour ("#RRGGBB" or "#RRGGBBAA") for this element and everything inside it: titles, axis and tick labels, legends and labels. Empty (default) inherits, or uses the theme's. |
+
 ## DataFlowDiagram
 
 A data flow diagram (DFD): external entities, processes and data stores joined by labelled data flows, with optional trust boundaries, laid out automatically (left to right). Children: ExternalEntity, Process, DataStore, DataFlow, TrustBoundary, Note.
@@ -100,11 +120,54 @@ Goes in: root, HorizontalLayout, VerticalLayout. Children: Entity, Relationship,
 | `font_size` | number | `0` | Text size in pixels for this element and everything inside it. 0 (default) inherits the enclosing element's size, or image.font_size. (0 to 96) |
 | `text_color` | colour | `""` | Text colour ("#RRGGBB" or "#RRGGBBAA") for this element and everything inside it: titles, axis and tick labels, legends and labels. Empty (default) inherits, or uses the theme's. |
 
+## Flowchart
+
+A flowchart or any node-and-link diagram (process, decision tree, dependency or architecture graph, mermaid's flowchart), laid out automatically (Graphviz dot's layered layout). Children: FlowNode, FlowGroup, FlowLink, Note.
+
+Goes in: root, HorizontalLayout, VerticalLayout. Children: FlowGroup, FlowLink, FlowNode, Note.
+
+| Field | Type | Default | Description |
+|---|---|---|---|
+| `title` | text | `""` | Title drawn above the diagram, at the full text size; empty for none. |
+| `width` | number | `0` | Width in pixels. 0 (default) is the natural width in a layout; as root it fills the image. In a HorizontalLayout a negative value is a stretch weight. (-1000 to 8192) |
+| `height` | number | `0` | Height in pixels. 0 (default) is the natural height in a layout; as root it fills the image. In a VerticalLayout a negative value is a stretch weight. (-1000 to 8192) |
+| `direction` | name | `TopDown` | Direction of the ranks (Graphviz dot's rankdir; mermaid's TB, BT, LR, RL). (one of: TopDown, BottomUp, LeftRight, RightLeft) |
+| `edge_style` | name | `Spline` | Shape of the edges: smooth curves (Spline) or straight segments (Polyline). (one of: Spline, Polyline) |
+| `node_spacing` | number | `0` | Pixels between nodes in one rank (dot's nodesep); 0 uses the default (30). (0 to 500) |
+| `rank_spacing` | number | `0` | Pixels between ranks (dot's ranksep); 0 uses the default (46). (0 to 500) |
+| `min_zoom` | number | `0.5` | Smallest scale the diagram may be drawn at to fit its space. Needing less is an error that gives the size the diagram needs. (0.05 to 1) |
+| `max_zoom` | number | `1` | Largest scale: 1 (default) never enlarges a small diagram; 2 lets it grow to fill a large space. (0.1 to 8) |
+| `line_color` | colour | `""` | Default colour of edges and node outlines; empty for the theme's. |
+| `fill_color` | colour | `""` | Default fill of nodes; empty for the theme's. |
+| `font` | text | `""` | Font of this element's text and of everything inside it: an embedded font file name (default, FiraMono-Bold.ttf, FiraMono-Regular.ttf, FiraSans-Bold.ttf, FiraSans-Italic.ttf, FiraSans-Regular.ttf, PT_Serif-Web-Bold.ttf, PT_Serif-Web-Italic.ttf, PT_Serif-Web-Regular.ttf). Empty (default) inherits the enclosing element's font, or image.font. |
+| `font_size` | number | `0` | Text size in pixels for this element and everything inside it. 0 (default) inherits the enclosing element's size, or image.font_size. (0 to 96) |
+| `text_color` | colour | `""` | Text colour ("#RRGGBB" or "#RRGGBBAA") for this element and everything inside it: titles, axis and tick labels, legends and labels. Empty (default) inherits, or uses the theme's. |
+
+## GanttChart
+
+A Gantt chart: tasks as bars on a time axis, one row each, top to bottom, in sections with a colour each. Children: GanttSection, GanttTask.
+
+Goes in: root, HorizontalLayout, VerticalLayout. Children: GanttTask, GanttSection.
+
+| Field | Type | Default | Description |
+|---|---|---|---|
+| `title` | text | `""` | Title above the chart; empty for none. |
+| `width` | number | `0` | Width in pixels; 0 (default) is 600 in a HorizontalLayout and fills elsewhere. In a HorizontalLayout a negative value is a stretch weight. (-1000 to 8192) |
+| `height` | number | `0` | Height in pixels; 0 (default) is the natural height (enough for every row) in a VerticalLayout, and fills elsewhere. In a VerticalLayout a negative value is a stretch weight. (-1000 to 8192) |
+| `x_label` | text | `""` | Label under the time axis; empty for none. |
+| `today` | text | `""` | Draws a red line marked "today" at this time: a date (YYYY-MM-DD, or YYYY-MM-DD HH:MM in UTC) or a number, like the tasks'. Empty for none. |
+| `colormap` | name | `Default` | Colormap for this plot: the colours series take in turn when they set none, and the scale of heatmaps and surfaces. Deep (the usual default), Dark, Pastel, Paired, Viridis, Plasma, Hot, Cool, Pink, Jet, Twilight, RdBu, BrBG, PiYG, Spectral or Greys. Default leaves the current colormap. (one of: Default, Deep, Dark, Pastel, Paired, Viridis, Plasma, Hot, Cool, Pink, Jet, Twilight, RdBu, BrBG, PiYG, Spectral, Greys) |
+| `bar_height` | number | `0.6` | Height of a bar as a fraction of its row. (0.1 to 1) |
+| `show_dependencies` | true/false | `true` | When true, draws an arrow from each task in after. |
+| `font` | text | `""` | Font of this element's text and of everything inside it: an embedded font file name (default, FiraMono-Bold.ttf, FiraMono-Regular.ttf, FiraSans-Bold.ttf, FiraSans-Italic.ttf, FiraSans-Regular.ttf, PT_Serif-Web-Bold.ttf, PT_Serif-Web-Italic.ttf, PT_Serif-Web-Regular.ttf). Empty (default) inherits the enclosing element's font, or image.font. |
+| `font_size` | number | `0` | Text size in pixels for this element and everything inside it. 0 (default) inherits the enclosing element's size, or image.font_size. (0 to 96) |
+| `text_color` | colour | `""` | Text colour ("#RRGGBB" or "#RRGGBBAA") for this element and everything inside it: titles, axis and tick labels, legends and labels. Empty (default) inherits, or uses the theme's. |
+
 ## HorizontalLayout
 
 Arranges children left-to-right.
 
-Goes in: root, HorizontalLayout, VerticalLayout. Children: ActivityDiagram, ClassDiagram, DataFlowDiagram, ERDiagram, HorizontalLayout, Label, NetworkDiagram, Plot, Plot3D, Separator, SeparatorText, SequenceDiagram, Spring, StateDiagram, UseCaseDiagram, VerticalLayout.
+Goes in: root, HorizontalLayout, VerticalLayout. Children: ActivityDiagram, ClassDiagram, ColorScale, DataFlowDiagram, ERDiagram, Flowchart, GanttChart, HorizontalLayout, Label, NetworkDiagram, Plot, Plot3D, SankeyDiagram, Separator, SeparatorText, SequenceDiagram, Spring, StateDiagram, UseCaseDiagram, VerticalLayout.
 
 | Field | Type | Default | Description |
 |---|---|---|---|
@@ -162,7 +225,7 @@ Goes in: root, HorizontalLayout, VerticalLayout. Children: Device, Link, Zone, N
 
 A 2D plot (ImPlot). Children are 2D series: PlotLine, PlotBars, PlotScatter, ...
 
-Goes in: root, HorizontalLayout, VerticalLayout. Children: PlotBars, PlotBarsH, PlotDigital, PlotHeatmap, PlotHistogram, PlotHistogram2D, PlotInfLines, PlotLine, PlotPieChart, PlotScatter, PlotShaded, PlotStairs, PlotStems, PlotText.
+Goes in: root, HorizontalLayout, VerticalLayout. Children: PlotAnnotation, PlotBarGroups, PlotBars, PlotBarsH, PlotDigital, PlotErrorBars, PlotHeatmap, PlotHistogram, PlotHistogram2D, PlotInfLines, PlotLine, PlotPieChart, PlotScatter, PlotShaded, PlotStairs, PlotStems, PlotTag, PlotText.
 
 | Field | Type | Default | Description |
 |---|---|---|---|
@@ -184,6 +247,22 @@ Goes in: root, HorizontalLayout, VerticalLayout. Children: PlotBars, PlotBarsH, 
 | `font` | text | `""` | Font of this element's text and of everything inside it: an embedded font file name (default, FiraMono-Bold.ttf, FiraMono-Regular.ttf, FiraSans-Bold.ttf, FiraSans-Italic.ttf, FiraSans-Regular.ttf, PT_Serif-Web-Bold.ttf, PT_Serif-Web-Italic.ttf, PT_Serif-Web-Regular.ttf). Empty (default) inherits the enclosing element's font, or image.font. |
 | `font_size` | number | `0` | Text size in pixels for this element and everything inside it. 0 (default) inherits the enclosing element's size, or image.font_size. (0 to 96) |
 | `text_color` | colour | `""` | Text colour ("#RRGGBB" or "#RRGGBBAA") for this element and everything inside it: titles, axis and tick labels, legends and labels. Empty (default) inherits, or uses the theme's. |
+| `x_scale` | name | `Linear` | Scale of the X axis: Linear (default); Log10, powers of ten, for values spanning several orders of magnitude (fixed limits must be above 0); SymLog, log-like but allowing 0 and negative values; or Time, values in UNIX seconds labelled as UTC dates and times. (one of: Linear, Time, Log10, SymLog) |
+| `y_scale` | name | `Linear` | Scale of the Y axis: Linear (default); Log10, powers of ten, for values spanning several orders of magnitude (fixed limits must be above 0); SymLog, log-like but allowing 0 and negative values; or Time, values in UNIX seconds labelled as UTC dates and times. (one of: Linear, Time, Log10, SymLog) |
+| `x_format` | text | `""` | printf format of the X tick labels, with one %f, %e or %g conversion ("%.0f ms", "%.1f%%"). Empty (default) is "%g". Not allowed on a Time axis. |
+| `y_format` | text | `""` | printf format of the Y tick labels, with one %f, %e or %g conversion ("%.0f ms", "%.1f%%"). Empty (default) is "%g". Not allowed on a Time axis. |
+| `x_ticks` | list of numbers | `[]` | Positions of the X ticks, in data units. Empty (default) places them automatically. |
+| `x_tick_labels` | list of texts | `[]` | Text of each tick in x_ticks, in order, such as category names under bars. Empty (default) labels the ticks with their values. |
+| `y_ticks` | list of numbers | `[]` | Positions of the Y ticks, in data units. Empty (default) places them automatically. |
+| `y_tick_labels` | list of texts | `[]` | Text of each tick in y_ticks, in order, such as category names under bars. Empty (default) labels the ticks with their values. |
+| `y2_label` | text | `""` | Label of the second Y axis, on the right. Setting any y2_ field, or giving a series y_axis: Y2, shows the axis. |
+| `y2_flags` | flags | `None` | ImPlotAxisFlags for the second Y axis. (combine with '\|': None, NoLabel, NoGridLines, NoTickMarks, NoTickLabels, NoInitialFit, NoMenus, NoSideSwitch, NoHighlight, Opposite, Foreground, Invert, AutoFit, RangeFit, PanStretch, LockMin, LockMax, Lock, NoDecorations) |
+| `y2_min` | number | `0` | Fixed lower limit of the second Y axis.  Ignored (axis auto-fits to its series) when equal to y2_max. |
+| `y2_max` | number | `0` | Fixed upper limit of the second Y axis.  Ignored (axis auto-fits to its series) when equal to y2_min. |
+| `y2_scale` | name | `Linear` | Scale of the second Y axis: Linear (default); Log10, powers of ten, for values spanning several orders of magnitude (fixed limits must be above 0); SymLog, log-like but allowing 0 and negative values; or Time, values in UNIX seconds labelled as UTC dates and times. (one of: Linear, Time, Log10, SymLog) |
+| `y2_format` | text | `""` | printf format of the second Y tick labels, with one %f, %e or %g conversion ("%.0f ms", "%.1f%%"). Empty (default) is "%g". Not allowed on a Time axis. |
+| `y2_ticks` | list of numbers | `[]` | Positions of the second Y ticks, in data units. Empty (default) places them automatically. |
+| `y2_tick_labels` | list of texts | `[]` | Text of each tick in y2_ticks, in order, such as category names under bars. Empty (default) labels the ticks with their values. |
 
 ## Plot3D
 
@@ -204,6 +283,30 @@ Goes in: root, HorizontalLayout, VerticalLayout. Children: Plot3DLine, Plot3DMes
 | `y_flags` | flags | `None` | ImPlot3DAxisFlags for the Y axis (combine names with '\|'). (combine with '\|': None, NoLabel, NoGridLines, NoTickMarks, NoTickLabels, LockMin, LockMax, AutoFit, Invert, PanStretch, Lock, NoDecorations) |
 | `z_flags` | flags | `None` | ImPlot3DAxisFlags for the Z axis (combine names with '\|'). (combine with '\|': None, NoLabel, NoGridLines, NoTickMarks, NoTickLabels, LockMin, LockMax, AutoFit, Invert, PanStretch, Lock, NoDecorations) |
 | `colormap` | name | `Default` | Colormap for this plot: the colours series take in turn when they set none, and the scale of heatmaps and surfaces. Deep (the usual default), Dark, Pastel, Paired, Viridis, Plasma, Hot, Cool, Pink, Jet, Twilight, RdBu, BrBG, PiYG, Spectral or Greys. Default leaves the current colormap. (one of: Default, Deep, Dark, Pastel, Paired, Viridis, Plasma, Hot, Cool, Pink, Jet, Twilight, RdBu, BrBG, PiYG, Spectral, Greys) |
+| `font` | text | `""` | Font of this element's text and of everything inside it: an embedded font file name (default, FiraMono-Bold.ttf, FiraMono-Regular.ttf, FiraSans-Bold.ttf, FiraSans-Italic.ttf, FiraSans-Regular.ttf, PT_Serif-Web-Bold.ttf, PT_Serif-Web-Italic.ttf, PT_Serif-Web-Regular.ttf). Empty (default) inherits the enclosing element's font, or image.font. |
+| `font_size` | number | `0` | Text size in pixels for this element and everything inside it. 0 (default) inherits the enclosing element's size, or image.font_size. (0 to 96) |
+| `text_color` | colour | `""` | Text colour ("#RRGGBB" or "#RRGGBBAA") for this element and everything inside it: titles, axis and tick labels, legends and labels. Empty (default) inherits, or uses the theme's. |
+
+## SankeyDiagram
+
+A Sankey diagram: quantities flowing from node to node as bands whose width is proportional to the amount (energy, budgets, traffic, conversions). Nodes are placed in columns automatically. Flows come from the from / to / values lists or SankeyFlow children; SankeyNode sets a node's label and colour. Cycles are not allowed.
+
+Goes in: root, HorizontalLayout, VerticalLayout. Children: SankeyFlow, SankeyNode.
+
+| Field | Type | Default | Description |
+|---|---|---|---|
+| `title` | text | `""` | Title above the diagram; empty for none. |
+| `width` | number | `0` | Width in pixels; 0 (default) is 600 in a HorizontalLayout and fills elsewhere; a negative value is a stretch weight in a HorizontalLayout. (-1000 to 8192) |
+| `height` | number | `0` | Height in pixels; 0 (default) is the natural height (at least 300, more for many nodes) in a VerticalLayout and fills elsewhere; a negative value is a stretch weight in a VerticalLayout. (-1000 to 8192) |
+| `from` | list of texts | `[]` | Node each flow leaves, such as $source; with to and values. |
+| `to` | list of texts | `[]` | Node each flow reaches, such as $target. |
+| `values` | list of numbers | `[]` | Quantity of each flow, such as $amount; each above 0. |
+| `colormap` | name | `Default` | Colormap for this plot: the colours series take in turn when they set none, and the scale of heatmaps and surfaces. Deep (the usual default), Dark, Pastel, Paired, Viridis, Plasma, Hot, Cool, Pink, Jet, Twilight, RdBu, BrBG, PiYG, Spectral or Greys. Default leaves the current colormap. (one of: Default, Deep, Dark, Pastel, Paired, Viridis, Plasma, Hot, Cool, Pink, Jet, Twilight, RdBu, BrBG, PiYG, Spectral, Greys) |
+| `link_color` | name | `Source` | Colour of the bands: Source (the node they leave, default), Target (the node they reach) or Gray. (one of: Source, Target, Gray) |
+| `node_width` | number | `16` | Width of the node bars in pixels. (2 to 200) |
+| `node_spacing` | number | `12` | Least vertical gap between nodes of a column, in pixels. (0 to 200) |
+| `show_values` | true/false | `true` | When true, each label ends with the node's total. |
+| `value_format` | text | `"%g"` | printf format of the totals in the labels ("%.0f GWh"). |
 | `font` | text | `""` | Font of this element's text and of everything inside it: an embedded font file name (default, FiraMono-Bold.ttf, FiraMono-Regular.ttf, FiraSans-Bold.ttf, FiraSans-Italic.ttf, FiraSans-Regular.ttf, PT_Serif-Web-Bold.ttf, PT_Serif-Web-Italic.ttf, PT_Serif-Web-Regular.ttf). Empty (default) inherits the enclosing element's font, or image.font. |
 | `font_size` | number | `0` | Text size in pixels for this element and everything inside it. 0 (default) inherits the enclosing element's size, or image.font_size. (0 to 96) |
 | `text_color` | colour | `""` | Text colour ("#RRGGBB" or "#RRGGBBAA") for this element and everything inside it: titles, axis and tick labels, legends and labels. Empty (default) inherits, or uses the theme's. |
@@ -312,7 +415,7 @@ Goes in: root, HorizontalLayout, VerticalLayout. Children: Actor, UseCase, UseCa
 
 Stacks children top-to-bottom.
 
-Goes in: root, HorizontalLayout, VerticalLayout. Children: ActivityDiagram, ClassDiagram, DataFlowDiagram, ERDiagram, HorizontalLayout, Label, NetworkDiagram, Plot, Plot3D, Separator, SeparatorText, SequenceDiagram, Spring, StateDiagram, UseCaseDiagram, VerticalLayout.
+Goes in: root, HorizontalLayout, VerticalLayout. Children: ActivityDiagram, ClassDiagram, ColorScale, DataFlowDiagram, ERDiagram, Flowchart, GanttChart, HorizontalLayout, Label, NetworkDiagram, Plot, Plot3D, SankeyDiagram, Separator, SeparatorText, SequenceDiagram, Spring, StateDiagram, UseCaseDiagram, VerticalLayout.
 
 | Field | Type | Default | Description |
 |---|---|---|---|
@@ -325,6 +428,81 @@ Goes in: root, HorizontalLayout, VerticalLayout. Children: ActivityDiagram, Clas
 | `font` | text | `""` | Font of this element's text and of everything inside it: an embedded font file name (default, FiraMono-Bold.ttf, FiraMono-Regular.ttf, FiraSans-Bold.ttf, FiraSans-Italic.ttf, FiraSans-Regular.ttf, PT_Serif-Web-Bold.ttf, PT_Serif-Web-Italic.ttf, PT_Serif-Web-Regular.ttf). Empty (default) inherits the enclosing element's font, or image.font. |
 | `font_size` | number | `0` | Text size in pixels for this element and everything inside it. 0 (default) inherits the enclosing element's size, or image.font_size. (0 to 96) |
 | `text_color` | colour | `""` | Text colour ("#RRGGBB" or "#RRGGBBAA") for this element and everything inside it: titles, axis and tick labels, legends and labels. Empty (default) inherits, or uses the theme's. |
+
+## GanttSection
+
+A group of tasks (a phase, a team) sharing a colour and a legend entry. Children: GanttTask.
+
+Goes in: GanttChart. Children: GanttTask.
+
+| Field | Type | Default | Description |
+|---|---|---|---|
+| `name` | text | `""` | Section name, shown in the legend. |
+| `color` | colour | `""` | Colour of its tasks; empty takes the next colour of the chart's colormap. |
+
+## GanttTask
+
+A task (a bar from start to end) or a milestone of a GanttChart, on its own row.
+
+Goes in: GanttChart, GanttSection.
+
+| Field | Type | Default | Description |
+|---|---|---|---|
+| `id` | text | `""` | Id that other tasks' after names; optional unless named. |
+| `name` | text | `""` | Name shown on the task's row; empty shows the id. |
+| `start` | text | `""` | When the task starts: a date (YYYY-MM-DD, or YYYY-MM-DD HH:MM in UTC) or a number. Leave empty and give after instead. |
+| `end` | text | `""` | When the task ends, in the same form as start (a date means its midnight: 2026-03-02 to 2026-03-05 is three days). Leave empty and give duration instead. |
+| `duration` | number | `0` | Length of the task instead of end: days when start is a date, else start's units. (0 to 1e+09) |
+| `after` | list of texts | `[]` | Ids of the tasks this one waits for: it starts when the last of them ends, with an arrow from each (mermaid's after). |
+| `milestone` | true/false | `false` | When true, the task is a moment, drawn as a diamond at its start. |
+| `status` | name | `None` | Done (pale), Active (outlined), Critical (red outline) or None. (one of: None, Done, Active, Critical) |
+| `color` | colour | `""` | Bar colour; empty uses its section's colour. |
+
+## PlotAnnotation
+
+Draws a callout box with text next to a point, to point out an event or a value. Without a color it takes the colour of the series drawn just before it (no background if none); its text is black or white, whichever reads better.  Must be a child of a Plot element.
+
+Goes in: Plot.
+
+| Field | Type | Default | Description |
+|---|---|---|---|
+| `label` | text | `""` | Series name shown in the plot legend. |
+| `color` | colour | `""` | Series colour as "#RRGGBB" or "#RRGGBBAA", used for its lines, fills and markers. Empty (default) takes the next colour of the plot's colormap. |
+| `fill_color` | colour | `""` | Colour of filled areas (bar faces, shaded regions, surfaces) as "#RRGGBB" or "#RRGGBBAA". Empty (default) uses color. |
+| `line_weight` | number | `1` | Line thickness in pixels (lines, bar edges, marker edges). (0 to 32) |
+| `fill_alpha` | number | `-1` | Opacity of fills from 0 (transparent) to 1 (opaque). -1 (default) keeps the series type's own default. (-1 to 1) |
+| `marker` | name | `Default` | Point marker: None, Auto, Circle, Square, Diamond, Up, Down, Left, Right, Cross, Plus or Asterisk. Default keeps the series type's own choice (markers on a scatter, none on a line). (one of: Default, None, Auto, Circle, Square, Diamond, Up, Down, Left, Right, Cross, Plus, Asterisk) |
+| `marker_size` | number | `0` | Marker radius in pixels. 0 (default) keeps the automatic size. (0 to 64) |
+| `text` | text | `""` | Text in the callout box. Empty (default) shows the point's coordinates. |
+| `x` | number | `0` | X coordinate of the point the callout marks, in plot (data) space. |
+| `y` | number | `0` | Y coordinate of the point the callout marks, in plot (data) space. |
+| `offset_x` | number | `10` | Horizontal position of the box from the point, in pixels (positive is right). |
+| `offset_y` | number | `-10` | Vertical position of the box from the point, in pixels (negative is up). |
+| `clamp` | true/false | `true` | When true, keeps the box inside the plot area. |
+| `y_axis` | name | `Y1` | Y axis the series is drawn against: Y1 (default, left) or Y2, the plot's second Y axis on the right, for a quantity in other units. Y2's range, scale and ticks are the Plot's y2_ fields. (one of: Y1, Y2) |
+
+## PlotBarGroups
+
+Draws groups of bars, one bar per label in each group, coloured in turn from the plot's colormap (color and fill_color are ignored). Groups sit at 0, 1, 2, ...: name them with the Plot's x_ticks and x_tick_labels (y_ when horizontal).  Must be a child of a Plot element.
+
+Goes in: Plot.
+
+| Field | Type | Default | Description |
+|---|---|---|---|
+| `label` | text | `""` | Series name shown in the plot legend. |
+| `color` | colour | `""` | Series colour as "#RRGGBB" or "#RRGGBBAA", used for its lines, fills and markers. Empty (default) takes the next colour of the plot's colormap. |
+| `fill_color` | colour | `""` | Colour of filled areas (bar faces, shaded regions, surfaces) as "#RRGGBB" or "#RRGGBBAA". Empty (default) uses color. |
+| `line_weight` | number | `1` | Line thickness in pixels (lines, bar edges, marker edges). (0 to 32) |
+| `fill_alpha` | number | `-1` | Opacity of fills from 0 (transparent) to 1 (opaque). -1 (default) keeps the series type's own default. (-1 to 1) |
+| `marker` | name | `Default` | Point marker: None, Auto, Circle, Square, Diamond, Up, Down, Left, Right, Cross, Plus or Asterisk. Default keeps the series type's own choice (markers on a scatter, none on a line). (one of: Default, None, Auto, Circle, Square, Diamond, Up, Down, Left, Right, Cross, Plus, Asterisk) |
+| `marker_size` | number | `0` | Marker radius in pixels. 0 (default) keeps the automatic size. (0 to 64) |
+| `labels` | list of texts | `[]` | Name of each series of bars (its legend entry), one per bar in a group. |
+| `values` | list of numbers | `[]` | Bar values, one row per group: the first row (one value per label) is group 0, the next group 1, and so on. [$a, $b] gives this layout from the columns a and b. |
+| `group_size` | number | `0.67` | Width of a group (all its bars together), in plot units. (0 to 16) |
+| `shift` | number | `0` | Offset of every group along the axis, in plot units. |
+| `horizontal` | true/false | `false` | When true, the bars are horizontal and the groups go up the Y axis. |
+| `stacked` | true/false | `false` | When true, a group's bars are stacked into one bar instead of side by side. |
+| `y_axis` | name | `Y1` | Y axis the series is drawn against: Y1 (default, left) or Y2, the plot's second Y axis on the right, for a quantity in other units. Y2's range, scale and ticks are the Plot's y2_ fields. (one of: Y1, Y2) |
 
 ## PlotBars
 
@@ -344,6 +522,7 @@ Goes in: Plot.
 | `xs` | list of numbers | `[]` | Array of bar X positions.  If empty, bars are placed at 0, 1, 2, ... using the ys values only. |
 | `ys` | list of numbers | `[]` | Array of bar heights (or lengths for horizontal bars). |
 | `bar_size` | number | `0.67` | Width (or height for horizontal) of each bar in plot units. (0 to 16) |
+| `y_axis` | name | `Y1` | Y axis the series is drawn against: Y1 (default, left) or Y2, the plot's second Y axis on the right, for a quantity in other units. Y2's range, scale and ticks are the Plot's y2_ fields. (one of: Y1, Y2) |
 
 ## PlotBarsH
 
@@ -363,6 +542,7 @@ Goes in: Plot.
 | `xs` | list of numbers | `[]` | Array of bar X positions.  If empty, bars are placed at 0, 1, 2, ... using the ys values only. |
 | `ys` | list of numbers | `[]` | Array of bar heights (or lengths for horizontal bars). |
 | `bar_size` | number | `0.67` | Width (or height for horizontal) of each bar in plot units. (0 to 16) |
+| `y_axis` | name | `Y1` | Y axis the series is drawn against: Y1 (default, left) or Y2, the plot's second Y axis on the right, for a quantity in other units. Y2's range, scale and ticks are the Plot's y2_ fields. (one of: Y1, Y2) |
 
 ## PlotDigital
 
@@ -381,6 +561,31 @@ Goes in: Plot.
 | `marker_size` | number | `0` | Marker radius in pixels. 0 (default) keeps the automatic size. (0 to 64) |
 | `xs` | list of numbers | `[]` | Array of X coordinates, one per data point. If empty, 0, 1, 2, ... are used. |
 | `ys` | list of numbers | `[]` | Array of Y coordinates, one per data point. |
+| `y_axis` | name | `Y1` | Y axis the series is drawn against: Y1 (default, left) or Y2, the plot's second Y axis on the right, for a quantity in other units. Y2's range, scale and ticks are the Plot's y2_ fields. (one of: Y1, Y2) |
+
+## PlotErrorBars
+
+Draws error bars at each (xs[i], ys[i]): a line spanning the error, with caps. Without a color it takes the colour of the series drawn just before it, so write the PlotLine, PlotScatter or PlotBars of the same data first.  Must be a child of a Plot element.
+
+Goes in: Plot.
+
+| Field | Type | Default | Description |
+|---|---|---|---|
+| `label` | text | `""` | Series name shown in the plot legend. |
+| `color` | colour | `""` | Series colour as "#RRGGBB" or "#RRGGBBAA", used for its lines, fills and markers. Empty (default) takes the next colour of the plot's colormap. |
+| `fill_color` | colour | `""` | Colour of filled areas (bar faces, shaded regions, surfaces) as "#RRGGBB" or "#RRGGBBAA". Empty (default) uses color. |
+| `line_weight` | number | `1` | Line thickness in pixels (lines, bar edges, marker edges). (0 to 32) |
+| `fill_alpha` | number | `-1` | Opacity of fills from 0 (transparent) to 1 (opaque). -1 (default) keeps the series type's own default. (-1 to 1) |
+| `marker` | name | `Default` | Point marker: None, Auto, Circle, Square, Diamond, Up, Down, Left, Right, Cross, Plus or Asterisk. Default keeps the series type's own choice (markers on a scatter, none on a line). (one of: Default, None, Auto, Circle, Square, Diamond, Up, Down, Left, Right, Cross, Plus, Asterisk) |
+| `marker_size` | number | `0` | Marker radius in pixels. 0 (default) keeps the automatic size. (0 to 64) |
+| `xs` | list of numbers | `[]` | X coordinates, one per point. If empty, 0, 1, 2, ... are used. |
+| `ys` | list of numbers | `[]` | Y coordinates the bars are centred on, one per point. |
+| `err` | list of numbers | `[]` | Symmetric error of each point: its bar spans ys - err to ys + err (xs when horizontal). Leave empty and give neg and pos for asymmetric errors. |
+| `neg` | list of numbers | `[]` | Error below each point (left when horizontal); asymmetric errors, with pos. |
+| `pos` | list of numbers | `[]` | Error above each point (right when horizontal); asymmetric errors, with neg. |
+| `horizontal` | true/false | `false` | When true, the bars are horizontal: the errors apply to xs. |
+| `cap_size` | number | `4` | Width of the cap at each end of a bar, in pixels. (0 to 64) |
+| `y_axis` | name | `Y1` | Y axis the series is drawn against: Y1 (default, left) or Y2, the plot's second Y axis on the right, for a quantity in other units. Y2's range, scale and ticks are the Plot's y2_ fields. (one of: Y1, Y2) |
 
 ## PlotHeatmap
 
@@ -407,6 +612,7 @@ Goes in: Plot.
 | `x_max` | number | `1` | X coordinate of the right edge of the heatmap bounds. |
 | `y_min` | number | `0` | Y coordinate of the bottom edge of the heatmap bounds. |
 | `y_max` | number | `1` | Y coordinate of the top edge of the heatmap bounds. |
+| `y_axis` | name | `Y1` | Y axis the series is drawn against: Y1 (default, left) or Y2, the plot's second Y axis on the right, for a quantity in other units. Y2's range, scale and ticks are the Plot's y2_ fields. (one of: Y1, Y2) |
 
 ## PlotHistogram
 
@@ -429,6 +635,7 @@ Goes in: Plot.
 | `density` | true/false | `false` | When true, normalizes bar heights to form a probability density. |
 | `range_min` | number | `0` | Minimum sample value to include.  When range_min == range_max (default 0/0), ImPlot auto-ranges. |
 | `range_max` | number | `0` | Maximum sample value to include.  When range_min == range_max (default 0/0), ImPlot auto-ranges. |
+| `y_axis` | name | `Y1` | Y axis the series is drawn against: Y1 (default, left) or Y2, the plot's second Y axis on the right, for a quantity in other units. Y2's range, scale and ticks are the Plot's y2_ fields. (one of: Y1, Y2) |
 
 ## PlotHistogram2D
 
@@ -449,6 +656,7 @@ Goes in: Plot.
 | `ys` | list of numbers | `[]` | Array of sample Y coordinates (must match xs in length). |
 | `x_bins` | integer | `-1` | Bin count for X.  -1 = square root, -2 = Sturges, -3 = Rice, -4 = Scott (ImPlotBin), >0 = explicit count. (-4 to 1e+05) |
 | `y_bins` | integer | `-1` | Bin count for Y.  -1 = square root, -2 = Sturges, -3 = Rice, -4 = Scott (ImPlotBin), >0 = explicit count. (-4 to 1e+05) |
+| `y_axis` | name | `Y1` | Y axis the series is drawn against: Y1 (default, left) or Y2, the plot's second Y axis on the right, for a quantity in other units. Y2's range, scale and ticks are the Plot's y2_ fields. (one of: Y1, Y2) |
 
 ## PlotInfLines
 
@@ -467,6 +675,7 @@ Goes in: Plot.
 | `marker_size` | number | `0` | Marker radius in pixels. 0 (default) keeps the automatic size. (0 to 64) |
 | `values` | list of numbers | `[]` | Array of axis positions at which to draw lines.  When horizontal is false these are X positions (vertical lines); when horizontal is true these are Y positions (horizontal lines). |
 | `horizontal` | true/false | `false` | When false, draws vertical lines at each X value.  When true, draws horizontal lines at each Y value. |
+| `y_axis` | name | `Y1` | Y axis the series is drawn against: Y1 (default, left) or Y2, the plot's second Y axis on the right, for a quantity in other units. Y2's range, scale and ticks are the Plot's y2_ fields. (one of: Y1, Y2) |
 
 ## PlotLine
 
@@ -485,6 +694,7 @@ Goes in: Plot.
 | `marker_size` | number | `0` | Marker radius in pixels. 0 (default) keeps the automatic size. (0 to 64) |
 | `xs` | list of numbers | `[]` | Array of X coordinates, one per data point. If empty, 0, 1, 2, ... are used. |
 | `ys` | list of numbers | `[]` | Array of Y coordinates, one per data point. |
+| `y_axis` | name | `Y1` | Y axis the series is drawn against: Y1 (default, left) or Y2, the plot's second Y axis on the right, for a quantity in other units. Y2's range, scale and ticks are the Plot's y2_ fields. (one of: Y1, Y2) |
 
 ## PlotPieChart
 
@@ -509,6 +719,7 @@ Goes in: Plot.
 | `normalize` | true/false | `false` | When true, slices are proportional to their values relative to the total sum. |
 | `label_fmt` | text | `"%.1f%%"` | printf format for the per-slice value label. |
 | `angle0` | number | `90` | Angle in degrees at which the first slice begins (0 = 3 o'clock, 90 = 12 o'clock). (0 to 360) |
+| `y_axis` | name | `Y1` | Y axis the series is drawn against: Y1 (default, left) or Y2, the plot's second Y axis on the right, for a quantity in other units. Y2's range, scale and ticks are the Plot's y2_ fields. (one of: Y1, Y2) |
 
 ## PlotScatter
 
@@ -527,6 +738,7 @@ Goes in: Plot.
 | `marker_size` | number | `0` | Marker radius in pixels. 0 (default) keeps the automatic size. (0 to 64) |
 | `xs` | list of numbers | `[]` | Array of X coordinates, one per data point. If empty, 0, 1, 2, ... are used. |
 | `ys` | list of numbers | `[]` | Array of Y coordinates, one per data point. |
+| `y_axis` | name | `Y1` | Y axis the series is drawn against: Y1 (default, left) or Y2, the plot's second Y axis on the right, for a quantity in other units. Y2's range, scale and ticks are the Plot's y2_ fields. (one of: Y1, Y2) |
 
 ## PlotShaded
 
@@ -547,6 +759,7 @@ Goes in: Plot.
 | `ys` | list of numbers | `[]` | Array of Y coordinates, one per data point. |
 | `ys2` | list of numbers | `[]` | Second Y array for a band between ys and ys2.  Leave empty to shade between ys and ref. |
 | `ref` | number | `0` | Horizontal reference line used when ys2 is empty. |
+| `y_axis` | name | `Y1` | Y axis the series is drawn against: Y1 (default, left) or Y2, the plot's second Y axis on the right, for a quantity in other units. Y2's range, scale and ticks are the Plot's y2_ fields. (one of: Y1, Y2) |
 
 ## PlotStairs
 
@@ -565,6 +778,7 @@ Goes in: Plot.
 | `marker_size` | number | `0` | Marker radius in pixels. 0 (default) keeps the automatic size. (0 to 64) |
 | `xs` | list of numbers | `[]` | Array of X coordinates, one per data point. If empty, 0, 1, 2, ... are used. |
 | `ys` | list of numbers | `[]` | Array of Y coordinates, one per data point. |
+| `y_axis` | name | `Y1` | Y axis the series is drawn against: Y1 (default, left) or Y2, the plot's second Y axis on the right, for a quantity in other units. Y2's range, scale and ticks are the Plot's y2_ fields. (one of: Y1, Y2) |
 
 ## PlotStems
 
@@ -584,6 +798,27 @@ Goes in: Plot.
 | `xs` | list of numbers | `[]` | Array of X coordinates, one per data point. If empty, 0, 1, 2, ... are used. |
 | `ys` | list of numbers | `[]` | Array of Y coordinates, one per data point. |
 | `ref` | number | `0` | Y coordinate of the baseline from which stems grow. |
+| `y_axis` | name | `Y1` | Y axis the series is drawn against: Y1 (default, left) or Y2, the plot's second Y axis on the right, for a quantity in other units. Y2's range, scale and ticks are the Plot's y2_ fields. (one of: Y1, Y2) |
+
+## PlotTag
+
+Draws a tag on an axis: a coloured box at a value, among the tick labels. Pair it with PlotInfLines to label a target or a threshold. Without a color it takes the colour of the series drawn just before it (no background if none).  Must be a child of a Plot element.
+
+Goes in: Plot.
+
+| Field | Type | Default | Description |
+|---|---|---|---|
+| `label` | text | `""` | Series name shown in the plot legend. |
+| `color` | colour | `""` | Series colour as "#RRGGBB" or "#RRGGBBAA", used for its lines, fills and markers. Empty (default) takes the next colour of the plot's colormap. |
+| `fill_color` | colour | `""` | Colour of filled areas (bar faces, shaded regions, surfaces) as "#RRGGBB" or "#RRGGBBAA". Empty (default) uses color. |
+| `line_weight` | number | `1` | Line thickness in pixels (lines, bar edges, marker edges). (0 to 32) |
+| `fill_alpha` | number | `-1` | Opacity of fills from 0 (transparent) to 1 (opaque). -1 (default) keeps the series type's own default. (-1 to 1) |
+| `marker` | name | `Default` | Point marker: None, Auto, Circle, Square, Diamond, Up, Down, Left, Right, Cross, Plus or Asterisk. Default keeps the series type's own choice (markers on a scatter, none on a line). (one of: Default, None, Auto, Circle, Square, Diamond, Up, Down, Left, Right, Cross, Plus, Asterisk) |
+| `marker_size` | number | `0` | Marker radius in pixels. 0 (default) keeps the automatic size. (0 to 64) |
+| `value` | number | `0` | Position of the tag on its axis, in data units. |
+| `axis` | name | `Y` | Axis the tag sits on: Y (default; the left axis, or the right one with y_axis: Y2) or X. (one of: X, Y) |
+| `text` | text | `""` | Text in the tag. Empty (default) shows the value, formatted like the tick labels. |
+| `y_axis` | name | `Y1` | Y axis the series is drawn against: Y1 (default, left) or Y2, the plot's second Y axis on the right, for a quantity in other units. Y2's range, scale and ticks are the Plot's y2_ fields. (one of: Y1, Y2) |
 
 ## PlotText
 
@@ -608,6 +843,7 @@ Goes in: Plot.
 | `font` | text | `""` | Font of this element's text and of everything inside it: an embedded font file name (default, FiraMono-Bold.ttf, FiraMono-Regular.ttf, FiraSans-Bold.ttf, FiraSans-Italic.ttf, FiraSans-Regular.ttf, PT_Serif-Web-Bold.ttf, PT_Serif-Web-Italic.ttf, PT_Serif-Web-Regular.ttf). Empty (default) inherits the enclosing element's font, or image.font. |
 | `font_size` | number | `0` | Text size in pixels for this element and everything inside it. 0 (default) inherits the enclosing element's size, or image.font_size. (0 to 96) |
 | `text_color` | colour | `""` | Text colour ("#RRGGBB" or "#RRGGBBAA") for this element and everything inside it: titles, axis and tick labels, legends and labels. Empty (default) inherits, or uses the theme's. |
+| `y_axis` | name | `Y1` | Y axis the series is drawn against: Y1 (default, left) or Y2, the plot's second Y axis on the right, for a quantity in other units. Y2's range, scale and ticks are the Plot's y2_ fields. (one of: Y1, Y2) |
 
 ## Plot3DLine
 
@@ -753,6 +989,31 @@ Goes in: Plot3D.
 | `xs` | list of numbers | `[]` | Vertex X coordinates; length must be a multiple of 3. |
 | `ys` | list of numbers | `[]` | Vertex Y coordinates; length must be a multiple of 3. |
 | `zs` | list of numbers | `[]` | Vertex Z coordinates; length must be a multiple of 3. |
+
+## SankeyFlow
+
+A flow of `value` from one node to another. The same flows can be given as the diagram's from / to / values lists.
+
+Goes in: SankeyDiagram.
+
+| Field | Type | Default | Description |
+|---|---|---|---|
+| `from` | text | `""` | Node the quantity leaves. |
+| `to` | text | `""` | Node it reaches. |
+| `value` | number | `0` | The quantity; the band's width is proportional to it. Above 0. |
+| `color` | colour | `""` | Colour of the band; empty follows the diagram's link_color. |
+
+## SankeyNode
+
+Optional: sets the label or colour of a node that flows name. Nodes are listed in this order within their column.
+
+Goes in: SankeyDiagram.
+
+| Field | Type | Default | Description |
+|---|---|---|---|
+| `id` | text | `""` | The name flows use for the node. |
+| `name` | text | `""` | Label shown; empty shows the id. |
+| `color` | colour | `""` | Colour of the node (and of the bands leaving it); empty takes the colormap's. |
 
 ## Action
 
@@ -946,6 +1207,52 @@ Goes in: ERDiagram.
 | `constraint` | true/false | `true` | false: the edge is drawn but does not influence the ranks (dot's constraint). |
 | `color` | colour | `""` | Line colour; empty for the diagram's. |
 
+## FlowGroup
+
+A group of nodes in a titled box (mermaid's subgraph), such as a service, a team or a phase. Children: FlowNode, FlowGroup, FlowLink, Note; links inside may also join nodes outside.
+
+Goes in: FlowGroup, Flowchart. Children: FlowGroup, FlowLink, FlowNode, Note.
+
+| Field | Type | Default | Description |
+|---|---|---|---|
+| `id` | text | `""` | Unique id; links may name a group to end at its box. |
+| `title` | text | `""` | Title at the top of the box; empty shows the id. |
+| `color` | colour | `""` | Outline colour; empty for the diagram's. |
+| `fill_color` | colour | `""` | Fill colour; empty for the diagram's. |
+
+## FlowLink
+
+A link between two nodes or groups of a flowchart.
+
+Goes in: FlowGroup, Flowchart.
+
+| Field | Type | Default | Description |
+|---|---|---|---|
+| `from` | text | `""` | Id of the node or group the link leaves. |
+| `to` | text | `""` | Id of the node or group it reaches. |
+| `label` | text | `""` | Text in the middle of the link, such as a decision's answer. |
+| `line` | name | `Solid` | Solid (default), Dotted (dashed: optional or asynchronous) or Thick (the main path). (one of: Solid, Dotted, Thick) |
+| `arrow` | name | `End` | Arrowheads: End (at to, default), None (a plain line) or Both. (one of: End, None, Both) |
+| `weight` | number | `1` | How strongly the layout keeps this edge short and straight (Graphviz dot's weight). (0 to 100) |
+| `min_length` | integer | `1` | Least number of ranks between the two ends (dot's minlen); 0 allows one rank. (0 to 10) |
+| `constraint` | true/false | `true` | false: the edge is drawn but does not influence the ranks (dot's constraint). |
+| `color` | colour | `""` | Line colour; empty for the diagram's. |
+
+## FlowNode
+
+A node of a flowchart.
+
+Goes in: FlowGroup, Flowchart.
+
+| Field | Type | Default | Description |
+|---|---|---|---|
+| `id` | text | `""` | Unique id that links and notes name. |
+| `text` | text | `""` | Text in the node (a line break starts a new line); empty shows the id. |
+| `shape` | name | `Box` | Box (a step, default), Rounded, Stadium (start / end), Diamond (decision), Circle, Parallelogram (input / output), Hexagon (preparation), Cylinder (database) or Subroutine (a predefined process). (one of: Box, Rounded, Stadium, Diamond, Circle, Parallelogram, Hexagon, Cylinder, Subroutine) |
+| `rank` | text | `""` | Nodes with the same rank text are placed in one rank (Graphviz dot's rank=same); empty for none. |
+| `color` | colour | `""` | Outline colour; empty for the diagram's. |
+| `fill_color` | colour | `""` | Fill colour; empty for the diagram's. |
+
 ## Device
 
 A network device drawn as an icon: server, database, storage, router, switch, firewall, load balancer, access point, cloud, internet, workstation, laptop, mobile or user.
@@ -999,7 +1306,7 @@ Goes in: NetworkDiagram, Zone. Children: Device, Link, Zone, Note.
 
 A note. In a graph diagram it sits beside the nodes it is attached to; in a sequence diagram it takes a row, over participants or beside one.
 
-Goes in: ActivityDiagram, ClassDiagram, DataFlowDiagram, ERDiagram, Fragment, NetworkDiagram, SequenceDiagram, State, StateDiagram, TrustBoundary, UseCaseDiagram, Zone.
+Goes in: ActivityDiagram, ClassDiagram, DataFlowDiagram, ERDiagram, FlowGroup, Flowchart, Fragment, NetworkDiagram, SequenceDiagram, State, StateDiagram, TrustBoundary, UseCaseDiagram, Zone.
 
 | Field | Type | Default | Description |
 |---|---|---|---|

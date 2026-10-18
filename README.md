@@ -2,11 +2,12 @@
 
 nymph is a command-line tool that turns a YAML file describing a chart
 into a PNG image, and a nymph PNG back into its YAML (the YAML is stored
-inside the image). It draws 2D and 3D plots, UML diagrams, labels and
-layouts with Dear ImGui, ImPlot, ImPlot3D and ImUml (nymph's own UML
-library for ImGui), and rasterizes them with OpenGL when a GPU is
-available, or on the CPU with its own software rasterizer: no GPU, window
-or display needed, and no OpenGL library linked.
+inside the image). It draws 2D and 3D plots, UML diagrams, flowcharts,
+Gantt and Sankey charts, labels and layouts with Dear ImGui, ImPlot, ImPlot3D and
+ImUml (nymph's own UML library for ImGui), and rasterizes them with
+OpenGL when a GPU is available, or on the CPU with its own software
+rasterizer: no GPU, window or display needed, and no OpenGL library
+linked.
 It is meant for AI agents that need to show information as a chart.
 
 It started as wish's `nymph` module and is now standalone, with no wish or
@@ -92,8 +93,8 @@ carries its source: `bdg::nymph::extract_source(png)` returns it.
 | Concept | Description |
 |---------|-------------|
 | **Source** | One YAML document: `description`, `image` options, a `root` element tree, `data`, and optional `source`. |
-| **UML diagrams** | `ClassDiagram`, `SequenceDiagram`, `StateDiagram`, `ActivityDiagram`, `UseCaseDiagram`, `ERDiagram` (database tables), `DataFlowDiagram`, `NetworkDiagram`: nodes and edges named by `id`, laid out automatically (Graphviz dot-style). See [docs/format.md](docs/format.md#uml-diagrams). |
-| **Elements** | `Plot` / `Plot3D` and their series, plus `VerticalLayout` / `HorizontalLayout`, `Spring`, `Label` and separators to combine them. New types register a class; see [the design](spec/01_core_features/DESIGN.md#9-extension-points). |
+| **UML diagrams and flowcharts** | `ClassDiagram`, `SequenceDiagram`, `StateDiagram`, `ActivityDiagram`, `UseCaseDiagram`, `ERDiagram` (database tables), `DataFlowDiagram`, `NetworkDiagram` and `Flowchart` (any node-and-link diagram, with groups): nodes and edges named by `id`, laid out automatically (Graphviz dot-style). See [docs/format.md](docs/format.md#uml-diagrams). |
+| **Elements** | `Plot` / `Plot3D` and their series (lines, bars, grouped bars, error bars, heatmaps, annotations, ...; log, time and category axes), `GanttChart` (schedules), `SankeyDiagram` (flows), `ColorScale`, plus `VerticalLayout` / `HorizontalLayout`, `Spring`, `Label` and separators to combine them. New types register a class; see [the design](spec/01_core_features/DESIGN.md#9-extension-points). |
 | **Data** | `data` holds one table, or several named tables, as CSV text or columns. |
 | **Column references** | `$name` / `$2` in a field takes data from a column; `$table:name` from a named table. |
 | **Text style** | `font` (an embedded font by file name), `font_size` and `text_color` on `image`, layouts, plots and labels, inherited down the tree. `nymph fonts` lists the fonts. |
