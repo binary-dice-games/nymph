@@ -4,6 +4,7 @@
 ///        register_uml().
 #include "elements/uml/uml_common.hpp"
 #include <imgui.h>
+#include <imgui_internal.h> // ImHashStr: ImUml hashes item ids with it
 #include <cmath>
 #include <memory>
 #include <stdexcept>
@@ -11,6 +12,7 @@
 #include "core/error.hpp"
 #include "core/limits.hpp"
 #include "core/suggest.hpp"
+#include "elements/plot_pick.hpp"
 #include "elements/plot_style.hpp"
 #include "fonts/embedded_fonts.hpp"
 #include "render/text_style.hpp"
@@ -391,7 +393,8 @@ ImUmlDiagramInfo diagram_class::submit(const node& n, draw_context& dc, const re
   ImUmlDiagramFlags flags = ImUmlDiagramFlags_MeasureOnly;
   if (r != nullptr) {
     size = ImVec2(r->width(), r->height());
-    flags = ImUmlDiagramFlags_None;
+    // A live view pans and zooms the diagram (spec/04_web_viewer).
+    flags = dc.interactive() ? ImUmlDiagramFlags_Interactive : ImUmlDiagramFlags_None;
     ImGui::SetCursorScreenPos(r->min);
   }
   if (begin_of(kind_)(id.c_str(), size, flags)) {
@@ -450,7 +453,68 @@ std::vector<std::string> diagram_class::implied_fonts(const node& n, const std::
 
 void diagram_class::draw(const node& n, draw_context& dc) const {
   const rect r = dc.rect_of(n);
-  submit(n, dc, &r);
+  const ImUmlDiagramInfo info = submit(n, dc, &r);
+  if (dc.interactive()) {
+    offer_hovered(n, dc, info);
+    finish_picks(dc, ImGui::GetWindowDrawList());
+  }
+}
+
+void diagram_class::offer_hovered(const node& n, draw_context& dc, const ImUmlDiagramInfo& info) const {
+  if (info.HoveredNode < 0 && info.HoveredEdge < 0) {
+    return;
+  }
+  const auto text = [](const node& c, const char* field) -> std::string {
+    const int i = c.cls->field_index(field);
+    return i < 0 ? std::string() : c.get<std::string>(static_cast<size_t>(i));
+  };
+  const node* hit = nullptr;
+  walk(n, [&](const node& c, size_t) {
+    if (hit != nullptr) {
+      return;
+    }
+    if (info.HoveredNode >= 0) {
+      const std::string& id = id_of(c);
+      if (!id.empty() && ImHashStr(id.c_str()) == info.HoveredNodeId) {
+        hit = &c;
+      }
+    } else {
+      const std::string from = text(c, "from"), to = text(c, "to");
+      if (!from.empty() && ImHashStr(from.c_str()) == info.HoveredEdgeFrom &&
+          ImHashStr(to.c_str()) == info.HoveredEdgeTo) {
+        hit = &c;
+      }
+    }
+  });
+  if (hit == nullptr) {
+    return;
+  }
+  pick_candidate c;
+  c.color = ImGui::GetColorU32(ImGuiCol_Text);
+  c.hit.element = hit;
+  c.hit.type = std::string(hit->cls->name());
+  if (info.HoveredNode >= 0) {
+    c.hit.index = info.HoveredNode;
+    c.hit.label = id_of(*hit);
+    c.hit.values = {{"id", id_of(*hit)}};
+    for (const char* field : {"name", "text"}) {
+      if (const std::string v = text(*hit, field); !v.empty()) {
+        c.hit.values.push_back({field, v});
+      }
+    }
+    c.outline = true;
+    c.outline_min = info.HoveredMin;
+    c.outline_max = info.HoveredMax;
+  } else {
+    c.hit.index = info.HoveredEdge;
+    c.hit.label = text(*hit, "from") + " -> " + text(*hit, "to");
+    c.hit.values = {{"from", text(*hit, "from")}, {"to", text(*hit, "to")}};
+    if (const std::string v = text(*hit, "label"); !v.empty()) {
+      c.hit.values.push_back({"label", v});
+    }
+  }
+  c.anchor = ImVec2((info.HoveredMin.x + info.HoveredMax.x) * 0.5f, (info.HoveredMin.y + info.HoveredMax.y) * 0.5f);
+  dc.offer_pick(std::move(c));
 }
 
 // ── Field helpers ────────────────────────────────────────────────────────────

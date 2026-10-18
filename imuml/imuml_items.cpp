@@ -1739,6 +1739,58 @@ void DrawSequenceDiagram(const Painter& pt) {
 
 // ── End ──────────────────────────────────────────────────────────────────────
 
+/// The node or edge of a graph diagram at `mouse`, as drawn: plain nodes
+/// over edges over composite nodes (inner composites first).
+void FindHovered(const Painter& pt, int edge_count, const ImVec2& mouse, ImUmlDiagramInfo* info) {
+  const ImUmlDiagram* d = pt.D;
+  const auto node_at = [&](bool composite) {
+    for (int i = d->Nodes.Size - 1; i >= 0; --i) {
+      const ImUmlNodeRec& n = d->Nodes[i];
+      if (n.Composite != composite) {
+        continue;
+      }
+      const ImVec2 a = pt.P(n.Pos - n.Size * 0.5f), b = pt.P(n.Pos + n.Size * 0.5f);
+      if (mouse.x >= a.x && mouse.x <= b.x && mouse.y >= a.y && mouse.y <= b.y) {
+        info->HoveredNode = i;
+        info->HoveredNodeId = n.Id;
+        info->HoveredMin = a;
+        info->HoveredMax = b;
+        return true;
+      }
+    }
+    return false;
+  };
+  if (node_at(false)) {
+    return;
+  }
+  const float reach = ImMax(5.0f, pt.LW * 2.0f);
+  ImVector<ImVec2> screen, path;
+  for (int e = ImMin(edge_count, d->Edges.Size) - 1; e >= 0; --e) {
+    const ImUmlEdgeRec& er = d->Edges[e];
+    const ImUmlGraphEdgeOut& eo = d->CacheEdges[e];
+    if (er.From < 0 || eo.PointCount < 2) {
+      continue;
+    }
+    screen.resize(0);
+    for (int i = 0; i < eo.PointCount; ++i) {
+      screen.push_back(pt.P(d->Points[eo.PointStart + i]));
+    }
+    ImUml::FlattenPath(screen.Data, screen.Size, eo.Bezier, &path);
+    for (int i = 0; i + 1 < path.Size; ++i) {
+      const ImVec2 c = ImLineClosestPoint(path[i], path[i + 1], mouse);
+      if (ImLengthSqr(c - mouse) <= reach * reach) {
+        info->HoveredEdge = e;
+        info->HoveredEdgeFrom = er.FromId;
+        info->HoveredEdgeTo = er.ToId;
+        info->HoveredMin = c - ImVec2(reach, reach);
+        info->HoveredMax = c + ImVec2(reach, reach);
+        return;
+      }
+    }
+  }
+  node_at(true);
+}
+
 void EndDiagram(int kind) {
   IM_ASSERT(GImUml != nullptr);
   ImUmlContext& g = *GImUml;
@@ -1860,6 +1912,40 @@ void EndDiagram(int kind) {
     zoom = ImMin(d->Style.MaxZoom, ImMin(size.x / content.x, (size.y - title_h) / content.y));
     zoom = ImMax(zoom, 0.01f);
   }
+  // The fitted content is centred in the space below the title.
+  const auto origin_at = [&](float z) {
+    return ImVec2(
+        bb.Min.x + (size.x - content.x * z) * 0.5f, bb.Min.y + title_h + (size.y - title_h - content.y * z) * 0.5f);
+  };
+  const bool interactive = (d->Flags & ImUmlDiagramFlags_Interactive) != 0;
+  bool hovered = false;
+  bool held = false;
+  ImVec2 pan(0.0f, 0.0f);
+  if (interactive) {
+    ImGui::ButtonBehavior(bb, d->ID, &hovered, &held, ImGuiButtonFlags_MouseButtonLeft);
+    ImGuiIO& io = ImGui::GetIO();
+    const float fit = zoom;
+    if (hovered && ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left)) {
+      d->ViewPan = ImVec2(0, 0);
+      d->ViewZoom = 1.0f;
+    }
+    if (hovered && io.MouseWheel != 0.0f) {
+      ImGui::SetKeyOwner(ImGuiKey_MouseWheelY, d->ID);
+      // Keep the content point under the mouse where it is.
+      const float old_zoom = fit * d->ViewZoom;
+      const ImVec2 old_origin = origin_at(old_zoom) + d->ViewPan;
+      const ImVec2 at = (io.MousePos - old_origin) / old_zoom;
+      d->ViewZoom = ImClamp(d->ViewZoom * ImPow(1.2f, io.MouseWheel), 0.25f, 8.0f);
+      const float new_zoom = fit * d->ViewZoom;
+      d->ViewPan = io.MousePos - at * new_zoom - origin_at(new_zoom);
+    }
+    if (held && ImGui::IsMouseDragging(ImGuiMouseButton_Left)) {
+      d->ViewPan += io.MouseDelta;
+    }
+    zoom = fit * d->ViewZoom;
+    pan = d->ViewPan;
+    info.ViewZoom = d->ViewZoom;
+  }
   info.Zoom = zoom;
   ImDrawList* dl = ImGui::GetWindowDrawList();
   dl->PushClipRect(bb.Min, bb.Max, true);
@@ -1872,12 +1958,15 @@ void EndDiagram(int kind) {
   pt.D = d;
   pt.Zoom = zoom;
   pt.LW = ImMax(1.0f, d->Style.LineWeight * zoom);
-  pt.Origin = ImVec2(ImFloor(bb.Min.x + (size.x - content.x * zoom) * 0.5f),
-                     ImFloor(bb.Min.y + title_h + (size.y - title_h - content.y * zoom) * 0.5f));
+  const ImVec2 fitted = origin_at(zoom);
+  pt.Origin = ImVec2(ImFloor(fitted.x + pan.x), ImFloor(fitted.y + pan.y));
   if (kind == ImUmlDiagramKind_Sequence) {
     DrawSequenceDiagram(pt);
   } else {
     DrawGraphDiagram(pt);
+    if (interactive && hovered && !ImGui::IsMouseDragging(ImGuiMouseButton_Left)) {
+      FindHovered(pt, edge_count, ImGui::GetIO().MousePos, &info);
+    }
   }
   dl->PopClipRect();
   d->Edges.resize(edge_count);

@@ -243,6 +243,17 @@ under the pointer.
 
 ### 7. Pan, zoom and picks in diagrams
 
+*Result: done.* `ImUmlDiagramFlags_Interactive`; the view (`ViewPan`,
+`ViewZoom`) lives on the pooled `ImUmlDiagram`; `FindHovered()` in
+`imuml_items.cpp` hit-tests in drawing order (plain nodes, edges along
+their flattened paths, composite nodes). nymph's `diagram_class` passes
+the flag in live views and maps the hashed ids to its elements
+(`offer_hovered()`). Sequence diagrams pan and zoom but report no hover
+(their participants are not placed through the node records); left for
+later. 6 tests in `test_imuml_interactive.cpp` (real ImGui mouse events
+through the `frame_setup` pieces) and 1 in `test_pick.cpp`; 402 tests
+pass.
+
 **Goal:** UML diagrams and flowcharts pan, zoom around the pointer and
 report the hovered node or edge, only when interactive.
 

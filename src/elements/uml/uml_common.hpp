@@ -131,6 +131,8 @@ class diagram_class : public element_class {
  private:
   /// Runs the ImUml scope: measure only when `r` is null, else draws at `r`.
   ImUmlDiagramInfo submit(const node& n, draw_context& dc, const rect* r) const;
+  /// In a live view, offers the node or edge ImUml found under the mouse.
+  void offer_hovered(const node& n, draw_context& dc, const ImUmlDiagramInfo& info) const;
 
   diagram_kind kind_;
   size_t title_, min_zoom_, max_zoom_, line_color_, fill_color_, node_spacing_;

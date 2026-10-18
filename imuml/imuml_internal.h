@@ -376,6 +376,9 @@ struct ImUmlDiagram {
   ImUmlSeqOutput Seq;
   ImVector<int> SeqParticipants; ///< Node indices of participants, in column order.
   ImVec2 ContentSize; ///< Laid out content at zoom 1, without the title.
+  // View of ImUmlDiagramFlags_Interactive, kept across frames.
+  ImVec2 ViewPan; ///< Screen offset added to the fitted origin.
+  float ViewZoom; ///< Factor on the fitted zoom.
   ImRect Boundary; ///< Use case system boundary (diagram coordinates).
 
   ImUmlDiagram() {
@@ -389,6 +392,8 @@ struct ImUmlDiagram {
     LayoutValid = false;
     CacheSkipped = 0;
     SetupLocked = false;
+    ViewPan = ImVec2(0, 0);
+    ViewZoom = 1.0f;
   }
 };
 

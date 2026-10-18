@@ -383,5 +383,34 @@ TEST(pick_shapes, ASankeyDiagramReportsNodesAndFlows) {
   EXPECT_EQ(seen["SankeyFlow A -> C"], "10");
 }
 
+// ── Diagrams (plan step 7) ───────────────────────────────────────────────────
+
+TEST(pick_diagrams, AClassAndARelationAreReportedAsTheirElements) {
+  driven_view d(
+      "image: {width: 400, height: 300}\n"
+      "root:\n"
+      "  type: ClassDiagram\n"
+      "  children:\n"
+      "    - {type: Class, id: Animal}\n"
+      "    - {type: Class, id: Duck}\n"
+      "    - {type: ClassRelation, from: Duck, to: Animal, kind: Inheritance}\n");
+  std::map<std::string, view_pick> seen; // label -> pick
+  for (float y = 4; y < 300; y += 5) {
+    for (float x = 4; x < 400; x += 10) {
+      d.move(x, y);
+      if (const std::optional<view_pick>& h = d.v.hovered()) {
+        seen.emplace(h->label, *h);
+      }
+    }
+  }
+  ASSERT_TRUE(seen.count("Animal"));
+  EXPECT_EQ(seen["Animal"].type, "Class");
+  EXPECT_EQ(seen["Animal"].element, "root/children/0");
+  EXPECT_EQ(value_of(seen["Animal"], "id"), "Animal");
+  ASSERT_TRUE(seen.count("Duck -> Animal"));
+  EXPECT_EQ(seen["Duck -> Animal"].type, "ClassRelation");
+  EXPECT_EQ(seen["Duck -> Animal"].element, "root/children/2");
+}
+
 } // namespace
 } // namespace bdg::nymph
