@@ -101,10 +101,73 @@ target_link_libraries(nymph PUBLIC nymph_imgui imuml PRIVATE yaml nymph_stb)
 add_library(nymph_cli STATIC
   cli/cli.hpp
   cli/cli.cpp
+  cli/cli_support.hpp
+  cli/cli_support.cpp
   cli/schema_doc.hpp
   cli/schema_doc.cpp
 )
 target_link_libraries(nymph_cli PUBLIC nymph)
+
+# ── nymph_mcp — the MCP server over the library and the CLI helpers ─────────
+
+# spec/06_claude_integration/DESIGN.md section 4.1. Above nymph_cli, whose
+# helpers its tools share, so the executable dispatches `nymph mcp`.
+if(NYMPH_MCP)
+  add_library(nymph_mcp STATIC
+    mcp/json_rpc.hpp
+    mcp/json_rpc.cpp
+    mcp/mcp_session.hpp
+    mcp/mcp_session.cpp
+    mcp/mcp_server.hpp
+    mcp/mcp_server.cpp
+    mcp/server_options.hpp
+    mcp/base64.hpp
+    mcp/base64.cpp
+    mcp/tools.hpp
+    mcp/tools.cpp
+    mcp/resources.hpp
+    mcp/resources.cpp
+  )
+  target_link_libraries(nymph_mcp PUBLIC nymph_cli nymph_json)
+
+  # The agent text and the guides the server hands to clients
+  # (spec/06_claude_integration/DESIGN.md sections 4.5 and 5.2).
+  set(_mcp_skill "${PROJECT_SOURCE_DIR}/claude/skill/nymph/SKILL.md")
+  set(_mcp_agent_guide "${PROJECT_SOURCE_DIR}/docs/agent-guide.md")
+  set(_mcp_elements "${PROJECT_SOURCE_DIR}/docs/elements.md")
+  set(_mcp_out "${CMAKE_CURRENT_BINARY_DIR}/generated/mcp")
+  file(MAKE_DIRECTORY "${_mcp_out}")
+  foreach(_doc skill agent_guide elements)
+    set(_file "${_mcp_${_doc}}")
+    add_custom_command(
+      OUTPUT "${_mcp_out}/mcp_${_doc}.cpp"
+      COMMAND "${CMAKE_COMMAND}" "-DINPUT=${_file}" "-DOUTPUT=${_mcp_out}/mcp_${_doc}.cpp" "-DSYMBOL=mcp_${_doc}"
+              -P "${PROJECT_SOURCE_DIR}/cmake/NymphEmbedFile.cmake"
+      DEPENDS "${_file}" "${PROJECT_SOURCE_DIR}/cmake/NymphEmbedFile.cmake"
+      COMMENT "Embedding ${_file}"
+      VERBATIM)
+    target_sources(nymph_mcp PRIVATE "${_mcp_out}/mcp_${_doc}.cpp")
+  endforeach()
+
+  # The MCP App page, built by the NYMPH_WEB build (web/CMakeLists.txt,
+  # nymph-claude-app); without it the server offers only PNGs.
+  set(NYMPH_MCP_VIEWER "" CACHE FILEPATH
+    "The MCP App page to embed (<build-web>/claude/viewer.html); empty for none")
+  if(NYMPH_MCP_VIEWER)
+    if(NOT EXISTS "${NYMPH_MCP_VIEWER}")
+      message(FATAL_ERROR "nymph: NYMPH_MCP_VIEWER names '${NYMPH_MCP_VIEWER}', which does not exist (build the web viewer first)")
+    endif()
+    add_custom_command(
+      OUTPUT "${_mcp_out}/mcp_viewer.cpp"
+      COMMAND "${CMAKE_COMMAND}" "-DINPUT=${NYMPH_MCP_VIEWER}" "-DOUTPUT=${_mcp_out}/mcp_viewer.cpp" "-DSYMBOL=mcp_viewer"
+              -P "${PROJECT_SOURCE_DIR}/cmake/NymphEmbedFile.cmake"
+      DEPENDS "${NYMPH_MCP_VIEWER}" "${PROJECT_SOURCE_DIR}/cmake/NymphEmbedFile.cmake"
+      COMMENT "Embedding the MCP App ${NYMPH_MCP_VIEWER}"
+      VERBATIM)
+    target_sources(nymph_mcp PRIVATE "${_mcp_out}/mcp_viewer.cpp")
+    target_compile_definitions(nymph_mcp PRIVATE NYMPH_MCP_HAS_VIEWER=1)
+  endif()
+endif()
 
 # ── OpenGL rasterizer (optional; OpenGL itself is loaded at run time) ────────
 

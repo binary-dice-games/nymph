@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "nymph": {
+      "command": "sh",
+      "args": ["${CLAUDE_PLUGIN_ROOT}/bin/nymph", "mcp"]
+    }
+  }
+}

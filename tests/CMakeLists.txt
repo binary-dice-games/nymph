@@ -1,5 +1,10 @@
-# MSVC: link gtest against the same (DLL) CRT as the test executables.
-set(gtest_force_shared_crt ON CACHE BOOL "" FORCE)
+# MSVC: link gtest against the same CRT as the test executables: the DLL
+# one, or the static one of a release build (cmake/NymphRelease.cmake).
+if(NYMPH_RELEASE)
+  set(gtest_force_shared_crt OFF CACHE BOOL "" FORCE)
+else()
+  set(gtest_force_shared_crt ON CACHE BOOL "" FORCE)
+endif()
 set(INSTALL_GTEST OFF CACHE BOOL "" FORCE)
 add_subdirectory(
     "${PROJECT_SOURCE_DIR}/extern/googletest"
@@ -106,3 +111,91 @@ target_compile_definitions(test_live_view PRIVATE NYMPH_SOURCE_DIR="${PROJECT_SO
 nymph_add_test(test_pick test_pick.cpp)
 nymph_add_test(test_imuml_interactive test_imuml_interactive.cpp)
 nymph_add_test(test_saved_view test_saved_view.cpp)
+
+# Script tests run a cross-built nymph through the toolchain's emulator,
+# passed '|'-separated (a ';' list would split on the command line).
+string(REPLACE ";" "|" _nymph_runner "${CMAKE_CROSSCOMPILING_EMULATOR}")
+
+# ── MCP server (spec/06_claude_integration) ──────────────────────────────────
+
+if(NYMPH_MCP)
+  nymph_add_test(test_mcp test_mcp.cpp)
+  target_link_libraries(test_mcp PRIVATE nymph_mcp)
+  target_compile_definitions(test_mcp PRIVATE NYMPH_SOURCE_DIR="${PROJECT_SOURCE_DIR}")
+  if(TARGET nymph-cli)
+    # string(JSON) needs CMake 3.19 in the script, whatever the project minimum.
+    add_test(NAME test_mcp_process
+      COMMAND ${CMAKE_COMMAND} -DNYMPH=$<TARGET_FILE:nymph-cli> -DWORK_DIR=${CMAKE_CURRENT_BINARY_DIR}/mcp_process
+              "-DRUNNER=${_nymph_runner}" -DEXPECT_VIEWER=$<BOOL:${NYMPH_MCP_VIEWER}>
+              -P ${CMAKE_CURRENT_SOURCE_DIR}/mcp_process.cmake)
+  endif()
+endif()
+
+# ── Release executables (spec/06_claude_integration step 7) ─────────────────
+
+if(NYMPH_RELEASE AND TARGET nymph-cli)
+  # Exact on x86-64, the architecture the committed PNGs were drawn on.
+  string(TOLOWER "${CMAKE_SYSTEM_PROCESSOR}" _nymph_cpu)
+  if(_nymph_cpu MATCHES "^(x86_64|amd64)$")
+    set(_nymph_exact ON)
+  else()
+    set(_nymph_exact OFF)
+  endif()
+  add_test(NAME nymph_release_examples
+    COMMAND ${CMAKE_COMMAND} -DNYMPH=$<TARGET_FILE:nymph-cli> -DEXAMPLES=${PROJECT_SOURCE_DIR}/examples -DEXACT=${_nymph_exact}
+            -DWORK_DIR=${CMAKE_CURRENT_BINARY_DIR}/release_examples "-DRUNNER=${_nymph_runner}"
+            -P ${CMAKE_CURRENT_SOURCE_DIR}/release_examples.cmake)
+  if(NYMPH_MCPB_FILE)
+    if(CMAKE_SYSTEM_NAME STREQUAL "Windows")
+      set(_nymph_platform win32)
+    elseif(CMAKE_SYSTEM_NAME STREQUAL "Darwin")
+      set(_nymph_platform darwin)
+    else()
+      set(_nymph_platform linux)
+    endif()
+    add_test(NAME nymph_release_mcpb
+      COMMAND ${CMAKE_COMMAND} -DMCPB=${NYMPH_MCPB_FILE} -DVERSION=${PROJECT_VERSION} -DPLATFORM=${_nymph_platform}
+              -DWORK_DIR=${CMAKE_CURRENT_BINARY_DIR}/release_mcpb "-DRUNNER=${_nymph_runner}"
+              -P ${CMAKE_CURRENT_SOURCE_DIR}/mcpb_check.cmake)
+  endif()
+  if(NYMPH_SKILL_FILE)
+    add_test(NAME nymph_release_skill
+      COMMAND ${CMAKE_COMMAND} -DSKILL_ZIP=${NYMPH_SKILL_FILE} -DSOURCE_DIR=${PROJECT_SOURCE_DIR}
+              -DWORK_DIR=${CMAKE_CURRENT_BINARY_DIR}/release_skill -P ${CMAKE_CURRENT_SOURCE_DIR}/skill_check.cmake)
+  endif()
+  if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+    find_program(NYMPH_READELF NAMES readelf ${CMAKE_READELF})
+    if(NYMPH_READELF)
+      add_test(NAME nymph_release_static
+        COMMAND ${CMAKE_COMMAND} -DREADELF=${NYMPH_READELF} -DNYMPH=$<TARGET_FILE:nymph-cli>
+                -P ${CMAKE_CURRENT_SOURCE_DIR}/release_static.cmake)
+    endif()
+  endif()
+endif()
+if(NYMPH_MCP)
+  nymph_add_test(test_mcp_tools test_mcp_tools.cpp)
+  target_link_libraries(test_mcp_tools PRIVATE nymph_mcp)
+  target_compile_definitions(test_mcp_tools PRIVATE NYMPH_SOURCE_DIR="${PROJECT_SOURCE_DIR}")
+endif()
+
+# ── Claude Code plugin (spec/06_claude_integration step 8) ──────────────────
+
+add_test(NAME nymph_plugin_in_sync
+  COMMAND ${CMAKE_COMMAND} -DSOURCE_DIR=${PROJECT_SOURCE_DIR} -DVERSION=${PROJECT_VERSION}
+          -P ${CMAKE_CURRENT_SOURCE_DIR}/plugin_sync_check.cmake)
+if(NOT WIN32)
+  find_program(NYMPH_SH sh)
+  if(NYMPH_SH)
+    add_test(NAME nymph_plugin_launcher
+      COMMAND ${NYMPH_SH} ${CMAKE_CURRENT_SOURCE_DIR}/plugin_launcher.sh
+              ${PROJECT_SOURCE_DIR}/claude/plugin/bin/nymph ${CMAKE_CURRENT_BINARY_DIR}/plugin_launcher)
+    set_tests_properties(nymph_plugin_launcher PROPERTIES SKIP_RETURN_CODE 77)
+  endif()
+endif()
+# Claude Code's own check of the marketplace and the plugin, when installed.
+find_program(NYMPH_CLAUDE claude)
+if(NYMPH_CLAUDE)
+  add_test(NAME nymph_plugin_validate_marketplace COMMAND ${NYMPH_CLAUDE} plugin validate --strict ${PROJECT_SOURCE_DIR})
+  add_test(NAME nymph_plugin_validate_plugin
+    COMMAND ${NYMPH_CLAUDE} plugin validate --strict ${PROJECT_SOURCE_DIR}/claude/plugin)
+endif()

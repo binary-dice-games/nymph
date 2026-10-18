@@ -178,9 +178,20 @@ class Core {
 
 let corePromise = null;
 
-/** The default font fetcher: `fetch(fontBaseUrl + name)`. */
-function fetchFrom(baseUrl) {
+/**
+ * The default font fetcher: `fetch(fontBaseUrl + name)`. The folder is
+ * resolved on the first fetch, so a page with no usable base URL (an
+ * inline `about:srcdoc` frame) fails only when a font is needed
+ * (spec/06_claude_integration/DESIGN.md section 4.3).
+ */
+function fetchFrom(base, here) {
   return async (name) => {
+    let baseUrl;
+    try {
+      baseUrl = new URL(base ?? './fonts/', here);
+    } catch {
+      throw new Error(`no font folder: '${base ?? './fonts/'}' has no base URL here (give fontBaseUrl or fetchFont)`);
+    }
     const response = await fetch(new URL(encodeURIComponent(name), baseUrl));
     if (!response.ok) {
       throw new Error(`${response.status} from ${response.url}`);
@@ -210,8 +221,10 @@ export function loadNymph(options = {}) {
           : (await import(new URL('./nymph-viewer-core.js', here).href)).default;
       const wasmUrl = options.wasmUrl ? new URL(options.wasmUrl, here).href : undefined;
       const module = await create(wasmUrl ? { locateFile: (path) => (path.endsWith('.wasm') ? wasmUrl : path) } : {});
-      const fontBaseUrl = new URL(options.fontBaseUrl ?? './fonts/', here);
-      return new Core(module, { fontBaseUrl, fetchFont: options.fetchFont ?? fetchFrom(fontBaseUrl) });
+      return new Core(module, {
+        fontBaseUrl: options.fontBaseUrl,
+        fetchFont: options.fetchFont ?? fetchFrom(options.fontBaseUrl, here),
+      });
     })();
     corePromise.catch(() => {
       corePromise = null;
@@ -550,8 +563,10 @@ export class NymphViewer {
       this.lastHover = hover;
       this.emit('hover', state.hovered);
     }
-    if (state.click) {
-      this.emit('click', state.click);
+    const click = this.pendingClick;
+    this.pendingClick = null;
+    if (click) {
+      this.emit('click', click);
     }
     const view = this.viewKey(state);
     if (!state.wantsFrame && this.buttonsDown === 0 && view !== this.lastView) {
@@ -950,7 +965,13 @@ export class NymphViewer {
    */
   state() {
     this.checkAlive();
-    return JSON.parse(this.core.string(this.core.m._nymph_viewer_state(this.handle)));
+    const state = JSON.parse(this.core.string(this.core.m._nymph_viewer_state(this.handle)));
+    if (state.click) {
+      // Taken by this call; kept for the click event, which a state() read
+      // inside the frame (sizeCanvas) would otherwise swallow.
+      this.pendingClick = state.click;
+    }
+    return state;
   }
 
   /** The source on screen (with setData applied). */

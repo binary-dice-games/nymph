@@ -1,0 +1,101 @@
+<!doctype html>
+<!-- MIT License © 2026 Binary Dice Games -->
+<!-- spec/06_claude_integration/PLAN.md step 5: a stand-in MCP Apps host for
+     the nymph MCP App. It loads <build>/claude/viewer.html in an iframe
+     sandboxed like a host's ("allow-scripts", an opaque origin) under the
+     policy users report for Claude (anthropics/claude-ai-mcp issue 40),
+     answers the App's requests and records what it sends. -->
+<meta charset="utf-8">
+<body style="margin:0">
+<iframe id="app" sandbox="allow-scripts" style="width:800px;height:1200px;border:0;display:block"></iframe>
+<script type="module">
+  const CSP = [
+    "default-src 'self'",
+    "script-src 'self' 'unsafe-inline' 'unsafe-eval' blob: data:",
+    "style-src 'self' 'unsafe-inline'",
+    "img-src 'self' data: blob:",
+    "connect-src 'self'",
+    "font-src 'self'",
+    "media-src 'self' blob: data:",
+    "worker-src 'self' blob:",
+    "frame-src 'self' blob: data:",
+    "base-uri 'self'",
+    "object-src 'none'",
+    "form-action 'self'",
+  ].join('; ');
+
+  const frame = document.getElementById('app');
+  const host = { messages: [], toolCalls: [], sizes: [], context: null, result: null, failFonts: false };
+  window.host = host;
+
+  function send(message) {
+    frame.contentWindow.postMessage({ jsonrpc: '2.0', ...message }, '*');
+  }
+  window.hostSend = send;
+
+  function bytesToBase64(bytes) {
+    let binary = '';
+    for (let i = 0; i < bytes.length; i += 0x8000) {
+      binary += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
+    }
+    return btoa(binary);
+  }
+
+  /** As nymph mcp's viewer_font: the font's bytes, from the build's fonts/. */
+  async function viewerFont(name) {
+    if (host.failFonts) {
+      return { isError: true, content: [{ type: 'text', text: `font '${name}' is not embedded in this nymph` }] };
+    }
+    const response = await fetch(`/fonts/${encodeURIComponent(name)}`);
+    if (!response.ok) {
+      return { isError: true, content: [{ type: 'text', text: `unknown font '${name}'` }] };
+    }
+    const base64 = bytesToBase64(new Uint8Array(await response.arrayBuffer()));
+    return { content: [{ type: 'text', text: name }], structuredContent: { name, base64 } };
+  }
+
+  window.addEventListener('message', async (event) => {
+    if (event.source !== frame.contentWindow) {
+      return;
+    }
+    const m = event.data;
+    host.messages.push(m);
+    if (m.method === 'ui/initialize') {
+      send({
+        id: m.id,
+        result: {
+          protocolVersion: '2026-01-26',
+          hostInfo: { name: 'nymph-test-host', version: '0' },
+          hostCapabilities: {},
+          hostContext: host.context,
+        },
+      });
+    } else if (m.method === 'ui/notifications/initialized') {
+      send({ method: 'ui/notifications/tool-result', params: host.result });
+    } else if (m.method === 'tools/call') {
+      host.toolCalls.push(m.params);
+      const result =
+        m.params.name === 'viewer_font'
+          ? await viewerFont(m.params.arguments?.name)
+          : { isError: true, content: [{ type: 'text', text: `the App may not call ${m.params.name}` }] };
+      send({ id: m.id, result });
+    } else if (m.method === 'ui/notifications/size-changed') {
+      host.sizes.push(m.params);
+    } else if (m.method === 'ui/request-display-mode') {
+      send({ id: m.id, result: { mode: m.params.mode } });
+    } else if (m.id !== undefined) {
+      send({ id: m.id, result: {} });
+    }
+  });
+
+  /** Loads the App with this host context, to be sent `result` once it is ready. */
+  window.hostStart = async ({ context, result, failFonts = false }) => {
+    host.context = context;
+    host.result = result;
+    host.failFonts = failFonts;
+    const html = await (await fetch('/claude/viewer.html')).text();
+    frame.srcdoc = html.replace('<head>', `<head><meta http-equiv="Content-Security-Policy" content="${CSP}">`);
+  };
+  window.hostReady = true;
+</script>
+</body>

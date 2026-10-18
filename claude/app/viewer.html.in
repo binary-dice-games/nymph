@@ -1,0 +1,45 @@
+<!doctype html>
+<!-- MIT License © 2026 Binary Dice Games -->
+<!-- The nymph MCP App (spec/06_claude_integration/DESIGN.md section 4.2):
+     the result of render_chart, live in the web viewer. Built by
+     cmake/NymphClaudeApp.cmake, which inlines the viewer and app.js. -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>nymph chart</title>
+<style>
+  :root {
+    color-scheme: light dark;
+    --nymph-bg: var(--color-background-primary, transparent);
+    --nymph-fg: var(--color-text-primary, #1f1f1f);
+    --nymph-muted: var(--color-text-secondary, #6b6b6b);
+    --nymph-border: var(--color-border-primary, rgba(127, 127, 127, 0.35));
+    --nymph-font: var(--font-sans, system-ui, sans-serif);
+  }
+  html, body { margin: 0; padding: 0; background: var(--nymph-bg); color: var(--nymph-fg); font: 13px/1.4 var(--nymph-font); }
+  #chart { width: 100%; }
+  #chart canvas { display: block; }
+  #bar { display: flex; justify-content: flex-end; gap: 6px; padding: 4px 6px 0; min-height: 24px; }
+  #bar button {
+    font: inherit; color: var(--nymph-muted); background: transparent; cursor: pointer;
+    border: 1px solid var(--nymph-border); border-radius: 6px; padding: 1px 8px;
+  }
+  #bar button:hover { color: var(--nymph-fg); }
+  #bar button[hidden] { display: none; }
+  #message { padding: 6px 8px; color: var(--nymph-muted); white-space: pre-wrap; }
+  #message:empty { display: none; }
+  #fallback { max-width: 100%; display: block; }
+</style>
+</head>
+<body>
+<div id="bar"><button id="fullscreen" type="button" hidden>Full screen</button></div>
+<div id="chart"></div>
+<div id="message">Waiting for the chart...</div>
+<script type="module">
+@NYMPH_VIEWER_JS@
+;
+@NYMPH_APP_JS@
+</script>
+</body>
+</html>

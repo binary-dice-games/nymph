@@ -63,6 +63,20 @@ const server = createServer(async (req, res) => {
     res.writeHead(200, { 'content-type': 'text/html' }).end(TEST_PAGE);
     return;
   }
+  // The MCP App (spec/06_claude_integration): its page from the build and
+  // the stand-in host from the sources.
+  const routes = {
+    '/claude/viewer.html': join(webDir, '..', 'claude', 'viewer.html'),
+    '/mcp_host.html': join(sourceDir, 'web', 'tests', 'browser', 'mcp_host.html'),
+  };
+  if (routes[path]) {
+    try {
+      res.writeHead(200, { 'content-type': 'text/html; charset=utf-8' }).end(await readFile(routes[path]));
+    } catch {
+      res.writeHead(404).end('not found');
+    }
+    return;
+  }
   const fromSource = path.startsWith('/examples/') || path.startsWith('/resources/');
   const file = fromSource ? join(sourceDir, normalize(path)) : join(webDir, normalize(path));
   try {
@@ -339,6 +353,22 @@ test('the wheel zooms a plot without scrolling the page, and scrolls it elsewher
   await page.close();
 });
 
+test('clicking a point fires click with its pick', async () => {
+  const page = await openPage();
+  await plotPage(page);
+  const p = await page.evaluate(() => window.at(2, 7));
+  await page.mouse.move(p.x, p.y);
+  await settleIn(page);
+  await page.mouse.down();
+  await page.waitForTimeout(50);
+  await page.mouse.up();
+  await settleIn(page);
+  const clicks = await page.evaluate(() => window.events.filter((e) => e.e === 'click').map((e) => e.detail));
+  assert(clicks.length === 1, `${clicks.length} click events`);
+  assert(clicks[0].element === 'root/children/0' && clicks[0].index === 2 && clicks[0].values.y === '7', JSON.stringify(clicks[0]));
+  await page.close();
+});
+
 test('hovering a point fires hover and draws the tooltip', async () => {
   const page = await openPage();
   await plotPage(page);
@@ -612,6 +642,217 @@ test('the element saves under the name of its src', async () => {
   const file = await download(page, at.x, at.y, 'Save as YAML');
   assert(file.name === 'line.yaml', file.name);
   assert(file.bytes.toString() === (await readFile(join(sourceDir, 'examples', 'line.yaml'), 'utf8')), 'unchanged source');
+  await page.close();
+});
+
+// ── Tests: the nymph MCP App (spec/06_claude_integration step 5) ─────────────
+
+/** A tool result as nymph mcp's render_chart returns it, for an example. */
+async function renderResult(name) {
+  const source = await readFile(join(sourceDir, 'examples', `${name}.yaml`), 'utf8');
+  const png = await readFile(join(sourceDir, 'examples', `${name}.png`));
+  return {
+    content: [
+      { type: 'image', data: png.toString('base64'), mimeType: 'image/png' },
+      { type: 'text', text: 'Rendered PNG' },
+    ],
+    structuredContent: { source, width: png.readUInt32BE(16), height: png.readUInt32BE(20) },
+  };
+}
+
+/**
+ * The host page with the App loaded and sent `result`; resolves once the App
+ * shows a chart or gave up. `requests` collects the App frame's requests.
+ */
+async function openApp({ context = { theme: 'light', displayMode: 'inline', availableDisplayModes: ['inline', 'fullscreen'] }, result, failFonts = false }) {
+  const page = await browser.newPage({ viewport: { width: 1000, height: 1300 }, deviceScaleFactor: 1 });
+  page.on('pageerror', (e) => console.log(`     page error: ${e.message}`));
+  await page.addInitScript(helpers);
+  const requests = [];
+  page.on('request', (r) => {
+    if (r.frame() !== page.mainFrame()) {
+      requests.push(r.url());
+    }
+  });
+  await page.goto(`${base}/mcp_host.html`);
+  await page.waitForFunction(() => window.hostReady === true);
+  await page.evaluate((options) => window.hostStart(options), { context, result, failFonts });
+  // The App frame is sandboxed (an opaque origin): reach it through Playwright.
+  let frame = null;
+  for (const until = Date.now() + 30000; !frame && Date.now() < until; ) {
+    const child = page.frames().find((f) => f !== page.mainFrame());
+    if (child && (await child.evaluate(() => window.nymphApp !== undefined).catch(() => false))) {
+      frame = child;
+    } else {
+      await page.waitForTimeout(50);
+    }
+  }
+  assert(frame, 'the App frame did not start');
+  await frame.waitForFunction(() => window.nymphApp.error !== null || window.nymphApp.viewer !== null, null, { timeout: 30000 });
+  if (await frame.evaluate(() => window.nymphApp.viewer !== null)) {
+    await frame.evaluate(() => window.nymphApp.viewer.rendered());
+  }
+  return { page, frame, requests };
+}
+
+test('the MCP App draws render_chart\'s result like the PNG, with no network request', async () => {
+  const { page, frame, requests } = await openApp({ result: await renderResult('line') });
+  const out = await frame.evaluate(async (pngBase64) => {
+    const viewer = window.nymphApp.viewer;
+    const img = new Image();
+    img.src = `data:image/png;base64,${pngBase64}`;
+    await img.decode();
+    const c = document.createElement('canvas');
+    c.width = img.width;
+    c.height = img.height;
+    const ctx = c.getContext('2d');
+    ctx.drawImage(img, 0, 0);
+    const png = { width: c.width, height: c.height, rgba: ctx.getImageData(0, 0, c.width, c.height).data };
+    return {
+      rasterizer: viewer.info().rasterizer,
+      colours: window.colours(viewer),
+      height: document.documentElement.scrollHeight,
+      ...window.compare(window.pixels(viewer), png),
+    };
+  }, (await renderResult('line')).content[0].data);
+  assert(out.rasterizer === 'webgl', `rasterizer ${out.rasterizer}`);
+  assert(out.colours > 10, `${out.colours} colours`);
+  assert(out.ok, out.why ?? `${(out.share * 100).toFixed(3)}% within 16, ${(out.flipped * 100).toFixed(3)}% beyond 64`);
+  const host = await page.evaluate(() => window.host);
+  const init = host.messages.find((m) => m.method === 'ui/initialize');
+  assert(init?.params?.protocolVersion === '2026-01-26', 'ui/initialize with the spec revision');
+  assert(init.params.appCapabilities.availableDisplayModes.includes('fullscreen'), 'offers full screen');
+  assert(host.messages.some((m) => m.method === 'ui/notifications/initialized'), 'initialized sent');
+  const last = host.sizes.at(-1);
+  assert(last && Math.abs(last.height - out.height) <= 1 && last.height >= 420, `size-changed ${JSON.stringify(last)} vs ${out.height}`);
+  assert(requests.length === 0, `the App fetched ${requests.join(', ')}`);
+  assert(host.toolCalls.length === 0, 'no font needed, no tool call');
+  await page.close();
+});
+
+test('the MCP App gets a named font through viewer_font', async () => {
+  const source =
+    'image: {width: 400, height: 240, font: FiraSans-Regular.ttf}\n' +
+    'root:\n  type: Plot\n  title: Fonts\n  children:\n    - {type: PlotLine, label: v, ys: [1, 3, 2]}\n';
+  const { page, frame, requests } = await openApp({ result: { content: [], structuredContent: { source } } });
+  const shown = await frame.evaluate(() => ({ error: window.nymphApp.error, colours: window.colours(window.nymphApp.viewer) }));
+  assert(shown.error === null, `error: ${shown.error}`);
+  assert(shown.colours > 5, 'drawn');
+  const calls = await page.evaluate(() => window.host.toolCalls);
+  assert(calls.length === 1 && calls[0].name === 'viewer_font' && calls[0].arguments.name === 'FiraSans-Regular.ttf', JSON.stringify(calls));
+  assert(requests.length === 0, `the App fetched ${requests.join(', ')}`);
+  await page.close();
+});
+
+test('the MCP App follows the host theme', async () => {
+  const { page, frame } = await openApp({ result: await renderResult('line') });
+  const corner = () => frame.evaluate(() => Array.from(window.pixels(window.nymphApp.viewer).rgba.slice(0, 3)));
+  const light = await corner();
+  await page.evaluate(() => window.hostSend({ method: 'ui/notifications/host-context-changed', params: { theme: 'dark' } }));
+  await frame.waitForFunction(() => window.nymphApp.viewer.rendered().then(() => true));
+  await frame.evaluate(() => window.nymphApp.viewer.rendered());
+  const dark = await corner();
+  assert(light[0] + light[1] + light[2] > 600, `light corner ${light}`);
+  assert(dark[0] + dark[1] + dark[2] < 300, `dark corner ${dark}`);
+  await page.close();
+
+  const darkFirst = await openApp({ context: { theme: 'dark' }, result: await renderResult('line') });
+  const first = await darkFirst.frame.evaluate(() => Array.from(window.pixels(window.nymphApp.viewer).rgba.slice(0, 3)));
+  assert(first[0] + first[1] + first[2] < 300, `dark from the start ${first}`);
+  await darkFirst.page.close();
+});
+
+test('the MCP App shows the PNG when the viewer cannot draw the chart', async () => {
+  const result = await renderResult('fonts');
+  const { page, frame } = await openApp({ result, failFonts: true });
+  const out = await frame.evaluate(() => ({
+    error: window.nymphApp.error,
+    img: document.getElementById('fallback')?.src.slice(0, 22),
+    message: document.getElementById('message').textContent,
+  }));
+  assert(out.error && out.error.includes('not embedded'), `error: ${out.error}`);
+  assert(out.img === 'data:image/png;base64,', `fallback image: ${out.img}`);
+  assert(out.message.includes('rendered image'), out.message);
+  await page.close();
+});
+
+test('the MCP App asks the host for full screen', async () => {
+  const { page, frame } = await openApp({ result: await renderResult('line') });
+  const hidden = await frame.evaluate(() => document.getElementById('fullscreen').hidden);
+  assert(!hidden, 'the button shows when the host offers full screen');
+  await frame.click('#fullscreen');
+  await frame.waitForFunction(() => window.nymphApp.displayMode === 'fullscreen');
+  const asked = await page.evaluate(() => window.host.messages.find((m) => m.method === 'ui/request-display-mode')?.params);
+  assert(asked?.mode === 'fullscreen', JSON.stringify(asked));
+  await page.close();
+
+  const plain = await openApp({ context: { theme: 'light' }, result: await renderResult('line') });
+  assert(await plain.frame.evaluate(() => document.getElementById('fullscreen').hidden), 'no button without full screen');
+  await plain.page.close();
+});
+
+// ── Tests: the view back to the model (spec/06_claude_integration step 6) ────
+
+const POINTS_SOURCE =
+  'description: Test points\nimage: {width: 600, height: 400}\n' +
+  'root:\n  type: Plot\n  title: Points\n  children:\n' +
+  '    - {type: PlotLine, label: v, xs: [0, 1, 2, 3, 4], ys: [1, 7, 3, 5, 2]}\n';
+
+/** Page coordinates of data point (x, y) of the App's first plot (the frame sits at 0, 0). */
+const appPoint = (frame, x, y) =>
+  frame.evaluate(
+    ([x, y]) => {
+      const viewer = window.nymphApp.viewer;
+      const p = viewer.state().views[0];
+      const box = viewer.canvas.getBoundingClientRect();
+      return {
+        x: box.left + p.x + ((x - p.xMin) / (p.xMax - p.xMin)) * p.width,
+        y: box.top + p.y + ((p.yMax - y) / (p.yMax - p.yMin)) * p.height,
+      };
+    },
+    [x, y],
+  );
+const contextUpdates = (page) =>
+  page.evaluate(() => window.host.messages.filter((m) => m.method === 'ui/update-model-context').map((m) => m.params));
+
+test('the MCP App tells the model what the user clicked and the view they left', async () => {
+  const { page, frame } = await openApp({ result: { content: [], structuredContent: { source: POINTS_SOURCE } } });
+  await page.waitForTimeout(800);
+  assert((await contextUpdates(page)).length === 0, 'nothing sent before the user touches the chart');
+
+  const point = await appPoint(frame, 1, 7);
+  await page.mouse.click(point.x, point.y);
+  await page.waitForTimeout(800);
+  let updates = await contextUpdates(page);
+  assert(updates.length === 1, `${updates.length} updates after a click`);
+  let text = updates[0].content[0].text;
+  assert(text.startsWith('nymph chart "Test points": the user changed the view.'), text);
+  assert(text.includes('Last clicked: root/children/0 (PlotLine "v") x=1 y=7'), text);
+  assert(text.includes('as written'), text);
+  assert(updates[0].structuredContent.lastClicked.element === 'root/children/0', JSON.stringify(updates[0].structuredContent));
+
+  const from = await appPoint(frame, 2, 4);
+  await page.mouse.move(from.x, from.y);
+  await page.mouse.down();
+  await page.mouse.move(from.x - 120, from.y + 40, { steps: 8 });
+  await page.mouse.up();
+  await page.waitForTimeout(900);
+  updates = await contextUpdates(page);
+  assert(updates.length === 2, `${updates.length} updates after a drag (debounced into one)`);
+  text = updates[1].content[0].text;
+  const expected = await frame.evaluate(() => {
+    const yaml = window.nymphApp.viewer.toYaml();
+    return yaml.slice(yaml.indexOf('\nview:') + 1).trimEnd();
+  });
+  assert(expected.startsWith('view:\n  root: {x: ['), expected);
+  assert(text.includes(`\n${expected}\n`), `${text}\n--- expected ---\n${expected}`);
+  assert(updates[1].structuredContent.view === expected, 'the same view block as structured content');
+  assert(text.includes('Last clicked: root/children/0'), 'the click is still reported');
+  assert(text.endsWith('To keep this view, render the source with this view key.'), text);
+
+  await page.mouse.click(from.x, from.y, { button: 'right' });
+  await page.waitForTimeout(200);
+  assert(!(await frame.evaluate(() => document.querySelector('.nymph-menu') !== null)), 'no right-click menu in the App');
   await page.close();
 });
 

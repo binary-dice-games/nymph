@@ -1,0 +1,2 @@
+# SHA-256 of the nymph release executables (cmake/NymphPluginSync.cmake).
+# None published yet: set NYMPH_BIN to a nymph executable.

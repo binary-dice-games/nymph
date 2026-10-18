@@ -91,6 +91,28 @@ configure_file("${CMAKE_CURRENT_SOURCE_DIR}/demo/index.html" "${NYMPH_WEB_OUT}/d
 # <build>/fonts at configure time).
 file(COPY "${PROJECT_BINARY_DIR}/fonts" DESTINATION "${NYMPH_WEB_OUT}")
 
+# ── The nymph MCP App (spec/06_claude_integration/DESIGN.md section 4.2) ────
+
+# One HTML page with the single-file viewer and the host bridge inlined; the
+# native build embeds it with NYMPH_MCP_VIEWER=<build-web>/claude/viewer.html.
+set(NYMPH_CLAUDE_APP "${PROJECT_BINARY_DIR}/claude/viewer.html")
+add_custom_command(
+  OUTPUT "${NYMPH_CLAUDE_APP}"
+  COMMAND "${CMAKE_COMMAND}" -E make_directory "${PROJECT_BINARY_DIR}/claude"
+  COMMAND "${CMAKE_COMMAND}"
+          "-DTEMPLATE=${PROJECT_SOURCE_DIR}/claude/app/viewer.html.in"
+          "-DVIEWER=$<TARGET_FILE:nymph-viewer-single>"
+          "-DAPP=${PROJECT_SOURCE_DIR}/claude/app/app.js"
+          "-DOUTPUT=${NYMPH_CLAUDE_APP}"
+          -P "${PROJECT_SOURCE_DIR}/cmake/NymphClaudeApp.cmake"
+  DEPENDS nymph-viewer-single
+          "${PROJECT_SOURCE_DIR}/claude/app/viewer.html.in"
+          "${PROJECT_SOURCE_DIR}/claude/app/app.js"
+          "${PROJECT_SOURCE_DIR}/cmake/NymphClaudeApp.cmake"
+  COMMENT "Writing the nymph MCP App"
+  VERBATIM)
+add_custom_target(nymph-claude-app ALL DEPENDS "${NYMPH_CLAUDE_APP}")
+
 # ── Tests (Node) ─────────────────────────────────────────────────────────────
 
 find_program(NYMPH_NODE node)

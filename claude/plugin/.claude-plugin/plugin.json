@@ -1,0 +1,10 @@
+{
+  "name": "nymph",
+  "displayName": "nymph",
+  "version": "0.1.0",
+  "description": "Charts and diagrams as PNG images from short YAML sources: plots, dashboards, UML, flowcharts, Gantt and Sankey charts. Gives Claude the nymph MCP tools and the nymph command.",
+  "author": { "name": "Binary Dice Games" },
+  "repository": "https://github.com/binary-dice-games/nymph",
+  "license": "MIT",
+  "keywords": ["charts", "plots", "diagrams", "visualization", "png", "mcp"]
+}

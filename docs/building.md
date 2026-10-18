@@ -24,6 +24,7 @@ optional.
 | `extern/implot3d` | v0.4 | 3D plots |
 | `extern/libyaml` | 0.2.5 | Parsing the YAML source |
 | `extern/stb` | `31c1ad3` | PNG encoding, zlib |
+| `extern/json` | v3.12.0 | JSON for the MCP server (`NYMPH_MCP`), header-only |
 | `extern/googletest` | v1.15.2 | Tests only (`NYMPH_BUILD_TESTS`) |
 
 To move a dependency to another version, check out the new commit inside
@@ -75,6 +76,9 @@ Outputs:
 | `NYMPH_FONTS_DIR` | `fonts/` | Folder whose `*.ttf` / `*.otf` fonts and `*.txt` licences are compiled into nymph |
 | `NYMPH_EMBED_FONTS` | `all` | Which of those fonts have their bytes compiled in: `all`, `none`, or a `;`-list of file names |
 | `NYMPH_WEB` | `OFF` | Build the interactive web viewer (WebAssembly) instead of the CLI; needs Emscripten (`emcmake`). See "Web viewer" below. |
+| `NYMPH_MCP` | `ON` | Build the MCP server, `nymph mcp` (off in the web build). `OFF` drops the `extern/json` dependency; `nymph mcp` then exits 2. |
+| `NYMPH_RELEASE` | `OFF` | Build the published executables: MinSizeRel, stripped, static (see "Release executables"). |
+| `NYMPH_MCP_VIEWER` | empty | The MCP App page to embed in `nymph mcp`, `build-web/claude/viewer.html` from the web build (below); empty: the server returns PNGs only. |
 | `NYMPH_OPENGL` | `ON` | Build the optional OpenGL rasterizer. `OFF` leaves only the software rasterizer; `--rasterizer opengl` then falls back with the reason "nymph was built without OpenGL support". |
 
 ---
@@ -158,6 +162,15 @@ ctest --test-dir build-web        # Node tests of the module
 every example live next to its PNG (serve the folder over HTTP to open
 it). See [viewer.md](viewer.md) for what to serve.
 
+It also writes `build-web/claude/viewer.html`, the MCP App that shows
+`nymph mcp`'s charts live in a Claude conversation. Embed it in the
+native build to serve it:
+
+```sh
+cmake -S . -B build -DNYMPH_MCP_VIEWER=$PWD/build-web/claude/viewer.html
+cmake --build build
+```
+
 The same build assembles the Chrome extension: `build-web/extension/nymph/`
 (load it unpacked from `chrome://extensions`) and
 `build-web/extension/nymph-extension-<version>.zip`. See
@@ -166,6 +179,67 @@ browser tests, the extension's included, when Playwright for Node is
 installed (they are skipped otherwise). `NYMPH_WEB` turns `NYMPH_OPENGL` and the native GoogleTest suite
 off, uses native wasm exceptions (`-fwasm-exceptions`) and 32-bit ImGui
 indices, and builds no CLI.
+
+## Release executables
+
+The executables published for the Claude integration
+([spec/06_claude_integration](../spec/06_claude_integration/DESIGN.md))
+are one file each, with no shared library beyond the operating system's,
+and carry the MCP App. Build the web viewer first (it makes the App
+page), then the native build with `NYMPH_RELEASE`:
+
+```sh
+emcmake cmake -S . -B build-web -DNYMPH_WEB=ON -DCMAKE_BUILD_TYPE=MinSizeRel
+cmake --build build-web --target nymph-claude-app
+cmake -S . -B build-release -DNYMPH_RELEASE=ON -DNYMPH_MCP_VIEWER=$PWD/build-web/claude/viewer.html
+cmake --build build-release
+ctest --test-dir build-release
+```
+
+`build-release/dist/` then holds `nymph-<version>-<os>-<arch>` (`.exe` on
+Windows), `nymph-<version>-<os>-<arch>.mcpb` (the Claude Desktop
+extension: double-click it to install), on Linux x86-64
+`nymph-skill-<version>.zip` (the claude.ai skill) and `SHA256SUMS`
+(`sha256sum -c SHA256SUMS` checks them). [claude.md](claude.md) says how
+each is installed. `npx @anthropic-ai/mcpb validate
+build-release/mcpb/manifest.json` checks the extension's manifest.
+`NYMPH_RELEASE` builds MinSizeRel and strips the executable; on Linux it
+links statically and turns `NYMPH_OPENGL` off (a static glibc cannot load
+libEGL reliably; the software rasterizer draws an example in well under
+0.1 s), with MinGW it links the GCC runtime statically, and with MSVC it
+uses the static runtime (`/MT`). Its tests also check that the Linux
+executable is static and that it reproduces every example PNG byte for
+byte (exactly on x86-64, where they were drawn; on arm64 floating-point
+results differ by a colour level at some pixels, and the test lists
+those examples).
+
+Cross builds use the toolchain files in `cmake/toolchains/`; their tests
+run through an emulator when one is installed (Wine for Windows, QEMU for
+arm64), so `ctest` works as on the target:
+
+```sh
+cmake -S . -B build-win -DCMAKE_TOOLCHAIN_FILE=cmake/toolchains/mingw-w64-x86_64.cmake \
+  -DNYMPH_RELEASE=ON -DNYMPH_MCP_VIEWER=$PWD/build-web/claude/viewer.html
+cmake -S . -B build-arm64 -DCMAKE_TOOLCHAIN_FILE=cmake/toolchains/aarch64-linux-gnu.cmake \
+  -DNYMPH_RELEASE=ON -DNYMPH_MCP_VIEWER=$PWD/build-web/claude/viewer.html
+```
+
+(On Ubuntu: `g++-mingw-w64-x86-64-posix wine64`, `g++-aarch64-linux-gnu
+qemu-user`.)
+
+To publish a release: upload the files of every `dist/` to the GitHub
+release `v<version>`, then pin them in the
+plugin and commit the result:
+
+```sh
+cmake build-release -DNYMPH_PLUGIN_SUMS="$PWD/build-release/dist/SHA256SUMS|$PWD/build-win/dist/SHA256SUMS|$PWD/build-arm64/dist/SHA256SUMS"
+cmake --build build-release --target nymph-plugin-sync
+git add claude/plugin
+```
+
+Run `nymph-plugin-sync` without `NYMPH_PLUGIN_SUMS` after changing
+`claude/skill/nymph/SKILL.md` or `docs/agent-guide.md`; a test fails while
+the plugin's copies are stale.
 
 ## Using nymph from another CMake project
 
