@@ -303,7 +303,12 @@ the binary must be inside the zip.
 Rules for every tool:
 
 - Exactly one of `source` / `input_path` (and of `input_path` /
-  `png_base64`); otherwise `isError` naming the fields.
+  `png_base64`); otherwise `isError` naming the fields. An argument a
+  tool does not take is `isError` with the closest name ("unknown
+  argument 'sorce' (did you mean 'source'?)"); `input_path` may not be
+  `-` (standard input is the protocol). An unknown tool name, or
+  `arguments` that is not an object, is a protocol error (`-32602`), as
+  MCP asks.
 - Relative paths resolve against the server's working directory (the
   project directory in Claude Code). `output_path` must end in the
   extension listed; it is written as the CLI writes (atomic replace,
@@ -313,6 +318,10 @@ Rules for every tool:
   'revenu' (did you mean 'revenue'?) (columns: month, revenue, cost)`.
 - Results larger than 8 MB of base64 (very large images) return the
   `text` and `structuredContent` without the image and say so.
+- An OpenGL fallback when OpenGL was asked for explicitly (`--rasterizer
+  opengl` or the tool's `rasterizer`) adds a text block `warning: OpenGL
+  unavailable (<reason>); used the software rasterizer`, the CLI's
+  warning; the default choice falls back silently.
 
 ### 5.2 Resources
 
@@ -350,12 +359,15 @@ fails, 2 for bad arguments (`docs/cli.md` gains the row).
 ## 7. Constraints and Invariants
 
 - Standard output in `nymph mcp` is the protocol only. Nothing in the
-  library prints; the server sends warnings (an OpenGL fallback with an
-  explicit `--rasterizer opengl`) as `notifications/message`.
-- Every handler catches all exceptions: `nymph::error` and
-  `std::runtime_error` become `isError` results with their text;
-  `std::bad_alloc` and anything else become `isError` "internal error:
-  <what>". The server never exits because of a request.
+  library prints. Warnings go in the tool result (section 5.1), where
+  the agent reads them, not in `notifications/message`, which clients
+  log out of the model's sight (so the server declares no `logging`
+  capability).
+- Every tool call catches all exceptions: problems with the input or
+  the source (`nymph::error`, `cli_failure`, a rendering or encoding
+  `std::runtime_error`) become `isError` results with the CLI's text;
+  anything else becomes `isError` "internal error: <what>". The server
+  never exits because of a request.
 - One request at a time on one thread: `renderer` and ImGui contexts are
   not thread-safe (GL DESIGN). `notifications/cancelled` for a request
   already running is ignored (renders take milliseconds).

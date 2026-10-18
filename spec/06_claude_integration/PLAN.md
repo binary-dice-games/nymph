@@ -130,6 +130,18 @@ connects (`claude mcp list`: Connected).
 
 ### 3. The tools
 
+*Result: done.* File I/O, `source_of()` and the schema and font texts
+moved from `cli.cpp` to `src/cli/cli_support.hpp/.cpp`; the only CLI
+change is that `nymph schema <Type>` now suggests the closest type.
+Warnings go in the tool result instead of `notifications/message`
+(DESIGN.md section 7: the agent must see them). Unknown arguments are
+refused with a suggestion. `tools/list` is checked by structure (names
+in order, schema properties, output schema, annotations) rather than a
+golden file, which every description edit would break. 17 tests in
+`test_mcp_tools` (also base64); 469 tests pass. End to end, Claude Code
+2.1.302 with only these tools drew and saved a bar chart, correcting a
+wrong element name from `chart_schema`'s suggestion.
+
 **Goal:** every tool of DESIGN.md section 5.1 except `viewer_font`
 works, with errors as `isError` results.
 
@@ -140,9 +152,9 @@ works, with errors as `isError` results.
   atomic writes (move a shared helper out of `cli.cpp` if needed, no
   behaviour change).
 - The session's renderer and `--rasterizer`; OpenGL fallback warnings
-  as `notifications/message`.
+  in the tool result (DESIGN.md section 7).
 
-**Tests (`test_mcp`):**
+**Tests (`test_mcp_tools`):**
 - `tools/list` matches a golden JSON (names, input schemas, output
   schema of `render_chart`).
 - `render_chart` with `examples/bars.yaml` text: the image decodes to

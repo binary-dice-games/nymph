@@ -11,6 +11,7 @@
 #include <stdexcept>
 #include <string>
 #include <vector>
+#include "cli/cli_support.hpp"
 #include "cli/schema_doc.hpp"
 #include "core/error.hpp"
 #include "core/limits.hpp"
@@ -25,7 +26,6 @@ namespace bdg::nymph {
 namespace {
 
 namespace fs = std::filesystem;
-using bytes_t = std::vector<uint8_t>;
 
 constexpr const char* kUsage =
     "usage: nymph <in> [-o <out>]                 render YAML to PNG, or print the YAML a nymph PNG carries\n"
@@ -40,12 +40,6 @@ constexpr const char* kUsage =
     "render writes <in> with its extension replaced by .png unless -o is given; -o - writes to stdout.\n"
     "--rasterizer software|opengl chooses how a render draws (default opengl: the GPU when there is one,\n"
     "otherwise the software rasterizer).\n";
-
-/// A failure to report as `nymph: <file>: <message>`.
-struct cli_failure {
-  std::string file;
-  std::string message;
-};
 
 /// Bad arguments: usage and exit 2.
 struct usage_error {
@@ -100,118 +94,6 @@ options parse(std::span<const std::string_view> args) {
     }
   }
   return o;
-}
-
-std::string label_of(const std::string& path) {
-  return path == "-" ? "<stdin>" : path;
-}
-
-/// Reads `path` ("-" for `in`), refusing more than the source limit plus
-/// room for a PNG's pixels (a PNG can be far larger than its source).
-bytes_t read_input(const std::string& path, std::istream& in) {
-  constexpr size_t kMaxInputBytes = 512u * 1024u * 1024u;
-  std::istream* stream = &in;
-  std::ifstream file;
-  if (path != "-") {
-    std::error_code ec;
-    if (!fs::is_regular_file(path, ec)) {
-      throw cli_failure{path, fs::exists(path, ec) ? "not a file" : "no such file"};
-    }
-    file.open(path, std::ios::binary);
-    if (!file) {
-      throw cli_failure{path, "cannot be read"};
-    }
-    stream = &file;
-  }
-  bytes_t data;
-  char buf[65536];
-  while (stream->read(buf, sizeof(buf)) || stream->gcount() > 0) {
-    data.insert(data.end(), buf, buf + stream->gcount());
-    if (data.size() > kMaxInputBytes) {
-      throw cli_failure{label_of(path), "input is larger than 512 MiB"};
-    }
-  }
-  return data;
-}
-
-/// Writes `data` straight to an existing file that is not a regular file
-/// (a device such as /dev/null, a pipe): a rename would replace it.
-void write_in_place(const fs::path& target, const std::string& path, const std::string_view data) {
-  std::ofstream f(target, std::ios::binary);
-  f.write(data.data(), static_cast<std::streamsize>(data.size()));
-  f.close();
-  if (!f) {
-    throw cli_failure{path, "cannot be written"};
-  }
-}
-
-/// Writes `data` to `path` ("-" for `out`) through a temporary file and a
-/// rename, so the target is either the new content or untouched. A
-/// symbolic link is followed (the file it points to is replaced, not the
-/// link); a device or pipe is written directly.
-void write_output(const std::string& path, const std::string_view data, std::ostream& out) {
-  if (path == "-") {
-    out.write(data.data(), static_cast<std::streamsize>(data.size()));
-    out.flush();
-    return;
-  }
-  fs::path target(path);
-  std::error_code ec;
-  const fs::file_status status = fs::status(target, ec); // follows links
-  if (fs::exists(status)) {
-    if (!fs::is_regular_file(status)) {
-      write_in_place(target, path, data);
-      return;
-    }
-    if (fs::is_symlink(fs::symlink_status(target, ec))) {
-      target = fs::canonical(target, ec);
-      if (ec) {
-        throw cli_failure{path, "cannot be resolved"};
-      }
-    }
-  }
-  fs::path temp = target;
-  temp += ".nymph-tmp";
-  {
-    std::ofstream f(temp, std::ios::binary | std::ios::trunc);
-    if (!f) {
-      throw cli_failure{path, "cannot be written"};
-    }
-    f.write(data.data(), static_cast<std::streamsize>(data.size()));
-    f.close();
-    if (!f) {
-      std::error_code ignored;
-      fs::remove(temp, ignored);
-      throw cli_failure{path, "could not be written completely"};
-    }
-  }
-  fs::rename(temp, target, ec);
-  if (ec) {
-    fs::remove(temp, ec);
-    throw cli_failure{path, "cannot be replaced"};
-  }
-}
-
-std::string_view as_text(const bytes_t& b) {
-  return std::string_view(reinterpret_cast<const char*>(b.data()), b.size());
-}
-
-/// The YAML a command works on: the input itself, or the source a nymph PNG
-/// carries.
-std::string source_of(const bytes_t& input, const std::string& path) {
-  if (!is_png(input)) {
-    return std::string(as_text(input));
-  }
-  std::optional<std::string> source;
-  try {
-    source = extract_source(input);
-  } catch (const std::runtime_error& e) {
-    throw cli_failure{label_of(path), e.what()};
-  }
-  if (!source) {
-    throw cli_failure{label_of(path), "not a nymph image (the PNG carries no nymph source)"};
-  }
-  return *source;
 }
 
 std::string png_name_for(const std::string& in) {
@@ -276,15 +158,7 @@ int do_schema(const options& o, std::ostream& out) {
     out << schema_text(reg);
     return 0;
   }
-  const element_class* cls = reg.find(o.positional[0]);
-  if (cls == nullptr) {
-    std::string names;
-    for (const element_class* c : classes_in_doc_order(reg)) {
-      names += (names.empty() ? "" : ", ") + std::string(c->name());
-    }
-    throw cli_failure{"schema", "unknown element type '" + o.positional[0] + "' (types: " + names + ")"};
-  }
-  out << schema_text(*cls, reg);
+  out << schema_type_text(o.positional[0]);
   return 0;
 }
 
@@ -304,10 +178,7 @@ int do_fonts(const options& o, std::ostream& out) {
     }
     return 0;
   }
-  out << kDefaultFontName << "\n";
-  for (const font_entry& f : font_catalog()) {
-    out << f.name << (f.data == nullptr ? " (not embedded)" : "") << "\n";
-  }
+  out << fonts_text();
   return 0;
 }
 

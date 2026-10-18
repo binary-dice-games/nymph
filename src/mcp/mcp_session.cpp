@@ -14,7 +14,7 @@ namespace {
 constexpr std::array<std::string_view, 3> kProtocolVersions = {"2025-11-25", "2025-06-18", "2025-03-26"};
 
 /// The methods answered after `initialize`, besides `ping`.
-constexpr std::array<std::string_view, 2> kSessionMethods = {"tools/list", "resources/list"};
+constexpr std::array<std::string_view, 3> kSessionMethods = {"tools/list", "tools/call", "resources/list"};
 
 bool is_session_method(const std::string& method) {
   return std::find(kSessionMethods.begin(), kSessionMethods.end(), method) != kSessionMethods.end();
@@ -26,7 +26,11 @@ std::span<const std::string_view> supported_protocol_versions() {
   return kProtocolVersions;
 }
 
-session::session(server_options options) : options_(options) {}
+session::session(server_options options) : tools_(std::make_unique<tool_registry>(options)) {
+  add_builtin_tools(*tools_);
+}
+
+session::~session() = default;
 
 std::optional<json> session::handle(const rpc_message& message) {
   if (message.type != rpc_message::kind::request) {
@@ -57,7 +61,10 @@ json session::dispatch(const std::string& method, const json& params) {
     throw rpc_error(rpc_code::invalid_request, "the session is not initialized: send initialize first");
   }
   if (method == "tools/list") {
-    return json{{"tools", json::array()}};
+    return tools_->list();
+  }
+  if (method == "tools/call") {
+    return tools_->call(params);
   }
   return json{{"resources", json::array()}};
 }

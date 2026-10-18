@@ -101,6 +101,8 @@ target_link_libraries(nymph PUBLIC nymph_imgui imuml PRIVATE yaml nymph_stb)
 add_library(nymph_cli STATIC
   cli/cli.hpp
   cli/cli.cpp
+  cli/cli_support.hpp
+  cli/cli_support.cpp
   cli/schema_doc.hpp
   cli/schema_doc.cpp
 )
@@ -118,6 +120,11 @@ if(NYMPH_MCP)
     mcp/mcp_session.cpp
     mcp/mcp_server.hpp
     mcp/mcp_server.cpp
+    mcp/server_options.hpp
+    mcp/base64.hpp
+    mcp/base64.cpp
+    mcp/tools.hpp
+    mcp/tools.cpp
   )
   target_link_libraries(nymph_mcp PUBLIC nymph_cli nymph_json)
 endif()

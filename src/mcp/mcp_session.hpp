@@ -5,20 +5,16 @@
 ///        (spec/06_claude_integration/DESIGN.md section 4.1).
 #pragma once
 
+#include <memory>
 #include <optional>
 #include <span>
 #include <string>
 #include <string_view>
 #include "mcp/json_rpc.hpp"
-#include "nymph.hpp"
+#include "mcp/server_options.hpp"
+#include "mcp/tools.hpp"
 
 namespace bdg::nymph::mcp {
-
-/// @brief What `nymph mcp` was started with.
-struct server_options {
-  rasterizer raster = rasterizer::opengl; ///< --rasterizer (default opengl, falling back silently)
-  bool raster_explicit = false; ///< --rasterizer was given: warn on an OpenGL fallback
-};
 
 /// @brief The MCP protocol revisions the server speaks, newest first.
 std::span<const std::string_view> supported_protocol_versions();
@@ -33,6 +29,9 @@ std::span<const std::string_view> supported_protocol_versions();
 class session {
  public:
   explicit session(server_options options = {});
+  ~session();
+  session(const session&) = delete;
+  session& operator=(const session&) = delete;
 
   /// @brief Handles one message.
   /// @return The response to a request (a result or an error); nullopt for
@@ -48,12 +47,16 @@ class session {
   const std::string& protocol_version() const {
     return protocol_version_;
   }
+  /// @brief The session's tools (tests add their own).
+  tool_registry& tools() {
+    return *tools_;
+  }
 
  private:
   json dispatch(const std::string& method, const json& params);
   json initialize(const json& params);
 
-  server_options options_;
+  std::unique_ptr<tool_registry> tools_;
   std::string protocol_version_;
 };
 

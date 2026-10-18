@@ -115,12 +115,12 @@ TEST(mcp_session, lists_are_refused_before_initialize) {
   EXPECT_EQ(error_code(r.responses[1]), -32600);
 }
 
-TEST(mcp_session, lists_are_empty_after_initialize) {
+TEST(mcp_session, lists_answer_after_initialize) {
   const run_result r = serve(
       initialize() + notification("notifications/initialized") + request(2, "tools/list") +
       request(3, "resources/list", {{"cursor", "x"}}));
   ASSERT_EQ(r.responses.size(), 3u);
-  EXPECT_EQ(r.responses[1]["result"], json({{"tools", json::array()}}));
+  EXPECT_EQ(r.responses[1]["result"]["tools"].size(), 5u);
   EXPECT_EQ(r.responses[2]["result"], json({{"resources", json::array()}}));
 }
 
