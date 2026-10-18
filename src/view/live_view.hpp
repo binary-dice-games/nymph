@@ -8,6 +8,7 @@
 #include <imgui.h>
 #include <memory>
 #include <optional>
+#include <span>
 #include <stdexcept>
 #include <string>
 #include <string_view>
@@ -132,6 +133,21 @@ class live_view {
   ///         that does not fit its own `image` size; fonts_needed. Either
   ///         way the previous figure stays.
   void set_source(std::string_view source, bool reset_view = false);
+
+  /// @brief Replaces the figure's data with `data_yaml` (the value of a
+  ///        top-level `data` key, as YAML or JSON) and keeps the rest of
+  ///        the source and the view state.
+  /// @throws nymph::error as set_source(); a problem inside `data_yaml` is
+  ///         positioned in `data_yaml` and its message starts "data: ".
+  ///         fonts_needed. Either way the previous figure stays.
+  void set_data(std::string_view data_yaml);
+
+  /// @brief Shows the source a nymph PNG carries, as set_source().
+  /// @return false, and no figure, for a PNG that carries no nymph source
+  ///         (the host shows it as a plain image).
+  /// @throws std::runtime_error for a corrupt PNG (the previous figure
+  ///         stays); as set_source().
+  bool set_png(std::span<const uint8_t> png, bool reset_view = true);
 
   /// @brief Overrides `image.theme`: "light", "dark", "classic", or "" for
   ///        the source's own.

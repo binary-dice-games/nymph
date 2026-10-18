@@ -429,6 +429,55 @@ image_options bind_image(const yaml_node& image) {
 
 } // namespace
 
+data_replacement replace_data(std::string_view source, std::string_view data_yaml) {
+  const yaml_node doc = parse_yaml(source);
+  if (!doc.is_mapping() || doc.keys.empty() || doc.keys.front().column != 1) {
+    fail(doc, "replacing the data needs a source whose top level is 'key: value' lines");
+  }
+  // The source's lines, without their line breaks.
+  std::vector<std::string_view> lines;
+  for (size_t at = 0; at <= source.size();) {
+    const size_t nl = source.find('\n', at);
+    const size_t end = nl == std::string_view::npos ? source.size() : nl;
+    lines.push_back(source.substr(at, end - at));
+    if (nl == std::string_view::npos) {
+      break;
+    }
+    at = nl + 1;
+  }
+  if (!lines.empty() && lines.back().empty()) {
+    lines.pop_back(); // the text after the last line break
+  }
+  // The `data` entry spans its key's line up to the next top-level key.
+  size_t from = lines.size(), to = lines.size();
+  for (size_t i = 0; i < doc.keys.size(); ++i) {
+    if (doc.keys[i].text == "data") {
+      from = static_cast<size_t>(doc.keys[i].line - 1);
+      to = i + 1 < doc.keys.size() ? static_cast<size_t>(doc.keys[i + 1].line - 1) : lines.size();
+    }
+  }
+  std::string out;
+  for (size_t i = 0; i < from; ++i) {
+    out.append(lines[i]).append("\n");
+  }
+  data_replacement r;
+  out += "data:\n";
+  r.first_line = static_cast<int>(from) + 2;
+  std::string_view rest = data_yaml;
+  while (!rest.empty()) {
+    const size_t nl = rest.find('\n');
+    const std::string_view line = rest.substr(0, nl);
+    out.append(line.empty() ? "" : "  ").append(line).append("\n");
+    ++r.line_count;
+    rest = nl == std::string_view::npos ? std::string_view() : rest.substr(nl + 1);
+  }
+  for (size_t i = to; i < lines.size(); ++i) {
+    out.append(lines[i]).append("\n");
+  }
+  r.source = std::move(out);
+  return r;
+}
+
 figure bind_source(std::string_view source, const registry& reg) {
   if (source.size() > kMaxSourceBytes) {
     throw error(0, 0, "the source is larger than 16 MiB");

@@ -278,6 +278,15 @@ report the hovered node or edge, only when interactive.
 
 ### 8. Data updates and PNG input
 
+*Result: done.* Instead of a `bind_source()` overload, `replace_data()`
+rewrites the source text (the `data` block replaced, every other line
+kept; appended when absent; refused for a flow-style top level) and the
+live view binds it with `set_source()`, so `source()` is exactly what
+`toPng()` will embed. Errors inside the new data are re-positioned in
+the caller's text with a "data: " prefix. `set_png()` returns false (and
+clears the figure) for a PNG with no nymph chunk. 4 tests in
+`test_bind.cpp`, 4 in `test_live_view.cpp`; 410 tests pass.
+
 **Goal:** a live view replaces its data from JSON and opens nymph PNGs.
 
 **Deliverables:**

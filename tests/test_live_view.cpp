@@ -432,5 +432,91 @@ TEST(live_view_input, PointerPositionsAreMappedThroughTheCssScale) {
   EXPECT_NEAR(d.plot().x_min, 20.0 / p.width * 10.0, 0.05);
 }
 
+// ── Data updates and PNG input (plan step 8) ─────────────────────────────────
+
+const char* const kData =
+    "image: {width: 400, height: 300}\n"
+    "root:\n"
+    "  type: Plot\n"
+    "  title: P\n"
+    "  x_min: 0\n"
+    "  x_max: 10\n"
+    "  y_min: 0\n"
+    "  y_max: 10\n"
+    "  children:\n"
+    "    - {type: PlotLine, label: a, ys: $v}\n"
+    "data:\n"
+    "  v: [1, 2, 3]\n";
+
+TEST(live_view_data, SetDataDrawsTheNewValuesAndKeepsTheView) {
+  driven_view d(kData);
+  const plot_view p = d.plot();
+  d.drag(p.x + 100, p.y + 50, p.x + 50, p.y + 50);
+  const double moved = d.plot().x_min;
+  const image before = rasterize(*d.last, d.v.textures(), d.v.clear_color());
+  d.v.set_data("{\"v\": [5, 6, 7, 8]}");
+  d.run();
+  EXPECT_DOUBLE_EQ(d.plot().x_min, moved);
+  EXPECT_FALSE(rasterize(*d.last, d.v.textures(), d.v.clear_color()).rgba == before.rgba);
+  EXPECT_NE(d.v.source().find("{\"v\": [5, 6, 7, 8]}"), std::string_view::npos);
+  EXPECT_NE(d.v.source().find("type: PlotLine"), std::string_view::npos);
+}
+
+TEST(live_view_data, ABadDataUpdateKeepsThePreviousData) {
+  driven_view d(kData);
+  const std::string before(d.v.source());
+  // A column the source no longer finds: positioned at the reference.
+  try {
+    d.v.set_data("{w: [1]}");
+    FAIL() << "expected nymph::error";
+  } catch (const error& e) {
+    EXPECT_EQ(e.line(), 10);
+    EXPECT_EQ(std::string(e.what()).rfind("data: ", 0), std::string::npos);
+  }
+  // A problem inside the new data: positioned in it.
+  try {
+    d.v.set_data("v: [1, 2]\nv: [3]\n");
+    FAIL() << "expected nymph::error";
+  } catch (const error& e) {
+    EXPECT_EQ(e.line(), 2);
+    EXPECT_EQ(e.column(), 1);
+    EXPECT_EQ(std::string(e.what()).rfind("data: ", 0), 0u) << e.what();
+  }
+  EXPECT_EQ(d.v.source(), before);
+}
+
+TEST(live_view_data, SetPngShowsTheSourceItCarries) {
+  for (const char* name : {"line", "bars", "uml_class"}) {
+    SCOPED_TRACE(name);
+    const std::vector<uint8_t> png = read_bytes(kSourceDir / "examples" / (std::string(name) + ".png"));
+    live_view v;
+    ASSERT_TRUE(v.set_png(png));
+    EXPECT_EQ(v.source(), read_text(kSourceDir / "examples" / (std::string(name) + ".yaml")));
+    const figure f = bind_source(v.source(), builtin_registry());
+    v.resize(
+        {static_cast<float>(f.image.width), static_cast<float>(f.image.height), static_cast<float>(f.image.scale)});
+    EXPECT_TRUE(settle(v).rgba == render_figure(f).rgba);
+  }
+}
+
+TEST(live_view_data, APlainPngClearsTheFigureAndACorruptOneThrows) {
+  // The standard 1 x 1 transparent PNG: no nymph chunk.
+  const std::vector<uint8_t> plain = {
+      0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 0x00, 0x00, 0x00, 0x0D, 0x49, 0x48, 0x44, 0x52, 0x00,
+      0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01, 0x08, 0x06, 0x00, 0x00, 0x00, 0x1F, 0x15, 0xC4, 0x89, 0x00,
+      0x00, 0x00, 0x0A, 0x49, 0x44, 0x41, 0x54, 0x78, 0x9C, 0x63, 0x00, 0x01, 0x00, 0x00, 0x05, 0x00, 0x01,
+      0x0D, 0x0A, 0x2D, 0xB4, 0x00, 0x00, 0x00, 0x00, 0x49, 0x45, 0x4E, 0x44, 0xAE, 0x42, 0x60, 0x82};
+  live_view v;
+  v.set_source(kLine);
+  std::vector<uint8_t> corrupt = read_bytes(kSourceDir / "examples/line.png");
+  corrupt.resize(60); // inside the nymph chunk, which comes right after IHDR
+  EXPECT_THROW(v.set_png(corrupt), std::runtime_error);
+  EXPECT_EQ(v.source(), kLine);
+  EXPECT_FALSE(v.set_png(plain));
+  EXPECT_FALSE(v.has_figure());
+  EXPECT_FALSE(v.wants_frame());
+  EXPECT_EQ(v.frame(0.0), nullptr);
+}
+
 } // namespace
 } // namespace bdg::nymph

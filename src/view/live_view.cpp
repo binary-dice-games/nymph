@@ -14,6 +14,7 @@
 #include "elements/register_builtin.hpp"
 #include "fonts/fonts_used.hpp"
 #include "layout/layout.hpp"
+#include "nymph.hpp"
 #include "render/draw_context.hpp"
 #include "render/figure_renderer.hpp"
 #include "render/frame_setup.hpp"
@@ -274,6 +275,40 @@ void live_view::set_source(std::string_view source, bool reset_view) {
   }
   m.update_geometry();
   m.pending_frames = kFigureFrames;
+}
+
+void live_view::set_data(std::string_view data_yaml) {
+  impl& m = *impl_;
+  if (!m.fig) {
+    throw std::logic_error("set_data: no figure to replace the data of");
+  }
+  const data_replacement r = replace_data(m.source, data_yaml);
+  try {
+    set_source(r.source);
+  } catch (const error& e) {
+    if (e.line() >= r.first_line && e.line() < r.first_line + r.line_count) {
+      // In the new data: say where in what the caller passed.
+      throw error(e.line() - r.first_line + 1, std::max(1, e.column() - 2), std::string("data: ") + e.what());
+    }
+    throw;
+  }
+}
+
+bool live_view::set_png(std::span<const uint8_t> png, bool reset_view) {
+  impl& m = *impl_;
+  const std::optional<std::string> source = extract_source(png);
+  if (!source) {
+    m.fig.reset();
+    m.source.clear();
+    m.paths.clear();
+    m.views.clear();
+    m.hovered.reset();
+    m.click.reset();
+    m.pending_frames = 0;
+    return false;
+  }
+  set_source(*source, reset_view);
+  return true;
 }
 
 void live_view::set_theme(std::string theme) {
