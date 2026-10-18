@@ -51,6 +51,30 @@ struct view_geometry {
   bool fit_fallback = false; ///< The fit could not be honoured; laid out at the source size.
 };
 
+/// @brief One pointer event, in CSS pixels from the view's top-left corner.
+struct pointer_event {
+  enum class kind { move, down, up, wheel, leave };
+  kind type = kind::move;
+  float x = 0.0f;
+  float y = 0.0f;
+  int button = 0; ///< down / up: 0 primary, 1 secondary, 2 middle.
+  float wheel_x = 0.0f; ///< wheel: notches; positive y zooms in (away from the user).
+  float wheel_y = 0.0f;
+  bool touch = false; ///< From a touch screen (ImGui tunes hover and drag for it).
+};
+
+/// @brief A 2D plot as the last frame left it: where its plot area is and
+///        what its axes show.
+struct plot_view {
+  std::string element; ///< Element path, e.g. "root/children/1".
+  float x = 0.0f, y = 0.0f; ///< Plot area (inside the axes), CSS pixels.
+  float width = 0.0f, height = 0.0f;
+  double x_min = 0, x_max = 0;
+  double y_min = 0, y_max = 0;
+  bool has_y2 = false;
+  double y2_min = 0, y2_max = 0;
+};
+
 /// @brief Thrown by an update whose figure names fonts without bytes. The
 ///        previous figure stays; register the fonts (register_font()) and
 ///        repeat the update.
@@ -98,6 +122,18 @@ class live_view {
 
   /// @brief Sets the box the view is shown in.
   void resize(view_size size);
+
+  /// @brief Feeds one pointer event to the figure (pan, zoom, hover); the
+  ///        next frames apply it.
+  void input(const pointer_event& event);
+
+  /// @brief Drops every view state (zoom, pan, hidden series): the figure
+  ///        is drawn as its source says, as after the first update.
+  void reset_view();
+
+  /// @brief Every 2D plot and Gantt chart as the last frame left it, in
+  ///        drawing order.
+  std::vector<plot_view> view_state() const;
 
   /// @brief Runs one frame if one is due (wants_frame()).
   /// @param now_seconds A monotonic clock; the step since the last frame is

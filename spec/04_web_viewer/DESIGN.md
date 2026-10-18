@@ -137,8 +137,11 @@ off.
 `Plot` and `GanttChart` set limits written in the source with
 `ImPlotCond_Always` (`src/elements/plot2d.cpp`, `gantt.cpp`), which
 re-applies them every frame and would undo every pan and zoom. In a live
-view they are applied with `ImPlotCond_Once` instead, and again for one
-frame after `resetView()`. Off a live view nothing changes. No YAML field
+view they are applied with `ImPlotCond_Always` only while fresh contexts
+settle (the first three frames, exactly as the PNG path: ImPlot treats an
+`Always` axis as locked, and an `Equal` plot such as a pie chart settles
+differently when it is not), then with `ImPlotCond_Once`. `resetView()`
+recreates the contexts, so the source limits apply again. Off a live view nothing changes. No YAML field
 is added: a source that must not move sets `NoInputs` in `flags`, which
 already exists.
 
@@ -317,8 +320,8 @@ struct view_geometry {           // of the last frame
   int pixel_width, pixel_height; bool fit_fallback;
 };
 
-struct pointer_input {           // one event, in CSS px of the view
-  enum kind { move, down, up, wheel, leave } type;
+struct pointer_event {           // one event, in CSS px of the view
+  enum class kind { move, down, up, wheel, leave } type;
   float x, y; int button; float wheel_x, wheel_y; bool touch;
 };
 
@@ -330,7 +333,11 @@ struct pick {                    // what is under the pointer
   std::vector<std::pair<std::string, std::string>> values; // "x" -> "3", "y" -> "15.2"
 };
 
-struct axis_range { std::string element; int axis; double min, max; };
+struct plot_view {               // a 2D plot or Gantt chart after the last frame
+  std::string element;
+  float x, y, width, height;     // plot area, CSS px
+  double x_min, x_max, y_min, y_max; bool has_y2; double y2_min, y2_max;
+};
 
 class live_view {
  public:
@@ -340,7 +347,7 @@ class live_view {
   void set_data(std::string_view data_yaml);    // throws nymph::error
   void set_theme(std::string theme);           // "" = the source's image.theme
   void resize(view_size size);
-  void input(const pointer_input& event);
+  void input(const pointer_event& event);
   void reset_view();
 
   /// Runs one frame if one is due; returns its draw data or nullptr.
@@ -350,7 +357,7 @@ class live_view {
 
   std::optional<pick> hovered() const;
   std::optional<pick> take_click();             // last click, once
-  std::vector<axis_range> view_state() const;   // every plot axis, after the last frame
+  std::vector<plot_view> view_state() const;    // every plot, after the last frame
   view_geometry geometry() const;
   bool has_figure() const;
   const std::string& description() const;
@@ -393,8 +400,12 @@ Elements learn they are live through the `draw_context`, so the PNG path
 pays nothing:
 
 - `bool interactive() const` — false in `render_frames()`.
-- `ImPlotCond limits_cond() const` — `Always` unless interactive; in a
-  live view `Once`, or `Always` for the frame after `reset_view()`.
+- `ImPlotCond limits_cond() const` — `Always` unless interactive or while
+  a live view's fresh contexts settle (`set_lock_limits()`), else `Once`.
+- `record_current_plot(node, with_y2)` / `plot_views()` /
+  `previous_plot_view(node)` — each plot's area and limits, read back as
+  `view_state()`; the Gantt chart computes its date ticks from the
+  previous frame's range so they follow pan and zoom.
 - `pick_tracker& picks()` — a per-frame candidate list. A series, while
   its plot is hovered (`ImPlot::IsPlotHovered()`), offers its nearest
   point as `{distance in px, pick}`; bars, cells and slices offer a hit

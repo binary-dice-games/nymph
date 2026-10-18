@@ -144,6 +144,15 @@ what `render_figure()` draws.
 
 ### 4. Pointer input, axis limits and view state
 
+*Result: done.* `pointer_event`, `plot_view` (plot area in CSS pixels
+plus limits, per element path), `input()`, `reset_view()` (recreates the
+contexts), `view_state()`; `draw_context::limits_cond()`,
+`record_current_plot()`. Found while testing: with `ImPlotCond_Once` from
+the first frame, the `Equal` pie charts of `pie` and `dashboard` settled
+differently from the PNG, so source limits stay `Always` while fresh
+contexts settle. Gantt date ticks follow the range on screen. 9 tests in
+`test_live_view.cpp` (`live_view_input`); 374 tests pass.
+
 **Goal:** plots pan and zoom under synthetic pointer input in a live view,
 the view can be reset and read back, and PNG output is unchanged.
 

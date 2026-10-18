@@ -157,7 +157,7 @@ constexpr size_t title = 0, x_label = 1, y_label = 2, width = 3, height = 4, fla
 constexpr size_t x_scale = 18, y_scale = 19, x_format = 20, y_format = 21, x_ticks = 22, x_tick_labels = 23,
                  y_ticks = 24, y_tick_labels = 25, y2_label = 26, y2_flags = 27, y2_min = 28, y2_max = 29,
                  y2_scale = 30, y2_format = 31, y2_ticks = 32, y2_tick_labels = 33;
-}
+} // namespace plot_field
 
 /// The fields of one plot axis.
 struct axis_fields {
@@ -432,7 +432,7 @@ class plot_class : public element_class {
       }
       for (const axis_fields& a : kAxes) {
         if (a.axis != ImAxis_Y2 || y2) {
-          setup_axis(n, a);
+          setup_axis(n, a, dc);
         }
       }
       const int64_t location = n.get<int64_t>(legend_location);
@@ -443,6 +443,7 @@ class plot_class : public element_class {
             static_cast<ImPlotLegendFlags>(lflags));
       }
       dc.draw_children(n);
+      dc.record_current_plot(n, y2);
       ImPlot::EndPlot();
     }
     if (colormap_value != kColormapDefault) {
@@ -461,9 +462,9 @@ class plot_class : public element_class {
   }
 
   /// Limits, scale, tick format and ticks of one (enabled) axis.
-  static void setup_axis(const node& n, const axis_fields& a) {
+  static void setup_axis(const node& n, const axis_fields& a, const draw_context& dc) {
     if (n.get<double>(a.min) != n.get<double>(a.max)) {
-      ImPlot::SetupAxisLimits(a.axis, n.get<double>(a.min), n.get<double>(a.max), ImPlotCond_Always);
+      ImPlot::SetupAxisLimits(a.axis, n.get<double>(a.min), n.get<double>(a.max), dc.limits_cond());
     }
     if (const int64_t scale = n.get<int64_t>(a.scale); scale != ImPlotScale_Linear) {
       ImPlot::SetupAxisScale(a.axis, static_cast<ImPlotScale>(scale));

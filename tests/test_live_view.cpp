@@ -295,5 +295,193 @@ TEST(live_view, AFontWithoutBytesThrowsFontsNeededUntilRegistered) {
   EXPECT_TRUE(live.rgba == render_figure(bind_source(serif, builtin_registry())).rgba);
 }
 
+// ── Pointer input and view state (plan step 4) ───────────────────────────────
+
+const char* const kPan =
+    "image: {width: 400, height: 300}\n"
+    "root:\n"
+    "  type: Plot\n"
+    "  title: P\n"
+    "  x_min: 0\n"
+    "  x_max: 10\n"
+    "  y_min: 0\n"
+    "  y_max: 10\n"
+    "  children:\n"
+    "    - {type: PlotLine, label: a, xs: [0, 10], ys: [0, 10]}\n";
+
+/// A view of `source` at its own size, settled.
+struct driven_view {
+  live_view v;
+  double clock = 0.0;
+
+  explicit driven_view(const std::string& source, float width = 400, float height = 300) {
+    v.set_source(source);
+    v.resize({width, height, 1});
+    run();
+  }
+
+  /// Runs frames until the view settles.
+  void run() {
+    for (int i = 0; i < 20 && v.wants_frame(); ++i) {
+      v.frame(clock);
+      clock += 1.0 / 60.0;
+    }
+  }
+
+  /// Sends one event and runs its frames.
+  void send(pointer_event e) {
+    v.input(e);
+    run();
+  }
+
+  void move(float x, float y) {
+    send({pointer_event::kind::move, x, y});
+  }
+
+  void drag(float x0, float y0, float x1, float y1, int button = 0) {
+    move(x0, y0);
+    send({pointer_event::kind::down, x0, y0, button});
+    for (int k = 1; k <= 4; ++k) {
+      move(x0 + (x1 - x0) * k / 4.0f, y0 + (y1 - y0) * k / 4.0f);
+    }
+    send({pointer_event::kind::up, x1, y1, button});
+  }
+
+  void wheel(float x, float y, float notches) {
+    move(x, y);
+    pointer_event e{pointer_event::kind::wheel, x, y};
+    e.wheel_y = notches;
+    send(e);
+  }
+
+  plot_view plot(size_t i = 0) const {
+    const std::vector<plot_view> views = v.view_state();
+    EXPECT_GT(views.size(), i);
+    return views.size() > i ? views[i] : plot_view{};
+  }
+};
+
+TEST(live_view_input, ViewStateReportsThePlotAreaAndTheSourceLimits) {
+  driven_view d(kPan);
+  const plot_view p = d.plot();
+  EXPECT_EQ(p.element, "root");
+  EXPECT_GT(p.width, 200.0f);
+  EXPECT_GT(p.height, 150.0f);
+  EXPECT_LE(p.x + p.width, 400.0f);
+  EXPECT_DOUBLE_EQ(p.x_min, 0.0);
+  EXPECT_DOUBLE_EQ(p.x_max, 10.0);
+  EXPECT_DOUBLE_EQ(p.y_min, 0.0);
+  EXPECT_DOUBLE_EQ(p.y_max, 10.0);
+  EXPECT_FALSE(p.has_y2);
+}
+
+TEST(live_view_input, DraggingAPlotPansItByTheDraggedAmount) {
+  driven_view d(kPan);
+  const plot_view p = d.plot();
+  const float cx = p.x + p.width / 2, cy = p.y + p.height / 2;
+  d.drag(cx, cy, cx - 40, cy + 30);
+  const plot_view q = d.plot();
+  // Dragging left by 40 px shows data further right by 40 px worth of range.
+  EXPECT_NEAR(q.x_min, 40.0 / p.width * 10.0, 0.05);
+  EXPECT_NEAR(q.x_max - q.x_min, 10.0, 1e-9);
+  // Dragging down shows data further up.
+  EXPECT_NEAR(q.y_min, 30.0 / p.height * 10.0, 0.05);
+  EXPECT_NEAR(q.y_max - q.y_min, 10.0, 1e-9);
+}
+
+TEST(live_view_input, TheWheelZoomsAroundThePointer) {
+  driven_view d(kPan);
+  const plot_view p = d.plot();
+  // A quarter of the way across: data x = 2.5.
+  const float px = p.x + p.width / 4, py = p.y + p.height / 2;
+  d.wheel(px, py, 1);
+  const plot_view q = d.plot();
+  EXPECT_LT(q.x_max - q.x_min, 10.0);
+  EXPECT_LT(q.y_max - q.y_min, 10.0);
+  // The data under the pointer stays under it (in the plot area of the
+  // zoom's frame: new tick labels may then move the area a little).
+  const double x_at = q.x_min + (q.x_max - q.x_min) * (px - p.x) / p.width;
+  EXPECT_NEAR(x_at, 2.5, 0.05);
+}
+
+TEST(live_view_input, TheWheelOverTheXAxisZoomsOnlyX) {
+  driven_view d(kPan);
+  const plot_view p = d.plot();
+  d.wheel(p.x + p.width / 2, p.y + p.height + 6, 1); // on the tick labels
+  const plot_view q = d.plot();
+  EXPECT_LT(q.x_max - q.x_min, 10.0);
+  EXPECT_DOUBLE_EQ(q.y_min, 0.0);
+  EXPECT_DOUBLE_EQ(q.y_max, 10.0);
+}
+
+TEST(live_view_input, APanSurvivesLaterFramesAndResetViewRestoresTheSource) {
+  driven_view d(kPan);
+  const plot_view p = d.plot();
+  d.drag(p.x + 100, p.y + 50, p.x + 50, p.y + 50);
+  const double moved = d.plot().x_min;
+  EXPECT_GT(moved, 0.5);
+  d.v.resize({400, 300, 1}); // more frames: the source limits are not re-applied
+  d.run();
+  EXPECT_DOUBLE_EQ(d.plot().x_min, moved);
+  d.v.reset_view();
+  d.run();
+  EXPECT_DOUBLE_EQ(d.plot().x_min, 0.0);
+  EXPECT_DOUBLE_EQ(d.plot().x_max, 10.0);
+}
+
+TEST(live_view_input, AnUpdateKeepsTheViewUnlessAskedToReset) {
+  driven_view d(kPan);
+  const plot_view p = d.plot();
+  d.drag(p.x + 100, p.y + 50, p.x + 50, p.y + 50);
+  const double moved = d.plot().x_min;
+  std::string updated = kPan;
+  updated.replace(updated.find("ys: [0, 10]"), 11, "ys: [5, 6]");
+  d.v.set_source(updated);
+  d.run();
+  EXPECT_DOUBLE_EQ(d.plot().x_min, moved);
+  d.v.set_source(updated, true);
+  d.run();
+  EXPECT_DOUBLE_EQ(d.plot().x_min, 0.0);
+}
+
+TEST(live_view_input, APlotWithNoInputsDoesNotMove) {
+  std::string source = kPan;
+  source.replace(source.find("  title: P\n"), 11, "  title: P\n  flags: NoInputs\n");
+  driven_view d(source);
+  const plot_view p = d.plot();
+  d.drag(p.x + 100, p.y + 50, p.x + 50, p.y + 80);
+  d.wheel(p.x + 100, p.y + 50, 2);
+  EXPECT_DOUBLE_EQ(d.plot().x_min, 0.0);
+  EXPECT_DOUBLE_EQ(d.plot().y_max, 10.0);
+}
+
+TEST(live_view_input, AGanttChartPansInTimeButNotInRows) {
+  driven_view d(
+      "image: {width: 600, height: 240}\n"
+      "root:\n"
+      "  type: GanttChart\n"
+      "  children:\n"
+      "    - {type: GanttTask, id: a, name: A, start: 2026-03-02, duration: 4}\n"
+      "    - {type: GanttTask, id: b, name: B, after: [a], duration: 6}\n",
+      600,
+      240);
+  const plot_view p = d.plot();
+  d.drag(p.x + p.width / 2, p.y + p.height / 2, p.x + p.width / 4, p.y + p.height);
+  const plot_view q = d.plot();
+  EXPECT_GT(q.x_min, p.x_min);
+  EXPECT_NEAR(q.x_max - q.x_min, p.x_max - p.x_min, 1e-6 * (p.x_max - p.x_min));
+  EXPECT_DOUBLE_EQ(q.y_min, p.y_min);
+  EXPECT_DOUBLE_EQ(q.y_max, p.y_max);
+}
+
+TEST(live_view_input, PointerPositionsAreMappedThroughTheCssScale) {
+  driven_view d(kPan, 200, 150); // shown at half size
+  const plot_view p = d.plot();
+  EXPECT_LT(p.width, 200.0f); // reported in CSS pixels
+  d.drag(p.x + p.width / 2, p.y + p.height / 2, p.x + p.width / 2 - 20, p.y + p.height / 2);
+  // 20 CSS px is 40 layout px; the area is reported in CSS px too.
+  EXPECT_NEAR(d.plot().x_min, 20.0 / p.width * 10.0, 0.05);
+}
+
 } // namespace
 } // namespace bdg::nymph

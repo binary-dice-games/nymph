@@ -480,8 +480,9 @@ class chart_class : public element_class {
     const ImPlotFlags flags = ImPlotFlags_NoMenus | ImPlotFlags_NoBoxSelect | ImPlotFlags_NoMouseText |
         (s.sections.empty() ? ImPlotFlags_NoLegend : 0);
     if (ImPlot::BeginPlot(id.c_str(), ImVec2(r.width(), r.height()), flags)) {
-      setup(n, s, r.width());
+      setup(n, s, r.width(), dc);
       plot(n, s);
+      dc.record_current_plot(n, false);
       ImPlot::EndPlot();
     }
     if (cmap != kColormapDefault) {
@@ -503,7 +504,7 @@ class chart_class : public element_class {
     return *v;
   }
 
-  static void setup(const node& n, const schedule& s, float width) {
+  static void setup(const node& n, const schedule& s, float width, const draw_context& dc) {
     using namespace chart_field;
     const std::string& xl = n.get<std::string>(x_label);
     ImPlot::SetupAxes(
@@ -516,12 +517,19 @@ class chart_class : public element_class {
     // about 20 px of the plot area (three quarters of the width).
     const double pad = span * std::max(0.03, 20.0 / std::max(100.0, static_cast<double>(width) * 0.75));
     const double x0 = s.lo - pad, x1 = s.hi + pad;
-    ImPlot::SetupAxisLimits(ImAxis_X1, x0, x1, ImPlotCond_Always);
+    // In a live view the time axis pans and zooms (the rows stay fixed),
+    // and the date ticks follow the range on screen.
+    ImPlot::SetupAxisLimits(ImAxis_X1, x0, x1, dc.limits_cond());
+    double t0 = x0, t1 = x1;
+    if (const plot_view_record* view = dc.previous_plot_view(n)) {
+      t0 = view->x_min;
+      t1 = view->x_max;
+    }
     if (s.dates) {
       // The row names take about a quarter of the width.
       std::vector<double> at;
       std::vector<std::string> labels;
-      date_ticks(x0, x1, width * 0.75f, &at, &labels);
+      date_ticks(t0, t1, width * 0.75f, &at, &labels);
       std::vector<const char*> texts;
       for (const std::string& l : labels) {
         texts.push_back(l.c_str());

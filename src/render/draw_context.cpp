@@ -2,6 +2,7 @@
 /// @file draw_context.cpp
 /// @brief draw_context: element drawing helpers.
 #include "render/draw_context.hpp"
+#include <implot.h>
 #include "render/text_style.hpp"
 #include "schema/element_class.hpp"
 
@@ -20,6 +21,29 @@ void draw_context::draw_children(const node& n) {
       ImGui::PopID();
     }
   }
+}
+
+void draw_context::record_current_plot(const node& n, bool with_y2) {
+  if (!interactive_) {
+    return;
+  }
+  plot_view_record v;
+  v.element = &n;
+  const ImVec2 pos = ImPlot::GetPlotPos();
+  const ImVec2 size = ImPlot::GetPlotSize();
+  v.area = {pos, ImVec2(pos.x + size.x, pos.y + size.y)};
+  const ImPlotRect r = ImPlot::GetPlotLimits(ImAxis_X1, ImAxis_Y1);
+  v.x_min = r.X.Min;
+  v.x_max = r.X.Max;
+  v.y_min = r.Y.Min;
+  v.y_max = r.Y.Max;
+  if (with_y2) {
+    const ImPlotRect r2 = ImPlot::GetPlotLimits(ImAxis_X1, ImAxis_Y2);
+    v.has_y2 = true;
+    v.y2_min = r2.Y.Min;
+    v.y2_max = r2.Y.Max;
+  }
+  views_.push_back(v);
 }
 
 void draw_context::draw_node(const node& n) {

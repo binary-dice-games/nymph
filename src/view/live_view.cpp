@@ -4,8 +4,10 @@
 ///        (spec/04_web_viewer/DESIGN.md section 4).
 #include "view/live_view.hpp"
 #include <algorithm>
+#include <cfloat>
 #include <cmath>
 #include <optional>
+#include <unordered_map>
 #include <utility>
 #include "core/error.hpp"
 #include "document/bind.hpp"
@@ -24,6 +26,17 @@ namespace {
 constexpr float kMaxPixelRatio = 3.0f;
 /// Largest side of the drawn image in device pixels (as render_frames()).
 constexpr float kMaxPixels = 8192.0f;
+/// Frames run after an input: ImGui takes one event of each kind per
+/// frame, and ImPlot applies a fit one frame late.
+constexpr int kInputFrames = 2;
+
+/// Paths of every node under `n` ("root/children/1/children/0").
+void index_paths(const node& n, const std::string& path, std::unordered_map<const node*, std::string>& out) {
+  out[&n] = path;
+  for (size_t i = 0; i < n.children.size(); ++i) {
+    index_paths(n.children[i], path + "/children/" + std::to_string(i), out);
+  }
+}
 
 std::string join(const std::vector<std::string>& names) {
   std::string out;
@@ -47,6 +60,8 @@ struct live_view::impl {
 
   std::unique_ptr<figure> fig;
   std::string source;
+  std::unordered_map<const node*, std::string> paths;
+  std::vector<plot_view> views; ///< Of the last frame.
 
   // The ImGui side; recreated by reset_contexts().
   std::unique_ptr<imgui_contexts> contexts;
@@ -59,6 +74,7 @@ struct live_view::impl {
   view_geometry geom;
   bool overflowed = false; ///< The fit overflowed at the current size; laid out at the source size.
   int pending_frames = 0;
+  int fresh_frames = 0; ///< Frames run since the contexts were created.
   std::optional<double> last_time;
 
   explicit impl(view_options o) : options(o) {
@@ -90,6 +106,7 @@ struct live_view::impl {
     load_fonts(*ctx);
     update_clear_color();
     last_time.reset();
+    fresh_frames = 0;
   }
 
   /// Re-applies the theme's styles if it changed; call with the contexts
@@ -167,7 +184,11 @@ struct live_view::impl {
     const double step = last_time ? now - *last_time : 1.0 / 60.0;
     io.DeltaTime = static_cast<float>(std::clamp(step, 1e-4, 0.25));
     last_time = now;
-    ctx->clear_rects();
+    ctx->begin_frame();
+    // Source limits stay fixed while fresh contexts settle (static parity
+    // with render_figure()); then they let go for pan and zoom.
+    ctx->set_lock_limits(fresh_frames < kFigureFrames);
+    ++fresh_frames;
     const node& root = fig->root;
     run_figure_frame(frame_options, *ctx, [&](draw_context& dc) {
       layout_root(root, dc);
@@ -175,6 +196,25 @@ struct live_view::impl {
     });
     if (options.cpu_textures) {
       textures.apply_all(*ImGui::GetDrawData());
+    }
+    views.clear();
+    const float s = geom.css_scale;
+    for (const plot_view_record& r : ctx->plot_views()) {
+      plot_view v;
+      const auto it = paths.find(r.element);
+      v.element = it == paths.end() ? std::string() : it->second;
+      v.x = r.area.min.x * s;
+      v.y = r.area.min.y * s;
+      v.width = r.area.width() * s;
+      v.height = r.area.height() * s;
+      v.x_min = r.x_min;
+      v.x_max = r.x_max;
+      v.y_min = r.y_min;
+      v.y_max = r.y_max;
+      v.has_y2 = r.has_y2;
+      v.y2_min = r.y2_min;
+      v.y2_max = r.y2_max;
+      views.push_back(std::move(v));
     }
   }
 };
@@ -198,6 +238,9 @@ void live_view::set_source(std::string_view source, bool reset_view) {
 
   m.fig = std::make_unique<figure>(std::move(f));
   m.source = std::string(source);
+  m.paths.clear();
+  index_paths(m.fig->root, "root", m.paths);
+  m.views.clear();
   m.overflowed = false;
   if (reset_view) {
     m.reset_contexts();
@@ -230,6 +273,39 @@ void live_view::resize(view_size size) {
   m.overflowed = false;
   m.update_geometry();
   m.pending_frames = kFigureFrames;
+}
+
+void live_view::input(const pointer_event& e) {
+  impl& m = *impl_;
+  const context_switch on(*m.contexts);
+  ImGuiIO& io = ImGui::GetIO();
+  io.AddMouseSourceEvent(e.touch ? ImGuiMouseSource_TouchScreen : ImGuiMouseSource_Mouse);
+  const float s = m.geom.css_scale > 0.0f ? m.geom.css_scale : 1.0f;
+  if (e.type == pointer_event::kind::leave) {
+    io.AddMousePosEvent(-FLT_MAX, -FLT_MAX);
+  } else {
+    io.AddMousePosEvent(e.x / s, e.y / s);
+  }
+  if (e.type == pointer_event::kind::down || e.type == pointer_event::kind::up) {
+    if (e.button >= 0 && e.button < ImGuiMouseButton_COUNT) {
+      io.AddMouseButtonEvent(e.button, e.type == pointer_event::kind::down);
+    }
+  } else if (e.type == pointer_event::kind::wheel) {
+    io.AddMouseWheelEvent(e.wheel_x, e.wheel_y);
+  }
+  m.pending_frames = std::max(m.pending_frames, kInputFrames);
+}
+
+void live_view::reset_view() {
+  impl& m = *impl_;
+  m.reset_contexts();
+  m.views.clear();
+  m.update_geometry();
+  m.pending_frames = kFigureFrames;
+}
+
+std::vector<plot_view> live_view::view_state() const {
+  return impl_->views;
 }
 
 const ImDrawData* live_view::frame(double now_seconds) {

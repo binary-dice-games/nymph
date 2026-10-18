@@ -4,10 +4,12 @@
 #pragma once
 
 #include <imgui.h>
+#include <implot.h>
 #include <map>
 #include <string>
 #include <string_view>
 #include <unordered_map>
+#include <vector>
 #include "render/image_options.hpp"
 #include "schema/node.hpp"
 
@@ -23,6 +25,18 @@ struct rect {
   float height() const {
     return max.y - min.y;
   }
+};
+
+/// @brief What a live view reads back about one 2D plot after a frame: its
+///        plot area and axis ranges (spec/04_web_viewer/DESIGN.md
+///        section 4, `view_state()`).
+struct plot_view_record {
+  const node* element = nullptr;
+  rect area; ///< The plot area (inside the axes), logical pixels.
+  double x_min = 0, x_max = 0;
+  double y_min = 0, y_max = 0;
+  bool has_y2 = false;
+  double y2_min = 0, y2_max = 0;
 };
 
 /// @brief Handed to the drawing function once per frame, inside the
@@ -53,10 +67,49 @@ class draw_context {
     interactive_ = interactive;
   }
 
-  /// @brief Forgets every rectangle; called before each live frame, since
-  ///        the figure (and its node addresses) may have changed.
-  void clear_rects() {
+  /// @brief How elements apply axis limits written in the source:
+  ///        `ImPlotCond_Always` (fixed) for PNG rendering and for a live
+  ///        view's first frames, `ImPlotCond_Once` afterwards so the user
+  ///        can pan and zoom away from them. ImPlot treats an `Always` axis
+  ///        as locked, which changes how it settles (an `Equal` plot then
+  ///        adjusts its other axis), so the first frames must match the
+  ///        PNG path exactly.
+  ImPlotCond limits_cond() const {
+    return (!interactive_ || lock_limits_) ? ImPlotCond_Always : ImPlotCond_Once;
+  }
+
+  /// @brief Set by the live view for the frames that settle fresh contexts.
+  void set_lock_limits(bool lock) {
+    lock_limits_ = lock;
+  }
+
+  /// @brief Called by the live view before each frame: forgets every
+  ///        rectangle (the figure, and its node addresses, may have
+  ///        changed) and keeps the last frame's plot views as previous.
+  void begin_frame() {
     rects_.clear();
+    previous_views_ = std::move(views_);
+    views_.clear();
+  }
+
+  /// @brief In a live view, records the current ImPlot plot's area and
+  ///        limits for `n`; call between BeginPlot and EndPlot, after its
+  ///        items. Does nothing when not interactive.
+  void record_current_plot(const node& n, bool with_y2);
+
+  /// @brief The plot views recorded in this frame.
+  const std::vector<plot_view_record>& plot_views() const {
+    return views_;
+  }
+
+  /// @brief `n`'s plot view recorded in the previous frame, or nullptr.
+  const plot_view_record* previous_plot_view(const node& n) const {
+    for (const plot_view_record& v : previous_views_) {
+      if (v.element == &n) {
+        return &v;
+      }
+    }
+    return nullptr;
   }
 
   /// @brief Output pixels per logical pixel (`image.scale`).
@@ -129,6 +182,9 @@ class draw_context {
  private:
   const image_options& options_;
   bool interactive_ = false;
+  bool lock_limits_ = false;
+  std::vector<plot_view_record> views_;
+  std::vector<plot_view_record> previous_views_;
   std::unordered_map<const node*, rect> rects_;
   std::map<std::string, ImFont*, std::less<>> fonts_;
 };
