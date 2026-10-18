@@ -568,5 +568,23 @@ TEST(live_view_input, TheWheelIsTakenOnlyOverPlotsAndDiagramsThatTakeInput) {
   EXPECT_FALSE(uml.v.takes_wheel(300, 75)); // outside the view
 }
 
+TEST(live_view_input, DraggingA3DPlotRotatesItAndResetViewRestoresIt) {
+  driven_view d(
+      "image: {width: 400, height: 300}\n"
+      "root:\n"
+      "  type: Plot3D\n"
+      "  title: S\n"
+      "  children:\n"
+      "    - {type: Plot3DScatter, label: p, xs: [0, 1, 0, 1], ys: [0, 0, 1, 1], zs: [0, 1, 1, 0]}\n");
+  const image before = rasterize(*d.last, d.v.textures(), d.v.clear_color());
+  EXPECT_TRUE(d.v.takes_wheel(200, 150));
+  d.drag(200, 150, 260, 170);
+  const image rotated = rasterize(*d.last, d.v.textures(), d.v.clear_color());
+  EXPECT_FALSE(rotated.rgba == before.rgba);
+  d.v.reset_view();
+  d.run();
+  EXPECT_TRUE(rasterize(*d.last, d.v.textures(), d.v.clear_color()).rgba == before.rgba);
+}
+
 } // namespace
 } // namespace bdg::nymph

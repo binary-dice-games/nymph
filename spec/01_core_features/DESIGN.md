@@ -834,7 +834,13 @@ std::optional<std::string> extract_source(std::span<const uint8_t> png);
 }
 ```
 
-The command line (`src/cli/`) is a function
+The interactive web viewer
+([spec/04_web_viewer](../04_web_viewer/DESIGN.md)) adds `live_view`
+(`src/view/`), which shares the frame setup (`src/render/frame_setup`)
+and draws the same elements with `draw_context::interactive()` on; with
+it off (always, for PNGs) nothing interactive runs.
+
+The command line (`src/cli/`, the `nymph_cli` library) is a function
 `int run_cli(std::span<const std::string_view> args, std::istream& in,
 std::ostream& out, std::ostream& err)` over this API, so it is tested
 in-process; `app/main.cpp` only forwards `argv` and the standard streams

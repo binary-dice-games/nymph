@@ -6,26 +6,25 @@
 #   nymph-viewer.js         the public ES module (web/js/nymph-viewer.js)
 #   nymph-viewer-core.js    Emscripten's loader, imported by it
 #   nymph-viewer-core.wasm  the module
+#   nymph-viewer.single.js  all three in one file (the wasm inlined, about a third larger)
 #   fonts/                  the fonts not embedded, fetched on demand
+#   demo/                   every example, live next to its PNG
 
 set(NYMPH_WEB_OUT "${PROJECT_BINARY_DIR}/web")
 
-add_executable(nymph-viewer
+# Compiled once, linked twice (with the wasm beside the loader, and inlined).
+add_library(nymph_web_objects OBJECT
   nymph_web.cpp
   webgl_presenter.hpp
   webgl_presenter.cpp
   # Dear ImGui's OpenGL3 backend, as WebGL2 (OpenGL ES 3.0).
   "${NYMPH_EXTERN_DIR}/imgui/backends/imgui_impl_opengl3.cpp"
 )
-target_include_directories(nymph-viewer PRIVATE "${NYMPH_EXTERN_DIR}/imgui/backends" "${CMAKE_CURRENT_SOURCE_DIR}")
-target_compile_definitions(nymph-viewer PRIVATE IMGUI_IMPL_OPENGL_ES3)
-target_link_libraries(nymph-viewer PRIVATE nymph)
-set_target_properties(nymph-viewer PROPERTIES
-  OUTPUT_NAME nymph-viewer-core
-  SUFFIX ".js"
-  RUNTIME_OUTPUT_DIRECTORY "${NYMPH_WEB_OUT}"
-)
-target_link_options(nymph-viewer PRIVATE
+target_include_directories(nymph_web_objects PRIVATE "${NYMPH_EXTERN_DIR}/imgui/backends" "${CMAKE_CURRENT_SOURCE_DIR}")
+target_compile_definitions(nymph_web_objects PRIVATE IMGUI_IMPL_OPENGL_ES3)
+target_link_libraries(nymph_web_objects PUBLIC nymph)
+
+set(NYMPH_WEB_LINK_OPTIONS
   -sMODULARIZE=1
   -sEXPORT_ES6=1
   -sEXPORT_NAME=createNymphCore
@@ -37,6 +36,31 @@ target_link_options(nymph-viewer PRIVATE
   -sMAX_WEBGL_VERSION=2
   "-sEXPORTED_FUNCTIONS=['_malloc','_free']"
   "-sEXPORTED_RUNTIME_METHODS=['UTF8ToString','HEAPU8','specialHTMLTargets']"
+)
+
+add_executable(nymph-viewer $<TARGET_OBJECTS:nymph_web_objects>)
+target_link_libraries(nymph-viewer PRIVATE nymph)
+set_target_properties(nymph-viewer PROPERTIES
+  OUTPUT_NAME nymph-viewer-core
+  SUFFIX ".js"
+  RUNTIME_OUTPUT_DIRECTORY "${NYMPH_WEB_OUT}"
+)
+target_link_options(nymph-viewer PRIVATE ${NYMPH_WEB_LINK_OPTIONS})
+
+# One file: the loader with the wasm inlined, and the API appended to the
+# same ES module (it then uses createNymphCore in scope, not an import).
+add_executable(nymph-viewer-single $<TARGET_OBJECTS:nymph_web_objects>)
+target_link_libraries(nymph-viewer-single PRIVATE nymph)
+set_target_properties(nymph-viewer-single PROPERTIES
+  OUTPUT_NAME nymph-viewer.single
+  SUFFIX ".js"
+  RUNTIME_OUTPUT_DIRECTORY "${NYMPH_WEB_OUT}"
+  LINK_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/js/nymph-viewer.js"
+)
+target_link_options(nymph-viewer-single PRIVATE
+  ${NYMPH_WEB_LINK_OPTIONS}
+  -sSINGLE_FILE=1
+  "--extern-post-js=${CMAKE_CURRENT_SOURCE_DIR}/js/nymph-viewer.js"
 )
 
 # The JavaScript API, next to the module.

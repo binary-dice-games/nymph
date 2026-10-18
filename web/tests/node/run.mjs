@@ -254,6 +254,20 @@ test('the module is small', async () => {
   console.log(`    nymph-viewer-core.wasm: ${wasm.length} bytes, ${size} gzip`);
 });
 
+test('the single-file build draws the same pixels as the two-file one', async () => {
+  const single = await import(pathToFileURL(join(webDir, 'nymph-viewer.single.js')).href);
+  const source = await readFile(join(sourceDir, 'examples', 'line.yaml'), 'utf8');
+  const a = await single.createViewer(null, { source });
+  const b = await viewer(source);
+  a.resize(800, 420, 1);
+  b.resize(800, 420, 1);
+  const fa = settle(a), fb = settle(b);
+  assert(fa && fb, 'both drawn');
+  assert(Buffer.from(fa.rgba).equals(Buffer.from(fb.rgba)), 'same pixels');
+  a.destroy();
+  b.destroy();
+});
+
 // ── Run ──────────────────────────────────────────────────────────────────────
 
 let failed = 0;

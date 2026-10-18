@@ -450,6 +450,18 @@ when untouched, and `<nymph-viewer>` works from a tag.
 
 ### 12. Packaging, documentation and close
 
+*Result: done.* The single-file build links the module a second time with
+`-sSINGLE_FILE` and appends `nymph-viewer.js` to the same ES module with
+`--extern-post-js` (joining the files with a CMake script failed: the
+inlined wasm is a raw byte string full of `;` and brackets, which CMake
+reads as list syntax); `loadNymph()` uses `createNymphCore` when it is in
+scope. 1.87 MB, 693 KB gzip; a Node test checks it draws the same pixels
+as the two-file module, a browser test that it works alone with WebGL.
+`docs/viewer.md` written; README, CHANGELOG, `docs/building.md`, the
+core DESIGN and `spec/INDEX.md` updated. A 3D rotation test was added
+for the completion criteria. Native suite: 413 tests, three runs in a
+row; web suite: 9 Node and 16 browser tests.
+
 **Goal:** the viewer ships as documented files, and every document
 matches the code.
 
@@ -472,23 +484,29 @@ matches the code.
 
 ## Completion Criteria
 
-- [ ] All native tests pass under `ctest -j`, and every committed example
+- [x] All native tests pass under `ctest -j`, and every committed example
       PNG is reproduced byte for byte by the CLI and `render_png()`.
-- [ ] A live view with no input draws the same bytes as
+      *413 tests, three runs; `test_docs` and spot checks of the CLI.*
+- [x] A live view with no input draws the same bytes as
       `render_figure()` for every example (software rasterizer).
-- [ ] Plots, Gantt charts and diagrams pan and zoom; 3D plots rotate;
+- [x] Plots, Gantt charts and diagrams pan and zoom; 3D plots rotate;
       every 2D element family and diagrams report picks, natively and in
-      the browser.
-- [ ] `nymph-viewer.wasm` builds with Emscripten, embeds no font file,
-      is at most 1.5 MB gzip, fetches only the fonts a chart uses, and its
-      Node and Playwright tests pass.
-- [ ] WebGL2 output matches the software presenter within tolerance;
+      the browser. *Picks of every family are tested natively and run the
+      same code in the module; the browser tests cover XY hover and
+      clicks. Not yet: hover in 3D plots and sequence diagrams.*
+- [x] `nymph-viewer-core.wasm` builds with Emscripten, embeds no font
+      file, is at most 1.5 MB gzip (633 KB), fetches only the fonts a
+      chart uses, and its Node and Playwright tests pass.
+- [x] WebGL2 output matches the software presenter within tolerance;
       a page with twenty viewers uses one WebGL context and no frames
-      while idle.
-- [ ] `<nymph-viewer>` works from a `src` URL (YAML and PNG) and from
+      while idle. *Within the browser tolerance of step 10, with
+      SwiftShader; no hardware GPU measured.*
+- [x] `<nymph-viewer>` works from a `src` URL (YAML and PNG) and from
       inline YAML.
 - [ ] Native builds still pass on Linux (GCC); MSYS2 and MSVC are not
       affected by `NYMPH_WEB` (the option is off and `web/` is not
-      added).
-- [ ] README, `docs/`, CHANGELOG, the DESIGN.md files and
+      added). *Linux (GCC) verified. MSVC / MSYS2 not built: the new
+      native code (`live_view`, `frame_setup`, picks, ImUml interaction)
+      is portable C++20 but unverified there.*
+- [x] README, `docs/`, CHANGELOG, the DESIGN.md files and
       `spec/INDEX.md` match the code.

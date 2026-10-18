@@ -476,6 +476,27 @@ test('fonts are fetched once per page, and a missing one keeps the chart', async
   await missing.close();
 });
 
+test('the single-file build works on its own in a page', async () => {
+  const page = await browser.newPage();
+  await page.route('**/single.html', (route) =>
+    route.fulfill({
+      contentType: 'text/html',
+      body: `<!doctype html><body><div id="a" style="width:500px"></div><script type="module">
+        import { createViewer } from '/nymph-viewer.single.js';
+        const v = await createViewer(document.getElementById('a'), {
+          source: 'image: {width: 500, height: 200}\\nroot: {type: Label, text: one file, font: FiraSans-Bold.ttf}\\n' });
+        await v.rendered();
+        window.result = { info: v.info(), width: v.canvas.width };
+      </script>`,
+    }),
+  );
+  await page.goto(`${base}/single.html`);
+  await page.waitForFunction(() => window.result, null, { timeout: 30000 });
+  const r = await page.evaluate(() => window.result);
+  assert(r.info.hasFigure && r.info.rasterizer === 'webgl' && r.width === 500, JSON.stringify(r));
+  await page.close();
+});
+
 // ── Run ──────────────────────────────────────────────────────────────────────
 
 let failed = 0;

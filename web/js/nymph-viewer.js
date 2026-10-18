@@ -169,9 +169,14 @@ export function loadNymph(options = {}) {
   if (!corePromise) {
     corePromise = (async () => {
       const here = import.meta.url;
-      const { default: createNymphCore } = await import(new URL('./nymph-viewer-core.js', here).href);
+      // The single-file build appends this file to the loader's module, so
+      // createNymphCore is in scope there; otherwise it is imported.
+      const create =
+        typeof createNymphCore === 'function'
+          ? createNymphCore
+          : (await import(new URL('./nymph-viewer-core.js', here).href)).default;
       const wasmUrl = options.wasmUrl ? new URL(options.wasmUrl, here).href : undefined;
-      const module = await createNymphCore(wasmUrl ? { locateFile: (path) => (path.endsWith('.wasm') ? wasmUrl : path) } : {});
+      const module = await create(wasmUrl ? { locateFile: (path) => (path.endsWith('.wasm') ? wasmUrl : path) } : {});
       const fontBaseUrl = new URL(options.fontBaseUrl ?? './fonts/', here);
       return new Core(module, { fontBaseUrl, fetchFont: options.fetchFont ?? fetchFrom(fontBaseUrl) });
     })();

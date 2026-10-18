@@ -152,9 +152,13 @@ ctest --test-dir build-web        # Node tests of the module
 
 `build-web/web/` then holds `nymph-viewer.js` (the API),
 `nymph-viewer-core.js` and `nymph-viewer-core.wasm` (about 630 KB gzip),
-and `fonts/`, the font files it fetches on demand: the web build embeds no
-font (`NYMPH_EMBED_FONTS` defaults to `none` there). Serve the four
-together. `NYMPH_WEB` turns `NYMPH_OPENGL` and the native GoogleTest suite
+`nymph-viewer.single.js` (all three in one file, about 690 KB gzip),
+`fonts/`, the font files fetched on demand (the web build embeds no font:
+`NYMPH_EMBED_FONTS` defaults to `none` there), and `demo/index.html`,
+every example live next to its PNG (serve the folder over HTTP to open
+it). See [viewer.md](viewer.md) for what to serve. `ctest` also runs the
+browser tests when Playwright for Node is installed (they are skipped
+otherwise). `NYMPH_WEB` turns `NYMPH_OPENGL` and the native GoogleTest suite
 off, uses native wasm exceptions (`-fwasm-exceptions`) and 32-bit ImGui
 indices, and builds no CLI.
 

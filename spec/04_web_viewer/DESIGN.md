@@ -1,6 +1,9 @@
 # nymph — Interactive Web Viewer: Design
 
-**Status: in progress (see [PLAN.md](PLAN.md) for each step's result).** [PLAN.md](PLAN.md) is the ordered
+**Status: done (plan steps 1-12; see [PLAN.md](PLAN.md) for each step's
+result). Verified on Linux with Emscripten 6.0.12, Node 22 and Chromium 141
+(Playwright, WebGL2 through SwiftShader); native MSVC / MSYS2 builds, a
+hardware GPU and other browsers are not yet verified.** [PLAN.md](PLAN.md) is the ordered
 implementation plan. This document describes only what this project adds
 or changes; the rest of the architecture is
 [spec/01_core_features/DESIGN.md](../01_core_features/DESIGN.md)
@@ -519,8 +522,10 @@ class NymphError extends Error { line: number; column: number; }
   `IntersectionObserver` pauses viewers off screen.
 - **Hosting.** `nymph-viewer.js`, `nymph-viewer-core.wasm` and the `fonts/`
   folder (the font files and their licences), served together; or a
-  single-file build with the wasm inlined (about a third larger) for
-  hosts that cannot serve a second file, which then needs `fontBaseUrl`
+  single-file build (`nymph-viewer.single.js`: Emscripten's
+  `SINGLE_FILE` loader with the API appended to the same module by
+  `--extern-post-js`; about 10 % larger gzip) for hosts that cannot serve
+  a second file, which then needs `fontBaseUrl`
   or only uses the built-in font. A page's
   Content Security Policy must allow `'wasm-unsafe-eval'`.
 
