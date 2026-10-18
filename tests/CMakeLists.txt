@@ -26,6 +26,7 @@ endmacro()
 
 nymph_add_test(test_version test_version.cpp)
 nymph_add_test(test_dependencies test_dependencies.cpp)
+nymph_add_test(test_charconv test_charconv.cpp)
 # Uses libyaml and stb directly; nymph links them PRIVATE.
 target_link_libraries(test_dependencies PRIVATE yaml nymph_stb)
 nymph_add_test(test_soft_rasterizer test_soft_rasterizer.cpp)
@@ -166,10 +167,19 @@ if(NYMPH_RELEASE AND TARGET nymph-cli)
   if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
     find_program(NYMPH_READELF NAMES readelf ${CMAKE_READELF})
     if(NYMPH_READELF)
-      add_test(NAME nymph_release_static
+      add_test(NAME nymph_release_linkage
         COMMAND ${CMAKE_COMMAND} -DREADELF=${NYMPH_READELF} -DNYMPH=$<TARGET_FILE:nymph-cli>
-                -P ${CMAKE_CURRENT_SOURCE_DIR}/release_static.cmake)
+                -P ${CMAKE_CURRENT_SOURCE_DIR}/release_linkage.cmake)
     endif()
+  elseif(APPLE)
+    find_program(NYMPH_OTOOL otool)
+    if(NYMPH_OTOOL)
+      add_test(NAME nymph_release_linkage
+        COMMAND ${CMAKE_COMMAND} -DOTOOL=${NYMPH_OTOOL} -DNYMPH=$<TARGET_FILE:nymph-cli>
+                -P ${CMAKE_CURRENT_SOURCE_DIR}/release_linkage.cmake)
+    endif()
+    # The arm64 executable runs only while its signature is valid.
+    add_test(NAME nymph_release_signature COMMAND codesign --verify --verbose "$<TARGET_FILE:nymph-cli>")
   endif()
 endif()
 if(NYMPH_MCP)
@@ -198,4 +208,34 @@ if(NYMPH_CLAUDE)
   add_test(NAME nymph_plugin_validate_marketplace COMMAND ${NYMPH_CLAUDE} plugin validate --strict ${PROJECT_SOURCE_DIR})
   add_test(NAME nymph_plugin_validate_plugin
     COMMAND ${NYMPH_CLAUDE} plugin validate --strict ${PROJECT_SOURCE_DIR}/claude/plugin)
+endif()
+
+# ── Install (spec/07_release_pipeline step 3) ───────────────────────────────
+
+if(NYMPH_INSTALL AND TARGET nymph-cli)
+  add_test(NAME nymph_install
+    COMMAND ${CMAKE_COMMAND} -DBUILD_DIR=${PROJECT_BINARY_DIR} -DWORK_DIR=${CMAKE_CURRENT_BINARY_DIR}/install
+            -DVERSION=${PROJECT_VERSION} -DSOURCE=${PROJECT_SOURCE_DIR}/examples/dashboard.yaml
+            -DWINDOWS=$<BOOL:${WIN32}> "-DRUNNER=${_nymph_runner}"
+            -P ${CMAKE_CURRENT_SOURCE_DIR}/install_check.cmake)
+endif()
+add_test(NAME nymph_install_subproject
+  COMMAND ${CMAKE_COMMAND} -DSOURCE_DIR=${PROJECT_SOURCE_DIR} -DWORK_DIR=${CMAKE_CURRENT_BINARY_DIR}/install_subproject
+          "-DGENERATOR=${CMAKE_GENERATOR}" -P ${CMAKE_CURRENT_SOURCE_DIR}/install_subproject.cmake)
+set_tests_properties(nymph_install_subproject PROPERTIES TIMEOUT 600)
+# The PATH scripts, in a scratch HOME / a stand-in for the user's Path.
+if(NOT WIN32)
+  find_program(NYMPH_SH sh)
+  if(NYMPH_SH)
+    add_test(NAME nymph_install_script_sh
+      COMMAND ${NYMPH_SH} ${CMAKE_CURRENT_SOURCE_DIR}/install_script.sh
+              ${PROJECT_SOURCE_DIR}/packaging/install/install.sh ${CMAKE_CURRENT_BINARY_DIR}/install_script_sh)
+    set_tests_properties(nymph_install_script_sh PROPERTIES SKIP_RETURN_CODE 77)
+  endif()
+endif()
+find_program(NYMPH_POWERSHELL NAMES pwsh powershell)
+if(NYMPH_POWERSHELL)
+  add_test(NAME nymph_install_script_ps1
+    COMMAND ${NYMPH_POWERSHELL} -NoProfile -ExecutionPolicy Bypass -File ${CMAKE_CURRENT_SOURCE_DIR}/install_script.ps1
+            ${PROJECT_SOURCE_DIR}/packaging/install/install.ps1 ${CMAKE_CURRENT_BINARY_DIR}/install_script_ps1)
 endif()

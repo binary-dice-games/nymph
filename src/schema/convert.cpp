@@ -8,6 +8,7 @@
 #include <limits>
 #include <optional>
 #include <string>
+#include "core/charconv.hpp"
 #include "core/error.hpp"
 
 namespace bdg::nymph {
@@ -60,7 +61,7 @@ std::optional<double> parse_double(std::string_view s) {
     s.remove_prefix(1);
   }
   double v = 0.0;
-  const auto r = std::from_chars(s.data(), s.data() + s.size(), v);
+  const auto r = from_chars_double(s.data(), s.data() + s.size(), v);
   if (s.empty() || r.ec != std::errc{} || r.ptr != s.data() + s.size() || !std::isfinite(v)) {
     return std::nullopt;
   }

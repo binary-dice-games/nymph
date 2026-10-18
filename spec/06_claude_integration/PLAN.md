@@ -316,7 +316,7 @@ now says "for one nymph build". Without a display, Wine reports the
 OpenGL probe's window error differently on two calls (0, then 6), which
 fails `cli.RasterizersReportsWhatIsAvailable`; with `xvfb-run` it passes,
 as in spec 02. The OpenGL linkage check now accepts a fully static ELF
-(no dynamic section). Tests: `nymph_release_static`,
+(no dynamic section). Tests: `nymph_release_static` (now `nymph_release_linkage`, spec 07),
 `nymph_release_examples`, and `test_mcp_process` checks the App resource
 when it is embedded and runs through the toolchain's emulator.
 

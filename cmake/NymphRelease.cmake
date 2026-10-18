@@ -8,6 +8,10 @@
 #                libEGL reliably; the software rasterizer is fast enough)
 #   MinGW        -static (libgcc, libstdc++, winpthread inside)
 #   MSVC         the static runtime (/MT)
+#   macOS        dynamic, but only on libSystem and libc++ (part of macOS;
+#                Apple supports no static executables), NYMPH_OPENGL off,
+#                stripped and signed ad hoc after the link (app/CMakeLists.txt;
+#                spec/07_release_pipeline/DESIGN.md section 4.8)
 #
 # all built MinSizeRel and stripped. The `nymph-dist` target copies the
 # executable to <build>/dist/nymph-<version>-<os>-<arch>[.exe] and writes
@@ -32,7 +36,9 @@ if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
 elseif(MINGW)
   add_link_options(-static)
 endif()
-if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
+if(APPLE)
+  add_link_options(-Wl,-dead_strip)
+elseif(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
   add_link_options(-s)
 endif()
 

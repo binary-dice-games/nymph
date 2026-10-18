@@ -279,7 +279,7 @@ CI checks the pin, and the history shows each pin.
   unsigned code, and `strip` invalidates the linker's signature). The
   executable links only `/usr/lib/libSystem.B.dylib` and
   `/usr/lib/libc++.1.dylib`, both part of macOS; the release linkage
-  test checks that list with `otool -L`, as `release_static` checks the
+  test checks that list with `otool -L`, as `release_linkage` checks the
   Linux executable.
 - Developer ID signing and notarization run only when the `APPLE_*`
   secrets exist (section 9); without them the files are signed ad hoc.
