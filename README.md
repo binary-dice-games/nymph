@@ -126,6 +126,8 @@ carries its source: `bdg::nymph::extract_source(png)` returns it.
 | [spec/03_uml_diagrams/PLAN.md](spec/03_uml_diagrams/PLAN.md) | Its implementation steps and tests |
 | [spec/04_web_viewer/DESIGN.md](spec/04_web_viewer/DESIGN.md) | The interactive web viewer: live view, picks, fonts on demand, WebAssembly, WebGL2, JS API |
 | [spec/04_web_viewer/PLAN.md](spec/04_web_viewer/PLAN.md) | Its implementation steps and tests |
+| [spec/05_browser_extension/DESIGN.md](spec/05_browser_extension/DESIGN.md) | The Chrome extension that turns nymph PNGs on any page into live viewers: detection, replacement, live pages, sites |
+| [spec/05_browser_extension/PLAN.md](spec/05_browser_extension/PLAN.md) | Its implementation steps and tests |
 | [CHANGELOG.md](CHANGELOG.md) | User-facing changes between releases |
 | [CLAUDE.md](CLAUDE.md) | Coding style and project rules for AI agents and contributors |
 
