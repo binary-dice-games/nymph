@@ -28,6 +28,9 @@ install nymph from.
 
 In scope:
 
+0. **A GitHub release per build**: each release tag creates a new
+   GitHub release `v<version>` with the executables and packages for
+   Windows, Linux and macOS (section 3).
 1. **macOS as a target**, on the same footing as Linux and Windows:
    built and tested in CI, release executables for arm64 and x86-64, a
    Claude Desktop bundle.
