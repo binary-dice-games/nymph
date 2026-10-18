@@ -27,6 +27,14 @@ namespace {
 
 constexpr unsigned kColorBufferBit = 0x00004000;
 
+/// OpenGL's calling convention (APIENTRY): __stdcall on Windows, which
+/// matters on 32-bit builds; the default elsewhere.
+#if defined(_WIN32)
+#define NYMPH_GL_CALL __stdcall
+#else
+#define NYMPH_GL_CALL
+#endif
+
 /// Seconds on a monotonic clock.
 double now_seconds() {
   using clock = std::chrono::steady_clock;
@@ -249,9 +257,9 @@ class viewer : public window_events {
   bool ready_ = false; ///< Events sent while the window is created find no view yet.
   std::unique_ptr<native_window> window_;
   live_view view_; ///< After window_: destroyed first, while the context exists.
-  void(*viewport_)(int, int, int, int) = nullptr;
-  void(*clear_color_)(float, float, float, float) = nullptr;
-  void(*clear_)(unsigned) = nullptr;
+  void(NYMPH_GL_CALL* viewport_)(int, int, int, int) = nullptr;
+  void(NYMPH_GL_CALL* clear_color_)(float, float, float, float) = nullptr;
+  void(NYMPH_GL_CALL* clear_)(unsigned) = nullptr;
   const ImDrawData* last_ = nullptr; ///< The last frame, valid until the next one.
   float scale_ = 1.0f; ///< Device pixels per CSS pixel.
   int client_w_ = 0;
