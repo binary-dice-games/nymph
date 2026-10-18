@@ -245,3 +245,12 @@ endif()
 add_test(NAME nymph_plugin_sync_versions
   COMMAND ${CMAKE_COMMAND} -DSOURCE_DIR=${PROJECT_SOURCE_DIR} -DWORK_DIR=${CMAKE_CURRENT_BINARY_DIR}/plugin_sync_versions
           -P ${CMAKE_CURRENT_SOURCE_DIR}/plugin_sync_versions.cmake)
+
+# ── Chrome Web Store publish script (spec/07_release_pipeline step 8) ───────
+
+find_program(NYMPH_NODE_TOOL node)
+if(NYMPH_NODE_TOOL AND NOT WIN32)
+  add_test(NAME nymph_chrome_publish
+    COMMAND ${NYMPH_NODE_TOOL} ${CMAKE_CURRENT_SOURCE_DIR}/chrome_publish_test.mjs
+            ${PROJECT_SOURCE_DIR}/packaging/chrome/publish.sh ${CMAKE_CURRENT_BINARY_DIR}/chrome_publish)
+endif()
