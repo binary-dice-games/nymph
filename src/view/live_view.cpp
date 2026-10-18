@@ -26,9 +26,10 @@ namespace {
 constexpr float kMaxPixelRatio = 3.0f;
 /// Largest side of the drawn image in device pixels (as render_frames()).
 constexpr float kMaxPixels = 8192.0f;
-/// Frames run after an input: ImGui takes one event of each kind per
-/// frame, and ImPlot applies a fit one frame late.
-constexpr int kInputFrames = 2;
+/// Frames run after an input: ImPlot sees the hover one frame after the
+/// pointer moves, ImGui hides a new tooltip window on its first frame, and
+/// ImPlot applies a fit one frame late.
+constexpr int kInputFrames = 3;
 
 /// Paths of every node under `n` ("root/children/1/children/0").
 void index_paths(const node& n, const std::string& path, std::unordered_map<const node*, std::string>& out) {
@@ -62,6 +63,8 @@ struct live_view::impl {
   std::string source;
   std::unordered_map<const node*, std::string> paths;
   std::vector<plot_view> views; ///< Of the last frame.
+  std::optional<view_pick> hovered;
+  std::optional<view_pick> click;
 
   // The ImGui side; recreated by reset_contexts().
   std::unique_ptr<imgui_contexts> contexts;
@@ -100,6 +103,7 @@ struct live_view::impl {
     textures = texture_store();
     ctx = std::make_unique<draw_context>(frame_options);
     ctx->set_interactive(true);
+    ctx->set_tooltips(options.tooltips);
     const context_switch on(*contexts);
     applied_theme = effective_theme();
     configure(*find_theme(applied_theme), "nymph_live_view", backend_flags());
@@ -197,6 +201,23 @@ struct live_view::impl {
     if (options.cpu_textures) {
       textures.apply_all(*ImGui::GetDrawData());
     }
+    hovered.reset();
+    if (const std::optional<pick>& p = ctx->hovered()) {
+      view_pick v;
+      const auto it = paths.find(p->element);
+      v.element = it == paths.end() ? std::string() : it->second;
+      v.type = p->type;
+      v.label = p->label;
+      v.index = p->index;
+      v.values = p->values;
+      hovered = std::move(v);
+    }
+    // A click: the primary button released where it was pressed.
+    const float slop = io.MouseDragThreshold;
+    if (ImGui::IsMouseReleased(ImGuiMouseButton_Left) &&
+        io.MouseDragMaxDistanceSqr[ImGuiMouseButton_Left] <= slop * slop && hovered) {
+      click = hovered;
+    }
     views.clear();
     const float s = geom.css_scale;
     for (const plot_view_record& r : ctx->plot_views()) {
@@ -241,6 +262,8 @@ void live_view::set_source(std::string_view source, bool reset_view) {
   m.paths.clear();
   index_paths(m.fig->root, "root", m.paths);
   m.views.clear();
+  m.hovered.reset();
+  m.click.reset();
   m.overflowed = false;
   if (reset_view) {
     m.reset_contexts();
@@ -306,6 +329,16 @@ void live_view::reset_view() {
 
 std::vector<plot_view> live_view::view_state() const {
   return impl_->views;
+}
+
+const std::optional<view_pick>& live_view::hovered() const {
+  return impl_->hovered;
+}
+
+std::optional<view_pick> live_view::take_click() {
+  std::optional<view_pick> out = std::move(impl_->click);
+  impl_->click.reset();
+  return out;
 }
 
 const ImDrawData* live_view::frame(double now_seconds) {

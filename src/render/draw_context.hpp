@@ -6,6 +6,7 @@
 #include <imgui.h>
 #include <implot.h>
 #include <map>
+#include <optional>
 #include <string>
 #include <string_view>
 #include <unordered_map>
@@ -38,6 +39,29 @@ struct plot_view_record {
   bool has_y2 = false;
   double y2_min = 0, y2_max = 0;
 };
+
+/// @brief What is under the pointer in a live view: a data point, bar,
+///        cell, task, flow or diagram node (spec/04_web_viewer/DESIGN.md
+///        section 3, "Interaction per element family").
+struct pick {
+  const node* element = nullptr; ///< The series or element hit.
+  std::string type; ///< Its type name, e.g. "PlotLine".
+  std::string label; ///< Series label (without any "##" suffix) or id.
+  int index = -1; ///< Point, bar, cell or node index; -1 for none.
+  /// Values as the axes show them, in order: {"x", "3"}, {"y", "15.2"}.
+  std::vector<std::pair<std::string, std::string>> values;
+};
+
+/// @brief A pick offered while a plot is drawn; the plot keeps the closest.
+struct pick_candidate {
+  float distance = 0.0f; ///< From the pointer, logical pixels; 0 inside a shape.
+  pick hit;
+  ImVec2 anchor; ///< Where to draw the highlight ring, logical pixels.
+  ImU32 color = 0; ///< The series colour, for the ring.
+};
+
+/// @brief Largest distance at which a point is picked, logical pixels.
+inline constexpr float kPickRadius = 8.0f;
 
 /// @brief Handed to the drawing function once per frame, inside the
 ///        figure's full-display ImGui window, with the private ImGui, ImPlot
@@ -90,6 +114,43 @@ class draw_context {
     rects_.clear();
     previous_views_ = std::move(views_);
     views_.clear();
+    candidate_.reset();
+    hovered_.reset();
+  }
+
+  // ── Picks (live views only) ───────────────────────────────────────────
+
+  /// @brief Offers a pick for the plot being drawn; kept if within
+  ///        kPickRadius and closer than any offered before.
+  void offer_pick(pick_candidate c) {
+    if (c.distance <= kPickRadius && (!candidate_ || c.distance < candidate_->distance)) {
+      candidate_ = std::move(c);
+    }
+  }
+
+  /// @brief The best pick offered since the last call, and forgets it.
+  std::optional<pick_candidate> take_pick_candidate() {
+    std::optional<pick_candidate> out = std::move(candidate_);
+    candidate_.reset();
+    return out;
+  }
+
+  /// @brief Sets what is under the pointer in this frame.
+  void set_hovered(pick p) {
+    hovered_ = std::move(p);
+  }
+
+  /// @brief What is under the pointer in this frame, if anything.
+  const std::optional<pick>& hovered() const {
+    return hovered_;
+  }
+
+  /// @brief Whether nymph draws its own tooltip for the hovered pick.
+  bool tooltips() const {
+    return tooltips_;
+  }
+  void set_tooltips(bool on) {
+    tooltips_ = on;
   }
 
   /// @brief In a live view, records the current ImPlot plot's area and
@@ -183,6 +244,9 @@ class draw_context {
   const image_options& options_;
   bool interactive_ = false;
   bool lock_limits_ = false;
+  bool tooltips_ = true;
+  std::optional<pick_candidate> candidate_;
+  std::optional<pick> hovered_;
   std::vector<plot_view_record> views_;
   std::vector<plot_view_record> previous_views_;
   std::unordered_map<const node*, rect> rects_;

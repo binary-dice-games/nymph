@@ -7,9 +7,11 @@
 
 #include <imgui.h>
 #include <memory>
+#include <optional>
 #include <stdexcept>
 #include <string>
 #include <string_view>
+#include <utility>
 #include <vector>
 #include "render/texture_store.hpp"
 
@@ -38,6 +40,9 @@ struct view_options {
   ///        the software rasterizer). A GPU presenter that answers them
   ///        itself sets this to false.
   bool cpu_textures = true;
+  /// @brief Draw nymph's tooltip for the hovered pick. Off, picks are
+  ///        still reported (hovered()) for the host to show its own.
+  bool tooltips = true;
 };
 
 /// @brief Where and how big the last frame is.
@@ -61,6 +66,19 @@ struct pointer_event {
   float wheel_x = 0.0f; ///< wheel: notches; positive y zooms in (away from the user).
   float wheel_y = 0.0f;
   bool touch = false; ///< From a touch screen (ImGui tunes hover and drag for it).
+};
+
+/// @brief What is under the pointer: a data point, bar, cell, task, flow
+///        or diagram node (spec/04_web_viewer/DESIGN.md section 3).
+struct view_pick {
+  std::string element; ///< Element path of the series or element hit.
+  std::string type; ///< Its type name, e.g. "PlotLine".
+  std::string label; ///< Series label or diagram id.
+  int index = -1; ///< Point, bar, cell or node index; -1 for none.
+  /// Values as the axes show them, in order: {"x", "3"}, {"y", "15.2"}.
+  std::vector<std::pair<std::string, std::string>> values;
+
+  bool operator==(const view_pick&) const = default;
 };
 
 /// @brief A 2D plot as the last frame left it: where its plot area is and
@@ -134,6 +152,14 @@ class live_view {
   /// @brief Every 2D plot and Gantt chart as the last frame left it, in
   ///        drawing order.
   std::vector<plot_view> view_state() const;
+
+  /// @brief What the pointer was over in the last frame.
+  const std::optional<view_pick>& hovered() const;
+
+  /// @brief The pick under a primary-button click (press and release
+  ///        without dragging), once: later calls return nothing until the
+  ///        next click.
+  std::optional<view_pick> take_click();
 
   /// @brief Runs one frame if one is due (wants_frame()).
   /// @param now_seconds A monotonic clock; the step since the last frame is

@@ -325,7 +325,7 @@ struct pointer_event {           // one event, in CSS px of the view
   float x, y; int button; float wheel_x, wheel_y; bool touch;
 };
 
-struct pick {                    // what is under the pointer
+struct view_pick {               // what is under the pointer
   std::string element;           // element path, e.g. "root/children/1/children/0"
   std::string type;              // "PlotLine"
   std::string label;             // series label or diagram id
@@ -355,8 +355,8 @@ class live_view {
   bool wants_frame() const;     // input, data or settling frames pending
   ImU32 clear_color() const;
 
-  std::optional<pick> hovered() const;
-  std::optional<pick> take_click();             // last click, once
+  const std::optional<view_pick>& hovered() const;
+  std::optional<view_pick> take_click();        // last click, once
   std::vector<plot_view> view_state() const;    // every plot, after the last frame
   view_geometry geometry() const;
   bool has_figure() const;
@@ -406,7 +406,9 @@ pays nothing:
   `previous_plot_view(node)` — each plot's area and limits, read back as
   `view_state()`; the Gantt chart computes its date ticks from the
   previous frame's range so they follow pan and zoom.
-- `pick_tracker& picks()` — a per-frame candidate list. A series, while
+- `offer_pick()` / `take_pick_candidate()` / `set_hovered()` (types
+  `pick`, `pick_candidate`; helpers in `src/elements/plot_pick`) — a
+  per-frame candidate. A series, while
   its plot is hovered (`ImPlot::IsPlotHovered()`), offers its nearest
   point as `{distance in px, pick}`; bars, cells and slices offer a hit
   with distance 0. The plot keeps the best candidate within 8 px after

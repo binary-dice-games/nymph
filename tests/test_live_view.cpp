@@ -16,6 +16,7 @@
 #include "elements/register_builtin.hpp"
 #include "fonts/embedded_fonts.hpp"
 #include "fonts/font_testing.hpp"
+#include "live_view_driver.hpp"
 #include "render/figure_renderer.hpp"
 #include "render/soft_rasterizer.hpp"
 #include "view/live_view.hpp"
@@ -308,58 +309,6 @@ const char* const kPan =
     "  y_max: 10\n"
     "  children:\n"
     "    - {type: PlotLine, label: a, xs: [0, 10], ys: [0, 10]}\n";
-
-/// A view of `source` at its own size, settled.
-struct driven_view {
-  live_view v;
-  double clock = 0.0;
-
-  explicit driven_view(const std::string& source, float width = 400, float height = 300) {
-    v.set_source(source);
-    v.resize({width, height, 1});
-    run();
-  }
-
-  /// Runs frames until the view settles.
-  void run() {
-    for (int i = 0; i < 20 && v.wants_frame(); ++i) {
-      v.frame(clock);
-      clock += 1.0 / 60.0;
-    }
-  }
-
-  /// Sends one event and runs its frames.
-  void send(pointer_event e) {
-    v.input(e);
-    run();
-  }
-
-  void move(float x, float y) {
-    send({pointer_event::kind::move, x, y});
-  }
-
-  void drag(float x0, float y0, float x1, float y1, int button = 0) {
-    move(x0, y0);
-    send({pointer_event::kind::down, x0, y0, button});
-    for (int k = 1; k <= 4; ++k) {
-      move(x0 + (x1 - x0) * k / 4.0f, y0 + (y1 - y0) * k / 4.0f);
-    }
-    send({pointer_event::kind::up, x1, y1, button});
-  }
-
-  void wheel(float x, float y, float notches) {
-    move(x, y);
-    pointer_event e{pointer_event::kind::wheel, x, y};
-    e.wheel_y = notches;
-    send(e);
-  }
-
-  plot_view plot(size_t i = 0) const {
-    const std::vector<plot_view> views = v.view_state();
-    EXPECT_GT(views.size(), i);
-    return views.size() > i ? views[i] : plot_view{};
-  }
-};
 
 TEST(live_view_input, ViewStateReportsThePlotAreaAndTheSourceLimits) {
   driven_view d(kPan);

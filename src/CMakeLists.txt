@@ -44,6 +44,8 @@ add_library(nymph STATIC
   elements/plot_style.cpp
   elements/plot2d.hpp
   elements/plot2d.cpp
+  elements/plot_pick.hpp
+  elements/plot_pick.cpp
   elements/plot3d.hpp
   elements/plot3d.cpp
   elements/gantt.hpp

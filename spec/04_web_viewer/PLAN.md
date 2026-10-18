@@ -181,6 +181,19 @@ the view can be reset and read back, and PNG output is unchanged.
 
 ### 5. Picks and tooltips for XY series
 
+*Result: done.* `pick`, `pick_candidate` and the pick calls live in
+`render/draw_context.hpp` (elements need them; `src/view/` depends on
+`render/`, not the other way), and `src/elements/plot_pick.hpp/.cpp`
+holds the plot helpers (`offer_nearest_point()`, `format_axis_value()`:
+category tick labels, ISO dates on time axes, the axis format,
+`finish_plot_picks()`: ring and tooltip). `live_view` reports
+`view_pick` (with the element path) through `hovered()` and
+`take_click()`. Found while testing: an input needs three frames, not
+two (ImPlot sees the hover a frame late; ImGui hides a new tooltip on its
+first frame). Error bars win ties with their line and add the error.
+11 tests in `test_pick.cpp`; the test driver moved to
+`tests/live_view_driver.hpp`. 385 tests pass.
+
 **Goal:** hovering a data point of a 2D series reports it and shows a
 tooltip, in a live view only.
 

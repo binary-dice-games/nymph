@@ -21,6 +21,7 @@
 #include <string>
 #include <utility>
 #include <vector>
+#include "elements/plot_pick.hpp"
 #include "elements/plot_style.hpp"
 #include "render/draw_context.hpp"
 #include "render/text_style.hpp"
@@ -443,6 +444,7 @@ class plot_class : public element_class {
             static_cast<ImPlotLegendFlags>(lflags));
       }
       dc.draw_children(n);
+      finish_plot_picks(dc);
       dc.record_current_plot(n, y2);
       ImPlot::EndPlot();
     }
@@ -612,7 +614,7 @@ class xy_series : public series_class {
     }
   }
 
-  void plot(const node& n, draw_context&) const override {
+  void plot(const node& n, draw_context& dc) const override {
     const doubles& ys = n.get<doubles>(kYs);
     const doubles generated = n.get<doubles>(kXs).empty() ? index_xs(ys.size()) : doubles{};
     const doubles& xs = generated.empty() ? n.get<doubles>(kXs) : generated;
@@ -657,6 +659,9 @@ class xy_series : public series_class {
           ImPlot::PlotBars(label, xs.data(), ys.data(), count, n.get<double>(kExtra), spec);
         }
         break;
+    }
+    if (kind_ != xy_kind::bars && kind_ != xy_kind::bars_h) {
+      offer_nearest_point(dc, n, label, xs.data(), ys.data(), count);
     }
   }
 
@@ -1123,7 +1128,7 @@ class error_bars_class : public series_class {
     require_same_length(n, pos, ys);
   }
 
-  void plot(const node& n, draw_context&) const override {
+  void plot(const node& n, draw_context& dc) const override {
     const doubles& y = n.get<doubles>(ys);
     const doubles generated = n.get<doubles>(xs).empty() ? index_xs(y.size()) : doubles{};
     const doubles& x = generated.empty() ? n.get<doubles>(xs) : generated;
@@ -1145,6 +1150,28 @@ class error_bars_class : public series_class {
       ImPlot::PlotErrorBars(
           label, x.data(), y.data(), n.get<doubles>(neg).data(), n.get<doubles>(pos).data(), count_of(y), spec);
     }
+    // The error bars usually sit on a line's points: win the tie, and say
+    // the error too.
+    const bool vertical = !n.get<bool>(horizontal);
+    offer_nearest_point(
+        dc,
+        n,
+        label,
+        x.data(),
+        y.data(),
+        count_of(y),
+        [&](int i, pick& p) {
+          const ImAxis axis = vertical ? ImPlot::GetCurrentPlot()->CurrentY : ImPlot::GetCurrentPlot()->CurrentX;
+          if (const doubles& e = n.get<doubles>(err); !e.empty()) {
+            p.values.push_back({"error", "+/-" + format_axis_value(axis, e[i])});
+          } else {
+            p.values.push_back(
+                {"error",
+                 "-" + format_axis_value(axis, n.get<doubles>(neg)[i]) + " / +" +
+                     format_axis_value(axis, n.get<doubles>(pos)[i])});
+          }
+        },
+        0.5f);
     // ImPlot v1.0 gives a new error-bar item the next colormap colour, then
     // draws it in spec.LineColor (or the text colour). Give that colormap
     // colour back to the next series, and make the item's colour (legend
