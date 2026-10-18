@@ -71,7 +71,7 @@ scaled to any box width, up or down.
 ### 3. Extension skeleton and packaging
 
 **Goal:** the build produces a loadable extension that runs a content
-script on its default hosts and does nothing else yet.
+script on every page and does nothing else yet.
 
 **Deliverables:**
 - `extension/manifest.json.in` (DESIGN.md section 5.1), `extension/icons/`,
@@ -81,12 +81,13 @@ script on its default hosts and does nothing else yet.
 - `extension/CMakeLists.txt` (DESIGN.md section 6), added from the root
   `CMakeLists.txt` under `NYMPH_WEB`.
 - `extension/tests/browser/harness.mjs`: launches Chromium with the
-  extension and a test manifest granting `<all_urls>`, and serves
+  extension, and serves
   fixture pages on two local origins with OS-assigned ports.
 
 **Tests:**
 - Browser: on a fixture page the content script runs once and sets a
-  test-visible marker; a page on a disabled site gets no `main.js`.
+  test-visible marker; a page on a site in the `off` setting gets no
+  `main.js`.
 - The zip contains the manifest with the project version and every
   file of the unpacked folder.
 
@@ -153,27 +154,32 @@ with bounded cost.
 - Node: the pool's parking order (farthest first, never under the
   pointer or inside the margin).
 
-### 7. Living with the host page, settings and popup
+### 7. Living with the host page, the toolbar button and options
 
 **Goal:** the user can use the chart without breaking the page, switch
-back to the image, and turn the extension on and off per site.
+back to the image, and turn the extension on and off for a site with
+one click on its button.
 
 **Deliverables:**
 - Link handling and the badge (Show image / Show chart / Open image) in
   `replacer.js`; `aria-label` fallback to `alt`.
-- `extension/src/popup/` and the settings of DESIGN.md section 5.2;
-  per-site permission request and `registerContentScripts`; the
-  toolbar badge count.
-- Live response to setting changes in `main.js`.
+- The toolbar button of DESIGN.md section 3.8 in the service worker
+  (click toggle, per-tab icon, title and badge, disabled on restricted
+  pages); `extension/src/options/` and the settings of section 5.2;
+  the first-run tab asking to pin the button.
+- Live response to setting changes in `loader.js` and `main.js`.
 
 **Tests (browser):**
 - Dragging and clicking a chart inside a link does not navigate;
   "Open image" opens the link's target.
 - Show image / Show chart toggle one chart only.
-- Turning the site off restores every image and removes every host and
-  the stylesheet (the page's DOM equals a page loaded with the extension
-  off, ignoring the page's own changes); turning it on replaces them
-  again.
+- Clicking the button turns the site off: every image restored, every
+  host and the stylesheet removed (the page's DOM equals a page loaded
+  with the extension off, ignoring the page's own changes), in every
+  open tab of the site, the icon grey and the badge empty; clicking
+  again replaces them and the badge counts the charts; the choice
+  survives a reload; a second site stays on throughout.
+- Removing a site from the options page's list turns it back on.
 - `theme: 'auto'` follows an emulated dark colour scheme.
 
 ### 8. GitHub
@@ -214,7 +220,8 @@ matches the code.
 
 **Deliverables:**
 - `docs/extension.md`: install (unpacked folder, zip), what is replaced,
-  supported sites, enabling other sites, settings, privacy (no data
+  sites given special care, pinning and using the toolbar button,
+  options, privacy (no data
   leaves the browser), limits (re-encoding services, shadow roots,
   canvases); a row in README's "Further Documentation".
 - `README.md`: the extension in the overview and the layout table

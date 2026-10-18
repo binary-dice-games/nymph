@@ -35,7 +35,8 @@ The main use cases, which get site-specific care and manual verification:
    far this is possible is decided by the feasibility check.
 
 In scope: the extension (`extension/`): manifest, content script,
-service worker, toolbar popup, packaging into an unpacked folder and a
+service worker, the toolbar button (section 3.8), an options page,
+packaging into an unpacked folder and a
 zip from the `NYMPH_WEB` build; one viewer change, `fit: 'scale'`
 (section 5.3); tests with fixture pages in Chromium.
 
@@ -44,7 +45,8 @@ an equivalent exists, so a port stays small); images inside shadow
 roots, cross-origin iframes the extension is not granted, `<canvas>` and
 CSS background images (except as section 3.7 allows for Google Docs);
 editing charts; publishing to the Chrome Web Store (a later release
-task; the design keeps the permissions store-friendly).
+task; running on every site needs `<all_urls>`, which the store
+listing must justify).
 
 ## 2. Design Goals
 
@@ -66,10 +68,12 @@ task; the design keeps the permissions store-friendly).
 5. **Bounded on pages with many charts.** Only images near the viewport
    become viewers, and the number of live viewers is capped; the user's
    zoom survives a viewer being freed and recreated.
-6. **Private and least-privileged.** No data leaves the browser; the
-   extension fetches only image URLs the page already shows; it runs by
-   default only on GitHub and Google Docs and on other sites only after
-   the user grants them.
+6. **Everywhere, one click to turn off.** The extension runs on every
+   site, with no list of allowed sites; the user turns it off (and on
+   again) for the site in the current tab with one click on its button
+   next to the address bar (section 3.8).
+7. **Private.** No data leaves the browser; the extension fetches only
+   image URLs the page already shows.
 
 ## 3. Behaviour
 
@@ -175,18 +179,15 @@ replace it the new element is simply a new candidate (and a cache hit).
   it is destroyed and its image is shown again. When the image comes
   near again it gets a viewer from the kept YAML (`setSource()`), so the
   user's zoom and hidden series come back.
-- Enabling and disabling apply live: a change of the settings (section
-  5.2) for the current site starts the scan, or destroys every viewer,
-  removes every host and the stylesheet and restores every image.
+- Turning on and off applies live (section 3.8): turning on starts the
+  scan; turning off destroys every viewer, removes every host and the
+  stylesheet and restores every image, without reloading the page.
 
 ### 3.6 GitHub
 
 Generic `<img>` handling covers GitHub's markdown; the GitHub adapter
 adds only:
 
-- the hosts it fetches from (`github.com`, `*.githubusercontent.com`,
-  `camo.githubusercontent.com`) are in the extension's default host
-  permissions;
 - `github.com/<o>/<r>/raw/...` URLs are fetched from the content script
   (same origin, with the user's cookies, so private repositories work);
   the redirect to `raw.githubusercontent.com` carries its own token and
@@ -232,6 +233,31 @@ ending in `.png`, `.yaml` or `.yml` on a host the extension may fetch,
 and that URL's content is a nymph PNG or a source the viewer accepts.
 It is built only if step 1 shows Docs needs it.
 
+### 3.8 The toolbar button
+
+The extension's button (the `action`, pinned next to the address bar)
+shows and toggles its state for the current tab's site, like the
+Translate icon does for translation:
+
+- **Icon**: the nymph icon in colour when the extension is on for the
+  tab's site, greyed out when off. The **badge** shows the number of
+  charts replaced on the tab (empty when none). The **title** (tooltip)
+  says "nymph: on for <site>, 3 charts. Click to turn off." or "nymph:
+  off for <site>. Click to turn on."
+- **Click**: toggles the site (the tab's origin) on or off. The choice
+  is stored (section 5.2) and applies at once to every open tab of that
+  site, without reloading: off restores every image, on scans the page
+  (section 3.5).
+- **Context menu** (right click on the button): "Options" (theme, and
+  the list of sites turned off, each removable).
+- Pages where extensions cannot run (`chrome://`, the Web Store, PDF
+  viewer) show the button disabled, with a title saying so.
+- On install, an options tab opens once and asks the user to pin the
+  button (Chrome does not let an extension pin itself).
+
+Every site is on until the user turns it off: there is no list of
+allowed sites.
+
 ## 4. Key Abstractions
 
 All in `extension/src/`, plain ES modules, no framework, no build step
@@ -239,15 +265,15 @@ beyond copying.
 
 | Module | Role | Invariants |
 |---|---|---|
-| `content/loader.js` | The declared content script (classic script, as MV3 requires): reads the settings for this site and, when on, `import()`s `content/main.js` from the extension. | Does nothing else; on a disabled site it costs one storage read. |
+| `content/loader.js` | The declared content script, on every page (classic script, as MV3 requires): reads the settings for this site and, when on, `import()`s `content/main.js` from the extension; listens for the toggle message (section 3.8). | Does nothing else: on a site turned off, and until a page has images, it costs one storage read. |
 | `content/scanner.js` | The observers of section 3.5; turns DOM changes into candidates for the active site adapter. | Never runs work inside an observer callback; never touches nodes it did not create except the one attribute of section 3.3. |
 | `content/sniff.js` | `sniffPng(reader) -> {nymph: boolean, bytes?}`: reads a byte stream, checks the PNG signature, walks chunk headers (length, type) up to the first `IDAT`, and answers whether a `iTXt` chunk with keyword `nymph` is among them; on yes, reads the rest of the stream (up to 32 MiB) and returns all bytes; on no, cancels the stream. | Pure over bytes (tested in Node); reads at most the chunk headers before `IDAT` and the keyword of each `iTXt`; never trusts a chunk length beyond the cap. |
 | `content/fetcher.js` | Gets an image's byte stream: `data:` decoded in place; same-origin and `blob:` URLs with `fetch(url, {cache: 'force-cache', credentials: 'same-origin'})` in the content script; cross-origin URLs through the service worker. At most 4 fetches at a time. | Fetches only the `currentSrc` of a candidate (or a linked source, section 3.7); never a URL taken from inside a chart's YAML. |
-| `background/service-worker.js` | Cross-origin fetches for content scripts (host permissions lift CORS there), with `credentials: 'omit'`; sniffs first and returns only nymph PNG bytes (base64 over `chrome.runtime` messaging) or "not nymph". Also registers content scripts for user-granted sites and keeps the toolbar badge count. | Answers only messages from its own content scripts; enforces the same caps as the sniffer. |
+| `background/service-worker.js` | Cross-origin fetches for content scripts (host permissions lift CORS there), with `credentials: 'omit'`; sniffs first and returns only nymph PNG bytes (base64 over `chrome.runtime` messaging) or "not nymph". Also owns the toolbar button (section 3.8): toggles, per-tab icon, title and badge. | Answers only messages from its own content scripts; enforces the same caps as the sniffer. |
 | `content/replacer.js` | Creates the host (section 3.2), the shadow root and the viewer (`createViewer` from the bundled `nymph-viewer.js`), swaps in after `rendered()`, the badge, link handling; restores the image. | The image is hidden only after the chart is drawn; every failure path restores the image and records the URL as "not nymph" for this page. |
 | `content/pool.js` | The viewer pool of section 3.5: cap, parking by distance to the viewport, parked YAML. | Never parks a viewer under the pointer or within the observer margin. |
 | `content/sites/*.js` | Site adapters: `generic` (images), `github` (fetch routing), `gdocs` (per section 3.7). An adapter answers `candidates(root)`, `anchor(candidate)` (where the host goes and how it is sized: in flow after the image, or an overlay) and `fetchRoute(url)`. | The generic adapter is the default for every site; adapters only narrow or extend it. |
-| `popup/` | The toolbar popup: on / off globally, on / off for this site (asking for the host permission when the site is not a default one), theme (`source` or `auto`), the number of charts on the tab. | Writes only `chrome.storage.sync`; content scripts follow its changes live. |
+| `options/` | The options page (from the button's context menu): theme (`source` or `auto`) and the list of sites turned off, each removable. | Writes only `chrome.storage.sync`; content scripts follow its changes live. |
 
 The bundled viewer (`viewer/`: `nymph-viewer.js`, `nymph-viewer-core.js`,
 `.wasm`, `fonts/`) is the unchanged output of the `NYMPH_WEB` build,
@@ -260,20 +286,18 @@ loaded once per page on the first nymph image with
 
 - Manifest V3; `minimum_chrome_version` 116 (WebAssembly in content
   scripts and the `wasm-unsafe-eval` CSP keyword; confirmed by step 1).
-- `permissions`: `storage`, `scripting`.
-- `host_permissions` (granted on install): `https://github.com/*`,
-  `https://*.githubusercontent.com/*`, `https://docs.google.com/*` (and
-  the image host Docs uses, from step 1).
-- `optional_host_permissions`: `<all_urls>`; the popup's "Enable on this
-  site" requests the site's origin and registers the content script for
-  it with `chrome.scripting.registerContentScripts` (persisted). Images
-  from hosts without permission can still be read when same-origin or
-  CORS-enabled; otherwise they stay images.
-- `content_scripts`: `content/loader.js` on the default hosts,
+- `permissions`: `storage`.
+- `host_permissions`: `<all_urls>`, granted on install: the content
+  script runs everywhere, and the service worker can read cross-origin
+  images on any site.
+- `content_scripts`: `content/loader.js` on `<all_urls>`,
   `run_at: document_idle`, `all_frames: false` (main frame only).
-- `web_accessible_resources`: `content/*`, `viewer/*`, restricted to the
-  granted hosts, with `use_dynamic_url: true` so pages cannot use the
-  resources to detect the extension.
+- `action`: the toolbar button, no `default_popup` (a click toggles,
+  section 3.8), icons for on and off.
+- `options_ui`: `options/options.html`.
+- `web_accessible_resources`: `content/*`, `viewer/*` for `<all_urls>`,
+  with `use_dynamic_url: true` so pages cannot use the resources to
+  detect the extension.
 - `content_security_policy.extension_pages`:
   `script-src 'self' 'wasm-unsafe-eval'; object-src 'self'`.
 
@@ -281,8 +305,7 @@ loaded once per page on the first nymph image with
 
 | Key | Type | Default | Meaning |
 |---|---|---|---|
-| `enabled` | boolean | `true` | Master switch. |
-| `sites` | object, origin to boolean | `{}` | Per-site override; a default host is on unless `false`; any other site is on only when `true` and its permission is granted. |
+| `off` | array of origins | `[]` | Sites the user turned off with the button; every other site is on. |
 | `theme` | `"source"` \| `"auto"` | `"source"` | The viewers' theme (section 3.2). |
 
 ### 5.3 Viewer change: `fit: 'scale'`
@@ -336,8 +359,7 @@ removes all three.
 3. **Browser** (`extension/tests/browser/`, Playwright with the
    preinstalled Chromium and `--load-extension`): fixture pages served
    on two local origins (`127.0.0.1` and `localhost`, ports from the OS)
-   and mapped to a default host by a test-only manifest (`<all_urls>`
-   granted), each asserting what the user would see:
+   each asserting what the user would see:
    - a markdown-like page with nymph and plain PNGs: only the nymph ones
      become viewers, with the image's box (within 1 px) and pixels close
      to the PNG (the viewer DESIGN browser tolerance);
@@ -350,8 +372,10 @@ removes all three.
      back with its zoom;
    - a strict CSP page (GitHub's policy headers) and a cross-origin
      image without CORS (through the service worker);
-   - corrupt and wish-style PNGs stay images; turning the site off
-     restores every image and turning it on again replaces them;
+   - corrupt and wish-style PNGs stay images; clicking the button turns
+     the site off in every open tab of it (every image restored, grey
+     icon, empty badge) and on again (charts back, badge count), and
+     the choice survives a reload; another site stays on;
    - a page without nymph images loads no `.wasm`.
 4. **Manual**, recorded in PLAN.md results: GitHub (README, issue,
    pull request comment with an uploaded PNG, comment preview, dark
@@ -398,9 +422,23 @@ removes all three.
 - **Swap after the first frame.** Creating the viewer hidden and
   swapping when `rendered()` resolves avoids a blank box while the
   module or a font loads.
-- **Default hosts plus opt-in.** `<all_urls>` at install is a heavy
-  permission (store review, user trust); the use cases need two sites,
-  and other sites are one click in the popup.
+- **Everywhere, off by exception; no list of allowed sites.** Charts
+  are pasted anywhere (wikis, forums, chat logs, internal tools), and a
+  list to maintain would hide them on every site nobody added. The cost
+  is the `<all_urls>` permission and a loader on every page, which goal
+  4 keeps to one storage read until an image is near the viewport.
+  Rejected: default sites plus opt-in through optional permissions (the
+  earlier version of this design).
+- **A toolbar button, not an address bar icon.** Chrome gives
+  extensions no icon inside the address bar: Manifest V3 removed page
+  actions, and the Translate icon is a browser feature. The action
+  button, pinned next to the address bar, is the closest; it shows the
+  tab's state with its icon, as Translate does, and a click toggles.
+  Rejected: a popup with switches (two clicks for the common action).
+- **Off per site, remembered.** A click turns the extension off for the
+  tab's origin, for every tab and future visit, as users expect from
+  "this site doesn't need it"; a per-tab, forgotten toggle would bring
+  the charts back on every reload.
 - **Cross-origin fetches without credentials.** Images the page loaded
   from another origin are re-fetched without cookies, so the extension
   never sends a user's cookies to a third party; images that need them
