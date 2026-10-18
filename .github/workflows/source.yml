@@ -1,0 +1,80 @@
+# MIT License © 2026 Binary Dice Games
+#
+# The release source tarball: made on Linux, then unpacked, built, tested
+# and installed with no network (Linux) and on macOS
+# (spec/07_release_pipeline/DESIGN.md section 4.4). Uploads it as the
+# artifact `source`.
+
+name: source
+
+on:
+  workflow_call:
+
+permissions:
+  contents: read
+
+jobs:
+  tarball:
+    runs-on: ubuntu-24.04
+    outputs:
+      version: ${{ steps.make.outputs.version }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          submodules: recursive
+          persist-credentials: false
+      - name: Make the tarball
+        id: make
+        run: |
+          version=$(sed -n 's/^  VERSION \([0-9][0-9.]*\)$/\1/p' CMakeLists.txt | head -n 1)
+          [ -n "$version" ] || { echo "no project VERSION in CMakeLists.txt" >&2; exit 1; }
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          mkdir -p dist
+          cmake -DSOURCE_DIR="$PWD" -DVERSION="$version" -DOUTPUT="$PWD/dist/nymph-$version-src.tar.gz" \
+            -P cmake/NymphSourceDist.cmake
+          tar tzf "dist/nymph-$version-src.tar.gz" | sort > dist/files-1.txt
+          # Two runs give the same files.
+          cmake -DSOURCE_DIR="$PWD" -DVERSION="$version" -DOUTPUT="$RUNNER_TEMP/again.tar.gz" \
+            -P cmake/NymphSourceDist.cmake
+          tar tzf "$RUNNER_TEMP/again.tar.gz" | sort | diff - dist/files-1.txt
+          rm dist/files-1.txt
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: source
+          path: dist/
+          if-no-files-found: error
+
+  check:
+    needs: tarball
+    strategy:
+      fail-fast: false
+      matrix:
+        runner: [ubuntu-24.04, macos-15]
+    runs-on: ${{ matrix.runner }}
+    steps:
+      # Only the check script: the build uses the tarball, not the checkout.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          sparse-checkout: tests/source_dist_check.cmake
+          sparse-checkout-cone-mode: false
+          persist-credentials: false
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: source
+          path: ${{ runner.temp }}/source
+      - name: Tools
+        run: |
+          if [ "$RUNNER_OS" = Linux ]; then sudo apt-get update && sudo apt-get install -y ninja-build; fi
+          if [ "$RUNNER_OS" = macOS ]; then command -v ninja || brew install ninja; fi
+      - name: Build, test and install the tarball
+        env:
+          VERSION: ${{ needs.tarball.outputs.version }}
+        run: |
+          set -- cmake "-DTARBALL=$RUNNER_TEMP/source/nymph-$VERSION-src.tar.gz" "-DVERSION=$VERSION" \
+            "-DWORK_DIR=$RUNNER_TEMP/check" -DGENERATOR=Ninja -P "$PWD/tests/source_dist_check.cmake"
+          if [ "$RUNNER_OS" = Linux ]; then
+            # No network: a new network namespace with only loopback.
+            sudo unshare --net -- sudo -u "$USER" env PATH="$PATH" HOME="$HOME" "$@"
+          else
+            "$@"
+          fi

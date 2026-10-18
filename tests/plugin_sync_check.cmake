@@ -2,7 +2,7 @@
 #
 # spec/06_claude_integration/PLAN.md step 8: the committed files of the
 # Claude Code plugin match their sources (run the nymph-plugin-sync target
-# after changing SKILL.md, docs/agent-guide.md or the version).
+# after changing SKILL.md or docs/agent-guide.md).
 #
 #   cmake -DSOURCE_DIR=<repo> -DVERSION=<x.y.z> -P plugin_sync_check.cmake
 
@@ -18,10 +18,26 @@ foreach(pair "skills/nymph/SKILL.md=claude/skill/nymph/SKILL.md" "skills/nymph/r
     list(APPEND stale "claude/plugin/${copy}")
   endif()
 endforeach()
+# The version is the pinned release's (spec/07_release_pipeline/DESIGN.md
+# section 4.5): 0.0.0 while checksums.txt pins none.
+set(pinned "0.0.0")
+file(STRINGS "${plugin}/bin/checksums.txt" entries REGEX "^[0-9a-f]+  nymph-[0-9]+\\.[0-9]+\\.[0-9]+-")
+set(versions "")
+foreach(entry IN LISTS entries)
+  string(REGEX REPLACE "^[0-9a-f]+  nymph-([0-9]+\\.[0-9]+\\.[0-9]+)-.*$" "\\1" entry_version "${entry}")
+  list(APPEND versions "${entry_version}")
+endforeach()
+list(REMOVE_DUPLICATES versions)
+list(LENGTH versions version_count)
+if(version_count GREATER 1)
+  list(APPEND stale "claude/plugin/bin/checksums.txt (pins several versions: ${versions})")
+elseif(version_count EQUAL 1)
+  set(pinned "${versions}")
+endif()
 file(READ "${plugin}/.claude-plugin/plugin.json" manifest)
 string(JSON plugin_version GET "${manifest}" version)
-if(NOT plugin_version STREQUAL VERSION)
-  list(APPEND stale "claude/plugin/.claude-plugin/plugin.json (version ${plugin_version}, not ${VERSION})")
+if(NOT plugin_version STREQUAL pinned)
+  list(APPEND stale "claude/plugin/.claude-plugin/plugin.json (version ${plugin_version}, not the pinned ${pinned})")
 endif()
 if(stale)
   message(FATAL_ERROR "out of date: ${stale}; run: cmake --build <build> --target nymph-plugin-sync")

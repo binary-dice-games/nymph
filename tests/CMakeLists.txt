@@ -239,3 +239,9 @@ if(NYMPH_POWERSHELL)
     COMMAND ${NYMPH_POWERSHELL} -NoProfile -ExecutionPolicy Bypass -File ${CMAKE_CURRENT_SOURCE_DIR}/install_script.ps1
             ${PROJECT_SOURCE_DIR}/packaging/install/install.ps1 ${CMAKE_CURRENT_BINARY_DIR}/install_script_ps1)
 endif()
+
+# ── Plugin pin and version (spec/07_release_pipeline step 6) ────────────────
+
+add_test(NAME nymph_plugin_sync_versions
+  COMMAND ${CMAKE_COMMAND} -DSOURCE_DIR=${PROJECT_SOURCE_DIR} -DWORK_DIR=${CMAKE_CURRENT_BINARY_DIR}/plugin_sync_versions
+          -P ${CMAKE_CURRENT_SOURCE_DIR}/plugin_sync_versions.cmake)

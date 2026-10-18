@@ -1,0 +1,62 @@
+# MIT License © 2026 Binary Dice Games
+#
+# Every target built and tested on pull requests and on main
+# (spec/07_release_pipeline/DESIGN.md section 4.2).
+
+name: ci
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  native:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { target: linux-x86_64, runner: ubuntu-24.04, build_type: Debug }
+          - { target: linux-arm64, runner: ubuntu-24.04-arm, build_type: Release }
+          - { target: macos-arm64, runner: macos-15, build_type: Debug }
+          - { target: macos-x86_64, runner: macos-15-intel, build_type: Release }
+          - { target: windows-msvc, runner: windows-latest, build_type: Debug }
+          - { target: windows-msys2, runner: windows-latest, build_type: Release }
+    uses: ./.github/workflows/build.yml
+    with:
+      target: ${{ matrix.target }}
+      runner: ${{ matrix.runner }}
+      build_type: ${{ matrix.build_type }}
+      path_check: true
+
+  web:
+    uses: ./.github/workflows/build.yml
+    with:
+      target: web
+      runner: ubuntu-24.04
+
+  # The release configuration, with the App page from the web job.
+  release-smoke:
+    needs: web
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { target: linux-x86_64, runner: ubuntu-24.04 }
+          - { target: macos-arm64, runner: macos-15 }
+    uses: ./.github/workflows/build.yml
+    with:
+      target: ${{ matrix.target }}
+      runner: ${{ matrix.runner }}
+      release: true
+
+  source:
+    uses: ./.github/workflows/source.yml
