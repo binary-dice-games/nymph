@@ -140,6 +140,8 @@ carries its source: `bdg::nymph::extract_source(png)` returns it.
 | [spec/05_browser_extension/PLAN.md](spec/05_browser_extension/PLAN.md) | Its implementation steps and tests |
 | [spec/06_claude_integration/DESIGN.md](spec/06_claude_integration/DESIGN.md) | Claude integration: `nymph mcp` server, the MCP App viewer in the chat, plugin, `.mcpb` and Skill packages |
 | [spec/06_claude_integration/PLAN.md](spec/06_claude_integration/PLAN.md) | Its implementation steps and tests |
+| [spec/07_release_pipeline/DESIGN.md](spec/07_release_pipeline/DESIGN.md) | Releases from a tag: CI, macOS, source install, Homebrew, Chrome Web Store, plugin pin |
+| [spec/07_release_pipeline/PLAN.md](spec/07_release_pipeline/PLAN.md) | Its implementation steps and tests |
 | [CHANGELOG.md](CHANGELOG.md) | User-facing changes between releases |
 | [CLAUDE.md](CLAUDE.md) | Coding style and project rules for AI agents and contributors |
 
