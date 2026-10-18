@@ -29,6 +29,8 @@ add_library(nymph STATIC
   core/suggest.hpp
   core/sha256.hpp
   core/sha256.cpp
+  render/gl/shared_library.hpp
+  render/gl/shared_library.cpp
   fonts/embedded_fonts.hpp
   fonts/fonts.cpp
   fonts/font_testing.hpp
@@ -93,6 +95,10 @@ target_include_directories(nymph PUBLIC
   ${CMAKE_CURRENT_BINARY_DIR}/generated
 )
 target_link_libraries(nymph PUBLIC nymph_imgui imuml PRIVATE yaml nymph_stb)
+# The run-time loader (shared_library): OpenGL, and the window of `nymph view`.
+if(NOT WIN32)
+  target_link_libraries(nymph PRIVATE ${CMAKE_DL_LIBS})
+endif()
 
 # ── nymph_cli — the command line over the library ───────────────────────────
 
@@ -169,6 +175,34 @@ if(NYMPH_MCP)
   endif()
 endif()
 
+# ── nymph_window — `nymph view`, the viewer in a native window ──────────────
+
+# spec/04_web_viewer/DESIGN.md section 10. A window and an OpenGL 3.3
+# context of the system's own libraries (Win32 and opengl32.dll, or X11 and
+# libGL.so.1), every function looked up at run time (nothing is linked); Dear ImGui's OpenGL3
+# backend (which loads OpenGL itself, at run time) draws the live_view into
+# it, as the web viewer does with WebGL.
+if(NYMPH_VIEW)
+  add_library(nymph_window STATIC
+    window/view_command.hpp
+    window/view_command.cpp
+    window/viewer_window.hpp
+    window/viewer_window.cpp
+    window/window_host.hpp
+    "${NYMPH_EXTERN_DIR}/imgui/backends/imgui_impl_opengl3.cpp"
+  )
+  # One window implementation per platform (window_host.hpp); no header or
+  # library of either is needed.
+  if(WIN32)
+    target_sources(nymph_window PRIVATE window/window_win32.cpp)
+  else()
+    target_sources(nymph_window PRIVATE window/window_x11.cpp)
+    target_link_libraries(nymph_window PRIVATE ${CMAKE_DL_LIBS})
+  endif()
+  target_include_directories(nymph_window PRIVATE "${NYMPH_EXTERN_DIR}/imgui/backends")
+  target_link_libraries(nymph_window PUBLIC nymph_cli)
+endif()
+
 # ── OpenGL rasterizer (optional; OpenGL itself is loaded at run time) ────────
 
 if(NYMPH_OPENGL)
@@ -192,7 +226,5 @@ if(NYMPH_OPENGL)
   if(WIN32)
     # System libraries for the hidden window and pixel format; not OpenGL.
     target_link_libraries(nymph PRIVATE user32 gdi32)
-  else()
-    target_link_libraries(nymph PRIVATE ${CMAKE_DL_LIBS})
   endif()
 endif()

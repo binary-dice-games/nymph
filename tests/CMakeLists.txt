@@ -112,6 +112,12 @@ nymph_add_test(test_pick test_pick.cpp)
 nymph_add_test(test_imuml_interactive test_imuml_interactive.cpp)
 nymph_add_test(test_saved_view test_saved_view.cpp)
 
+# `nymph view` up to the window (spec/04_web_viewer, plan step 14).
+if(NYMPH_VIEW)
+  nymph_add_test(test_view_command test_view_command.cpp)
+  target_link_libraries(test_view_command PRIVATE nymph_window)
+endif()
+
 # Script tests run a cross-built nymph through the toolchain's emulator,
 # passed '|'-separated (a ';' list would split on the command line).
 string(REPLACE ";" "|" _nymph_runner "${CMAKE_CROSSCOMPILING_EMULATOR}")

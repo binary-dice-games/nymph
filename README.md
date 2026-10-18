@@ -11,7 +11,8 @@ linked.
 It is meant for AI agents that need to show information as a chart.
 The [web viewer](docs/viewer.md) shows the same charts live in a web page
 (WebAssembly and WebGL2), with pan, zoom and data-point values, for
-markdown viewers and chatbots: `<nymph-viewer src="chart.yaml"></nymph-viewer>`.
+markdown viewers and chatbots: `<nymph-viewer src="chart.yaml"></nymph-viewer>`;
+`nymph view chart.yaml` opens it in a window.
 The [Chrome extension](docs/extension.md) does it on any page you read:
 nymph PNGs on GitHub or any site become live charts of the same size.
 
