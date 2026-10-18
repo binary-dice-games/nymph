@@ -114,6 +114,7 @@ class draw_context {
   ///        changed) and keeps the last frame's plot views as previous.
   void begin_frame() {
     rects_.clear();
+    input_areas_.clear();
     previous_views_ = std::move(views_);
     views_.clear();
     candidate_.reset();
@@ -159,6 +160,20 @@ class draw_context {
   ///        limits for `n`; call between BeginPlot and EndPlot, after its
   ///        items. Does nothing when not interactive.
   void record_current_plot(const node& n, bool with_y2);
+
+  /// @brief In a live view, records `r` as an area that takes pointer input
+  ///        (a plot or diagram that pans and zooms), so the host lets the
+  ///        wheel scroll the page everywhere else.
+  void add_input_area(const rect& r) {
+    if (interactive_) {
+      input_areas_.push_back(r);
+    }
+  }
+
+  /// @brief The input areas recorded in this frame.
+  const std::vector<rect>& input_areas() const {
+    return input_areas_;
+  }
 
   /// @brief The plot views recorded in this frame.
   const std::vector<plot_view_record>& plot_views() const {
@@ -250,6 +265,7 @@ class draw_context {
   std::optional<pick_candidate> candidate_;
   std::optional<pick> hovered_;
   std::vector<plot_view_record> views_;
+  std::vector<rect> input_areas_;
   std::vector<plot_view_record> previous_views_;
   std::unordered_map<const node*, rect> rects_;
   std::map<std::string, ImFont*, std::less<>> fonts_;

@@ -453,6 +453,7 @@ std::vector<std::string> diagram_class::implied_fonts(const node& n, const std::
 
 void diagram_class::draw(const node& n, draw_context& dc) const {
   const rect r = dc.rect_of(n);
+  dc.add_input_area(r);
   const ImUmlDiagramInfo info = submit(n, dc, &r);
   if (dc.interactive()) {
     offer_hovered(n, dc, info);

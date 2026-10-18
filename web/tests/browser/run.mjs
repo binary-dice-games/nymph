@@ -63,7 +63,8 @@ const server = createServer(async (req, res) => {
     res.writeHead(200, { 'content-type': 'text/html' }).end(TEST_PAGE);
     return;
   }
-  const file = path.startsWith('/examples/') ? join(sourceDir, normalize(path)) : join(webDir, normalize(path));
+  const fromSource = path.startsWith('/examples/') || path.startsWith('/resources/');
+  const file = fromSource ? join(sourceDir, normalize(path)) : join(webDir, normalize(path));
   try {
     const body = await readFile(file);
     res.writeHead(200, { 'content-type': TYPES[extname(file)] ?? 'application/octet-stream' }).end(body);
@@ -262,6 +263,217 @@ test('the demo page shows every example', async () => {
   await page.waitForFunction(() => document.querySelectorAll('.live canvas').length >= 20, null, { timeout: 60000 });
   assert(errors.length === 0, errors.join('; '));
   await page.close();
+});
+
+// ── Tests: input, scheduling and the element (plan step 11) ──────────────────
+
+const PLOT = 'image: {width: 400, height: 300}\nroot:\n  type: Plot\n  title: P\n  x_min: 0\n  x_max: 4\n  y_min: 0\n  y_max: 10\n' +
+  '  children:\n    - {type: PlotLine, label: temp, xs: [0, 1, 2, 3, 4], ys: [1, 4, 7, 2, 5]}\n';
+
+/** In-page: a viewer of PLOT at the top of the page, and helpers to find points on it. */
+const plotPage = async (page, source = PLOT, options = {}) => {
+  await page.evaluate(helpers);
+  await page.evaluate(async ({ source, options }) => {
+    const v = await window.nymph.createViewer(window.box(400), { source, ...options });
+    await v.rendered();
+    window.v = v;
+    window.events = [];
+    for (const e of ['hover', 'click', 'view']) {
+      v.on(e, (detail) => window.events.push({ e, detail }));
+    }
+    /** Page coordinates of data point (x, y) of plot `i`. */
+    window.at = (x, y, i = 0) => {
+      const p = window.v.state().views[i];
+      const box = window.v.canvas.getBoundingClientRect();
+      return {
+        x: box.left + p.x + ((x - p.xMin) / (p.xMax - p.xMin)) * p.width,
+        y: box.top + p.y + ((p.yMax - y) / (p.yMax - p.yMin)) * p.height,
+      };
+    };
+  }, { source, options });
+};
+const settleIn = (page) => page.evaluate(() => new Promise((r) => setTimeout(r, 150)).then(() => window.v.rendered()));
+
+test('dragging a plot pans it and fires view', async () => {
+  const page = await openPage();
+  await plotPage(page);
+  const a = await page.evaluate(() => window.at(2, 5));
+  await page.mouse.move(a.x, a.y);
+  await page.mouse.down();
+  await page.mouse.move(a.x - 50, a.y, { steps: 5 });
+  await page.mouse.up();
+  await settleIn(page);
+  const views = await page.evaluate(() => window.events.filter((x) => x.e === 'view').map((x) => x.detail));
+  assert(views.length >= 1, 'a view event');
+  const last = views[views.length - 1][0];
+  assert(last.xMin > 0.3 && Math.abs(last.xMax - last.xMin - 4) < 1e-6, `x range ${last.xMin} to ${last.xMax}`);
+  await page.close();
+});
+
+test('the wheel zooms a plot without scrolling the page, and scrolls it elsewhere', async () => {
+  const page = await openPage();
+  await plotPage(
+    page,
+    'image: {width: 400, height: 300}\nroot:\n  type: VerticalLayout\n  children:\n    - {type: Label, text: A heading over the plot}\n' +
+      '    - {type: Plot, title: P, x_min: 0, x_max: 4, y_min: 0, y_max: 10, height: -1, children: [{type: PlotLine, label: a, ys: [1, 2]}]}\n',
+  );
+  await page.evaluate(() => {
+    const spacer = document.createElement('div');
+    spacer.style.height = '3000px';
+    document.body.appendChild(spacer);
+  });
+  const p = await page.evaluate(() => window.at(2, 5));
+  await page.mouse.move(p.x, p.y);
+  await page.mouse.wheel(0, -120);
+  await settleIn(page);
+  const zoomed = await page.evaluate(() => ({ scroll: window.scrollY, range: window.v.state().views[0].xMax - window.v.state().views[0].xMin }));
+  assert(zoomed.scroll === 0, `the page scrolled to ${zoomed.scroll}`);
+  assert(zoomed.range < 4, `x range ${zoomed.range}`);
+  const label = await page.evaluate(() => {
+    const box = window.v.canvas.getBoundingClientRect();
+    return { x: box.left + 200, y: box.top + 15 };
+  });
+  await page.mouse.move(label.x, label.y);
+  await page.mouse.wheel(0, 200);
+  await page.waitForFunction(() => window.scrollY > 0, null, { timeout: 5000 });
+  await page.close();
+});
+
+test('hovering a point fires hover and draws the tooltip', async () => {
+  const page = await openPage();
+  await plotPage(page);
+  const before = await page.evaluate(() => Array.from(window.pixels(window.v).rgba));
+  const p = await page.evaluate(() => window.at(2, 7));
+  await page.mouse.move(p.x, p.y);
+  await settleIn(page);
+  const result = await page.evaluate((before) => {
+    const hovers = window.events.filter((x) => x.e === 'hover').map((x) => x.detail);
+    const now = window.pixels(window.v).rgba;
+    let changed = 0;
+    for (let i = 0; i < now.length; ++i) changed += now[i] !== before[i] ? 1 : 0;
+    return { hover: hovers[hovers.length - 1], changed };
+  }, before);
+  assert(result.hover?.label === 'temp' && result.hover.values.y === '7', JSON.stringify(result.hover));
+  assert(result.changed > 100, `${result.changed} pixel channels changed`);
+  await page.close();
+});
+
+test('an idle viewer asks for no animation frames', async () => {
+  const page = await openPage(() => {
+    window.frames = 0;
+    const raf = window.requestAnimationFrame.bind(window);
+    window.requestAnimationFrame = (fn) => {
+      ++window.frames;
+      return raf(fn);
+    };
+  });
+  await plotPage(page);
+  const p = await page.evaluate(() => window.at(1, 4));
+  await page.mouse.move(p.x, p.y);
+  await settleIn(page);
+  const before = await page.evaluate(() => window.frames);
+  await page.waitForTimeout(1000);
+  const after = await page.evaluate(() => window.frames);
+  assert(after === before, `${after - before} frames asked for while idle`);
+  await page.close();
+});
+
+test('<nymph-viewer> shows YAML, nymph PNGs, inline YAML, plain PNGs and errors', async () => {
+  const page = await openPage(helpers);
+  const result = await page.evaluate(async () => {
+    const show = (html) =>
+      new Promise((resolve) => {
+        const holder = document.createElement('div');
+        holder.style.width = '500px';
+        holder.innerHTML = html;
+        const el = holder.firstElementChild;
+        el.addEventListener('nymph-load', (e) => resolve({ ok: true, info: e.detail, el }));
+        el.addEventListener('nymph-error', (e) => resolve({ ok: false, text: el.shadowRoot.textContent, line: e.detail.line }));
+        document.body.appendChild(holder);
+      });
+    const yaml = await show('<nymph-viewer src="/examples/line.yaml"></nymph-viewer>');
+    const png = await show('<nymph-viewer src="/examples/line.png"></nymph-viewer>');
+    const inline = await show('<nymph-viewer>\n    root:\n      type: Label\n      text: inline\n</nymph-viewer>');
+    const plain = await show('<nymph-viewer src="/resources/Nymph.png"></nymph-viewer>');
+    const bad = await show('<nymph-viewer>root: {type: Plot, children: [{type: PlotLyne}]}</nymph-viewer>');
+    return {
+      yaml: yaml.ok && yaml.info.hasFigure && window.colours(yaml.el.viewer) > 3,
+      png: png.ok && png.el.viewer.source().includes('Load test'),
+      inline: inline.ok && inline.info.hasFigure,
+      plain: plain.ok && !plain.info.hasFigure && plain.el.viewer.canvas.width > 0,
+      bad: !bad.ok && bad.line === 1 && bad.text.includes("unknown element type 'PlotLyne'"),
+    };
+  });
+  for (const [name, ok] of Object.entries(result)) {
+    assert(ok, `${name} failed`);
+  }
+  await page.close();
+});
+
+test('toPng carries the source on screen, data included', async () => {
+  const page = await openPage();
+  await plotPage(page, 'image: {width: 400, height: 300}\nroot: {type: Plot, children: [{type: PlotLine, label: a, ys: $v}]}\ndata: {v: [1, 2]}\n');
+  const ok = await page.evaluate(async () => {
+    await window.v.setData({ v: [9, 8, 7] });
+    const png = window.v.toPng();
+    const signature = [0x89, 0x50, 0x4e, 0x47].every((b, i) => png[i] === b);
+    const text = new TextDecoder().decode(png); // the source chunk is UTF-8
+    return signature && text.includes(window.v.source()) && window.v.source().includes('[9,8,7]');
+  });
+  assert(ok, 'the PNG carries the source with the new data');
+  await page.close();
+});
+
+test('theme auto follows the colour scheme', async () => {
+  const page = await openPage();
+  await page.emulateMedia({ colorScheme: 'light' });
+  await plotPage(page, PLOT, { theme: 'auto' });
+  const corner = () => page.evaluate(() => Array.from(window.pixels(window.v).rgba.slice(0, 3)));
+  const light = await corner();
+  await page.emulateMedia({ colorScheme: 'dark' });
+  await settleIn(page);
+  const dark = await corner();
+  assert(light[0] > 200 && dark[0] < 80, `corner ${light} then ${dark}`);
+  await page.close();
+});
+
+test('a fit="width" viewer lays out again when its box narrows', async () => {
+  const page = await openPage();
+  await plotPage(page, PLOT.replace('width: 400', 'width: 800'), { fit: 'width' });
+  await page.evaluate(() => (window.v.container.style.width = '800px'));
+  await settleIn(page);
+  const wide = await page.evaluate(() => window.v.state().geometry.layoutWidth);
+  await page.evaluate(() => (window.v.container.style.width = '400px'));
+  await settleIn(page);
+  const narrow = await page.evaluate(() => ({ g: window.v.state().geometry, css: window.v.canvas.style.width }));
+  assert(wide === 800 && narrow.g.layoutWidth === 400 && narrow.css === '400px', `${wide} then ${JSON.stringify(narrow)}`);
+  await page.close();
+});
+
+test('fonts are fetched once per page, and a missing one keeps the chart', async () => {
+  const page = await openPage(helpers);
+  const requests = [];
+  page.on('request', (r) => r.url().includes('/fonts/') && requests.push(r.url()));
+  await page.evaluate(async () => {
+    const source = 'image: {width: 300, height: 60}\nroot: {type: Label, text: mono, font: FiraMono-Regular.ttf}\n';
+    const a = await window.nymph.createViewer(window.box(300), { source });
+    const b = await window.nymph.createViewer(window.box(300), { source });
+    await Promise.all([a.rendered(), b.rendered()]);
+  });
+  assert(requests.filter((u) => u.endsWith('/FiraMono-Regular.ttf')).length === 1, requests.join(', '));
+  await page.close();
+
+  const missing = await openPage(helpers);
+  const result = await missing.evaluate(async () => {
+    await window.nymph.loadNymph({ fontBaseUrl: '/missing/' }); // the first load decides
+    const v = await window.nymph.createViewer(window.box(300), { source: 'root: {type: Label, text: kept}\n' });
+    let error = null;
+    await v.setSource('root: {type: Label, text: x, font: FiraSans-Bold.ttf}\n').catch((e) => (error = e));
+    return { message: error?.message, kind: error?.kind, kept: v.source().includes('kept') };
+  });
+  assert(result.kind === 'fonts' && /404/.test(result.message) && /missing\/FiraSans-Bold.ttf/.test(result.message), result.message);
+  assert(result.kept, 'the previous chart stays');
+  await missing.close();
 });
 
 // ── Run ──────────────────────────────────────────────────────────────────────

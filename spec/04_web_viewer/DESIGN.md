@@ -477,6 +477,10 @@ class NymphViewer {
   setData(tables: object): Promise<void>;
   resetView(): void;
   on(event: "hover" | "click" | "view" | "error", cb: (detail) => void): () => void;
+  setTheme(theme: "light" | "dark" | "classic" | ""): void;
+  rendered(): Promise<void>;  // every update so far applied and drawn, nothing due
+  state(): object;            // geometry, hovered, plot views (as the events report them)
+  source(): string;           // with setData applied
   info(): { rasterizer: "webgl" | "software"; hasFigure: boolean;
             description: string; size: { width: number; height: number } };
   toPng(): Uint8Array;        // render_png() of the current source and data: YAML embedded
@@ -496,16 +500,20 @@ class NymphError extends Error { line: number; column: number; }
   fails. The custom element re-dispatches them as DOM `CustomEvent`s
   (`nymph-hover`, ...).
 - **`<nymph-viewer>`** attributes: `src` (URL of a `.yaml` or `.png`,
-  fetched by the element, not the wasm), `fit`, `theme`, `tooltips`;
+  fetched by the element, not the wasm), `fit`, `theme`, `tooltips`
+  (and `nymph-load` once shown, with `info()`);
   without `src`, the element's text content is the YAML, so a markdown
   renderer can turn a ```` ```nymph ```` fenced block into
   `<nymph-viewer>…</nymph-viewer>`. Its `viewer` property is the
   `NymphViewer`.
 - **Input mapping.** Pointer events (mouse, pen, touch) with pointer
   capture during drags; `wheel` with `preventDefault()` only while the
-  pointer is over a plot or diagram that takes input, so page scrolling is
-  not hijacked over labels and margins; a two-finger pinch becomes wheel
-  zoom at its centre; a double tap is a double click.
+  pointer is over a plot or diagram that takes input
+  (`live_view::takes_wheel()`), so page scrolling is not hijacked over
+  labels and margins; a two-finger pinch becomes wheel zoom at its centre
+  (about 1.2 per notch); a double tap is a double click. The canvas has
+  `touch-action: pan-y`: a vertical one-finger swipe scrolls the page, a
+  horizontal one pans the chart.
 - **Scheduling.** `requestAnimationFrame` only while some viewer
   `wants_frame()`; `ResizeObserver` for size and pixel-ratio changes;
   `IntersectionObserver` pauses viewers off screen.

@@ -480,6 +480,7 @@ class chart_class : public element_class {
     const std::string id = (title_text.empty() ? std::string() : title_text) + "##gantt";
     const ImPlotFlags flags = ImPlotFlags_NoMenus | ImPlotFlags_NoBoxSelect | ImPlotFlags_NoMouseText |
         (s.sections.empty() ? ImPlotFlags_NoLegend : 0);
+    dc.add_input_area(r);
     if (ImPlot::BeginPlot(id.c_str(), ImVec2(r.width(), r.height()), flags)) {
       setup(n, s, r.width(), dc);
       plot(n, s, dc);

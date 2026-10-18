@@ -170,6 +170,11 @@ class live_view {
   ///        drawing order.
   std::vector<plot_view> view_state() const;
 
+  /// @brief Whether the wheel at (`x`, `y`), CSS pixels, would pan or zoom
+  ///        something in the last frame (a plot or diagram that takes
+  ///        input); elsewhere the host should let the page scroll.
+  bool takes_wheel(float x, float y) const;
+
   /// @brief What the pointer was over in the last frame.
   const std::optional<view_pick>& hovered() const;
 

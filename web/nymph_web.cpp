@@ -304,6 +304,13 @@ nymph_viewer_pointer(int handle, int type, float x, float y, int button, float w
   });
 }
 
+/// @brief 1 when the wheel at (x, y), CSS pixels, would pan or zoom
+///        something (the host then keeps it from scrolling the page).
+EMSCRIPTEN_KEEPALIVE int nymph_viewer_takes_wheel(int handle, float x, float y) {
+  const auto it = viewers().find(handle);
+  return it != viewers().end() && it->second->view.takes_wheel(x, y) ? 1 : 0;
+}
+
 EMSCRIPTEN_KEEPALIVE int nymph_viewer_reset_view(int handle) {
   return guarded([&] {
     get(handle).view.reset_view();

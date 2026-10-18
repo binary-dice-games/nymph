@@ -413,6 +413,9 @@ class plot_class : public element_class {
     if (colormap_value != kColormapDefault) {
       ImPlot::PushColormap(static_cast<ImPlotColormap>(colormap_value));
     }
+    if ((n.get<int64_t>(flags) & ImPlotFlags_NoInputs) == 0) {
+      dc.add_input_area(r);
+    }
     if (ImPlot::BeginPlot(str(n, title), size, static_cast<ImPlotFlags>(n.get<int64_t>(flags)))) {
       const std::string& xl = n.get<std::string>(x_label);
       const std::string& yl = n.get<std::string>(y_label);

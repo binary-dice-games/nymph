@@ -399,6 +399,21 @@ software presenter.
 
 ### 11. Browser input, scheduling and the custom element
 
+*Result: done (Chromium 141 through Playwright).* `live_view::takes_wheel()`
+(input areas recorded by plots without `NoInputs`, 3D plots, Gantt
+charts and diagrams) decides when the wheel is kept from scrolling the
+page. Pointer input uses pointer capture; touches pan with one finger
+(`touch-action: pan-y`, so vertical swipes still scroll the page) and
+pinch-zoom with two. Events fire after frames (`hover` on change,
+`click`, `view` when a pan or zoom settles with no button down);
+`error` when an update fails. The element also fires `nymph-load` with
+`info()`. Found while testing: the element's reload read its own
+promise before it existed when the YAML was inline (no `await` first),
+and a `view` listener added after the first frame missed the first pan
+(the baseline is now taken when the first listener is added). 9 browser
+tests added (15 in all) and 1 native test; the web suite passed three
+runs in a row.
+
 **Goal:** a person can pan, zoom and hover in the browser, viewers go idle
 when untouched, and `<nymph-viewer>` works from a tag.
 

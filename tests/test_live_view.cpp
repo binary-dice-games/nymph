@@ -548,5 +548,25 @@ TEST(live_view_gpu, ContextHooksRunWithTheViewsContextsCurrent) {
   EXPECT_EQ(destroyed[1], created[1]);
 }
 
+// ── Wheel areas (plan step 11) ───────────────────────────────────────────────
+
+TEST(live_view_input, TheWheelIsTakenOnlyOverPlotsAndDiagramsThatTakeInput) {
+  driven_view d(
+      "image: {width: 400, height: 300}\n"
+      "root:\n"
+      "  type: VerticalLayout\n"
+      "  children:\n"
+      "    - {type: Label, text: A heading}\n"
+      "    - {type: Plot, title: moves, height: 120, children: []}\n"
+      "    - {type: Plot, title: fixed, flags: NoInputs, height: -1, children: []}\n");
+  EXPECT_FALSE(d.v.takes_wheel(200, 12)); // the label
+  EXPECT_TRUE(d.v.takes_wheel(200, 100)); // the first plot
+  EXPECT_FALSE(d.v.takes_wheel(200, 250)); // NoInputs
+  driven_view uml(
+      "image: {width: 400, height: 300}\nroot: {type: ClassDiagram, children: [{type: Class, id: A}]}\n", 200, 150);
+  EXPECT_TRUE(uml.v.takes_wheel(100, 75)); // in CSS pixels, at half size
+  EXPECT_FALSE(uml.v.takes_wheel(300, 75)); // outside the view
+}
+
 } // namespace
 } // namespace bdg::nymph

@@ -64,6 +64,7 @@ struct live_view::impl {
   std::string source;
   std::unordered_map<const node*, std::string> paths;
   std::vector<plot_view> views; ///< Of the last frame.
+  std::vector<rect> input_areas; ///< Of the last frame, logical pixels.
   std::optional<view_pick> hovered;
   std::optional<view_pick> click;
 
@@ -242,6 +243,7 @@ struct live_view::impl {
         io.MouseDragMaxDistanceSqr[ImGuiMouseButton_Left] <= slop * slop && hovered) {
       click = hovered;
     }
+    input_areas = ctx->input_areas();
     views.clear();
     const float s = geom.css_scale;
     for (const plot_view_record& r : ctx->plot_views()) {
@@ -387,6 +389,18 @@ void live_view::reset_view() {
 
 std::vector<plot_view> live_view::view_state() const {
   return impl_->views;
+}
+
+bool live_view::takes_wheel(float x, float y) const {
+  const impl& m = *impl_;
+  const float s = m.geom.css_scale > 0.0f ? m.geom.css_scale : 1.0f;
+  const ImVec2 p(x / s, y / s);
+  for (const rect& r : m.input_areas) {
+    if (p.x >= r.min.x && p.x <= r.max.x && p.y >= r.min.y && p.y <= r.max.y) {
+      return true;
+    }
+  }
+  return false;
 }
 
 const std::optional<view_pick>& live_view::hovered() const {
