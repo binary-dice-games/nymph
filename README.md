@@ -132,6 +132,8 @@ carries its source: `bdg::nymph::extract_source(png)` returns it.
 | [spec/04_web_viewer/PLAN.md](spec/04_web_viewer/PLAN.md) | Its implementation steps and tests |
 | [spec/05_browser_extension/DESIGN.md](spec/05_browser_extension/DESIGN.md) | The Chrome extension that turns nymph PNGs on any page into live viewers: detection, replacement, live pages, sites |
 | [spec/05_browser_extension/PLAN.md](spec/05_browser_extension/PLAN.md) | Its implementation steps and tests |
+| [spec/06_claude_integration/DESIGN.md](spec/06_claude_integration/DESIGN.md) | Claude integration: `nymph mcp` server, the MCP App viewer in the chat, plugin, `.mcpb` and Skill packages |
+| [spec/06_claude_integration/PLAN.md](spec/06_claude_integration/PLAN.md) | Its implementation steps and tests |
 | [CHANGELOG.md](CHANGELOG.md) | User-facing changes between releases |
 | [CLAUDE.md](CLAUDE.md) | Coding style and project rules for AI agents and contributors |
 
