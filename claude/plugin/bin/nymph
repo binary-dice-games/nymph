@@ -1,0 +1,96 @@
+#!/bin/sh
+# MIT License © 2026 Binary Dice Games
+#
+# nymph launcher of the Claude Code plugin
+# (spec/06_claude_integration/DESIGN.md section 4.6). Runs the nymph
+# executable with the arguments given: the plugin's MCP server runs
+# `nymph mcp`, and with the plugin's bin/ on PATH, Claude runs `nymph`
+# commands. The executable is, in order:
+#
+#   1. $NYMPH_BIN, when set (any nymph the user chooses);
+#   2. the release for this OS and CPU named in checksums.txt next to this
+#      script, from $NYMPH_CACHE (default ~/.cache/nymph), after checking
+#      its SHA-256 against checksums.txt;
+#   3. that release downloaded from $NYMPH_RELEASE_URL (default: the
+#      project's GitHub release of that version), checked the same way,
+#      then cached.
+#
+# Any failure prints one line on standard error and exits 1; a file whose
+# SHA-256 differs is never run or kept. NYMPH_LAUNCHER_INFO=1 prints the
+# release file name and cache path instead of running anything (tests).
+
+set -eu
+
+fail() {
+  echo "nymph: $*" >&2
+  exit 1
+}
+
+if [ -n "${NYMPH_BIN:-}" ]; then
+  exec "$NYMPH_BIN" "$@"
+fi
+
+here=$(cd "$(dirname "$0")" && pwd)
+
+case $(uname -s) in
+  Linux) os=linux ext= ;;
+  Darwin) os=macos ext= ;;
+  MINGW* | MSYS* | CYGWIN*) os=windows ext=.exe ;;
+  *) fail "no nymph release for this system ($(uname -s)); set NYMPH_BIN to a nymph executable" ;;
+esac
+case $(uname -m) in
+  x86_64 | amd64 | AMD64) arch=x86_64 ;;
+  aarch64 | arm64 | ARM64) arch=arm64 ;;
+  *) fail "no nymph release for this CPU ($(uname -m)); set NYMPH_BIN to a nymph executable" ;;
+esac
+
+# "<sha256>  nymph-<version>-<os>-<arch>[.exe]", as sha256sum writes it.
+line=$(grep -v '^#' "$here/checksums.txt" 2>/dev/null | grep -E "  nymph-[^ ]+-$os-$arch$ext\$" | head -n 1 || true)
+[ -n "$line" ] || fail "this plugin names no nymph release for $os-$arch yet; set NYMPH_BIN to a nymph executable"
+expected=${line%% *}
+name=${line##* }
+version=${name#nymph-}
+version=${version%-"$os"-"$arch$ext"}
+
+cache=${NYMPH_CACHE:-${XDG_CACHE_HOME:-$HOME/.cache}/nymph}/$version
+target=$cache/$name
+
+if [ "${NYMPH_LAUNCHER_INFO:-}" = 1 ]; then
+  echo "$name"
+  echo "$target"
+  exit 0
+fi
+
+sha256_of() {
+  if command -v sha256sum >/dev/null 2>&1; then
+    sha256sum "$1" | cut -d ' ' -f 1
+  elif command -v shasum >/dev/null 2>&1; then
+    shasum -a 256 "$1" | cut -d ' ' -f 1
+  elif command -v openssl >/dev/null 2>&1; then
+    openssl dgst -sha256 -r "$1" | cut -d ' ' -f 1
+  else
+    fail "no sha256sum, shasum or openssl to check the nymph executable"
+  fi
+}
+
+if [ -f "$target" ] && [ "$(sha256_of "$target")" = "$expected" ]; then
+  exec "$target" "$@"
+fi
+
+base=${NYMPH_RELEASE_URL:-https://github.com/binary-dice-games/nymph/releases/download/v$version}
+mkdir -p "$cache" || fail "cannot create $cache"
+temp=$target.download.$$
+trap 'rm -f "$temp"' EXIT INT TERM
+if command -v curl >/dev/null 2>&1; then
+  curl -fsSL --retry 2 -o "$temp" "$base/$name" 2>/dev/null || fail "could not download $base/$name"
+elif command -v wget >/dev/null 2>&1; then
+  wget -q -O "$temp" "$base/$name" || fail "could not download $base/$name"
+else
+  fail "no curl or wget to download $base/$name; set NYMPH_BIN to a nymph executable"
+fi
+actual=$(sha256_of "$temp")
+[ "$actual" = "$expected" ] || fail "$base/$name has SHA-256 $actual, not $expected as the plugin pins; not run"
+chmod +x "$temp"
+mv -f "$temp" "$target" || fail "cannot write $target"
+trap - EXIT INT TERM
+exec "$target" "$@"

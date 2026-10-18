@@ -8,3 +8,6 @@ _deps/
 __pycache__/
 *.pyc
 *.pyo
+
+# The Claude Code plugin ships its launcher in bin/ (claude/plugin/bin/).
+!claude/plugin/bin/
