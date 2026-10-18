@@ -76,14 +76,15 @@ TEST(mcp_session, initialize_returns_each_supported_version) {
   for (std::string_view version : supported_protocol_versions()) {
     const run_result r = serve(initialize(1, std::string(version)));
     ASSERT_EQ(r.responses.size(), 1u);
-    EXPECT_EQ(r.responses[0]["result"]["protocolVersion"], version);
+    EXPECT_EQ(r.responses[0]["result"]["protocolVersion"], std::string(version));
   }
 }
 
 TEST(mcp_session, initialize_answers_an_unsupported_version_with_the_newest) {
   const run_result r = serve(initialize(1, "2024-11-05"));
   ASSERT_EQ(r.responses.size(), 1u);
-  EXPECT_EQ(r.responses[0]["result"]["protocolVersion"], supported_protocol_versions().front());
+  EXPECT_EQ(r.responses[0]["result"]["protocolVersion"],
+            std::string(supported_protocol_versions().front()));
 }
 
 TEST(mcp_session, initialize_reports_the_server_and_its_capabilities) {
