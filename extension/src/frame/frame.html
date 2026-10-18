@@ -1,0 +1,20 @@
+<!doctype html>
+<!-- MIT License © 2026 Binary Dice Games -->
+<!-- One chart in an extension frame, for pages whose Content Security
+     Policy blocks WebAssembly in content scripts
+     (spec/05_browser_extension/DESIGN.md section 3.9). -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>nymph chart</title>
+<style>
+  html, body { margin: 0; padding: 0; overflow: hidden; background: transparent; }
+  #box { width: 100vw; }
+  #box > canvas { max-width: 100%; }
+</style>
+</head>
+<body>
+<div id="box"></div>
+<script type="module" src="frame.js"></script>
+</body>
+</html>

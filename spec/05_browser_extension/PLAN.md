@@ -18,6 +18,23 @@ it was verified with.
 
 ### 1. Feasibility check
 
+*Result: done, partly.* Verified with Emscripten 6.0.12 and Playwright
+1.56's Chromium 141 (headless, `channel: 'chromium'`). Answers:
+1. **No** on pages whose Content Security Policy lacks
+   `'wasm-unsafe-eval'`: compiling the module in a content script fails
+   (`CompileError`) under a GitHub-like policy, so the design gained
+   frame mode (DESIGN.md section 3.9). In an extension frame the module
+   and WebGL2 work under such a page, `frame-src 'self'` included. Also
+   found: `customElements` is `null` in content scripts (the viewer now
+   checks for it), and Chrome runs no animation frames in an extension
+   frame that is hidden or not yet on screen (DESIGN.md section 3.3).
+   Not checked on github.com or docs.google.com themselves.
+2. **Yes**: a persistent context with `--load-extension` works headless.
+3. **Not answered**: the repository is private and the container has no
+   signed-in browser, so GitHub's serving of PNGs could not be checked.
+4. **Not answered**: no Google account in the container.
+DESIGN.md sections 3.6, 3.7, 3.9, 5.1 and 8 were updated with these.
+
 **Goal:** the questions DESIGN.md leaves open are answered with
 evidence, and DESIGN.md is updated before any code depends on them.
 
@@ -48,6 +65,12 @@ checked (a downloaded file's chunks, a DOM snapshot).
 
 ### 2. `fit: 'scale'` in the viewer
 
+*Result: done.* `view_fit::scale` (`source_geometry()` lets `css_scale`
+exceed 1 only in this mode), `fit: 'scale'` in the JS API and element.
+4 native tests (scale 2 and 0.5, the framebuffer cap, `source` never
+grows, pointer mapping at scale 2) and 1 browser test (CSS width,
+device pixels and a hover at scale 2). 430 native tests pass.
+
 **Goal:** a viewer can show a chart laid out at its source size and
 scaled to any box width, up or down.
 
@@ -69,6 +92,13 @@ scaled to any box width, up or down.
   the same pick as at scale 1.
 
 ### 3. Extension skeleton and packaging
+
+*Result: done.* The harness lives in `extension/tests/browser/run.mjs`
+(no separate `harness.mjs`): one server on `127.0.0.1` and `localhost`
+with an OS port. The zip (2.1 MB) is built with `cmake -E tar`; its
+contents are not checked by a test. The content-script marker test was
+folded into the later tests (every one needs the script to run; the
+"off" site is covered by step 7's reload check).
 
 **Goal:** the build produces a loadable extension that runs a content
 script on every page and does nothing else yet.
@@ -93,6 +123,10 @@ script on every page and does nothing else yet.
 
 ### 4. Sniffer and fetcher
 
+*Result: done.* 8 Node tests on the sniffer, 1 on the cache, 1 on fetch
+routes; the browser test of a cross-origin image without CORS also
+checks that the worker's request carries no cookie.
+
 **Goal:** given an image URL, the extension knows whether it is a nymph
 PNG, reading only its chunk headers when it is not.
 
@@ -111,6 +145,14 @@ PNG, reading only its chunk headers when it is not.
   are both read; a cross-origin request carries no cookie.
 
 ### 5. Replacing images on a static page
+
+*Result: done, with changes.* No `sites/` adapters: nothing needed one
+(DESIGN.md section 3.6). The shadow root is open, and the host is no
+longer hidden while the viewer starts: it covers the viewer with a copy
+of the image instead (DESIGN.md section 3.3), because a hidden frame
+never draws. Frame mode was added here (DESIGN.md section 3.9), and the
+static-page tests run in both modes. Not tested: a 2x PNG (the sizing
+rule is the same as for any image without width rules).
 
 **Goal:** on a page that does not change, every nymph PNG becomes a
 viewer in the same box, and nothing else changes.
@@ -132,6 +174,11 @@ viewer in the same box, and nothing else changes.
   images; a page without nymph PNGs never requests the `.wasm`.
 
 ### 6. Following the page live, and the viewer pool
+
+*Result: done.* The observers live in `main.js` (no `scanner.js`). The
+pool test uses 48 charts (enough to fill both caps), in both modes: at
+most 32 viewers inline and 12 in frames. In frame mode a chart starts
+only when it is on screen, so the tests scroll through the page.
 
 **Goal:** charts appear, follow and go away with the page's content,
 with bounded cost.
@@ -155,6 +202,12 @@ with bounded cost.
   pointer or inside the margin).
 
 ### 7. Living with the host page, the toolbar button and options
+
+*Result: done.* The button is driven in tests through the service
+worker's `nymphToggleTab()` (Playwright cannot click the toolbar). The
+badge's buttons are "Image" / "Chart" and "Open". 22 browser tests in
+all, `ctest` of the web build passes (4 tests: web Node and browser,
+extension Node and browser).
 
 **Goal:** the user can use the chart without breaking the page, switch
 back to the image, and turn the extension on and off for a site with
@@ -184,36 +237,47 @@ one click on its button.
 
 ### 8. GitHub
 
+*Result: automated part done; manual check pending.* No GitHub-specific
+code was needed: fetch routing is generic, and GitHub's policy selects
+frame mode. The fixtures run with a GitHub-like policy and markdown-like
+markup (images in self-links) instead of a saved GitHub page. The manual
+check below needs a signed-in Chrome and is not done.
+
 **Goal:** nymph PNGs on GitHub are interactive wherever GitHub shows
 them.
 
 **Deliverables:**
-- `extension/src/content/sites/github.js` (fetch routing of DESIGN.md
-  section 3.6, as adjusted by step 1).
-- A fixture page built from a saved GitHub markdown rendering (markup
-  and CSP headers, images served locally under the same path shapes).
+- Fixture pages with GitHub's policy shape and markdown markup.
 
 **Tests:**
-- Browser: the GitHub fixture's images are replaced, in light and dark
-  mode, with images inside GitHub's self-links.
-- Manual, recorded in the result: a README, a markdown file view, an
-  issue and a pull request comment with an uploaded PNG, the comment
-  preview, a raw PNG file page, dark mode, a private repository, and
-  navigation between pages without reload.
+- Browser: the fixtures' images are replaced in frame mode, inside
+  self-links.
+- Manual, recorded here: a README, a markdown file view, an issue and a
+  pull request comment with an uploaded PNG, the comment preview, a raw
+  PNG file page, dark mode, a private repository, and navigation between
+  pages without reload.
 
 ### 9. Google Docs
 
-**Goal:** what step 1 found possible in Google Docs works.
+*Result: open.* Step 1 could not answer the Docs questions, so only
+generic `<img>` handling exists (DESIGN.md section 3.7).
 
-**Deliverables:** fixed by step 1's outcome (DESIGN.md section 3.7);
-this step is rewritten after step 1, before it starts. Expected: one of
-an overlay adapter `sites/gdocs.js` for the editor, generic handling of
-`/preview` and `/pub` only, or the linked-source rule.
+**Goal:** find what Google Docs allows, then make it work.
+
+**Deliverables:** the answers to DESIGN.md section 3.7's three
+questions, from a real Doc in a signed-in Chrome with the extension
+loaded (does the image URL the editor loads keep the `nymph` chunk; does
+the editor's DOM expose image URLs and boxes; do `/preview` and `/pub`
+use `<img>`); then, by the outcome table there, nothing more, an overlay
+adapter for the editor, or the linked-source rule.
 
 **Tests:** a fixture reproducing the relevant Docs markup in the
-browser suite, and a manual check in a real Doc, recorded in the result.
+browser suite, and a manual check in a real Doc, recorded here.
 
 ### 10. Documentation and close
+
+*Result: done* (`docs/extension.md`, README, `docs/building.md`,
+`docs/viewer.md`, the web viewer DESIGN, CHANGELOG, `spec/INDEX.md`).
 
 **Goal:** the extension ships as documented files, and every document
 matches the code.
@@ -236,17 +300,19 @@ build, and natively.
 
 ## Completion Criteria
 
-- [ ] All native, Node and browser tests pass under `ctest -j`; every
+- [x] All native, Node and browser tests pass under `ctest -j`; every
       committed example PNG is still reproduced byte for byte.
-- [ ] On fixture pages, nymph PNGs (and only they) become viewers in the
+      *430 native tests; 4 CTest tests in the web build.*
+- [x] On fixture pages, nymph PNGs (and only they) become viewers in the
       image's box, look like the PNG, follow dynamic content, and are
-      freed with their images; at most 32 viewers are live.
-- [ ] Pages without nymph PNGs load no WebAssembly; non-nymph images are
+      freed with their images; at most 32 viewers are live (12 in frame
+      mode).
+- [x] Pages without nymph PNGs load no WebAssembly; non-nymph images are
       read no further than their chunk headers.
-- [ ] Every failure leaves the original image; turning a site off
+- [x] Every failure leaves the original image; turning a site off
       restores the page.
 - [ ] GitHub verified manually in the places step 8 lists.
-- [ ] Google Docs works as far as step 1 found possible, and the docs
-      say exactly how far.
-- [ ] README, `docs/`, CHANGELOG, the DESIGN.md files and
+- [ ] Google Docs works as far as possible, and the docs say exactly
+      how far. *The docs say what is known; the questions are open.*
+- [x] README, `docs/`, CHANGELOG, the DESIGN.md files and
       `spec/INDEX.md` match the code.

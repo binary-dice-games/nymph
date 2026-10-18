@@ -214,6 +214,39 @@ TEST(live_view, ALayoutOverflowAtTheBoxSizeFallsBackToTheSourceSize) {
   EXPECT_EQ(v.geometry().layout_width, 900.0f);
 }
 
+TEST(live_view, FitScaleGrowsAndShrinksTheSourceLayoutToTheBoxWidth) {
+  live_view v({view_fit::scale});
+  v.set_source(kLine);
+  v.resize({800, 0, 1});
+  view_geometry g = v.geometry();
+  EXPECT_EQ(g.layout_width, 400.0f); // laid out as the PNG
+  EXPECT_EQ(g.layout_height, 300.0f);
+  EXPECT_FLOAT_EQ(g.css_scale, 2.0f);
+  EXPECT_FLOAT_EQ(g.framebuffer_scale, 2.0f); // sharp at the larger size
+  EXPECT_EQ(g.pixel_width, 800);
+  EXPECT_EQ(g.pixel_height, 600);
+  v.resize({200, 0, 1});
+  g = v.geometry();
+  EXPECT_FLOAT_EQ(g.css_scale, 0.5f);
+  EXPECT_EQ(g.layout_width, 400.0f);
+  EXPECT_FALSE(g.fit_fallback);
+}
+
+TEST(live_view, FitScaleKeepsTheFramebufferWithinLimits) {
+  live_view v({view_fit::scale});
+  v.set_source("image: {width: 4000, height: 100}\nroot: {type: Label, text: wide}\n");
+  v.resize({8000, 0, 2});
+  EXPECT_FLOAT_EQ(v.geometry().css_scale, 2.0f);
+  EXPECT_LE(v.geometry().pixel_width, 8192);
+}
+
+TEST(live_view, FitSourceNeverGrows) {
+  live_view v;
+  v.set_source(kLine);
+  v.resize({800, 0, 1});
+  EXPECT_FLOAT_EQ(v.geometry().css_scale, 1.0f);
+}
+
 TEST(live_view, ThePixelRatioIsCappedAndTheImageStaysWithinLimits) {
   live_view v;
   v.set_source("image: {width: 4000, height: 100}\nroot: {type: Label, text: wide}\n");
@@ -430,6 +463,15 @@ TEST(live_view_input, PointerPositionsAreMappedThroughTheCssScale) {
   d.drag(p.x + p.width / 2, p.y + p.height / 2, p.x + p.width / 2 - 20, p.y + p.height / 2);
   // 20 CSS px is 40 layout px; the area is reported in CSS px too.
   EXPECT_NEAR(d.plot().x_min, 20.0 / p.width * 10.0, 0.05);
+}
+
+TEST(live_view_input, PointerPositionsAreMappedThroughAScaleAboveOne) {
+  driven_view d(kPan, 800, 0, {view_fit::scale}); // shown at twice the size
+  const plot_view p = d.plot();
+  EXPECT_GT(p.width, 400.0f); // reported in CSS pixels
+  d.drag(p.x + p.width / 2, p.y + p.height / 2, p.x + p.width / 2 - 40, p.y + p.height / 2);
+  // 40 CSS px is 20 layout px.
+  EXPECT_NEAR(d.plot().x_min, 40.0 / p.width * 10.0, 0.05);
 }
 
 // ── Data updates and PNG input (plan step 8) ─────────────────────────────────

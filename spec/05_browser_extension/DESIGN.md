@@ -1,8 +1,10 @@
 # nymph — Browser Extension: Design
 
-**Status: design; not started.** [PLAN.md](PLAN.md) is the ordered
-implementation plan; its step 1 is a feasibility check whose results may
-change sections 3.6, 3.7 and 8 of this document. This document
+**Status: implemented (plan steps 1-8 and 10); verified in Chromium 141
+through Playwright on local pages, including one with GitHub's Content
+Security Policy. Not yet verified on github.com itself or in Google Docs
+(plan steps 8 and 9 list the manual checks).** [PLAN.md](PLAN.md) is the
+ordered implementation plan and records each step's result. This document
 describes only what this project adds or changes; the viewer it embeds
 is [spec/04_web_viewer/DESIGN.md](../04_web_viewer/DESIGN.md)
 (*viewer DESIGN*), the PNG format is
@@ -31,8 +33,8 @@ The main use cases, which get site-specific care and manual verification:
    (`github.com/<o>/<r>/raw/...`), uploads (`user-attachments`,
    `private-user-images.githubusercontent.com`) and external images
    through GitHub's image proxy (`camo.githubusercontent.com`).
-2. **Google Docs** (`docs.google.com/document/...`): see section 3.7; how
-   far this is possible is decided by the feasibility check.
+2. **Google Docs** (`docs.google.com/document/...`): see section 3.7;
+   only partly possible, and not yet checked.
 
 In scope: the extension (`extension/`): manifest, content script,
 service worker, the toolbar button (section 3.8), an options page,
@@ -42,8 +44,9 @@ zip from the `NYMPH_WEB` build; one viewer change, `fit: 'scale'`
 
 Out of scope: Firefox and Safari (the code avoids Chrome-only APIs where
 an equivalent exists, so a port stays small); images inside shadow
-roots, cross-origin iframes the extension is not granted, `<canvas>` and
-CSS background images (except as section 3.7 allows for Google Docs);
+roots, iframes (the content script runs in the main frame only),
+`<canvas>` and CSS background images (so Google Docs' editor, section
+3.7);
 editing charts; publishing to the Chrome Web Store (a later release
 task; running on every site needs `<all_urls>`, which the store
 listing must justify).
@@ -62,9 +65,10 @@ listing must justify).
    scan are handled within about 200 ms of becoming visible, with no
    polling.
 4. **Cheap on pages without charts.** No WebAssembly is loaded and no
-   image is downloaded twice in full until a nymph PNG is found; deciding
-   that an image is not a nymph PNG reads at most its first chunks,
-   usually from the HTTP cache.
+   image is downloaded twice in full until a nymph PNG is found (the
+   page gets one storage read and about 25 KB of script); deciding that
+   an image is not a nymph PNG reads at most its first chunks, usually
+   from the HTTP cache.
 5. **Bounded on pages with many charts.** Only images near the viewport
    become viewers, and the number of live viewers is capped; the user's
    zoom survives a viewer being freed and recreated.
@@ -80,7 +84,7 @@ listing must justify).
 ### 3.1 What is replaced
 
 An `<img>` (including one inside `<picture>`) is a **candidate** when it
-is connected, rendered (not `display: none`), its `currentSrc` is
+is connected, loaded, its `currentSrc` is
 `http(s):`, `data:` or `blob:`, its natural size is at least 32 x 32 and
 its rendered box at least 24 x 24 CSS px (skips icons, avatars and
 tracking pixels). A candidate is a **nymph image** when its bytes are a
@@ -114,18 +118,25 @@ the PNG; a setting lets the user follow the page instead (`'auto'`).
 
 ### 3.3 Swapping in and out
 
-1. The viewer is created inside the host while the host is hidden
-   (`visibility: hidden`, positioned absolutely over the image's box), so
-   the viewer has its size while the image is still the one shown.
-2. When `rendered()` resolves, in one task: the image gets the attribute
+1. In one task: the host goes in after the image with its final sizing,
+   holding the viewer's box and, on top of it, a **cover**: a copy of
+   the image (same URL, already decoded); the image gets the attribute
    `data-nymph-ext="hidden"` (an injected stylesheet hides
-   `img[data-nymph-ext="hidden"]` with `display: none !important`) and
-   the host becomes visible in its normal flow position.
-3. **Back to the image**: a small badge in the host's top-right corner,
-   shown while the pointer is over the chart, switches between the chart
-   and the original image for that chart ("Show image" / "Show chart").
-   Turning the extension or the site off restores every image (section
-   3.5).
+   `img[data-nymph-ext="hidden"]` with `display: none !important`). The
+   page looks the same.
+2. The viewer starts under the cover. When `rendered()` resolves, the
+   cover is removed and the chart shows. If the viewer fails, the host
+   is removed and the image shown again.
+3. **Back to the image**: a badge in the host's top-right corner, shown
+   while the pointer is over the chart, has two buttons: "Image" /
+   "Chart" switches this chart between the chart and its image, and
+   "Open" opens the image's link (or the image) in a new tab. Turning
+   the extension or the site off restores every image (section 3.5).
+
+The viewer is never hidden while it starts (an earlier version kept the
+host invisible until the first frame): Chrome does not run animation
+frames in an extension frame it considers hidden, so in frame mode
+(section 3.9) the chart would never draw.
 
 Hiding by attribute and stylesheet, not by an inline style or by removing
 the image, leaves the node to the page's framework: React, Turbo and
@@ -135,15 +146,18 @@ replace it the new element is simply a new candidate (and a cache hit).
 ### 3.4 Living with the host page
 
 - **Links.** Images are often inside a link (GitHub wraps every markdown
-  image in a link to itself). The host stops `click` and `auxclick` from
-  bubbling out of the chart and prevents their default, so panning does
-  not navigate; the badge offers "Open image" to keep the link's use.
+  image in a link to itself). The host stops `click`, `auxclick` and
+  `dragstart` from bubbling out of the chart and prevents their default,
+  so panning does not navigate; the badge's "Open" keeps the link's use.
+  (In frame mode, input inside the frame never reaches the page.)
 - **Wheel and touch**: the viewer's own rules (viewer DESIGN section 5,
   input mapping) already scroll the page except over a plot or diagram.
-- **Styles.** The viewer lives in a closed shadow root inside the host,
-  so page CSS (`.markdown-body img`, `canvas { ... }`) cannot reach it
-  and the extension's CSS cannot leak out. The only page-level CSS is
-  the one rule of section 3.3.
+- **Styles.** The viewer lives in a shadow root inside the host, so page
+  CSS (`.markdown-body img`, `canvas { ... }`) cannot reach it and the
+  extension's CSS cannot leak out. The root is open: it holds nothing a
+  page should not see, and tests reach the badge through it. The only
+  page-level CSS is the rule of section 3.3 (and, inline, the viewer's
+  own right-click menu style).
 - **Accessibility.** The canvas's `aria-label` is the source's
   `description`, or the image's `alt` when the source has none.
 - **Keyboard and the page's own handlers** are untouched: the extension
@@ -173,21 +187,27 @@ replace it the new element is simply a new candidate (and a cache hit).
 - Results are cached per URL for the page's lifetime (nymph or not, up
   to 4,000 URLs, least recently used dropped), so re-rendered and
   repeated images (avatars in a feed) cost one lookup.
-- **Viewer pool.** At most 32 live viewers per page. When a new one is
-  needed, the viewer farthest from the viewport that is outside the
-  `IntersectionObserver` margin is **parked**: its `toYaml()` is kept,
-  it is destroyed and its image is shown again. When the image comes
-  near again it gets a viewer from the kept YAML (`setSource()`), so the
-  user's zoom and hidden series come back.
+- **Viewer pool.** At most 32 live viewers per page inline, 12 in frame
+  mode (each frame has its own module and WebGL context; browsers allow
+  about 16 contexts per process). When a new one is needed, the viewer
+  farthest from the viewport that is outside the `IntersectionObserver`
+  margin is **parked**: its source with the user's view (`toYaml()`) is
+  kept, it is destroyed and its image is shown again. When the image
+  comes near again it gets a viewer from the kept YAML, so the user's
+  zoom and hidden series come back. A host the page removes (a
+  re-render of the image's parent) is put back the same way, at most
+  three times per image.
 - Turning on and off applies live (section 3.8): turning on starts the
   scan; turning off destroys every viewer, removes every host and the
   stylesheet and restores every image, without reloading the page.
 
 ### 3.6 GitHub
 
-Generic `<img>` handling covers GitHub's markdown; the GitHub adapter
-adds only:
+Generic `<img>` handling covers GitHub's markdown; nothing in the code is
+specific to GitHub:
 
+- GitHub's Content Security Policy has no `'wasm-unsafe-eval'`, so the
+  charts run in frame mode (section 3.9) there;
 - `github.com/<o>/<r>/raw/...` URLs are fetched from the content script
   (same origin, with the user's cookies, so private repositories work);
   the redirect to `raw.githubusercontent.com` carries its own token and
@@ -201,15 +221,17 @@ adds only:
 - navigation without reloads (Turbo, React routes) needs nothing more:
   replaced subtrees are mutations like any other.
 
-Feasibility step 1 checks that GitHub serves uploaded and proxied PNGs
-byte for byte (the `iTXt` chunk survives).
+Not yet checked (it needs a signed-in browser): that GitHub serves
+uploaded and proxied PNGs byte for byte (the `iTXt` chunk survives).
+GitHub documents Camo as a proxy that does not transform images.
 
 ### 3.7 Google Docs
 
 Google Docs draws document pages on `<canvas>` elements (since 2021)
 rather than as HTML, so there may be no `<img>` to replace, and the
 service may re-encode inserted images, which drops the chunk (README:
-"services that re-encode images drop it"). Feasibility step 1 answers:
+"services that re-encode images drop it"). The feasibility step could
+not answer these questions without a Google account; they stay open:
 
 1. Does an image inserted into a Doc keep its `nymph` chunk at the URL
    the editor loads it from?
@@ -219,19 +241,22 @@ service may re-encode inserted images, which drops the chunk (README:
 3. Do the read-only views (`/preview`, published `/pub`) render images as
    `<img>`?
 
-The **Docs adapter** implements the outcome:
+What is built: generic `<img>` handling, which covers any Docs view that
+shows images as `<img>` with their original bytes (question 3, if the
+bytes are kept). The editor is not supported. Depending on the answers,
+a later change could add:
 
 | Outcome | What the extension does in Docs |
 |---|---|
 | Bytes kept, images in the DOM | An adapter maps each image to a URL and a box; the host is an absolutely positioned overlay over the canvas, re-positioned on scroll and resize (the canvas is not ours to replace). |
-| Bytes kept, images only in the canvas | Read-only views only (`/preview`, `/pub`) through generic `<img>` handling; the editor is not supported. |
+| Bytes kept, images only in the canvas | Nothing more: read-only views only, as built. |
 | Bytes re-encoded | **Linked source**: an image whose link (Docs lets users link an image) points to a nymph PNG or a `.yaml` / `.yml` nymph source is replaced with that source, wherever the image's box can be found (row 1 or 2). |
 
 The linked-source rule is general (any site): it applies only when the
 image itself is not a nymph PNG, its enclosing `<a href>` points to a URL
 ending in `.png`, `.yaml` or `.yml` on a host the extension may fetch,
 and that URL's content is a nymph PNG or a source the viewer accepts.
-It is built only if step 1 shows Docs needs it.
+It is not built.
 
 ### 3.8 The toolbar button
 
@@ -258,6 +283,26 @@ Translate icon does for translation:
 Every site is on until the user turns it off: there is no list of
 allowed sites.
 
+### 3.9 Inline and frame mode
+
+The feasibility step found that a page's Content Security Policy governs
+WebAssembly in content scripts: on a page without `'wasm-unsafe-eval'`
+(GitHub, and most large sites), compiling the module in the content
+script fails. So the viewer runs in one of two ways, chosen once per
+page by compiling an empty module (`canRunInline()`):
+
+| | Inline | Frame |
+|---|---|---|
+| Where | In the content script, in the host's shadow root | In an extension page (`src/frame/frame.html`) in an `<iframe>` in the host's shadow root, under the extension's own policy |
+| Cost | One module and one WebGL context for the page | One of each per chart |
+| Pool cap | 32 | 12 |
+| Bytes | Passed to `createViewer()` | Sent over a `MessageChannel` port handed to the frame with its first message |
+| Parking | `toYaml()` | The frame sends `toYaml()` after the first frame and every `view` event; the last one is kept |
+| Start | At once | When the frame is on screen: Chrome pauses animation frames in an off-screen extension frame, so a chart below the viewport swaps in when the user scrolls to it (the image shows until then) |
+
+The frame is sized by the host (`aspect-ratio`), never by messages. The
+right-click menu and About panel open inside the frame in frame mode.
+
 ## 4. Key Abstractions
 
 All in `extension/src/`, plain ES modules, no framework, no build step
@@ -265,27 +310,32 @@ beyond copying.
 
 | Module | Role | Invariants |
 |---|---|---|
-| `content/loader.js` | The declared content script, on every page (classic script, as MV3 requires): reads the settings for this site and, when on, `import()`s `content/main.js` from the extension; listens for the toggle message (section 3.8). | Does nothing else: on a site turned off, and until a page has images, it costs one storage read. |
-| `content/scanner.js` | The observers of section 3.5; turns DOM changes into candidates for the active site adapter. | Never runs work inside an observer callback; never touches nodes it did not create except the one attribute of section 3.3. |
-| `content/sniff.js` | `sniffPng(reader) -> {nymph: boolean, bytes?}`: reads a byte stream, checks the PNG signature, walks chunk headers (length, type) up to the first `IDAT`, and answers whether a `iTXt` chunk with keyword `nymph` is among them; on yes, reads the rest of the stream (up to 32 MiB) and returns all bytes; on no, cancels the stream. | Pure over bytes (tested in Node); reads at most the chunk headers before `IDAT` and the keyword of each `iTXt`; never trusts a chunk length beyond the cap. |
-| `content/fetcher.js` | Gets an image's byte stream: `data:` decoded in place; same-origin and `blob:` URLs with `fetch(url, {cache: 'force-cache', credentials: 'same-origin'})` in the content script; cross-origin URLs through the service worker. At most 4 fetches at a time. | Fetches only the `currentSrc` of a candidate (or a linked source, section 3.7); never a URL taken from inside a chart's YAML. |
-| `background/service-worker.js` | Cross-origin fetches for content scripts (host permissions lift CORS there), with `credentials: 'omit'`; sniffs first and returns only nymph PNG bytes (base64 over `chrome.runtime` messaging) or "not nymph". Also owns the toolbar button (section 3.8): toggles, per-tab icon, title and badge. | Answers only messages from its own content scripts; enforces the same caps as the sniffer. |
-| `content/replacer.js` | Creates the host (section 3.2), the shadow root and the viewer (`createViewer` from the bundled `nymph-viewer.js`), swaps in after `rendered()`, the badge, link handling; restores the image. | The image is hidden only after the chart is drawn; every failure path restores the image and records the URL as "not nymph" for this page. |
-| `content/pool.js` | The viewer pool of section 3.5: cap, parking by distance to the viewport, parked YAML. | Never parks a viewer under the pointer or within the observer margin. |
-| `content/sites/*.js` | Site adapters: `generic` (images), `github` (fetch routing), `gdocs` (per section 3.7). An adapter answers `candidates(root)`, `anchor(candidate)` (where the host goes and how it is sized: in flow after the image, or an overlay) and `fetchRoute(url)`. | The generic adapter is the default for every site; adapters only narrow or extend it. |
-| `options/` | The options page (from the button's context menu): theme (`source` or `auto`) and the list of sites turned off, each removable. | Writes only `chrome.storage.sync`; content scripts follow its changes live. |
+| `content/loader.js` | The declared content script, on every page (classic script, as MV3 requires): reads the settings and, when this site is on, `import()`s `content/main.js`; follows setting changes (`storage.onChanged`) with `start()` / `stop()`. | Does nothing else: on a site turned off it costs one storage read. |
+| `content/main.js` | The observers and states of section 3.5: each image's entry moves watching, reading, live, parked or plain; the pool. | Never runs work inside an observer callback; never touches nodes it did not create except the one attribute of section 3.3. |
+| `content/sniff.js` | `sniffStream(stream) -> {nymph, bytes?, reason?}`: checks the PNG signature, walks chunk headers up to the first `IDAT`, and answers whether an `iTXt` chunk with keyword `nymph` is among them; on yes, reads the rest (up to 32 MiB) and returns all bytes; on no, cancels the stream. `PngSniffer` is the incremental walker. | Pure over bytes (tested in Node); reads at most the chunk headers before `IDAT` and the keyword of each `iTXt`; never trusts a chunk length beyond the caps. |
+| `content/fetcher.js` | `readImage(url)`: `data:`, `blob:` and same-origin URLs with `fetch(url, {cache: 'force-cache', credentials: 'same-origin'})` here (a failure there, as a redirect to a host without CORS, falls back to the worker); cross-origin URLs through the service worker. At most 4 reads at a time. | Reads only the `currentSrc` of a candidate; never a URL taken from inside a chart's YAML. Never rejects. |
+| `content/replacer.js` | `Replacement`: the host (section 3.2), shadow root, cover, viewer inline or in a frame (section 3.9), badge, link handling; `unmount()` restores the image. | The image is hidden only while the host and its cover stand in its place; every failure path shows the image again. |
+| `content/sizing.js`, `pool.js`, `cache.js` | The host's CSS from the image's (`hostStyle()`); which viewer to park (`pickToPark()`); the per-URL LRU cache. | Pure (tested in Node). `pickToPark()` never picks a viewer under the pointer or within the observer margin. |
+| `frame/frame.html`, `frame.js` | One chart in an extension frame (section 3.9). | Takes the first `MessagePort` it is sent and listens only to it. |
+| `background/service-worker.js` | Cross-origin reads for content scripts (host permissions lift CORS there), with `credentials: 'omit'`; sniffs first and returns only nymph PNG bytes (base64: messages are JSON) or "not nymph". Owns the toolbar button (section 3.8): toggles, per-tab icon, title and badge from the counts content scripts report (kept in `storage.session`, as the worker sleeps). | Answers only messages from its own content scripts; enforces the sniffer's caps. |
+| `shared/settings.js` | The settings of section 5.2: read, `isOn(origin)`, `setSite()`, `runnableOrigin(url)`. | The one place that knows the setting keys. |
+| `options/` | The options page (from the button's context menu): theme (`source` or `auto`), the list of sites turned off (each can be turned on), and the pinning hint shown on install. | Writes only `chrome.storage.sync`; content scripts follow its changes live. |
 
 The bundled viewer (`viewer/`: `nymph-viewer.js`, `nymph-viewer-core.js`,
-`.wasm`, `fonts/`) is the unchanged output of the `NYMPH_WEB` build,
-loaded once per page on the first nymph image with
-`loadNymph({wasmUrl, fontBaseUrl})` pointing into the extension.
+`.wasm`, `fonts/`) is the output of the `NYMPH_WEB` build, loaded on the
+first nymph image of a page (inline) or by each frame, finding its
+`.wasm` and fonts next to itself in the extension. One viewer change was
+needed besides `fit: 'scale'`: `customElements` is `null` (not
+undefined) in content scripts, and the module now checks for that
+before defining `<nymph-viewer>`.
 
 ## 5. Contracts
 
 ### 5.1 Manifest and permissions
 
-- Manifest V3; `minimum_chrome_version` 116 (WebAssembly in content
-  scripts and the `wasm-unsafe-eval` CSP keyword; confirmed by step 1).
+- Manifest V3; `minimum_chrome_version` 116 (`'wasm-unsafe-eval'` in
+  extension pages and module service workers; verified only with
+  Chromium 141).
 - `permissions`: `storage`.
 - `host_permissions`: `<all_urls>`, granted on install: the content
   script runs everywhere, and the service worker can read cross-origin
@@ -295,9 +345,12 @@ loaded once per page on the first nymph image with
 - `action`: the toolbar button, no `default_popup` (a click toggles,
   section 3.8), icons for on and off.
 - `options_ui`: `options/options.html`.
-- `web_accessible_resources`: `content/*`, `viewer/*` for `<all_urls>`,
-  with `use_dynamic_url: true` so pages cannot use the resources to
-  detect the extension.
+- `web_accessible_resources`: `src/content/*`, `src/frame/*`, `viewer/*`
+  and `viewer/fonts/*` for `<all_urls>` (the content script imports its
+  modules and the viewer from the extension, and frames load from it).
+  A page can therefore tell that the extension is installed;
+  `use_dynamic_url` would hide it but is not used yet (untested with
+  module imports and frames).
 - `content_security_policy.extension_pages`:
   `script-src 'self' 'wasm-unsafe-eval'; object-src 'self'`.
 
@@ -325,12 +378,14 @@ in a slide, a thumbnail):
 
 ### 5.4 DOM markers
 
-The only marks the extension leaves in the page: the attribute
+The marks the extension leaves in the page: the attribute
 `data-nymph-ext="hidden"` on hidden images, the host element
 `<nymph-ext-chart>` (an unregistered custom element name, so the page's
-`<nymph-viewer>` definition, if any, is never involved), and one
-`<style>` element with `id="nymph-ext-style"`. Turning the extension off
-removes all three.
+`<nymph-viewer>` definition, if any, is never involved; its classes are
+`nymph-ext-starting` and `nymph-ext-showing-image`), and one `<style>`
+element with `id="nymph-ext-style"`. Turning the extension off removes
+them all. Inline, the viewer's right-click menu adds its own style
+(`nymph-viewer-style`) and menu elements to the page when used.
 
 ## 6. Build and Packaging
 
@@ -348,52 +403,55 @@ removes all three.
 ## 7. Testing Strategy
 
 1. **Native GoogleTest**: `fit: scale` geometry (`css_scale` above and
-   below 1, framebuffer cap, pointer mapping at scale 2) in the
-   `live_view` tests.
-2. **Node** (`extension/tests/node/`): the sniffer over every committed
-   example PNG (nymph), PNGs re-encoded without the chunk, a wish-style
-   chunk, a chunk after `IDAT`, truncated and oversized lengths, non-PNG
-   bytes, and a stream that must be cancelled after the headers; the
-   URL cache; the pool's parking order; the host sizing rules from a
-   computed-style object.
-3. **Browser** (`extension/tests/browser/`, Playwright with the
-   preinstalled Chromium and `--load-extension`): fixture pages served
-   on two local origins (`127.0.0.1` and `localhost`, ports from the OS)
-   each asserting what the user would see:
-   - a markdown-like page with nymph and plain PNGs: only the nymph ones
-     become viewers, with the image's box (within 1 px) and pixels close
-     to the PNG (the viewer DESIGN browser tolerance);
-   - images in links (no navigation on drag or click), in `<picture>`,
-     with `srcset`, `loading="lazy"`, scaled by CSS, a 2x PNG;
-   - a feed that appends images on scroll, a framework-like page that
-     replaces and re-renders image nodes, an image whose `src` changes,
-     an image removed: viewers appear, follow and are freed;
-   - 100 nymph images: at most 32 viewers live, a parked chart comes
-     back with its zoom;
-   - a strict CSP page (GitHub's policy headers) and a cross-origin
-     image without CORS (through the service worker);
-   - corrupt and wish-style PNGs stay images; clicking the button turns
-     the site off in every open tab of it (every image restored, grey
-     icon, empty badge) and on again (charts back, badge count), and
-     the choice survives a reload; another site stays on;
-   - a page without nymph images loads no `.wasm`.
-4. **Manual**, recorded in PLAN.md results: GitHub (README, issue,
-   pull request comment with an uploaded PNG, comment preview, dark
-   mode, private repository) and Google Docs (per step 1's outcome).
+   below 1, the framebuffer cap, pointer mapping at scale 2) in
+   `tests/test_live_view.cpp`.
+2. **Node** (`extension/tests/node/run.mjs`, CTest `nymph_extension_node`):
+   the sniffer over every committed example PNG, the same PNGs without
+   the chunk (and their image data never read), a chunk after `IDAT`,
+   another keyword, truncated and malformed streams, the header and size
+   caps, non-PNG bytes; the URL cache; the host sizing rules; the
+   pool's parking order; fetch routes; settings.
+3. **Browser** (`extension/tests/browser/run.mjs`, CTest
+   `nymph_extension_browser`; Playwright with the preinstalled Chromium
+   and `--load-extension`): fixture pages served on two origins
+   (`127.0.0.1` and `localhost`, one port from the OS), several of them
+   in both modes (`?csp=github` serves a GitHub-like policy, which
+   forces frame mode). Each asserts what the user would see:
+   - only nymph PNGs become charts, in the image's box (to the pixel)
+     and looking like it (the viewer DESIGN browser tolerance), for
+     images at natural size, with a `width` attribute and scaled by CSS;
+     a plain PNG and an icon-sized image stay images;
+   - dragging and clicking a chart inside a link does not follow it;
+   - `srcset`, `<picture>` and `loading="lazy"` images; a feed that
+     appends images on scroll; a framework that replaces image nodes and
+     strips the extension's attribute; an image whose `src` changes or
+     that is removed;
+   - 48 charts: at most 32 (inline) or 12 (frame) viewers live, the
+     first is parked and comes back with its zoom;
+   - corrupt and non-nymph sources stay images; a cross-origin image
+     without CORS is read by the worker without cookies; a page without
+     nymph PNGs loads no viewer;
+   - the button turns a site off in every tab of it (page restored, badge
+     empty, title), stays off after a reload, turns on again (badge
+     count), leaves another site on, and is disabled on pages the
+     extension cannot see; the badge switches a chart to its image and
+     back and opens it; `theme: auto` follows a dark colour scheme.
+4. **Manual** (PLAN.md steps 8 and 9): github.com and Google Docs.
 
 ## 8. Design Decisions
 
-- **Content script world, one module per page.** The viewer runs in the
-  content script's isolated world: one WebAssembly instance and one
-  shared WebGL context for all charts on the page (viewer DESIGN section
-  8), direct DOM access for sizing, and no page script can call into
-  it. Rejected: one extension `<iframe>` per chart (a module instance
-  and a WebGL context each, which hits the browser's context cap on a
-  long thread, and frames are hard to size to an inline image);
-  injecting into the page's main world (the page could reach the
-  viewer, and the page's CSP would govern WebAssembly). If step 1 finds
-  WebAssembly blocked in content scripts on a target site, the
-  per-chart iframe becomes that site's fallback.
+- **Inline where allowed, a frame per chart where not.** Inline, the
+  viewer runs in the content script's isolated world: one WebAssembly
+  instance and one shared WebGL context for all charts on the page
+  (viewer DESIGN section 8), and no page script can call into it. But
+  the page's Content Security Policy governs WebAssembly there, and
+  GitHub's forbids it, so pages like GitHub get one extension frame per
+  chart, which runs under the extension's own policy. Rejected:
+  frames everywhere (a module instance and a WebGL context per chart on
+  every page); one hidden extension frame drawing every chart and
+  sending frames to the page (a remote version of the whole viewer API,
+  input and menus included); injecting into the page's main world (the
+  page could reach the viewer, and its CSP still applies).
 - **Re-fetch the bytes; never decode pixels.** An `<img>` exposes only
   decoded pixels, which have lost the chunk, and `webRequest` cannot
   read response bodies in MV3. Re-fetching with `force-cache` usually
@@ -419,9 +477,11 @@ removes all three.
   (`fit: 'fill'`) would change line breaks and font proportions
   compared to the image; scaling the source-size layout keeps the chart
   identical to the PNG, only sharper.
-- **Swap after the first frame.** Creating the viewer hidden and
-  swapping when `rendered()` resolves avoids a blank box while the
-  module or a font loads.
+- **Cover, then reveal.** The host takes the image's place at once with
+  a copy of the image on top, and the copy goes when `rendered()`
+  resolves, so there is never a blank box while the module or a font
+  loads. Rejected: building the viewer in a hidden host and swapping
+  after the first frame (Chrome never runs a hidden extension frame).
 - **Everywhere, off by exception; no list of allowed sites.** Charts
   are pasted anywhere (wikis, forums, chat logs, internal tools), and a
   list to maintain would hide them on every site nobody added. The cost
@@ -448,14 +508,14 @@ removes all three.
 
 - The page is never left with a hidden image and no visible chart: every
   path that destroys a viewer shows its image first.
-- No fetch of a URL that did not come from a candidate's `currentSrc` or
-  (section 3.7) its enclosing link; fonts come only from the extension.
+- No fetch of a URL that did not come from a candidate's `currentSrc`;
+  fonts come only from the extension.
 - Sources are untrusted: the viewer's limits apply unchanged (viewer
   DESIGN goal 5); byte caps: 32 MiB per PNG, the header walk stops at
   the first `IDAT` or after 1 MiB.
 - No timers polling the DOM; observers and idle callbacks only.
 - All extension code follows CLAUDE.md where it applies (MIT header,
-  JSDoc on exported functions, 2-space indentation, ASCII).
+  JSDoc on exported functions, 2-space indentation).
 
 ## 10. Integration Boundaries
 
@@ -466,7 +526,7 @@ removes all three.
   only through the sniffer's check of the chunk keyword.
 - **Changes** the viewer by adding `fit: 'scale'` (section 5.3); viewer
   DESIGN and `docs/viewer.md` gain it.
-- **Couples to** GitHub's and Google Docs' markup and image hosting,
-  which change without notice: everything site-specific stays in
-  `content/sites/`, and the generic image path must keep working when an
-  adapter's assumptions break.
+- **Couples to** pages' Content Security Policies (section 3.9) and,
+  for GitHub and Google Docs, to how they host images, which can change
+  without notice. Nothing in the code is site-specific; a site adapter
+  (section 3.7) would be the first.

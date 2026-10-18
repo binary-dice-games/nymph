@@ -450,6 +450,21 @@ test('a fit="width" viewer lays out again when its box narrows', async () => {
   await page.close();
 });
 
+test('a fit="scale" viewer grows to its box and hovers the same point', async () => {
+  const page = await openPage();
+  await plotPage(page, PLOT, { fit: 'scale' });
+  await page.evaluate(() => (window.v.container.style.width = '800px'));
+  await settleIn(page);
+  const g = await page.evaluate(() => ({ g: window.v.state().geometry, css: window.v.canvas.style.width, px: window.v.canvas.width }));
+  assert(g.g.layoutWidth === 400 && g.g.cssScale === 2 && g.css === '800px' && g.px === 800, JSON.stringify(g));
+  const p = await page.evaluate(() => window.at(2, 7));
+  await page.mouse.move(p.x, p.y);
+  await settleIn(page);
+  const hover = await page.evaluate(() => window.events.filter((x) => x.e === 'hover').map((x) => x.detail).pop());
+  assert(hover?.label === 'temp' && hover.values.y === '7', JSON.stringify(hover));
+  await page.close();
+});
+
 test('fonts are fetched once per page, and a missing one keeps the chart', async () => {
   const page = await openPage(helpers);
   const requests = [];

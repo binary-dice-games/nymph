@@ -9,6 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Chrome extension (built with `NYMPH_WEB`, in `build-web/extension/`): turns nymph PNGs on any page into live charts of the same size, following pages that change (comments, previews, feeds); a toolbar button turns it off or on per site and counts the charts; options for the theme and the sites turned off. See `docs/extension.md`.
+- Web viewer: `fit: 'scale'` (and `fit="scale"`) lays the chart out at its source size and scales it to the box width, up or down.
+
 - Web viewer (`NYMPH_WEB`, built with Emscripten): the library compiled to WebAssembly (630 KB gzip) with a JavaScript API (`nymph-viewer.js`, or one file, `nymph-viewer.single.js`) and a `<nymph-viewer>` element that show a nymph YAML source or PNG live in a web page with WebGL2 (or on the CPU): pan, zoom and pinch, hover and click values, hover / click / view / error events, data updates, themes following the page, fonts fetched on demand, and PNG export of the chart on screen. See `docs/viewer.md`.
 - `view` top-level key: the zoom, pan, 3D rotation and hidden series of plots, Gantt charts, 3D plots and diagrams, by element path; PNGs and the viewer open with it. The web viewer writes it.
 - Web viewer: `toYaml()` returns the chart's YAML as it is on screen (data and view included); `toPng()` saves the image on screen; a right-click menu saves PNG or YAML and shows an About panel (`menu: false` / `menu="false"` turns it off).

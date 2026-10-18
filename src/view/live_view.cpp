@@ -161,12 +161,16 @@ struct live_view::impl {
     clear = ImGui::ColorConvertFloat4ToU32(bg);
   }
 
-  /// The geometry at the source size, shrunk with CSS to the box width.
+  /// The geometry at the source size, shrunk with CSS to the box width
+  /// (view_fit::scale: also grown to it).
   view_geometry source_geometry() const {
     view_geometry g;
     g.layout_width = static_cast<float>(fig->image.width);
     g.layout_height = static_cast<float>(fig->image.height);
-    g.css_scale = size.width > 0.0f ? std::min(1.0f, size.width / g.layout_width) : 1.0f;
+    if (size.width > 0.0f) {
+      const float to_box = size.width / g.layout_width;
+      g.css_scale = options.fit == view_fit::scale ? to_box : std::min(1.0f, to_box);
+    }
     return g;
   }
 
@@ -178,7 +182,7 @@ struct live_view::impl {
     }
     view_geometry g = source_geometry();
     bool fallback = overflowed;
-    if (!overflowed && options.fit != view_fit::source && size.width > 0.0f) {
+    if (!overflowed && (options.fit == view_fit::width || options.fit == view_fit::fill) && size.width > 0.0f) {
       view_geometry fit;
       fit.layout_width = std::round(size.width);
       if (options.fit == view_fit::width) {
