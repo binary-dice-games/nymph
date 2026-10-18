@@ -81,6 +81,7 @@ carries its source: `bdg::nymph::extract_source(png)` returns it.
 | `imuml/` | ImUml, the UML diagram library for Dear ImGui that nymph's diagrams use |
 | `app/` | The `nymph` command-line executable |
 | `tests/` | GoogleTest suite, run with `ctest` |
+| `web/` | The interactive web viewer: WebAssembly module and JavaScript API (`NYMPH_WEB`) |
 | `examples/` | Example sources and the PNGs rendered from them |
 | `fonts/` | Fonts (Google Fonts, OFL) compiled into the binary |
 | `cmake/` | CMake helper modules |

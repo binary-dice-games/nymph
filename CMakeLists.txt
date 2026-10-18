@@ -11,6 +11,27 @@ option(NYMPH_BUILD_TESTS "Build the nymph tests" ${PROJECT_IS_TOP_LEVEL})
 # The OpenGL rasterizer loads OpenGL at run time; nothing is linked and no
 # GL headers are needed (spec/02_opengl_rasterizer/DESIGN.md section 5).
 option(NYMPH_OPENGL "Build the optional OpenGL rasterizer" ON)
+# The interactive web viewer: the library compiled to WebAssembly with a
+# JavaScript API (spec/04_web_viewer/DESIGN.md section 6). Emscripten only.
+option(NYMPH_WEB "Build the WebAssembly web viewer (with emcmake)" OFF)
+if(NYMPH_WEB)
+  if(NOT EMSCRIPTEN)
+    message(FATAL_ERROR "NYMPH_WEB needs the Emscripten toolchain: configure with emcmake cmake ...")
+  endif()
+  # The EGL / WGL loader does not apply (WebGL comes from the browser), and
+  # the GoogleTest suite is native: the web build has its own Node and
+  # browser tests (web/tests).
+  set(NYMPH_OPENGL OFF CACHE BOOL "" FORCE)
+  set(NYMPH_BUILD_TESTS OFF CACHE BOOL "" FORCE)
+  # Fonts are fetched on demand, next to the module (fonts/).
+  if(NOT DEFINED CACHE{NYMPH_EMBED_FONTS})
+    set(NYMPH_EMBED_FONTS "none" CACHE STRING
+      "Fonts of NYMPH_FONTS_DIR whose bytes are compiled in: all, none, or a ;-list of file names")
+  endif()
+  # Native wasm exception handling (every current browser and Node).
+  add_compile_options(-fwasm-exceptions)
+  add_link_options(-fwasm-exceptions)
+endif()
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED True)
@@ -46,8 +67,15 @@ add_subdirectory(src)
 
 # ── nymph executable ──────────────────────────────────────────────────────────
 
-if(PROJECT_IS_TOP_LEVEL)
+if(PROJECT_IS_TOP_LEVEL AND NOT NYMPH_WEB)
   add_subdirectory(app)
+endif()
+
+# ── web viewer ────────────────────────────────────────────────────────────────
+
+if(NYMPH_WEB)
+  enable_testing()
+  add_subdirectory(web)
 endif()
 
 # ── tests ─────────────────────────────────────────────────────────────────────

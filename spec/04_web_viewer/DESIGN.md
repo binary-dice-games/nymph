@@ -99,7 +99,7 @@ including the dynamic font atlas (`ImGuiBackendFlags_RendererHasTextures`).
    untrusted (often written by an AI) and keep the library's limits.
 6. **Small.** One shared module per page. The web build embeds no font
    file (ImGui's built-in font is always there); each other font is
-   fetched once, the first time a chart names it. `nymph-viewer.wasm`
+   fetched once, the first time a chart names it. `nymph-viewer-core.wasm`
    stays at or below 1.5 MB gzip.
 7. **A source means the same everywhere.** Every build knows the same
    font names; a build that does not embed a font still accepts the name
@@ -246,7 +246,7 @@ chart shows.
 ## 4. Key Abstractions
 
 ```
- host page ──► nymph-viewer.js ──────────────► nymph-viewer.wasm (one per page)
+ host page ──► nymph-viewer.js ──────────────► nymph-viewer-core.wasm (one per page)
                (API, custom element,            │
                 pointer/wheel/touch events,     ├─ nymph_web.cpp: C exports, viewer table
                 ResizeObserver, frame           │
@@ -509,7 +509,7 @@ class NymphError extends Error { line: number; column: number; }
 - **Scheduling.** `requestAnimationFrame` only while some viewer
   `wants_frame()`; `ResizeObserver` for size and pixel-ratio changes;
   `IntersectionObserver` pauses viewers off screen.
-- **Hosting.** `nymph-viewer.js`, `nymph-viewer.wasm` and the `fonts/`
+- **Hosting.** `nymph-viewer.js`, `nymph-viewer-core.wasm` and the `fonts/`
   folder (the font files and their licences), served together; or a
   single-file build with the wasm inlined (about a third larger) for
   hosts that cannot serve a second file, which then needs `fontBaseUrl`
@@ -539,7 +539,8 @@ class NymphError extends Error { line: number; column: number; }
   so `imgui_impl_opengl3` cannot set `RendererHasVtxOffset` there, and
   plots above 65,535 vertices would otherwise fail; WebGL2 draws 32-bit
   indices natively. The native build keeps 16-bit indices.
-- Output in `build/web/`: `nymph-viewer.js`, `nymph-viewer.wasm`,
+- Output in `build/web/`: `nymph-viewer.js` (the API), `nymph-viewer-core.js`
+  (Emscripten's loader, which it imports), `nymph-viewer-core.wasm`,
   `nymph-viewer.single.js`, `fonts/`, and `demo/index.html`.
 
 ## 7. Testing Strategy

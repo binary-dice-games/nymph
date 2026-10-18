@@ -9,6 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Web viewer (in progress, `NYMPH_WEB` with Emscripten): the library compiled to WebAssembly with a JavaScript API (`nymph-viewer.js`) that shows a nymph YAML source or PNG live, with pan and zoom, hover and click picks, data updates and fonts fetched on demand; PNG export of the chart on screen.
+- Library: `bdg::nymph::live_view` keeps a figure on screen frame after frame, with pointer input (pan, zoom, picks), data updates (`set_data`), nymph PNG input and view state.
+- ImUml: `ImUmlDiagramFlags_Interactive` (wheel zoom around the mouse, drag pan, double-click fit, hovered node or edge).
 - `NYMPH_EMBED_FONTS` CMake option (`all`, `none` or a list of file names) to compile in only some fonts; fonts not embedded are copied to `build/fonts/` and registered at run time with `bdg::nymph::register_font()`, checked against their size and SHA-256.
 
 - `Plot` axis fields: `x_scale` / `y_scale` (`Log10`, `SymLog`, `Time` in UTC), `x_format` / `y_format` tick formats, `x_ticks` / `y_ticks` with `x_tick_labels` / `y_tick_labels`, and a second Y axis (`y2_` fields, `y_axis: Y2` on any 2D series).

@@ -1,0 +1,423 @@
+// MIT License © 2026 Binary Dice Games
+/// @file nymph_web.cpp
+/// @brief The C exports of the WebAssembly module: a table of live views
+///        driven by web/js/nymph-viewer.js (spec/04_web_viewer/DESIGN.md
+///        section 4, "Web module"). Internal: the JavaScript module is the
+///        public contract.
+///
+/// Every export catches every exception (CLAUDE.md, C ABI boundaries) and
+/// reports it through nymph_last_error(). Strings and buffers handed back
+/// stay valid until the next call of the same kind.
+#include <emscripten/emscripten.h>
+#include <cstdint>
+#include <cstdio>
+#include <map>
+#include <memory>
+#include <span>
+#include <stdexcept>
+#include <string>
+#include <vector>
+#include "core/error.hpp"
+#include "fonts/embedded_fonts.hpp"
+#include "nymph.hpp"
+#include "render/image.hpp"
+#include "render/soft_rasterizer.hpp"
+#include "view/live_view.hpp"
+
+namespace {
+
+using namespace bdg::nymph;
+
+// ── JSON ─────────────────────────────────────────────────────────────────────
+
+/// Appends `s` as a JSON string literal.
+void json_string(std::string& out, std::string_view s) {
+  out += '"';
+  for (const char c : s) {
+    switch (c) {
+      case '"':
+        out += "\\\"";
+        break;
+      case '\\':
+        out += "\\\\";
+        break;
+      case '\n':
+        out += "\\n";
+        break;
+      case '\r':
+        out += "\\r";
+        break;
+      case '\t':
+        out += "\\t";
+        break;
+      default:
+        if (static_cast<unsigned char>(c) < 0x20) {
+          char buf[8];
+          std::snprintf(buf, sizeof(buf), "\\u%04x", c);
+          out += buf;
+        } else {
+          out += c;
+        }
+    }
+  }
+  out += '"';
+}
+
+void json_number(std::string& out, double v) {
+  char buf[32];
+  std::snprintf(buf, sizeof(buf), "%.17g", v);
+  out += buf;
+}
+
+void json_pick(std::string& out, const std::optional<view_pick>& p) {
+  if (!p) {
+    out += "null";
+    return;
+  }
+  out += "{\"element\":";
+  json_string(out, p->element);
+  out += ",\"type\":";
+  json_string(out, p->type);
+  out += ",\"label\":";
+  json_string(out, p->label);
+  out += ",\"index\":" + std::to_string(p->index) + ",\"values\":{";
+  for (size_t i = 0; i < p->values.size(); ++i) {
+    out += i == 0 ? "" : ",";
+    json_string(out, p->values[i].first);
+    out += ':';
+    json_string(out, p->values[i].second);
+  }
+  out += "}}";
+}
+
+// ── Viewers ──────────────────────────────────────────────────────────────────
+
+struct viewer {
+  live_view view;
+  image pixels; ///< The last software frame.
+  explicit viewer(view_options o) : view(o) {}
+};
+
+std::map<int, std::unique_ptr<viewer>>& viewers() {
+  static std::map<int, std::unique_ptr<viewer>> table;
+  return table;
+}
+
+viewer& get(int handle) {
+  const auto it = viewers().find(handle);
+  if (it == viewers().end()) {
+    throw std::invalid_argument("no viewer " + std::to_string(handle));
+  }
+  return *it->second;
+}
+
+std::string& last_error() {
+  static std::string json = "null";
+  return json;
+}
+
+std::string& scratch() {
+  static std::string text;
+  return text;
+}
+
+std::vector<uint8_t>& png_buffer() {
+  static std::vector<uint8_t> bytes;
+  return bytes;
+}
+
+/// The status codes the exports return.
+enum status : int { kOk = 0, kError = 1, kFontsNeeded = 2, kPlainPng = 3 };
+
+/// Runs `f`, turning exceptions into a status and last_error().
+template <typename F>
+int guarded(F&& f) {
+  last_error() = "null";
+  try {
+    return f();
+  } catch (const fonts_needed& e) {
+    std::string& j = last_error();
+    j = "{\"kind\":\"fonts\",\"message\":";
+    json_string(j, e.what());
+    j += ",\"fonts\":[";
+    for (size_t i = 0; i < e.fonts().size(); ++i) {
+      j += i == 0 ? "" : ",";
+      json_string(j, e.fonts()[i]);
+    }
+    j += "]}";
+    return kFontsNeeded;
+  } catch (const error& e) {
+    std::string& j = last_error();
+    j = "{\"kind\":\"source\",\"line\":" + std::to_string(e.line()) + ",\"column\":" + std::to_string(e.column()) +
+        ",\"message\":";
+    json_string(j, e.what());
+    j += '}';
+    return kError;
+  } catch (const std::exception& e) {
+    std::string& j = last_error();
+    j = "{\"kind\":\"other\",\"message\":";
+    json_string(j, e.what());
+    j += '}';
+    return kError;
+  } catch (...) {
+    last_error() = "{\"kind\":\"other\",\"message\":\"unknown error\"}";
+    return kError;
+  }
+}
+
+} // namespace
+
+extern "C" {
+
+/// @brief The last error as JSON ({kind, message, line, column, fonts}),
+///        or "null".
+EMSCRIPTEN_KEEPALIVE const char* nymph_last_error() {
+  return last_error().c_str();
+}
+
+/// @brief nymph's version, "MAJOR.MINOR.PATCH".
+EMSCRIPTEN_KEEPALIVE const char* nymph_version() {
+  static const std::string v(version());
+  return v.c_str();
+}
+
+/// @brief Every catalog font as JSON: [{name, size, embedded}].
+EMSCRIPTEN_KEEPALIVE const char* nymph_font_catalog() {
+  std::string& j = scratch();
+  j = "[";
+  for (const font_entry& f : font_catalog()) {
+    j += j.size() == 1 ? "{\"name\":" : ",{\"name\":";
+    json_string(j, f.name);
+    j += ",\"size\":" + std::to_string(f.size) + ",\"available\":" + (font_data(f.name).empty() ? "false" : "true") +
+        "}";
+  }
+  j += ']';
+  return j.c_str();
+}
+
+/// @brief register_font(): 0, or 1 with last_error().
+EMSCRIPTEN_KEEPALIVE int nymph_register_font(const char* name, const uint8_t* bytes, int size) {
+  return guarded([&] {
+    register_font(name, std::span<const uint8_t>(bytes, static_cast<size_t>(size)));
+    return kOk;
+  });
+}
+
+/// @brief A new viewer; returns its handle (> 0), or 0 with last_error().
+/// @param fit 0 source, 1 width, 2 fill.
+EMSCRIPTEN_KEEPALIVE int nymph_viewer_create(int fit, int tooltips) {
+  int handle = 0;
+  guarded([&] {
+    static int next = 1;
+    view_options o;
+    o.fit = fit == 1 ? view_fit::width : (fit == 2 ? view_fit::fill : view_fit::source);
+    o.tooltips = tooltips != 0;
+    handle = next++;
+    viewers()[handle] = std::make_unique<viewer>(o);
+    return kOk;
+  });
+  return handle;
+}
+
+EMSCRIPTEN_KEEPALIVE void nymph_viewer_destroy(int handle) {
+  viewers().erase(handle);
+}
+
+/// @brief set_source(): 0, 1 (error) or 2 (fonts needed), with last_error().
+EMSCRIPTEN_KEEPALIVE int nymph_viewer_set_source(int handle, const char* text, int size, int reset_view) {
+  return guarded([&] {
+    get(handle).view.set_source(std::string_view(text, static_cast<size_t>(size)), reset_view != 0);
+    return kOk;
+  });
+}
+
+/// @brief set_data(): as nymph_viewer_set_source().
+EMSCRIPTEN_KEEPALIVE int nymph_viewer_set_data(int handle, const char* text, int size) {
+  return guarded([&] {
+    get(handle).view.set_data(std::string_view(text, static_cast<size_t>(size)));
+    return kOk;
+  });
+}
+
+/// @brief set_png(): as nymph_viewer_set_source(), or 3 for a PNG without a
+///        nymph source.
+EMSCRIPTEN_KEEPALIVE int nymph_viewer_set_png(int handle, const uint8_t* bytes, int size, int reset_view) {
+  return guarded([&] {
+    const bool nymph =
+        get(handle).view.set_png(std::span<const uint8_t>(bytes, static_cast<size_t>(size)), reset_view != 0);
+    return nymph ? kOk : kPlainPng;
+  });
+}
+
+/// @brief set_theme(): "" for the source's.
+EMSCRIPTEN_KEEPALIVE int nymph_viewer_set_theme(int handle, const char* theme) {
+  return guarded([&] {
+    get(handle).view.set_theme(theme);
+    return kOk;
+  });
+}
+
+EMSCRIPTEN_KEEPALIVE int nymph_viewer_resize(int handle, float width, float height, float pixel_ratio) {
+  return guarded([&] {
+    get(handle).view.resize({width, height, pixel_ratio});
+    return kOk;
+  });
+}
+
+/// @brief One pointer event; `type` 0 move, 1 down, 2 up, 3 wheel, 4 leave.
+EMSCRIPTEN_KEEPALIVE int nymph_viewer_pointer(
+    int handle,
+    int type,
+    float x,
+    float y,
+    int button,
+    float wheel_x,
+    float wheel_y,
+    int touch) {
+  return guarded([&] {
+    pointer_event e;
+    e.type = static_cast<pointer_event::kind>(type < 0 || type > 4 ? 0 : type);
+    e.x = x;
+    e.y = y;
+    e.button = button;
+    e.wheel_x = wheel_x;
+    e.wheel_y = wheel_y;
+    e.touch = touch != 0;
+    get(handle).view.input(e);
+    return kOk;
+  });
+}
+
+EMSCRIPTEN_KEEPALIVE int nymph_viewer_reset_view(int handle) {
+  return guarded([&] {
+    get(handle).view.reset_view();
+    return kOk;
+  });
+}
+
+EMSCRIPTEN_KEEPALIVE int nymph_viewer_wants_frame(int handle) {
+  const auto it = viewers().find(handle);
+  return it != viewers().end() && it->second->view.wants_frame() ? 1 : 0;
+}
+
+/// @brief Runs a due frame and draws it with the software rasterizer.
+/// @return 1 when new pixels are ready (nymph_viewer_pixels()), 0 when no
+///         frame was due, -1 on error (last_error()).
+EMSCRIPTEN_KEEPALIVE int nymph_viewer_frame_software(int handle, double now_seconds) {
+  int drawn = 0;
+  const int s = guarded([&] {
+    viewer& v = get(handle);
+    if (const ImDrawData* d = v.view.frame(now_seconds)) {
+      v.pixels = rasterize(*d, v.view.textures(), v.view.clear_color());
+      drawn = 1;
+    }
+    return kOk;
+  });
+  return s == kOk ? drawn : -1;
+}
+
+/// @brief The last software frame: RGBA, nymph_viewer_pixel_width() x
+///        nymph_viewer_pixel_height().
+EMSCRIPTEN_KEEPALIVE const uint8_t* nymph_viewer_pixels(int handle) {
+  const auto it = viewers().find(handle);
+  return it == viewers().end() ? nullptr : it->second->pixels.rgba.data();
+}
+
+EMSCRIPTEN_KEEPALIVE int nymph_viewer_pixel_width(int handle) {
+  const auto it = viewers().find(handle);
+  return it == viewers().end() ? 0 : it->second->pixels.width;
+}
+
+EMSCRIPTEN_KEEPALIVE int nymph_viewer_pixel_height(int handle) {
+  const auto it = viewers().find(handle);
+  return it == viewers().end() ? 0 : it->second->pixels.height;
+}
+
+/// @brief The viewer's state as JSON: geometry, figure, description,
+///        hovered pick, the click since the last call (taken), plot views.
+EMSCRIPTEN_KEEPALIVE const char* nymph_viewer_state(int handle) {
+  std::string& j = scratch();
+  j = "null";
+  guarded([&] {
+    live_view& v = get(handle).view;
+    const view_geometry g = v.geometry();
+    j = "{\"geometry\":{\"layoutWidth\":";
+    json_number(j, g.layout_width);
+    j += ",\"layoutHeight\":";
+    json_number(j, g.layout_height);
+    j += ",\"cssScale\":";
+    json_number(j, g.css_scale);
+    j += ",\"framebufferScale\":";
+    json_number(j, g.framebuffer_scale);
+    j += ",\"pixelWidth\":" + std::to_string(g.pixel_width) + ",\"pixelHeight\":" + std::to_string(g.pixel_height) +
+        ",\"fitFallback\":" + (g.fit_fallback ? "true" : "false") + "}";
+    j += std::string(",\"hasFigure\":") + (v.has_figure() ? "true" : "false");
+    j += std::string(",\"wantsFrame\":") + (v.wants_frame() ? "true" : "false");
+    j += ",\"description\":";
+    json_string(j, v.description());
+    j += ",\"hovered\":";
+    json_pick(j, v.hovered());
+    j += ",\"click\":";
+    json_pick(j, v.take_click());
+    j += ",\"views\":[";
+    const std::vector<plot_view> views = v.view_state();
+    for (size_t i = 0; i < views.size(); ++i) {
+      const plot_view& p = views[i];
+      j += i == 0 ? "{\"element\":" : ",{\"element\":";
+      json_string(j, p.element);
+      const std::pair<const char*, double> fields[] = {
+          {"x", p.x},
+          {"y", p.y},
+          {"width", p.width},
+          {"height", p.height},
+          {"xMin", p.x_min},
+          {"xMax", p.x_max},
+          {"yMin", p.y_min},
+          {"yMax", p.y_max}};
+      for (const auto& [name, value] : fields) {
+        j += std::string(",\"") + name + "\":";
+        json_number(j, value);
+      }
+      if (p.has_y2) {
+        j += ",\"y2Min\":";
+        json_number(j, p.y2_min);
+        j += ",\"y2Max\":";
+        json_number(j, p.y2_max);
+      }
+      j += '}';
+    }
+    j += "]}";
+    return kOk;
+  });
+  return j.c_str();
+}
+
+/// @brief The viewer's source (with set_data() applied).
+EMSCRIPTEN_KEEPALIVE const char* nymph_viewer_source(int handle) {
+  std::string& j = scratch();
+  j.clear();
+  guarded([&] {
+    j = std::string(get(handle).view.source());
+    return kOk;
+  });
+  return j.c_str();
+}
+
+/// @brief render_png() of the viewer's source: 0 with the bytes in
+///        nymph_png_data() / nymph_png_size(), or 1 with last_error().
+EMSCRIPTEN_KEEPALIVE int nymph_viewer_to_png(int handle) {
+  return guarded([&] {
+    png_buffer() = render_png(get(handle).view.source());
+    return kOk;
+  });
+}
+
+EMSCRIPTEN_KEEPALIVE const uint8_t* nymph_png_data() {
+  return png_buffer().data();
+}
+
+EMSCRIPTEN_KEEPALIVE int nymph_png_size() {
+  return static_cast<int>(png_buffer().size());
+}
+
+} // extern "C"

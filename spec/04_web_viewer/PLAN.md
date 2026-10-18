@@ -308,6 +308,21 @@ clears the figure) for a PNG with no nymph chunk. 4 tests in
 
 ### 9. Emscripten build with the software presenter
 
+*Result: done, with Emscripten 6.0.12 and Node 22.* The software
+presenter is one `rasterize()` call inside `web/nymph_web.cpp` (no file
+of its own). Emscripten names the module after its loader:
+`nymph-viewer-core.js` / `.wasm`, imported by `nymph-viewer.js`.
+`NYMPH_EMBED_FONTS` defaults to `none` in the web build;
+`nymph-viewer-core.wasm` is 1.57 MB, 633 KB gzip (was 2.1 MB with the
+fonts). The JavaScript module already has fonts on demand (one fetch per
+font per page, a failed load retried, `fetchFont` to replace the
+fetcher), updates in call order and `toPng()`. 8 Node tests
+(`web/tests/node/run.mjs`, CTest `nymph_web_node`, about 1 s): every
+example within the GL DESIGN tolerance of its committed PNG, a
+corrupted font rejected by its SHA-256, the library's own error text and
+position, hover and click picks, setData / setPng / toPng, update order,
+size.
+
 **Goal:** `NYMPH_WEB` builds `nymph-viewer.wasm` and a minimal JS loader,
 and Node can drive a viewer end to end on the CPU.
 
