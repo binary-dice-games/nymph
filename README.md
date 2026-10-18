@@ -12,6 +12,8 @@ It is meant for AI agents that need to show information as a chart.
 The [web viewer](docs/viewer.md) shows the same charts live in a web page
 (WebAssembly and WebGL2), with pan, zoom and data-point values, for
 markdown viewers and chatbots: `<nymph-viewer src="chart.yaml"></nymph-viewer>`.
+The [Chrome extension](docs/extension.md) does it on any page you read:
+nymph PNGs on GitHub or any site become live charts of the same size.
 
 It started as wish's `nymph` module and is now standalone, with no wish or
 bison dependency (and no compatibility with wish's format). **Status: first
@@ -85,6 +87,7 @@ carries its source: `bdg::nymph::extract_source(png)` returns it.
 | `app/` | The `nymph` command-line executable |
 | `tests/` | GoogleTest suite, run with `ctest` |
 | `web/` | The interactive web viewer: WebAssembly module and JavaScript API (`NYMPH_WEB`) |
+| `extension/` | The Chrome extension that turns nymph PNGs on any page into live viewers (built with `NYMPH_WEB`) |
 | `examples/` | Example sources and the PNGs rendered from them |
 | `fonts/` | Fonts (Google Fonts, OFL) compiled into the binary |
 | `cmake/` | CMake helper modules |
@@ -117,6 +120,7 @@ carries its source: `bdg::nymph::extract_source(png)` returns it.
 | [docs/agent-guide.md](docs/agent-guide.md) | Self-contained instructions and recipes for AI agents |
 | [docs/examples.md](docs/examples.md) | The example charts with their sources and images |
 | [docs/viewer.md](docs/viewer.md) | The web viewer: files, embedding, JavaScript API, events, interaction |
+| [docs/extension.md](docs/extension.md) | The Chrome extension: install, the toolbar button, sites, privacy, limits |
 | [spec/INDEX.md](spec/INDEX.md) | Index of the project specifications (one folder per project, with its DESIGN.md and PLAN.md) |
 | [spec/01_core_features/DESIGN.md](spec/01_core_features/DESIGN.md) | Architecture, source format, key abstractions, design decisions |
 | [spec/01_core_features/PLAN.md](spec/01_core_features/PLAN.md) | Ordered implementation steps and their tests |
@@ -126,6 +130,8 @@ carries its source: `bdg::nymph::extract_source(png)` returns it.
 | [spec/03_uml_diagrams/PLAN.md](spec/03_uml_diagrams/PLAN.md) | Its implementation steps and tests |
 | [spec/04_web_viewer/DESIGN.md](spec/04_web_viewer/DESIGN.md) | The interactive web viewer: live view, picks, fonts on demand, WebAssembly, WebGL2, JS API |
 | [spec/04_web_viewer/PLAN.md](spec/04_web_viewer/PLAN.md) | Its implementation steps and tests |
+| [spec/05_browser_extension/DESIGN.md](spec/05_browser_extension/DESIGN.md) | The Chrome extension that turns nymph PNGs on any page into live viewers: detection, replacement, live pages, sites |
+| [spec/05_browser_extension/PLAN.md](spec/05_browser_extension/PLAN.md) | Its implementation steps and tests |
 | [CHANGELOG.md](CHANGELOG.md) | User-facing changes between releases |
 | [CLAUDE.md](CLAUDE.md) | Coding style and project rules for AI agents and contributors |
 

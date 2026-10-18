@@ -45,7 +45,9 @@ its text:
 
 A markdown renderer can turn a fenced block whose language is `nymph`
 into the last form (escape `<` and `&` in the text). Attributes: `src`,
-`fit` (`source`, `width`, `fill`), `theme` (`source`, `light`, `dark`,
+`fit` (`source`: laid out at the source size, shrunk to a narrower box;
+`width`: laid out at the box width; `fill`: at the box size; `scale`:
+laid out at the source size and scaled to the box width, up or down), `theme` (`source`, `light`, `dark`,
 `classic`, `auto`), `tooltips` (`false` turns nymph's own off), `menu`
 (`false` turns the right-click menu off). Events,
 bubbling: `nymph-load` (shown; `detail` is `info()`), `nymph-hover`,

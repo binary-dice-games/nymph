@@ -11,7 +11,7 @@
  * bytes in.
  */
 
-const FIT = { source: 0, width: 1, fill: 2 };
+const FIT = { source: 0, width: 1, fill: 2, scale: 3 };
 const POINTER = { move: 0, down: 1, up: 2, wheel: 3, leave: 4 };
 const STATUS = { ok: 0, error: 1, fontsNeeded: 2, plainPng: 3 };
 
@@ -1014,7 +1014,7 @@ export class NymphViewer {
  * @param {object} [options]
  * @param {string} [options.source] YAML to show
  * @param {Uint8Array} [options.png] or a nymph PNG
- * @param {'source'|'width'|'fill'} [options.fit]
+ * @param {'source'|'width'|'fill'|'scale'} [options.fit]
  * @param {boolean} [options.tooltips] nymph's own tooltips (default true)
  * @param {'auto'|'webgl'|'software'} [options.rasterizer] WebGL2 when available (default), or the CPU
  * @param {'source'|'light'|'dark'|'classic'|'auto'} [options.theme] the source's theme (default), a fixed one, or the page's colour scheme
@@ -1168,6 +1168,7 @@ export class NymphViewerElement extends (typeof HTMLElement === 'undefined' ? cl
   }
 }
 
-if (typeof customElements !== 'undefined' && !customElements.get('nymph-viewer')) {
+// customElements is null in a browser extension's content scripts.
+if (typeof customElements !== 'undefined' && customElements !== null && !customElements.get('nymph-viewer')) {
   customElements.define('nymph-viewer', NymphViewerElement);
 }

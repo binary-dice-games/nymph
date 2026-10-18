@@ -164,6 +164,10 @@ The viewer has a CSS size (its box on the page) and a device pixel ratio.
 - `width`: the layout width follows the box width; the height is
   `image.height` scaled by the same factor (the aspect ratio is kept).
 - `fill`: the layout fills the box in both directions.
+- `scale` (added by [spec/05_browser_extension](../05_browser_extension/DESIGN.md)
+  section 5.3): the layout runs at the source size, as `source`, and the
+  CSS scale is the box width over the layout width, above 1 too, so a
+  chart replacing an image shown larger than its pixels looks the same.
 
 In `width` and `fill`, a box smaller than the layout needs (an overflow,
 core DESIGN section 4, layout engine) is handled by laying out at the
@@ -521,7 +525,7 @@ following ImUml's naming (CLAUDE.md, `imuml/` exception).
 createViewer(container: HTMLElement, options?: {
   source?: string;            // YAML text
   png?: Uint8Array;           // or a nymph PNG
-  fit?: "source" | "width" | "fill";
+  fit?: "source" | "width" | "fill" | "scale";
   theme?: "source" | "light" | "dark" | "classic" | "auto";
   tooltips?: boolean;         // default true
   rasterizer?: "auto" | "webgl" | "software"; // default auto

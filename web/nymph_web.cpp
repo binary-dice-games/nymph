@@ -212,7 +212,7 @@ EMSCRIPTEN_KEEPALIVE int nymph_gl_init(const char* target) {
 }
 
 /// @brief A new viewer; returns its handle (> 0), or 0 with last_error().
-/// @param fit 0 source, 1 width, 2 fill.
+/// @param fit 0 source, 1 width, 2 fill, 3 scale.
 /// @param webgl draw with the shared WebGL2 context (nymph_gl_init() first);
 ///        else on the CPU.
 EMSCRIPTEN_KEEPALIVE int nymph_viewer_create(int fit, int tooltips, int webgl) {
@@ -220,7 +220,7 @@ EMSCRIPTEN_KEEPALIVE int nymph_viewer_create(int fit, int tooltips, int webgl) {
   guarded([&] {
     static int next = 1;
     view_options o;
-    o.fit = fit == 1 ? view_fit::width : (fit == 2 ? view_fit::fill : view_fit::source);
+    o.fit = fit == 1 ? view_fit::width : (fit == 2 ? view_fit::fill : (fit == 3 ? view_fit::scale : view_fit::source));
     o.tooltips = tooltips != 0;
     const bool gl = webgl != 0 && web::gl_ready();
     o.cpu_textures = !gl;

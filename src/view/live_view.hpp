@@ -34,6 +34,7 @@ enum class view_fit {
   source, ///< Lay out at the source size; shrink with CSS when the box is narrower.
   width, ///< Lay out at the box width; height scaled to keep the aspect ratio.
   fill, ///< Lay out at the box size.
+  scale, ///< Lay out at the source size; scale with CSS to the box width, up or down.
 };
 
 /// @brief Fixed choices of a live view.
@@ -52,7 +53,7 @@ struct view_options {
 struct view_geometry {
   float layout_width = 0.0f; ///< Logical pixels the layout runs at (ImGui's DisplaySize).
   float layout_height = 0.0f;
-  float css_scale = 1.0f; ///< CSS pixels per logical pixel (below 1 when shrunk).
+  float css_scale = 1.0f; ///< CSS pixels per logical pixel (below 1 when shrunk; above 1 only with view_fit::scale).
   float framebuffer_scale = 1.0f; ///< Device pixels per logical pixel.
   int pixel_width = 0; ///< Size of the drawn image in device pixels.
   int pixel_height = 0;

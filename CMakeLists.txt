@@ -76,6 +76,7 @@ endif()
 if(NYMPH_WEB)
   enable_testing()
   add_subdirectory(web)
+  add_subdirectory(extension)
 endif()
 
 # ── tests ─────────────────────────────────────────────────────────────────────
