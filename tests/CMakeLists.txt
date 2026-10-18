@@ -1,5 +1,10 @@
-# MSVC: link gtest against the same (DLL) CRT as the test executables.
-set(gtest_force_shared_crt ON CACHE BOOL "" FORCE)
+# MSVC: link gtest against the same CRT as the test executables: the DLL
+# one, or the static one of a release build (cmake/NymphRelease.cmake).
+if(NYMPH_RELEASE)
+  set(gtest_force_shared_crt OFF CACHE BOOL "" FORCE)
+else()
+  set(gtest_force_shared_crt ON CACHE BOOL "" FORCE)
+endif()
 set(INSTALL_GTEST OFF CACHE BOOL "" FORCE)
 add_subdirectory(
     "${PROJECT_SOURCE_DIR}/extern/googletest"
@@ -107,6 +112,10 @@ nymph_add_test(test_pick test_pick.cpp)
 nymph_add_test(test_imuml_interactive test_imuml_interactive.cpp)
 nymph_add_test(test_saved_view test_saved_view.cpp)
 
+# Script tests run a cross-built nymph through the toolchain's emulator,
+# passed '|'-separated (a ';' list would split on the command line).
+string(REPLACE ";" "|" _nymph_runner "${CMAKE_CROSSCOMPILING_EMULATOR}")
+
 # ── MCP server (spec/06_claude_integration) ──────────────────────────────────
 
 if(NYMPH_MCP)
@@ -117,7 +126,25 @@ if(NYMPH_MCP)
     # string(JSON) needs CMake 3.19 in the script, whatever the project minimum.
     add_test(NAME test_mcp_process
       COMMAND ${CMAKE_COMMAND} -DNYMPH=$<TARGET_FILE:nymph-cli> -DWORK_DIR=${CMAKE_CURRENT_BINARY_DIR}/mcp_process
+              "-DRUNNER=${_nymph_runner}" -DEXPECT_VIEWER=$<BOOL:${NYMPH_MCP_VIEWER}>
               -P ${CMAKE_CURRENT_SOURCE_DIR}/mcp_process.cmake)
+  endif()
+endif()
+
+# ── Release executables (spec/06_claude_integration step 7) ─────────────────
+
+if(NYMPH_RELEASE AND TARGET nymph-cli)
+  add_test(NAME nymph_release_examples
+    COMMAND ${CMAKE_COMMAND} -DNYMPH=$<TARGET_FILE:nymph-cli> -DEXAMPLES=${PROJECT_SOURCE_DIR}/examples
+            -DWORK_DIR=${CMAKE_CURRENT_BINARY_DIR}/release_examples "-DRUNNER=${_nymph_runner}"
+            -P ${CMAKE_CURRENT_SOURCE_DIR}/release_examples.cmake)
+  if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+    find_program(NYMPH_READELF NAMES readelf ${CMAKE_READELF})
+    if(NYMPH_READELF)
+      add_test(NAME nymph_release_static
+        COMMAND ${CMAKE_COMMAND} -DREADELF=${NYMPH_READELF} -DNYMPH=$<TARGET_FILE:nymph-cli>
+                -P ${CMAKE_CURRENT_SOURCE_DIR}/release_static.cmake)
+    endif()
   endif()
 endif()
 if(NYMPH_MCP)

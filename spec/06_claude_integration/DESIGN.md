@@ -382,11 +382,21 @@ fails, 2 for bad arguments (`docs/cli.md` gains the row).
   needs Emscripten), so a release configures the web build first and
   passes its output; a missing file is a configure error.
 - `cmake/NymphRelease.cmake` (option `NYMPH_RELEASE`, default OFF):
-  MinSizeRel, `NYMPH_OPENGL=OFF` and `-static` on Linux (section 8), `/MT`
-  on MSVC, stripped; package targets `nymph-mcpb`, `nymph-skill`,
-  `nymph-plugin-sync` (copies `SKILL.md`, `reference.md` and writes
-  `checksums.txt` into `claude/plugin/`), and `nymph-dist` (all of them
-  plus `SHA256SUMS`).
+  MinSizeRel, `NYMPH_OPENGL=OFF` and `-static` on Linux (section 8),
+  `-static` with MinGW, `/MT` on MSVC (chosen in the root
+  `CMakeLists.txt` before `project()`), stripped (`-s`). `nymph-dist`
+  copies the executable to `<build>/dist/nymph-<version>-<os>-<arch>`
+  (`.exe` on Windows; `os` linux / windows / macos, `arch` x86_64 /
+  arm64; `NYMPH_DIST_NAME` overrides) and writes `<build>/dist/SHA256SUMS`
+  in `sha256sum` format (`cmake/NymphChecksums.cmake`), over every file
+  of `dist/`. The package targets of steps 8 to 10 (`nymph-mcpb`,
+  `nymph-skill`, `nymph-plugin-sync`, which copies `SKILL.md` and
+  `reference.md` and writes `checksums.txt` into `claude/plugin/`) put
+  their files in `dist/` too. A release without `NYMPH_MCP_VIEWER` warns.
+- Cross builds: `cmake/toolchains/mingw-w64-x86_64.cmake` and
+  `cmake/toolchains/aarch64-linux-gnu.cmake`, whose
+  `CMAKE_CROSSCOMPILING_EMULATOR` (Wine, QEMU) runs every test, the
+  script tests included (they take it as `RUNNER`).
 - The web build gains a `nymph-claude-app` target writing
   `claude/viewer.html` from `claude/app/` and `nymph-viewer.single.js`.
 

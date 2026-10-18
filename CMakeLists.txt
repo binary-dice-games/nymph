@@ -2,6 +2,13 @@
 
 cmake_minimum_required(VERSION 3.14...3.28)
 
+# The published executables (cmake/NymphRelease.cmake). The MSVC runtime
+# must be chosen before project().
+option(NYMPH_RELEASE "Build the static, stripped executables published for the Claude integration" OFF)
+if(NYMPH_RELEASE)
+  set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded")
+endif()
+
 project(
   Nymph
   VERSION 0.1.0
@@ -60,6 +67,8 @@ function(nymph_ensure_submodules)
   endif()
 endfunction()
 
+include(cmake/NymphRelease.cmake)
+
 # ── third-party dependencies ──────────────────────────────────────────────────
 
 include(cmake/NymphDependencies.cmake)
@@ -73,6 +82,9 @@ add_subdirectory(src)
 
 if(PROJECT_IS_TOP_LEVEL AND NOT NYMPH_WEB)
   add_subdirectory(app)
+  if(NYMPH_RELEASE)
+    nymph_add_dist_target()
+  endif()
 endif()
 
 # ── web viewer ────────────────────────────────────────────────────────────────
