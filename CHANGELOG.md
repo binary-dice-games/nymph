@@ -66,5 +66,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Chrome extension: a chart whose image has `width` / `height` attributes overridden by the page's CSS (claude.ai's file preview) now takes the image's shown size instead of collapsing to zero height.
 - Web viewer: the `click` event (and `nymph-click`) now fires when a data point is clicked; it never did.
 - Web viewer: a viewer given `fetchFont` in a page without a base URL (an inline `srcdoc` frame) no longer fails to start; the default font folder is resolved only when a font is first fetched.
