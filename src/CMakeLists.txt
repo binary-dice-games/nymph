@@ -106,6 +106,22 @@ add_library(nymph_cli STATIC
 )
 target_link_libraries(nymph_cli PUBLIC nymph)
 
+# ── nymph_mcp — the MCP server over the library and the CLI helpers ─────────
+
+# spec/06_claude_integration/DESIGN.md section 4.1. Above nymph_cli, whose
+# helpers its tools share, so the executable dispatches `nymph mcp`.
+if(NYMPH_MCP)
+  add_library(nymph_mcp STATIC
+    mcp/json_rpc.hpp
+    mcp/json_rpc.cpp
+    mcp/mcp_session.hpp
+    mcp/mcp_session.cpp
+    mcp/mcp_server.hpp
+    mcp/mcp_server.cpp
+  )
+  target_link_libraries(nymph_mcp PUBLIC nymph_cli nymph_json)
+endif()
+
 # ── OpenGL rasterizer (optional; OpenGL itself is loaded at run time) ────────
 
 if(NYMPH_OPENGL)

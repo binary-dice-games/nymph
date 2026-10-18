@@ -10,6 +10,7 @@
 #   nymph_stb    -- interface: the stb include directory. The single
 #                   implementation of each stb header lives in nymph's own
 #                   sources.
+#   nymph_json   -- interface: nlohmann/json (header-only), with NYMPH_MCP.
 
 nymph_ensure_submodules(extern/imgui extern/implot extern/implot3d extern/libyaml extern/stb)
 
@@ -80,3 +81,12 @@ set_target_properties(yaml PROPERTIES FOLDER extern)
 
 add_library(nymph_stb INTERFACE)
 target_include_directories(nymph_stb INTERFACE ${NYMPH_EXTERN_DIR}/stb)
+
+# ── nymph_json (nlohmann/json) ────────────────────────────────────────────────
+
+if(NYMPH_MCP)
+  nymph_ensure_submodules(extern/json)
+  # The headers only: the project's own CMakeLists.txt adds install rules.
+  add_library(nymph_json INTERFACE)
+  target_include_directories(nymph_json INTERFACE ${NYMPH_EXTERN_DIR}/json/include)
+endif()

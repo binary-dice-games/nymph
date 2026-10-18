@@ -126,9 +126,12 @@ The four packages carry the same executable and the same agent text
 ### 4.1 `nymph mcp` (`src/mcp/`)
 
 A stdio MCP server: newline-delimited JSON-RPC 2.0 on standard input and
-output, logs on standard error. It is a library, `nymph_mcp`, beside
-`nymph_cli` (viewer DESIGN section 6) so tests drive it with string
-streams, and `run_cli` dispatches `nymph mcp [--rasterizer R]` to it.
+output, logs on standard error. It is a library, `nymph_mcp`, on top of
+`nymph_cli` (viewer DESIGN section 6), whose helpers its tools share, so
+tests drive it with string streams. Because of that layering the
+executable (`app/main.cpp`), not `run_cli`, dispatches `nymph mcp
+[--rasterizer R]` to `run_mcp_cli`; `run_cli` only lists the command in
+its usage and, in a build without the server, refuses it (exit 2).
 
 - `json_rpc` — reads one message per line, writes one per line, and
   turns malformed input into JSON-RPC errors (`-32700`, `-32600`,

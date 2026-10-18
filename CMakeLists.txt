@@ -14,6 +14,9 @@ option(NYMPH_OPENGL "Build the optional OpenGL rasterizer" ON)
 # The interactive web viewer: the library compiled to WebAssembly with a
 # JavaScript API (spec/04_web_viewer/DESIGN.md section 6). Emscripten only.
 option(NYMPH_WEB "Build the WebAssembly web viewer (with emcmake)" OFF)
+# `nymph mcp`: an MCP server over stdio in the nymph executable
+# (spec/06_claude_integration/DESIGN.md section 4.1). Native only.
+option(NYMPH_MCP "Build the MCP server (nymph mcp)" ON)
 if(NYMPH_WEB)
   if(NOT EMSCRIPTEN)
     message(FATAL_ERROR "NYMPH_WEB needs the Emscripten toolchain: configure with emcmake cmake ...")
@@ -22,6 +25,7 @@ if(NYMPH_WEB)
   # the GoogleTest suite is native: the web build has its own Node and
   # browser tests (web/tests).
   set(NYMPH_OPENGL OFF CACHE BOOL "" FORCE)
+  set(NYMPH_MCP OFF CACHE BOOL "" FORCE)
   set(NYMPH_BUILD_TESTS OFF CACHE BOOL "" FORCE)
   # Fonts are fetched on demand, next to the module (fonts/).
   if(NOT DEFINED CACHE{NYMPH_EMBED_FONTS})

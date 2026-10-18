@@ -1,3 +1,7 @@
 add_executable(nymph-cli main.cpp)
 target_link_libraries(nymph-cli PRIVATE nymph_cli)
 set_target_properties(nymph-cli PROPERTIES OUTPUT_NAME nymph)
+if(NYMPH_MCP)
+  target_link_libraries(nymph-cli PRIVATE nymph_mcp)
+  target_compile_definitions(nymph-cli PRIVATE NYMPH_HAS_MCP=1)
+endif()

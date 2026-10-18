@@ -24,6 +24,7 @@ optional.
 | `extern/implot3d` | v0.4 | 3D plots |
 | `extern/libyaml` | 0.2.5 | Parsing the YAML source |
 | `extern/stb` | `31c1ad3` | PNG encoding, zlib |
+| `extern/json` | v3.12.0 | JSON for the MCP server (`NYMPH_MCP`), header-only |
 | `extern/googletest` | v1.15.2 | Tests only (`NYMPH_BUILD_TESTS`) |
 
 To move a dependency to another version, check out the new commit inside
@@ -75,6 +76,7 @@ Outputs:
 | `NYMPH_FONTS_DIR` | `fonts/` | Folder whose `*.ttf` / `*.otf` fonts and `*.txt` licences are compiled into nymph |
 | `NYMPH_EMBED_FONTS` | `all` | Which of those fonts have their bytes compiled in: `all`, `none`, or a `;`-list of file names |
 | `NYMPH_WEB` | `OFF` | Build the interactive web viewer (WebAssembly) instead of the CLI; needs Emscripten (`emcmake`). See "Web viewer" below. |
+| `NYMPH_MCP` | `ON` | Build the MCP server, `nymph mcp` (off in the web build). `OFF` drops the `extern/json` dependency; `nymph mcp` then exits 2. |
 | `NYMPH_OPENGL` | `ON` | Build the optional OpenGL rasterizer. `OFF` leaves only the software rasterizer; `--rasterizer opengl` then falls back with the reason "nymph was built without OpenGL support". |
 
 ---

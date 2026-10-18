@@ -93,6 +93,15 @@ checked (client version, screenshot or log).
 
 ### 2. JSON-RPC and the MCP session
 
+*Result: done.* `nymph_mcp` sits on `nymph_cli` (step 3 shares its
+helpers), so `app/main.cpp` dispatches `nymph mcp` and `run_cli` refuses
+it in a `NYMPH_MCP=OFF` build; binary stdio on Windows was already set
+in `main.cpp`. Revisions `2025-11-25`, `2025-06-18`, `2025-03-26`;
+`server/discover` gets `-32601`. 22 tests in `test_mcp` (also: requests
+before `initialize`, a second `initialize`, invalid UTF-8, ids, CRLF and
+blank lines, an unwritable output); 452 tests pass. Claude Code 2.1.302
+connects (`claude mcp list`: Connected).
+
 **Goal:** `nymph mcp` completes the MCP handshake and answers `ping`,
 `tools/list` (empty) and `resources/list` (empty) over stdio.
 

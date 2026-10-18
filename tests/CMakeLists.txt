@@ -106,3 +106,10 @@ target_compile_definitions(test_live_view PRIVATE NYMPH_SOURCE_DIR="${PROJECT_SO
 nymph_add_test(test_pick test_pick.cpp)
 nymph_add_test(test_imuml_interactive test_imuml_interactive.cpp)
 nymph_add_test(test_saved_view test_saved_view.cpp)
+
+# ── MCP server (spec/06_claude_integration) ──────────────────────────────────
+
+if(NYMPH_MCP)
+  nymph_add_test(test_mcp test_mcp.cpp)
+  target_link_libraries(test_mcp PRIVATE nymph_mcp)
+endif()
