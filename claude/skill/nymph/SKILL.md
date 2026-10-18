@@ -81,8 +81,11 @@ numbers; quote text containing `: `; CSV in `data: |`, never `>`.
 Give it a title, axis labels with units, a label per series and a real
 `description`. Category names go on ticks (`x_ticks: [0, 1, 2]`,
 `x_tick_labels: [Q1, Q2, Q3]`); dates are UNIX seconds with `x_scale:
-Time`. Start bar charts at 0 (`y_min: 0` with `y_max`). Keep to about
+Time`. Start bar charts at 0 (`y_min: 0` with `y_max`). Keep pies round
+with `flags: Equal`, `x_min: 0` and `x_max: 1` on the plot. Keep to about
 five series per plot. Use `image: {scale: 2}` for images shown large.
+Before a chart type you have not drawn yet, read its recipe in the full
+guide: it shows the fields that make it look right.
 
 The full guide, with recipes for every chart and diagram type and a
 table of common errors, is `reference.md` next to this file (the MCP

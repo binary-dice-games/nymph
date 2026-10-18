@@ -113,7 +113,7 @@ New and changed files:
 
 | Client | Package | Install | What the user gets |
 |---|---|---|---|
-| Claude Code (terminal) | Plugin | `/plugin marketplace add binary-dice-games/nymph`, `/plugin install nymph@nymph` | Claude renders and sees PNGs, and writes them into the project. The terminal shows no image; the user opens the file. |
+| Claude Code (terminal) | Plugin | `/plugin install nymph --marketplace binary-dice-games/nymph` (Claude Code 2.1.275 or later; before: `/plugin marketplace add binary-dice-games/nymph`, then `/plugin install nymph@nymph`) | Claude renders and sees PNGs, and writes them into the project. The terminal shows no image; the user opens the file. |
 | Claude Code (desktop app, Code tab) | Same plugin | Same | Also the App in the conversation. |
 | Claude Desktop (chat) | `nymph-<version>-<os>-<arch>.mcpb` | Double-click, or Settings > Extensions | PNG and App in the conversation. |
 | claude.ai (web, mobile) | `nymph-skill-<version>.zip` | Upload in claude.ai's Skills settings (code execution on) | Claude runs the static Linux binary in its code sandbox and shares the PNG as a file. No App (no local MCP server there). |
@@ -278,26 +278,46 @@ travels as `reference.md` beside the skill and as the resource
 ### 4.6 The Claude Code plugin (`claude/plugin/`)
 
 ```
-.claude-plugin/marketplace.json     (repository root) lists ./claude/plugin
+.claude-plugin/marketplace.json     (repository root) marketplace "nymph", lists ./claude/plugin
+claude/plugin.json.in               the manifest's template (outside the plugin)
 claude/plugin/
   .claude-plugin/plugin.json        name "nymph", version = nymph version
-  .mcp.json                         server "nymph": ${CLAUDE_PLUGIN_ROOT}/bin/nymph-launch mcp
-  skills/nymph/SKILL.md, reference.md   copies made by the build, committed
-  bin/nymph-launch, bin/nymph-launch.cmd
-  bin/checksums.txt                 SHA-256 of each release binary of this version
+  .mcp.json                         server "nymph": sh ${CLAUDE_PLUGIN_ROOT}/bin/nymph mcp
+  skills/nymph/SKILL.md, reference.md   copies of claude/skill/nymph/SKILL.md, docs/agent-guide.md
+  bin/nymph                         the launcher (POSIX sh)
+  bin/checksums.txt                 "<sha256>  nymph-<version>-<os>-<arch>[.exe]" per release executable
 ```
 
-The launcher finds the executable in this order: `$NYMPH_BIN`; a cached
-download in `$NYMPH_CACHE/<version>/`, which `.mcp.json` sets to
-`${CLAUDE_PLUGIN_DATA}` (the plugin's persistent data directory, which
-Claude Code expands; PLAN step 1); else
-it downloads the release asset for this OS and architecture, checks it
-against `checksums.txt`, and caches it. A mismatch or a failed download
-prints one line on standard error and exits 1 (the client shows the
-server as failed). It never uses an unpinned `nymph` from `PATH`: a
-different version's tools may not match the skill. Because the Bash
-tool also exists in Claude Code, the skill tells Claude it may run
-`nymph-launch` as the CLI for anything the tools do not cover.
+Everything but `bin/nymph` is written by the `nymph-plugin-sync` target
+(`cmake/NymphPluginSync.cmake`) and committed, since the plugin installs
+from the repository; a test fails when the copies or the version are
+stale. `checksums.txt` is filled from the release's `SHA256SUMS` files
+(`NYMPH_PLUGIN_SUMS`) when a release is published; until then it names
+no executable.
+
+`bin/` is on the Bash tool's `PATH` while the plugin is enabled, so the
+launcher is also the `nymph` command Claude runs for anything the tools
+do not cover (the skill says `nymph`). It runs, in order: `$NYMPH_BIN`;
+the release for this OS and CPU named in `checksums.txt`, from
+`$NYMPH_CACHE` (default `~/.cache/nymph/<version>/`) once its SHA-256
+matches; else that release downloaded from `$NYMPH_RELEASE_URL` (default
+the GitHub release `v<version>`), checked, then cached (atomic rename).
+The version comes from the file name in `checksums.txt`, so a release
+changes only that file and the manifest. A mismatch, a failed download
+or a missing release prints one line on standard error and exits 1 (the
+client shows the server as failed); a file whose SHA-256 differs is
+never run or kept. It never uses an unpinned `nymph` from `PATH`: a
+different version's tools may not match the skill. `NYMPH_LAUNCHER_INFO=1`
+prints the release name and cache path (tests).
+
+Why the user cache and not `${CLAUDE_PLUGIN_DATA}`: Claude Code exports
+that variable to MCP servers but not to Bash-tool commands, so the
+server and the `nymph` command would download the binary twice into
+different places. Why `sh` and one script: `.mcp.json` has no
+per-platform command; Claude Code on Windows requires Git for Windows,
+whose `sh` runs the same script (not yet verified there, PLAN step 8).
+Plugins with a `bin/` folder are refused by claude.ai and Cowork; this
+plugin is for Claude Code, and claude.ai gets the Skill (section 4.8).
 
 ### 4.7 The MCP bundle (`claude/mcpb/`)
 

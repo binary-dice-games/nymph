@@ -22,7 +22,10 @@ version complete on Linux**; MSYS2 and MSVC builds are not yet verified
 
 <img src="examples/dashboard.png" alt="A nymph layout: two line plots and a pie chart under a heading" width="600"/>
 
-AI agents: start with [docs/agent-guide.md](docs/agent-guide.md).
+AI agents: start with [docs/agent-guide.md](docs/agent-guide.md). In Claude Code,
+`/plugin install nymph --marketplace binary-dice-games/nymph` adds the
+`nymph mcp` tools and the `nymph` command
+([spec/06_claude_integration](spec/06_claude_integration/DESIGN.md)).
 
 ## Quick Build
 
@@ -87,7 +90,7 @@ carries its source: `bdg::nymph::extract_source(png)` returns it.
 | `app/` | The `nymph` command-line executable |
 | `tests/` | GoogleTest suite, run with `ctest` |
 | `web/` | The interactive web viewer: WebAssembly module and JavaScript API (`NYMPH_WEB`) |
-| `claude/` | Claude integration: the agent skill text (`claude/skill/`) and the MCP App that shows charts live in the chat (`claude/app/`), used by `nymph mcp` |
+| `claude/` | Claude integration: the agent skill text (`claude/skill/`), the MCP App that shows charts live in the chat (`claude/app/`) and the Claude Code plugin (`claude/plugin/`, listed by `.claude-plugin/marketplace.json`) |
 | `extension/` | The Chrome extension that turns nymph PNGs on any page into live viewers (built with `NYMPH_WEB`) |
 | `examples/` | Example sources and the PNGs rendered from them |
 | `fonts/` | Fonts (Google Fonts, OFL) compiled into the binary |

@@ -340,6 +340,28 @@ embedded and their SHA-256 sums.
 
 ### 8. The Claude Code plugin
 
+*Result: done; Windows and the GitHub download not verified.* The
+launcher is `bin/nymph`, one POSIX script: `bin/` is on the Bash tool's
+`PATH`, so it is also the `nymph` command, and `.mcp.json` runs it with
+`sh` (no `.cmd`: `.mcp.json` has no per-platform command; on Windows Git
+for Windows' `sh` should run it, unverified). The cache is
+`~/.cache/nymph`, shared by the server and the command (DESIGN.md section
+4.6). `checksums.txt` names no release yet: none is published, and the
+repository is private, so the default download URL cannot be reached
+without credentials; until a release exists, users set `NYMPH_BIN`.
+Tests: `nymph_plugin_launcher` (12 checks; a launcher without its SHA-256
+check fails 2 of them), `nymph_plugin_in_sync`, and `claude plugin
+validate --strict` of the marketplace and the plugin (both pass, Claude
+Code 2.1.302); 481 tests pass. Manual, Claude Code 2.1.302: a scratch
+copy of the marketplace, pinned to the step 7 Linux executable and
+served through `NYMPH_RELEASE_URL=file://...`, installed with `claude
+plugin marketplace add` and `claude plugin install nymph@nymph`; the
+server connected after the launcher downloaded and checked the binary,
+`nymph --version` ran from Bash, and Claude drew a pie chart into the
+project (correcting one source error). The pie came out oval, so
+SKILL.md gained the round-pie fields and a nudge to read a chart type's
+recipe first.
+
 **Goal:** `/plugin marketplace add binary-dice-games/nymph` and
 `/plugin install nymph@nymph` give Claude the nymph tools with nothing
 else to do.

@@ -1,0 +1,14 @@
+{
+  "name": "nymph",
+  "owner": { "name": "Binary Dice Games" },
+  "description": "nymph: charts and diagrams from YAML for Claude Code",
+  "plugins": [
+    {
+      "name": "nymph",
+      "source": "./claude/plugin",
+      "description": "Charts and diagrams as PNG images from short YAML sources, through the nymph MCP tools and the nymph command.",
+      "category": "visualization",
+      "tags": ["charts", "diagrams", "mcp"]
+    }
+  ]
+}

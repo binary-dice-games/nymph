@@ -222,6 +222,20 @@ cmake -S . -B build-arm64 -DCMAKE_TOOLCHAIN_FILE=cmake/toolchains/aarch64-linux-
 (On Ubuntu: `g++-mingw-w64-x86-64-posix wine64`, `g++-aarch64-linux-gnu
 qemu-user`.)
 
+To publish a release for the Claude Code plugin: upload the executables
+of every `dist/` to the GitHub release `v<version>`, then pin them in the
+plugin and commit the result:
+
+```sh
+cmake build-release -DNYMPH_PLUGIN_SUMS="$PWD/build-release/dist/SHA256SUMS|$PWD/build-win/dist/SHA256SUMS|$PWD/build-arm64/dist/SHA256SUMS"
+cmake --build build-release --target nymph-plugin-sync
+git add claude/plugin
+```
+
+Run `nymph-plugin-sync` without `NYMPH_PLUGIN_SUMS` after changing
+`claude/skill/nymph/SKILL.md` or `docs/agent-guide.md`; a test fails while
+the plugin's copies are stale.
+
 ## Using nymph from another CMake project
 
 ```cmake

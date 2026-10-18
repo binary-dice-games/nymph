@@ -159,3 +159,25 @@ if(NYMPH_MCP)
   target_link_libraries(test_mcp_tools PRIVATE nymph_mcp)
   target_compile_definitions(test_mcp_tools PRIVATE NYMPH_SOURCE_DIR="${PROJECT_SOURCE_DIR}")
 endif()
+
+# ── Claude Code plugin (spec/06_claude_integration step 8) ──────────────────
+
+add_test(NAME nymph_plugin_in_sync
+  COMMAND ${CMAKE_COMMAND} -DSOURCE_DIR=${PROJECT_SOURCE_DIR} -DVERSION=${PROJECT_VERSION}
+          -P ${CMAKE_CURRENT_SOURCE_DIR}/plugin_sync_check.cmake)
+if(NOT WIN32)
+  find_program(NYMPH_SH sh)
+  if(NYMPH_SH)
+    add_test(NAME nymph_plugin_launcher
+      COMMAND ${NYMPH_SH} ${CMAKE_CURRENT_SOURCE_DIR}/plugin_launcher.sh
+              ${PROJECT_SOURCE_DIR}/claude/plugin/bin/nymph ${CMAKE_CURRENT_BINARY_DIR}/plugin_launcher)
+    set_tests_properties(nymph_plugin_launcher PROPERTIES SKIP_RETURN_CODE 77)
+  endif()
+endif()
+# Claude Code's own check of the marketplace and the plugin, when installed.
+find_program(NYMPH_CLAUDE claude)
+if(NYMPH_CLAUDE)
+  add_test(NAME nymph_plugin_validate_marketplace COMMAND ${NYMPH_CLAUDE} plugin validate --strict ${PROJECT_SOURCE_DIR})
+  add_test(NAME nymph_plugin_validate_plugin
+    COMMAND ${NYMPH_CLAUDE} plugin validate --strict ${PROJECT_SOURCE_DIR}/claude/plugin)
+endif()
