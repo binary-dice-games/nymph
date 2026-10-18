@@ -105,6 +105,10 @@ enum ImUmlDiagramFlags_ {
   ImUmlDiagramFlags_NoTitle = 1 << 0, ///< Hide the title (the ID after "##" is never shown).
   ImUmlDiagramFlags_MeasureOnly = 1 << 1, ///< Lay out but draw nothing and reserve no space; see GetLastDiagramInfo().
   ImUmlDiagramFlags_NoFit = 1 << 2, ///< Draw at zoom 1, clipped, instead of scaling to fit.
+  /// The mouse wheel zooms around the mouse (0.25x to 8x of the fit),
+  /// dragging pans, a double-click fits again; the view is kept per diagram
+  /// ID. ImUmlDiagramInfo reports the hovered node or edge (graph diagrams).
+  ImUmlDiagramFlags_Interactive = 1 << 3,
 };
 
 enum ImUmlDirection_ {
@@ -326,11 +330,24 @@ struct ImUmlDiagramInfo {
   int NodeCount;
   int EdgeCount;
   int SkippedItems; ///< Edges or messages naming an unknown id.
+  // ImUmlDiagramFlags_Interactive only:
+  float ViewZoom; ///< The user's zoom on top of the fit (1 = fitted).
+  ImVec2 ViewCenter; ///< Content point (zoom-1 units) at the centre of the view; also with SetNextDiagramView().
+  int HoveredNode; ///< Node under the mouse, in submission order; -1 for none.
+  ImGuiID HoveredNodeId; ///< Its id hashed with ImHashStr; 0 for none.
+  int HoveredEdge; ///< Edge under the mouse (not a node), in submission order; -1 for none.
+  ImGuiID HoveredEdgeFrom, HoveredEdgeTo; ///< Its ends' ids, hashed.
+  ImVec2 HoveredMin, HoveredMax; ///< Screen rectangle of the hovered node or edge.
   ImUmlDiagramInfo() {
     NaturalSize = ContentSize = Size = ImVec2(0, 0);
     TitleHeight = 0.0f;
     Zoom = 1.0f;
     NodeCount = EdgeCount = SkippedItems = 0;
+    ViewZoom = 1.0f;
+    ViewCenter = ImVec2(0, 0);
+    HoveredNode = HoveredEdge = -1;
+    HoveredNodeId = HoveredEdgeFrom = HoveredEdgeTo = 0;
+    HoveredMin = HoveredMax = ImVec2(0, 0);
   }
 };
 
@@ -588,5 +605,11 @@ IMGUI_API void Link(
 // ── Queries ──────────────────────────────────────────────────────────────────
 
 IMGUI_API const ImUmlDiagramInfo& GetLastDiagramInfo();
+/// Sets the view of the next diagram drawn (not measured): `zoom` on top of
+/// the fit (0.25 to 8) and the content point (zoom-1 units, as
+/// ImUmlDiagramInfo::ViewCenter) at the centre; a NaN component centres the
+/// content on that axis. Applies with or without ImUmlDiagramFlags_Interactive
+/// (a saved view drawn into an image); with it, the user moves on from there.
+IMGUI_API void SetNextDiagramView(float zoom, const ImVec2& center);
 
 } // namespace ImUml

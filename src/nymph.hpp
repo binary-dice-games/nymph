@@ -99,4 +99,12 @@ void check_source(std::string_view source);
 /// @throws std::runtime_error for a corrupt or truncated PNG.
 std::optional<std::string> extract_source(std::span<const uint8_t> png);
 
+/// @brief Makes a font that this build does not embed (`NYMPH_EMBED_FONTS`)
+///        available, by file name, to every later render in the process.
+///        The bytes are copied. Registering a font that already has bytes
+///        does nothing (spec/04_web_viewer/DESIGN.md, "Fonts on demand").
+/// @throws std::invalid_argument for a name `nymph fonts` does not list, or
+///         bytes whose size or SHA-256 differ from that font file's.
+void register_font(std::string_view name, std::span<const uint8_t> bytes);
+
 } // namespace bdg::nymph

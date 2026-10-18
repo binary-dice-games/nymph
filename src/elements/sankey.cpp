@@ -21,6 +21,7 @@
 #include <vector>
 #include "core/error.hpp"
 #include "core/limits.hpp"
+#include "elements/plot_pick.hpp"
 #include "elements/plot_style.hpp"
 #include "layout/sankey_layout.hpp"
 #include "render/draw_context.hpp"
@@ -409,10 +410,83 @@ class sankey_diagram_class : public element_class {
       const float y = std::floor((a.y + z.y - ts.y) * 0.5f);
       dl->AddText(ImVec2(std::floor(x), y), text_col, label.c_str());
     }
+    offer_hover(n, dc, g, out, origin, r);
+    finish_picks(dc, dl);
     dl->PopClipRect();
   }
 
  private:
+  /// In a live view, offers the node under the pointer, else the flow
+  /// (nodes are drawn over the bands).
+  static void offer_hover(
+      const node& n,
+      draw_context& dc,
+      const graph& g,
+      const sankey_output& out,
+      const ImVec2& origin,
+      const rect& r) {
+    if (!dc.interactive() || !ImGui::IsWindowHovered()) {
+      return;
+    }
+    const ImVec2 p = ImGui::GetIO().MousePos;
+    if (p.x < r.min.x || p.x > r.max.x || p.y < r.min.y || p.y > r.max.y) {
+      return;
+    }
+    const auto value_text = [&](double v) {
+      char buf[64];
+      std::snprintf(buf, sizeof(buf), n.get<std::string>(diagram_field::value_format).c_str(), v);
+      return std::string(buf);
+    };
+    const ImU32 col = ImGui::GetColorU32(ImGuiCol_Text);
+    for (size_t i = 0; i < g.ids.size(); ++i) {
+      const sankey_box& b = out.nodes[i];
+      const ImVec2 a(std::floor(origin.x + b.x0), std::floor(origin.y + b.y0));
+      const ImVec2 z(std::floor(origin.x + b.x1), std::max(a.y + 1.0f, std::floor(origin.y + b.y1 + 0.5f)));
+      if (p.x >= a.x && p.x <= z.x && p.y >= a.y && p.y <= z.y) {
+        pick hit;
+        hit.element = &n;
+        hit.type = "SankeyNode";
+        hit.label = g.labels[i];
+        hit.index = static_cast<int>(i);
+        hit.values = {{"id", g.ids[i]}, {"value", value_text(out.value[i])}};
+        offer_rect_px(dc, p, std::move(hit), a, z, col);
+        return;
+      }
+    }
+    // Flows: the band's centre line at the pointer's x, as draw_band draws it.
+    for (size_t k = g.links.size(); k-- > 0;) {
+      const sankey_link_out& l = out.links[k];
+      const float x0 = origin.x + l.x0, x1 = origin.x + l.x1;
+      if (p.x < x0 || p.x > x1 || x1 <= x0) {
+        continue;
+      }
+      // x(t) is monotonic: bisect for the t at the pointer.
+      float lo = 0.0f, hi = 1.0f;
+      const float xm = (x0 + x1) * 0.5f;
+      for (int it = 0; it < 30; ++it) {
+        const float t = (lo + hi) * 0.5f, u = 1.0f - t;
+        const float x = u * u * u * x0 + 3 * u * u * t * xm + 3 * u * t * t * xm + t * t * t * x1;
+        (x < p.x ? lo : hi) = t;
+      }
+      const float t = (lo + hi) * 0.5f, u = 1.0f - t;
+      const float y0 = origin.y + l.y0, y1 = origin.y + l.y1;
+      const float y = u * u * u * y0 + 3 * u * u * t * y0 + 3 * u * t * t * y1 + t * t * t * y1;
+      if (std::abs(p.y - y) <= std::max(0.5f, l.width * 0.5f)) {
+        const sankey_link_in& in = g.links[k];
+        pick_candidate c;
+        c.anchor = ImVec2(p.x, y);
+        c.color = col;
+        c.hit.element = &n;
+        c.hit.type = "SankeyFlow";
+        c.hit.label = g.labels[in.from] + " -> " + g.labels[in.to];
+        c.hit.index = static_cast<int>(k);
+        c.hit.values = {{"from", g.ids[in.from]}, {"to", g.ids[in.to]}, {"value", value_text(in.value)}};
+        dc.offer_pick(std::move(c));
+        return;
+      }
+    }
+  }
+
   /// A band of constant vertical thickness along a horizontal S curve.
   static void draw_band(ImDrawList* dl, const sankey_link_out& l, const ImVec2& origin, ImU32 col) {
     constexpr int kSegments = 32;

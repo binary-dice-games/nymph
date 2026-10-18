@@ -4,10 +4,15 @@
 #pragma once
 
 #include <imgui.h>
+#include <implot.h>
+#include <array>
 #include <map>
+#include <optional>
 #include <string>
 #include <string_view>
 #include <unordered_map>
+#include <vector>
+#include "document/view.hpp"
 #include "render/image_options.hpp"
 #include "schema/node.hpp"
 
@@ -25,6 +30,51 @@ struct rect {
   }
 };
 
+/// @brief What a live view reads back about one 2D plot after a frame: its
+///        plot area and axis ranges (spec/04_web_viewer/DESIGN.md
+///        section 4, `view_state()`).
+struct plot_view_record {
+  const node* element = nullptr;
+  view_kind kind = view_kind::plot2d;
+  rect area; ///< The plot area (inside the axes), logical pixels.
+  double x_min = 0, x_max = 0;
+  double y_min = 0, y_max = 0;
+  bool has_y2 = false;
+  double y2_min = 0, y2_max = 0;
+  // 3D plots:
+  double z_min = 0, z_max = 0;
+  std::array<double, 4> rotation{0, 0, 0, 1};
+  // Diagrams:
+  double zoom = 1.0;
+  std::array<double, 2> center{0, 0};
+  std::vector<std::string> hidden; ///< Legend entries switched off.
+};
+
+/// @brief What is under the pointer in a live view: a data point, bar,
+///        cell, task, flow or diagram node (spec/04_web_viewer/DESIGN.md
+///        section 3, "Interaction per element family").
+struct pick {
+  const node* element = nullptr; ///< The series or element hit.
+  std::string type; ///< Its type name, e.g. "PlotLine".
+  std::string label; ///< Series label (without any "##" suffix) or id.
+  int index = -1; ///< Point, bar, cell or node index; -1 for none.
+  /// Values as the axes show them, in order: {"x", "3"}, {"y", "15.2"}.
+  std::vector<std::pair<std::string, std::string>> values;
+};
+
+/// @brief A pick offered while a plot is drawn; the plot keeps the closest.
+struct pick_candidate {
+  float distance = 0.0f; ///< From the pointer, logical pixels; 0 inside a shape.
+  pick hit;
+  ImVec2 anchor; ///< Where to draw the highlight ring, logical pixels.
+  ImU32 color = 0; ///< The series colour, for the ring or outline.
+  bool outline = false; ///< Highlight with a rectangle instead of a ring.
+  ImVec2 outline_min, outline_max; ///< The rectangle, logical pixels.
+};
+
+/// @brief Largest distance at which a point is picked, logical pixels.
+inline constexpr float kPickRadius = 8.0f;
+
 /// @brief Handed to the drawing function once per frame, inside the
 ///        figure's full-display ImGui window, with the private ImGui, ImPlot
 ///        and ImPlot3D contexts current.
@@ -39,6 +89,170 @@ class draw_context {
   /// @brief The options the frame is rendered with.
   const image_options& options() const {
     return options_;
+  }
+
+  /// @brief Whether the frame belongs to a live view that takes pointer
+  ///        input (spec/04_web_viewer/DESIGN.md section 4). False for
+  ///        PNG rendering, where nothing interactive may change the image.
+  bool interactive() const {
+    return interactive_;
+  }
+
+  /// @brief Set by the live view; never by the PNG frame driver.
+  void set_interactive(bool interactive) {
+    interactive_ = interactive;
+  }
+
+  /// @brief How elements apply axis limits written in the source:
+  ///        `ImPlotCond_Always` (fixed) for PNG rendering and for a live
+  ///        view's first frames, `ImPlotCond_Once` afterwards so the user
+  ///        can pan and zoom away from them. ImPlot treats an `Always` axis
+  ///        as locked, which changes how it settles (an `Equal` plot then
+  ///        adjusts its other axis), so the first frames must match the
+  ///        PNG path exactly.
+  ImPlotCond limits_cond() const {
+    return (!interactive_ || lock_limits_) ? ImPlotCond_Always : ImPlotCond_Once;
+  }
+
+  /// @brief Set by the live view for the frames that settle fresh contexts.
+  void set_lock_limits(bool lock) {
+    lock_limits_ = lock;
+  }
+
+  // ── Saved view (the `view` key) ────────────────────────────────────────
+
+  /// @brief The saved views of the figure and the path of every node
+  ///        (both outlive the frames), or nulls for none.
+  void set_views(const view_map* views, const std::unordered_map<const node*, std::string>* paths) {
+    views_map_ = views;
+    paths_ = paths;
+  }
+
+  /// @brief `n`'s saved view, or nullptr.
+  const element_view* view_of(const node& n) const {
+    if (views_map_ == nullptr || paths_ == nullptr) {
+      return nullptr;
+    }
+    const auto p = paths_->find(&n);
+    if (p == paths_->end()) {
+      return nullptr;
+    }
+    const auto v = views_map_->find(p->second);
+    return v == views_map_->end() ? nullptr : &v->second;
+  }
+
+  /// @brief Whether elements apply their saved view (and source limits)
+  ///        this frame: always for PNGs, in a live view while fresh
+  ///        contexts settle.
+  bool apply_view() const {
+    return limits_cond() == ImPlotCond_Always;
+  }
+
+  /// @brief The plot whose items are being drawn (set by Plot and Plot3D
+  ///        around their children), or nullptr.
+  const node* current_plot() const {
+    return current_plot_;
+  }
+  void set_current_plot(const node* n) {
+    current_plot_ = n;
+    pending_hidden_.clear();
+  }
+
+  /// @brief Notes that legend entry `label` of the current plot is hidden.
+  void record_hidden(const std::string& label) {
+    if (interactive_) {
+      pending_hidden_.push_back(label);
+    }
+  }
+
+  /// @brief Records a view of a kind other than a 2D plot (3D plot,
+  ///        diagram); the current plot's hidden entries are attached.
+  void record_view(plot_view_record r) {
+    if (interactive_) {
+      r.hidden = pending_hidden_;
+      views_.push_back(std::move(r));
+    }
+  }
+
+  /// @brief Called by the live view before each frame: forgets every
+  ///        rectangle (the figure, and its node addresses, may have
+  ///        changed) and keeps the last frame's plot views as previous.
+  void begin_frame() {
+    rects_.clear();
+    input_areas_.clear();
+    previous_views_ = std::move(views_);
+    views_.clear();
+    candidate_.reset();
+    hovered_.reset();
+  }
+
+  // ── Picks (live views only) ───────────────────────────────────────────
+
+  /// @brief Offers a pick for the plot being drawn; kept if within
+  ///        kPickRadius and closer than any offered before.
+  void offer_pick(pick_candidate c) {
+    if (c.distance <= kPickRadius && (!candidate_ || c.distance < candidate_->distance)) {
+      candidate_ = std::move(c);
+    }
+  }
+
+  /// @brief The best pick offered since the last call, and forgets it.
+  std::optional<pick_candidate> take_pick_candidate() {
+    std::optional<pick_candidate> out = std::move(candidate_);
+    candidate_.reset();
+    return out;
+  }
+
+  /// @brief Sets what is under the pointer in this frame.
+  void set_hovered(pick p) {
+    hovered_ = std::move(p);
+  }
+
+  /// @brief What is under the pointer in this frame, if anything.
+  const std::optional<pick>& hovered() const {
+    return hovered_;
+  }
+
+  /// @brief Whether nymph draws its own tooltip for the hovered pick.
+  bool tooltips() const {
+    return tooltips_;
+  }
+  void set_tooltips(bool on) {
+    tooltips_ = on;
+  }
+
+  /// @brief In a live view, records the current ImPlot plot's area and
+  ///        limits for `n`; call between BeginPlot and EndPlot, after its
+  ///        items. Does nothing when not interactive.
+  void record_current_plot(const node& n, bool with_y2, view_kind kind = view_kind::plot2d);
+
+  /// @brief In a live view, records `r` as an area that takes pointer input
+  ///        (a plot or diagram that pans and zooms), so the host lets the
+  ///        wheel scroll the page everywhere else.
+  void add_input_area(const rect& r) {
+    if (interactive_) {
+      input_areas_.push_back(r);
+    }
+  }
+
+  /// @brief The input areas recorded in this frame.
+  const std::vector<rect>& input_areas() const {
+    return input_areas_;
+  }
+
+  /// @brief The plot views recorded in this frame.
+  const std::vector<plot_view_record>& plot_views() const {
+    return views_;
+  }
+
+  /// @brief `n`'s plot view recorded in the previous frame, or nullptr.
+  const plot_view_record* previous_plot_view(const node& n) const {
+    for (const plot_view_record& v : previous_views_) {
+      if (v.element == &n) {
+        return &v;
+      }
+    }
+    return nullptr;
   }
 
   /// @brief Output pixels per logical pixel (`image.scale`).
@@ -110,6 +324,18 @@ class draw_context {
 
  private:
   const image_options& options_;
+  bool interactive_ = false;
+  bool lock_limits_ = false;
+  const view_map* views_map_ = nullptr;
+  const std::unordered_map<const node*, std::string>* paths_ = nullptr;
+  const node* current_plot_ = nullptr;
+  std::vector<std::string> pending_hidden_;
+  bool tooltips_ = true;
+  std::optional<pick_candidate> candidate_;
+  std::optional<pick> hovered_;
+  std::vector<plot_view_record> views_;
+  std::vector<rect> input_areas_;
+  std::vector<plot_view_record> previous_views_;
   std::unordered_map<const node*, rect> rects_;
   std::map<std::string, ImFont*, std::less<>> fonts_;
 };

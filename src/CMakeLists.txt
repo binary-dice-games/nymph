@@ -17,16 +17,27 @@ add_library(nymph STATIC
   render/text_style.cpp
   render/figure_renderer.hpp
   render/figure_renderer.cpp
+  render/frame_setup.hpp
+  render/frame_setup.cpp
+  view/live_view.hpp
+  view/live_view.cpp
   core/limits.hpp
   png/png_meta.hpp
   png/png_meta.cpp
   core/dates.hpp
   core/error.hpp
   core/suggest.hpp
+  core/sha256.hpp
+  core/sha256.cpp
   fonts/embedded_fonts.hpp
   fonts/fonts.cpp
+  fonts/font_testing.hpp
+  fonts/fonts_used.hpp
+  fonts/fonts_used.cpp
   document/yaml_doc.hpp
   document/yaml_doc.cpp
+  document/view.hpp
+  document/view.cpp
   document/table.hpp
   document/table.cpp
   document/bind.hpp
@@ -35,6 +46,8 @@ add_library(nymph STATIC
   elements/plot_style.cpp
   elements/plot2d.hpp
   elements/plot2d.cpp
+  elements/plot_pick.hpp
+  elements/plot_pick.cpp
   elements/plot3d.hpp
   elements/plot3d.cpp
   elements/gantt.hpp
@@ -59,10 +72,6 @@ add_library(nymph STATIC
   layout/layout.cpp
   layout/sankey_layout.hpp
   layout/sankey_layout.cpp
-  cli/cli.hpp
-  cli/cli.cpp
-  cli/schema_doc.hpp
-  cli/schema_doc.cpp
   elements/register_builtin.hpp
   elements/register_builtin.cpp
   schema/value.hpp
@@ -84,6 +93,18 @@ target_include_directories(nymph PUBLIC
   ${CMAKE_CURRENT_BINARY_DIR}/generated
 )
 target_link_libraries(nymph PUBLIC nymph_imgui imuml PRIVATE yaml nymph_stb)
+
+# ── nymph_cli — the command line over the library ───────────────────────────
+
+# Kept out of `nymph` so library users (and the web viewer) do not link the
+# command line or std::filesystem.
+add_library(nymph_cli STATIC
+  cli/cli.hpp
+  cli/cli.cpp
+  cli/schema_doc.hpp
+  cli/schema_doc.cpp
+)
+target_link_libraries(nymph_cli PUBLIC nymph)
 
 # ── OpenGL rasterizer (optional; OpenGL itself is loaded at run time) ────────
 

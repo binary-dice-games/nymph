@@ -13,6 +13,7 @@
 #include "core/limits.hpp"
 #include "core/suggest.hpp"
 #include "document/table.hpp"
+#include "document/view.hpp"
 #include "document/yaml_doc.hpp"
 #include "render/text_style.hpp"
 #include "schema/convert.hpp"
@@ -363,7 +364,7 @@ class binder {
 
 /// `source` (how the data was made) is accepted as any value and never
 /// looked at (spec/01_core_features/DESIGN.md section 3).
-constexpr std::string_view kTopKeys[] = {"nymph", "description", "image", "root", "data", "source"};
+constexpr std::string_view kTopKeys[] = {"nymph", "description", "image", "root", "data", "source", "view"};
 constexpr std::string_view kImageKeys[] =
     {"width", "height", "scale", "theme", "padding", "font", "font_size", "text_color"};
 
@@ -429,6 +430,66 @@ image_options bind_image(const yaml_node& image) {
 
 } // namespace
 
+data_replacement replace_data(std::string_view source, std::string_view data_yaml) {
+  return replace_top_level(source, "data", data_yaml);
+}
+
+data_replacement replace_top_level(std::string_view source, std::string_view key, std::string_view value_yaml) {
+  const yaml_node doc = parse_yaml(source);
+  if (!doc.is_mapping() || doc.keys.empty() || doc.keys.front().column != 1) {
+    fail(doc, "replacing '" + std::string(key) + "' needs a source whose top level is 'key: value' lines");
+  }
+  // The source's lines, without their line breaks.
+  std::vector<std::string_view> lines;
+  for (size_t at = 0; at <= source.size();) {
+    const size_t nl = source.find('\n', at);
+    const size_t end = nl == std::string_view::npos ? source.size() : nl;
+    lines.push_back(source.substr(at, end - at));
+    if (nl == std::string_view::npos) {
+      break;
+    }
+    at = nl + 1;
+  }
+  if (!lines.empty() && lines.back().empty()) {
+    lines.pop_back(); // the text after the last line break
+  }
+  // The entry spans its key's line up to the next top-level key.
+  size_t from = lines.size(), to = lines.size();
+  for (size_t i = 0; i < doc.keys.size(); ++i) {
+    if (doc.keys[i].text == key) {
+      from = static_cast<size_t>(doc.keys[i].line - 1);
+      to = i + 1 < doc.keys.size() ? static_cast<size_t>(doc.keys[i + 1].line - 1) : lines.size();
+    }
+  }
+  std::string out;
+  for (size_t i = 0; i < from; ++i) {
+    out.append(lines[i]).append("\n");
+  }
+  data_replacement r;
+  if (value_yaml.empty()) { // remove the key
+    for (size_t i = to; i < lines.size(); ++i) {
+      out.append(lines[i]).append("\n");
+    }
+    r.source = std::move(out);
+    return r;
+  }
+  out.append(key).append(":\n");
+  r.first_line = static_cast<int>(from) + 2;
+  std::string_view rest = value_yaml;
+  while (!rest.empty()) {
+    const size_t nl = rest.find('\n');
+    const std::string_view line = rest.substr(0, nl);
+    out.append(line.empty() ? "" : "  ").append(line).append("\n");
+    ++r.line_count;
+    rest = nl == std::string_view::npos ? std::string_view() : rest.substr(nl + 1);
+  }
+  for (size_t i = to; i < lines.size(); ++i) {
+    out.append(lines[i]).append("\n");
+  }
+  r.source = std::move(out);
+  return r;
+}
+
 figure bind_source(std::string_view source, const registry& reg) {
   if (source.size() > kMaxSourceBytes) {
     throw error(0, 0, "the source is larger than 16 MiB");
@@ -442,7 +503,7 @@ figure bind_source(std::string_view source, const registry& reg) {
       fail(
           key,
           "unknown key '" + key.text + "'" + did_you_mean(key.text, kTopKeys) +
-              " (keys: nymph, description, image, root, data, source)");
+              " (keys: nymph, description, image, root, data, source, view)");
     }
   }
 
@@ -460,6 +521,11 @@ figure bind_source(std::string_view source, const registry& reg) {
   }
   if (const yaml_node* image = doc.find("image")) {
     out.image = bind_image(*image);
+    for (size_t i = 0; i < image->keys.size(); ++i) {
+      if (image->keys[i].text == "font") {
+        out.image_font_pos = {image->children[i].line, image->children[i].column};
+      }
+    }
   }
   data_set data;
   const yaml_node* data_node = doc.find("data");
@@ -474,6 +540,9 @@ figure bind_source(std::string_view source, const registry& reg) {
   std::vector<bool> set;
   out.root = b.element(*root, nullptr, &set);
   out.root.cls->adjust_root(out.root, set);
+  if (const yaml_node* view = doc.find("view")) {
+    out.views = bind_view(*view, element_paths(out.root));
+  }
   return out;
 }
 

@@ -10,6 +10,8 @@
 /// vertex arrays.
 #include "elements/plot3d.hpp"
 #include <implot3d.h>
+#include <implot3d_internal.h> // the current plot's rotation, ranges and items
+#include <algorithm>
 #include <cstdint>
 #include <memory>
 #include <string>
@@ -138,6 +140,10 @@ class plot3d_class : public element_class {
     return ImVec2(400.0f, 400.0f);
   }
 
+  view_kind viewable() const override {
+    return view_kind::plot3d;
+  }
+
   void draw(const node& n, draw_context& dc) const override {
     using namespace plot3d_field;
     const rect r = dc.rect_of(n);
@@ -149,7 +155,12 @@ class plot3d_class : public element_class {
     if (colormap_value != kColormapDefault) {
       ImPlot3D::PushColormap(static_cast<ImPlot3DColormap>(colormap_value));
     }
-    if (ImPlot3D::BeginPlot(str(n, title), size, static_cast<ImPlot3DFlags>(n.get<int64_t>(flags)))) {
+    if ((n.get<int64_t>(flags) & ImPlot3DFlags_NoInputs) == 0) {
+      dc.add_input_area(dc.rect_of(n));
+    }
+    // In a live view the host's own menu takes the right click.
+    const ImPlot3DFlags live_flags = dc.interactive() ? ImPlot3DFlags_NoMenus : 0;
+    if (ImPlot3D::BeginPlot(str(n, title), size, static_cast<ImPlot3DFlags>(n.get<int64_t>(flags)) | live_flags)) {
       const std::string& xl = n.get<std::string>(x_label);
       const std::string& yl = n.get<std::string>(y_label);
       const std::string& zl = n.get<std::string>(z_label);
@@ -165,12 +176,82 @@ class plot3d_class : public element_class {
             yf,
             zf);
       }
-      dc.draw_children(n);
+      apply_view(n, dc);
+      draw_series(n, dc);
+      record_view(n, dc);
       ImPlot3D::EndPlot();
     }
     if (colormap_value != kColormapDefault) {
       ImPlot3D::PopColormap();
     }
+  }
+
+ private:
+  /// The saved view (the `view` key): axis ranges and rotation.
+  static void apply_view(const node& n, draw_context& dc) {
+    const element_view* v = dc.view_of(n);
+    if (v == nullptr) {
+      return;
+    }
+    const ImPlot3DCond cond = dc.limits_cond();
+    const std::optional<view_range>* ranges[] = {&v->x, &v->y, &v->z};
+    for (int a = 0; a < 3; ++a) {
+      if (*ranges[a]) {
+        ImPlot3D::SetupAxisLimits(static_cast<ImAxis3D>(a), (*ranges[a])->min, (*ranges[a])->max, cond);
+      }
+    }
+    if (v->rotation) {
+      const auto& q = *v->rotation;
+      ImPlot3D::SetupBoxRotation(ImPlot3DQuat(q[0], q[1], q[2], q[3]), false, cond);
+    }
+  }
+
+  /// The series, as draw_context::draw_children() draws them, each with its
+  /// legend entry hidden as the saved view says, and noted when hidden.
+  static void draw_series(const node& n, draw_context& dc) {
+    dc.set_current_plot(&n);
+    const element_view* v = dc.view_of(n);
+    for (size_t i = 0; i < n.children.size(); ++i) {
+      const node& c = n.children[i];
+      ImGui::PushID(static_cast<int>(i));
+      const int field = c.cls->field_index("label");
+      const char* label = field < 0 ? nullptr : c.get<std::string>(static_cast<size_t>(field)).c_str();
+      dc.draw_node(c);
+      // Hidden after plotting, as sync_hidden() does for 2D plots.
+      ImPlot3DItemGroup& items = *ImPlot3D::GetCurrentContext()->CurrentItems;
+      if (ImPlot3DItem* item = label == nullptr ? nullptr : items.GetItem(label)) {
+        if (v != nullptr && dc.apply_view() &&
+            std::find(v->hidden.begin(), v->hidden.end(), label) != v->hidden.end()) {
+          item->Show = false;
+        }
+        if (!item->Show) {
+          dc.record_hidden(label);
+        }
+      }
+      ImGui::PopID();
+    }
+  }
+
+  /// In a live view, what the user has done to the plot.
+  static void record_view(const node& n, draw_context& dc) {
+    if (!dc.interactive()) {
+      dc.set_current_plot(nullptr);
+      return;
+    }
+    const ImPlot3DPlot& plot = *ImPlot3D::GetCurrentPlot();
+    plot_view_record r;
+    r.element = &n;
+    r.kind = view_kind::plot3d;
+    r.area = dc.rect_of(n);
+    r.x_min = plot.Axes[0].Range.Min;
+    r.x_max = plot.Axes[0].Range.Max;
+    r.y_min = plot.Axes[1].Range.Min;
+    r.y_max = plot.Axes[1].Range.Max;
+    r.z_min = plot.Axes[2].Range.Min;
+    r.z_max = plot.Axes[2].Range.Max;
+    r.rotation = {plot.Rotation.x, plot.Rotation.y, plot.Rotation.z, plot.Rotation.w};
+    dc.record_view(std::move(r));
+    dc.set_current_plot(nullptr);
   }
 };
 

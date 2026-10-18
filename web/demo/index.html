@@ -1,0 +1,50 @@
+<!doctype html>
+<!-- MIT License © 2026 Binary Dice Games -->
+<!-- The nymph web viewer on every example, next to the PNG the CLI renders. -->
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>nymph viewer demo</title>
+  <style>
+    :root { color-scheme: light dark; --bg: #fafafa; --fg: #222; --line: #ddd; }
+    @media (prefers-color-scheme: dark) { :root { --bg: #1b1b1b; --fg: #ddd; --line: #444; } }
+    body { margin: 0; padding: 16px; font: 15px/1.4 system-ui, sans-serif; background: var(--bg); color: var(--fg); }
+    h1 { font-size: 20px; margin: 0 0 4px; }
+    p.note { margin: 0 0 16px; opacity: 0.8; }
+    section { border-top: 1px solid var(--line); padding: 12px 0; }
+    h2 { font-size: 16px; margin: 0 0 8px; font-family: ui-monospace, monospace; }
+    .pair { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 12px; align-items: start; }
+    .pair > div { min-width: 0; }
+    .pair img { max-width: 100%; display: block; }
+    .label { font-size: 12px; opacity: 0.7; margin-bottom: 4px; }
+    #pick { position: sticky; top: 0; background: var(--bg); padding: 6px 0; font-family: ui-monospace, monospace; font-size: 13px; min-height: 1.4em; }
+  </style>
+</head>
+<body>
+  <h1>nymph viewer</h1>
+  <p class="note">Left: live (drag to pan, wheel to zoom, double-click to fit, hover for values). Right: the PNG <code>nymph</code> renders.</p>
+  <div id="pick"></div>
+  <main id="examples"></main>
+  <script type="module">
+    import { createViewer } from '../nymph-viewer.js';
+    const list = await (await fetch('examples/index.json')).json();
+    const main = document.getElementById('examples');
+    const pick = document.getElementById('pick');
+    for (const name of list) {
+      const section = document.createElement('section');
+      section.innerHTML = `<h2>${name}</h2><div class="pair"><div><div class="label">live</div><div class="live"></div></div>` +
+        `<div><div class="label">PNG</div><img alt="${name}" src="examples/${name}.png"></div></div>`;
+      main.appendChild(section);
+      const source = await (await fetch(`examples/${name}.yaml`)).text();
+      createViewer(section.querySelector('.live'), { source }).then((viewer) => {
+        viewer.on?.('hover', (p) => {
+          pick.textContent = p ? `${name}: ${p.label} ${Object.entries(p.values).map(([k, v]) => `${k}=${v}`).join(' ')}` : '';
+        });
+      }, (e) => {
+        section.querySelector('.live').textContent = `${e.name}: ${e.message}`;
+      });
+    }
+  </script>
+</body>
+</html>

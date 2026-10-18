@@ -73,6 +73,8 @@ Outputs:
 |--------|---------|-------------|
 | `NYMPH_BUILD_TESTS` | `ON` when top-level | Build the GoogleTest suite |
 | `NYMPH_FONTS_DIR` | `fonts/` | Folder whose `*.ttf` / `*.otf` fonts and `*.txt` licences are compiled into nymph |
+| `NYMPH_EMBED_FONTS` | `all` | Which of those fonts have their bytes compiled in: `all`, `none`, or a `;`-list of file names |
+| `NYMPH_WEB` | `OFF` | Build the interactive web viewer (WebAssembly) instead of the CLI; needs Emscripten (`emcmake`). See "Web viewer" below. |
 | `NYMPH_OPENGL` | `ON` | Build the optional OpenGL rasterizer. `OFF` leaves only the software rasterizer; `--rasterizer opengl` then falls back with the reason "nymph was built without OpenGL support". |
 
 ---
@@ -121,10 +123,44 @@ time. Sources name a font by its file name.
   the standard fonts then skip.
 - Each font adds its size to the binary (the standard set is 2.8 MB).
   File names must not contain `"` or `\`.
+- **Embed only some fonts:** `-DNYMPH_EMBED_FONTS=none` (or a `;`-list
+  such as `"FiraSans-Regular.ttf;FiraSans-Bold.ttf"`). Every font name
+  stays valid in sources; a font without bytes must be registered at run
+  time with `bdg::nymph::register_font(name, bytes)` (checked against its
+  size and SHA-256) before a source that names it can render, or
+  rendering fails at its `font` field. The fonts not embedded are copied,
+  with the licences, to `build/fonts/` for hosting. `nymph fonts` marks
+  them `(not embedded)`. The web viewer uses this to load fonts on demand
+  ([spec/04_web_viewer](../spec/04_web_viewer/DESIGN.md)).
 - Licences: the standard fonts are SIL OFL 1.1 (see `fonts/README.md`);
   `nymph fonts --licenses` prints the texts compiled in with them.
 
 ---
+
+## Web viewer
+
+The web viewer is the library compiled to WebAssembly with a JavaScript
+API ([spec/04_web_viewer](../spec/04_web_viewer/DESIGN.md)). It needs the
+[Emscripten SDK](https://emscripten.org/docs/getting_started/downloads.html)
+(verified with 6.0.12) and, for its tests, Node.
+
+```sh
+emcmake cmake -S . -B build-web -DNYMPH_WEB=ON -DCMAKE_BUILD_TYPE=MinSizeRel
+cmake --build build-web
+ctest --test-dir build-web        # Node tests of the module
+```
+
+`build-web/web/` then holds `nymph-viewer.js` (the API),
+`nymph-viewer-core.js` and `nymph-viewer-core.wasm` (about 630 KB gzip),
+`nymph-viewer.single.js` (all three in one file, about 690 KB gzip),
+`fonts/`, the font files fetched on demand (the web build embeds no font:
+`NYMPH_EMBED_FONTS` defaults to `none` there), and `demo/index.html`,
+every example live next to its PNG (serve the folder over HTTP to open
+it). See [viewer.md](viewer.md) for what to serve. `ctest` also runs the
+browser tests when Playwright for Node is installed (they are skipped
+otherwise). `NYMPH_WEB` turns `NYMPH_OPENGL` and the native GoogleTest suite
+off, uses native wasm exceptions (`-fwasm-exceptions`) and 32-bit ImGui
+indices, and builds no CLI.
 
 ## Using nymph from another CMake project
 

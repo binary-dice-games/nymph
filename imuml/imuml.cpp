@@ -423,6 +423,13 @@ bool BeginDiagram(int kind, const char* title_id, const ImVec2& size, ImUmlDiagr
   d->ID = id;
   d->Kind = kind;
   d->Flags = flags;
+  // A measuring pass leaves the next view to the drawing one.
+  if (g.HasNextView && !(flags & ImUmlDiagramFlags_MeasureOnly)) {
+    d->HasNextView = true;
+    d->NextZoom = g.NextZoom;
+    d->NextCenter = g.NextCenter;
+    g.HasNextView = false;
+  }
   d->SizeRequest = size;
   d->CursorPos = ImGui::GetCursorScreenPos();
   d->TextBuf.resize(0);
@@ -525,6 +532,13 @@ void ImUml::SetupSystemBoundary(const char* label) {
 
 const ImUmlDiagramInfo& ImUml::GetLastDiagramInfo() {
   return Ctx().LastInfo;
+}
+
+void ImUml::SetNextDiagramView(float zoom, const ImVec2& center) {
+  ImUmlContext& g = Ctx();
+  g.HasNextView = true;
+  g.NextZoom = ImClamp(zoom, 0.25f, 8.0f);
+  g.NextCenter = center;
 }
 
 // ── Items ────────────────────────────────────────────────────────────────────

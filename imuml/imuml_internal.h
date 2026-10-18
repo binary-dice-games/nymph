@@ -376,6 +376,12 @@ struct ImUmlDiagram {
   ImUmlSeqOutput Seq;
   ImVector<int> SeqParticipants; ///< Node indices of participants, in column order.
   ImVec2 ContentSize; ///< Laid out content at zoom 1, without the title.
+  // View of ImUmlDiagramFlags_Interactive, kept across frames.
+  ImVec2 ViewPan; ///< Screen offset added to the fitted origin.
+  float ViewZoom; ///< Factor on the fitted zoom.
+  bool HasNextView; ///< SetNextDiagramView() was called before this diagram's Begin.
+  float NextZoom;
+  ImVec2 NextCenter;
   ImRect Boundary; ///< Use case system boundary (diagram coordinates).
 
   ImUmlDiagram() {
@@ -389,6 +395,11 @@ struct ImUmlDiagram {
     LayoutValid = false;
     CacheSkipped = 0;
     SetupLocked = false;
+    ViewPan = ImVec2(0, 0);
+    ViewZoom = 1.0f;
+    HasNextView = false;
+    NextZoom = 1.0f;
+    NextCenter = ImVec2(0, 0);
   }
 };
 
@@ -410,6 +421,9 @@ struct ImUmlContext {
   ImGuiStorage DiagramMap; ///< ID -> index + 1.
   ImUmlDiagram* Current;
   ImUmlDiagramInfo LastInfo;
+  bool HasNextView; ///< SetNextDiagramView(), taken by the next Begin.
+  float NextZoom;
+  ImVec2 NextCenter;
   // Next item.
   ImU32 NextLineCol, NextFillCol;
   bool HasNextRank;
@@ -417,6 +431,9 @@ struct ImUmlContext {
   int NextWeight, NextMinLen;
   bool NextConstraint;
   ImUmlContext() {
+    HasNextView = false;
+    NextZoom = 1.0f;
+    NextCenter = ImVec2(0, 0);
     Current = nullptr;
     NextLineCol = NextFillCol = 0;
     HasNextRank = false;

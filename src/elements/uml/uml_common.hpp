@@ -112,6 +112,11 @@ class diagram_class : public element_class {
   /// @throws nymph::error when the diagram needs a zoom below `min_zoom` to fit.
   void arrange(const node& n, draw_context& dc, const rect& r) const override;
   void draw(const node& n, draw_context& dc) const override;
+  view_kind viewable() const override {
+    return view_kind::diagram;
+  }
+  /// @brief The `-Italic` sibling of `font`, used for abstract names.
+  std::vector<std::string> implied_fonts(const node& n, const std::string& font) const override;
 
  protected:
   /// @brief The diagram's own rules (edge kinds, UML constraints), after
@@ -129,6 +134,8 @@ class diagram_class : public element_class {
  private:
   /// Runs the ImUml scope: measure only when `r` is null, else draws at `r`.
   ImUmlDiagramInfo submit(const node& n, draw_context& dc, const rect* r) const;
+  /// In a live view, offers the node or edge ImUml found under the mouse.
+  void offer_hovered(const node& n, draw_context& dc, const ImUmlDiagramInfo& info) const;
 
   diagram_kind kind_;
   size_t title_, min_zoom_, max_zoom_, line_color_, fill_color_, node_spacing_;

@@ -450,5 +450,42 @@ TEST(bind, SourceKeyTakesAnyValueAndIsNotInterpreted) {
   }
 }
 
+// ── replace_data (spec/04_web_viewer plan step 8) ─────────────────────────────
+
+TEST(replace_data, ReplacesTheDataBlockAndKeepsEveryOtherLine) {
+  const data_replacement r = replace_data(
+      "description: d\n"
+      "data:\n"
+      "  a: [1, 2]\n"
+      "  # a comment\n"
+      "root: {type: Label, text: $a}\n",
+      "{\"a\": [3, 4]}");
+  EXPECT_EQ(
+      r.source,
+      "description: d\n"
+      "data:\n"
+      "  {\"a\": [3, 4]}\n"
+      "root: {type: Label, text: $a}\n");
+  EXPECT_EQ(r.first_line, 3);
+  EXPECT_EQ(r.line_count, 1);
+}
+
+TEST(replace_data, ReplacesTheLastKeyAndIndentsMultiLineData) {
+  const data_replacement r = replace_data("root: {type: Label, text: hi}\ndata: |\n  a\n  1\n", "|\n  a, b\n  1, 2");
+  EXPECT_EQ(r.source, "root: {type: Label, text: hi}\ndata:\n  |\n    a, b\n    1, 2\n");
+  EXPECT_EQ(r.first_line, 3);
+  EXPECT_EQ(r.line_count, 3);
+}
+
+TEST(replace_data, AppendsDataWhenTheSourceHasNone) {
+  const data_replacement r = replace_data("root: {type: Label, text: hi}", "{x: [1]}");
+  EXPECT_EQ(r.source, "root: {type: Label, text: hi}\ndata:\n  {x: [1]}\n");
+  EXPECT_EQ(r.first_line, 3);
+}
+
+TEST(replace_data, AFlowStyleTopLevelIsRefused) {
+  EXPECT_THROW(replace_data("{root: {type: Label, text: hi}}", "{}"), error);
+}
+
 } // namespace
 } // namespace bdg::nymph

@@ -48,8 +48,8 @@ Diagrams in this project, the most used UML kinds (mermaid has each):
 Not in this project (section 10 lists where they would go): component,
 deployment, object, package, timing and communication diagrams; activity
 swimlanes; concurrent regions in states; mermaid's text syntax as an input
-format; interaction (hover, drag, zoom) in ImUml; hand-placed node
-positions.
+format; dragging nodes; hand-placed node positions. (Pan, zoom and hover
+came later, with the web viewer: section 6, "Interaction".)
 
 Owns or changes:
 
@@ -773,6 +773,21 @@ walks its subtree once and runs every reference and kind rule of section
   positioned at the element, so the agent enlarges the image, splits the
   diagram or lowers `min_zoom`.
 
+### Interaction (added by spec/04_web_viewer)
+
+`ImUmlDiagramFlags_Interactive` (off by default; nymph sets it only in a
+live view, so PNGs never change) keeps a view per diagram ID, on top of
+the fit: the mouse wheel zooms around the mouse (factor 1.2 per notch,
+0.25x to 8x of the fit; the content point under the mouse stays put),
+dragging pans, a double-click fits again. `ImUmlDiagramInfo` then also
+reports `ViewZoom` and, for graph diagrams, the hovered node
+(`HoveredNode`, `HoveredNodeId` = `ImHashStr(id)`) or edge
+(`HoveredEdge`, `HoveredEdgeFrom` / `To`) with its screen rectangle, in
+drawing order: plain nodes over edges over composite nodes. Sequence
+diagrams pan and zoom but report no hover yet. nymph matches the hashed
+ids to its elements and reports them as picks
+([spec/04_web_viewer](../04_web_viewer/DESIGN.md) section 3).
+
 ### ImUml API (`imuml/imuml.h`)
 
 The functions of section 4 plus `GetLastDiagramInfo()` (natural size,
@@ -925,7 +940,7 @@ prints one.
   and dot's box-constrained spline router for fewer edge-node overlaps.
 - **Concurrent state regions**: composite states with several child
   layouts stacked and separated by dashed lines.
-- **Interaction** in ImUml for live ImGui programs (hover highlight,
-  dragging nodes, pan and zoom), behind flags off by default.
+- **Dragging nodes** in ImUml for live ImGui programs (pan, zoom and
+  hover exist: section 6, "Interaction"); hover in sequence diagrams.
 - **A mermaid importer** (`nymph import diagram.mmd`) that writes the
   equivalent YAML, if agents ask for it.

@@ -9,6 +9,7 @@
 #include <string>
 #include <string_view>
 #include <vector>
+#include "document/view.hpp"
 #include "render/draw_context.hpp"
 #include "schema/field_desc.hpp"
 #include "schema/node.hpp"
@@ -81,6 +82,24 @@ class element_class {
   virtual void adjust_root(node& n, const std::vector<bool>& explicitly_set) const {
     (void)n;
     (void)explicitly_set;
+  }
+
+  /// @brief What view the element has for the `view` key (zoom, pan, ...);
+  ///        decides which keys its entry may have. Default: none.
+  virtual view_kind viewable() const {
+    return view_kind::none;
+  }
+
+  /// @brief Fonts this element draws with besides the one in effect,
+  ///        `font` (its own `font` field or the inherited one): diagrams
+  ///        use its `-Italic` sibling for abstract names. Listed so a
+  ///        viewer can fetch them before drawing
+  ///        (spec/04_web_viewer/DESIGN.md, "Fonts on demand"). Default:
+  ///        none.
+  virtual std::vector<std::string> implied_fonts(const node& n, const std::string& font) const {
+    (void)n;
+    (void)font;
+    return {};
   }
 
   /// @brief Called by bind_source() on every node of this class once its

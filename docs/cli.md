@@ -22,7 +22,7 @@ is available and on the CPU otherwise ([Rasterizers](#rasterizers)).
 | `nymph schema` | Prints every element type with its fields, types, defaults and allowed values. |
 | `nymph schema <Type>` | The same for one type. |
 | `nymph schema --markdown` | The reference as Markdown ([elements.md](elements.md) is generated from it). |
-| `nymph fonts` | The font names `font:` accepts, one per line: `default` and every embedded font file. |
+| `nymph fonts` | The font names `font:` accepts, one per line: `default` and every font file of the catalog; fonts whose bytes this build does not embed (`NYMPH_EMBED_FONTS`) are marked `(not embedded)`. |
 | `nymph fonts --licenses` | The licence texts of the embedded fonts. |
 | `nymph rasterizers` | Whether each rasterizer can be used here: `software: available`, then `opengl: available (<device>)` or `opengl: unavailable (<reason>)`. Exit 0 either way. |
 | `nymph --version`, `nymph --help` | Version, usage. |

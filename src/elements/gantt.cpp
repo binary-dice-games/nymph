@@ -27,6 +27,7 @@
 #include "core/error.hpp"
 #include "core/limits.hpp"
 #include "core/suggest.hpp"
+#include "elements/plot_pick.hpp"
 #include "elements/plot_style.hpp"
 #include "render/draw_context.hpp"
 #include "render/text_style.hpp"
@@ -466,6 +467,10 @@ class chart_class : public element_class {
     return ImVec2(600.0f, std::ceil(h));
   }
 
+  view_kind viewable() const override {
+    return view_kind::gantt;
+  }
+
   void draw(const node& n, draw_context& dc) const override {
     using namespace chart_field;
     const schedule s = schedule_of(n);
@@ -479,9 +484,12 @@ class chart_class : public element_class {
     const std::string id = (title_text.empty() ? std::string() : title_text) + "##gantt";
     const ImPlotFlags flags = ImPlotFlags_NoMenus | ImPlotFlags_NoBoxSelect | ImPlotFlags_NoMouseText |
         (s.sections.empty() ? ImPlotFlags_NoLegend : 0);
+    dc.add_input_area(r);
     if (ImPlot::BeginPlot(id.c_str(), ImVec2(r.width(), r.height()), flags)) {
-      setup(n, s, r.width());
-      plot(n, s);
+      setup(n, s, r.width(), dc);
+      plot(n, s, dc);
+      finish_plot_picks(dc);
+      dc.record_current_plot(n, false, view_kind::gantt);
       ImPlot::EndPlot();
     }
     if (cmap != kColormapDefault) {
@@ -503,7 +511,7 @@ class chart_class : public element_class {
     return *v;
   }
 
-  static void setup(const node& n, const schedule& s, float width) {
+  static void setup(const node& n, const schedule& s, float width, const draw_context& dc) {
     using namespace chart_field;
     const std::string& xl = n.get<std::string>(x_label);
     ImPlot::SetupAxes(
@@ -516,12 +524,24 @@ class chart_class : public element_class {
     // about 20 px of the plot area (three quarters of the width).
     const double pad = span * std::max(0.03, 20.0 / std::max(100.0, static_cast<double>(width) * 0.75));
     const double x0 = s.lo - pad, x1 = s.hi + pad;
-    ImPlot::SetupAxisLimits(ImAxis_X1, x0, x1, ImPlotCond_Always);
+    // In a live view the time axis pans and zooms (the rows stay fixed),
+    // and the date ticks follow the range on screen.
+    ImPlot::SetupAxisLimits(ImAxis_X1, x0, x1, dc.limits_cond());
+    double t0 = x0, t1 = x1;
+    if (const element_view* saved = dc.view_of(n); saved != nullptr && saved->x) {
+      ImPlot::SetupAxisLimits(ImAxis_X1, saved->x->min, saved->x->max, dc.limits_cond());
+      t0 = saved->x->min;
+      t1 = saved->x->max;
+    }
+    if (const plot_view_record* view = dc.previous_plot_view(n)) {
+      t0 = view->x_min;
+      t1 = view->x_max;
+    }
     if (s.dates) {
       // The row names take about a quarter of the width.
       std::vector<double> at;
       std::vector<std::string> labels;
-      date_ticks(x0, x1, width * 0.75f, &at, &labels);
+      date_ticks(t0, t1, width * 0.75f, &at, &labels);
       std::vector<const char*> texts;
       for (const std::string& l : labels) {
         texts.push_back(l.c_str());
@@ -544,7 +564,7 @@ class chart_class : public element_class {
     }
   }
 
-  void plot(const node& n, const schedule& s) const {
+  void plot(const node& n, const schedule& s, draw_context& dc) const {
     using namespace chart_field;
     // One legend item per section (tasks outside sections share a hidden
     // one), whose colour the section's tasks take.
@@ -592,6 +612,7 @@ class chart_class : public element_class {
       if (t.milestone) {
         const ImVec2 c = ImPlot::PlotToPixels(t.start, row);
         const float h = std::max(bar_half_px, 4.0f);
+        offer_task(dc, s, i, ImVec2(c.x - h, c.y - h), ImVec2(c.x + h, c.y + h), border);
         dl->AddQuadFilled(ImVec2(c.x, c.y - h), ImVec2(c.x + h, c.y), ImVec2(c.x, c.y + h), ImVec2(c.x - h, c.y), fill);
         dl->AddQuad(
             ImVec2(c.x, c.y - h), ImVec2(c.x + h, c.y), ImVec2(c.x, c.y + h), ImVec2(c.x - h, c.y), border, outline);
@@ -603,6 +624,7 @@ class chart_class : public element_class {
       b = ImVec2(std::max(std::floor(b.x), a.x + 1.0f), std::floor(b.y + bar_half_px));
       dl->AddRectFilled(a, b, fill, 3.0f);
       dl->AddRect(a, b, border, 3.0f, ImDrawFlags_None, outline);
+      offer_task(dc, s, i, a, b, border);
     }
     ImPlot::PopPlotClipRect();
     if (const std::string& today = n.get<std::string>(chart_field::today); !today.empty()) {
@@ -613,6 +635,35 @@ class chart_class : public element_class {
       ImPlot::PlotInfLines("##today", &x, 1, spec);
       ImPlot::TagX(x, spec.LineColor, "%s", "today");
     }
+  }
+
+  /// In a live view, offers task `i` (drawn in `a`-`b`) when the pointer
+  /// is on it.
+  static void offer_task(draw_context& dc, const schedule& s, size_t i, ImVec2 a, ImVec2 b, ImU32 color) {
+    const std::optional<ImVec2> pointer = plot_pointer(dc, nullptr);
+    if (!pointer) {
+      return;
+    }
+    const scheduled_task& t = s.tasks[i];
+    const auto time = [&](double v) {
+      char buf[64];
+      std::snprintf(buf, sizeof(buf), "%g", v);
+      return s.dates ? format_iso_time(v) : std::string(buf);
+    };
+    pick hit;
+    hit.element = t.n;
+    hit.type = std::string(t.n->cls->name());
+    hit.label = task_name(*t.n);
+    hit.index = static_cast<int>(i);
+    if (t.milestone) {
+      hit.values = {{"at", time(t.start)}};
+    } else {
+      hit.values = {{"start", time(t.start)}, {"end", time(t.end)}};
+    }
+    if (t.section >= 0) {
+      hit.values.push_back({"section", s.sections[static_cast<size_t>(t.section)]->get<std::string>(0)});
+    }
+    offer_rect_px(dc, *pointer, std::move(hit), a, b, color);
   }
 
   /// An elbow arrow from the end of task `from` into the start of task

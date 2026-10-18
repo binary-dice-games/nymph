@@ -81,7 +81,8 @@ TEST(fonts, EveryFileInTheFontsFolderIsEmbeddedByteForByte) {
     names.emplace_back(f.name);
     EXPECT_EQ(f.text(), read_file(kFontsDir / f.name)) << f.name;
     EXPECT_EQ(f.data[f.size], 0) << f.name; // terminator
-    EXPECT_EQ(find_font(f.name), &f);
+    ASSERT_NE(find_font(f.name), nullptr);
+    EXPECT_EQ(find_font(f.name)->data, f.data);
   }
   EXPECT_EQ(names, files_in_fonts_dir({".ttf", ".otf"}));
 

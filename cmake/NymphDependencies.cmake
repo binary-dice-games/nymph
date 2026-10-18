@@ -42,6 +42,12 @@ target_compile_definitions(nymph_imgui PUBLIC
   IMGUI_DISABLE_DEFAULT_SHELL_FUNCTIONS
 )
 set_target_properties(nymph_imgui PROPERTIES FOLDER extern)
+if(NYMPH_WEB)
+  # WebGL2 has no glDrawElementsBaseVertex, so ImGui's OpenGL3 backend
+  # cannot honour vertex offsets there; 32-bit indices keep plots of more
+  # than 65,535 vertices drawable (spec/04_web_viewer/DESIGN.md section 6).
+  target_compile_definitions(nymph_imgui PUBLIC "ImDrawIdx=unsigned int")
+endif()
 
 # ── yaml (libyaml) ────────────────────────────────────────────────────────────
 

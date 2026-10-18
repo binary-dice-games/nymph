@@ -4,14 +4,18 @@
 ///        register_uml().
 #include "elements/uml/uml_common.hpp"
 #include <imgui.h>
+#include <imgui_internal.h> // ImHashStr: ImUml hashes item ids with it
 #include <cmath>
+#include <limits>
 #include <memory>
 #include <stdexcept>
 #include <string>
 #include "core/error.hpp"
 #include "core/limits.hpp"
 #include "core/suggest.hpp"
+#include "elements/plot_pick.hpp"
 #include "elements/plot_style.hpp"
+#include "fonts/embedded_fonts.hpp"
 #include "render/text_style.hpp"
 
 namespace bdg::nymph::uml {
@@ -177,18 +181,10 @@ std::string px(float v) {
   return std::to_string(static_cast<long>(std::lround(v)));
 }
 
-/// The `-Italic` sibling of the current font, if one is embedded.
+/// The `-Italic` sibling of the current font, if it is loaded.
 ImFont* italic_sibling(const draw_context& dc) {
-  const std::string name(dc.font_name(ImGui::GetFont()));
-  for (const char* style : {"-Regular.", "-Bold."}) {
-    const size_t at = name.find(style);
-    if (at != std::string::npos) {
-      std::string sibling = name;
-      sibling.replace(at, std::char_traits<char>::length(style), "-Italic.");
-      return dc.font(sibling);
-    }
-  }
-  return nullptr;
+  const std::string sibling = italic_sibling_name(dc.font_name(ImGui::GetFont()));
+  return sibling.empty() ? nullptr : dc.font(sibling);
 }
 
 } // namespace
@@ -398,7 +394,16 @@ ImUmlDiagramInfo diagram_class::submit(const node& n, draw_context& dc, const re
   ImUmlDiagramFlags flags = ImUmlDiagramFlags_MeasureOnly;
   if (r != nullptr) {
     size = ImVec2(r->width(), r->height());
-    flags = ImUmlDiagramFlags_None;
+    // A live view pans and zooms the diagram (spec/04_web_viewer).
+    flags = dc.interactive() ? ImUmlDiagramFlags_Interactive : ImUmlDiagramFlags_None;
+    // The saved view (the `view` key).
+    if (const element_view* v = dc.view_of(n); v != nullptr && dc.apply_view() && (v->zoom || v->center)) {
+      const float nan = std::numeric_limits<float>::quiet_NaN();
+      ImUml::SetNextDiagramView(
+          v->zoom ? static_cast<float>(*v->zoom) : 1.0f,
+          v->center ? ImVec2(static_cast<float>((*v->center)[0]), static_cast<float>((*v->center)[1]))
+                    : ImVec2(nan, nan));
+    }
     ImGui::SetCursorScreenPos(r->min);
   }
   if (begin_of(kind_)(id.c_str(), size, flags)) {
@@ -446,9 +451,87 @@ void diagram_class::arrange(const node& n, draw_context& dc, const rect& r) cons
   }
 }
 
+std::vector<std::string> diagram_class::implied_fonts(const node& n, const std::string& font) const {
+  (void)n;
+  std::string sibling = italic_sibling_name(font);
+  if (sibling.empty()) {
+    return {};
+  }
+  return {std::move(sibling)};
+}
+
 void diagram_class::draw(const node& n, draw_context& dc) const {
   const rect r = dc.rect_of(n);
-  submit(n, dc, &r);
+  dc.add_input_area(r);
+  const ImUmlDiagramInfo info = submit(n, dc, &r);
+  if (dc.interactive()) {
+    offer_hovered(n, dc, info);
+    finish_picks(dc, ImGui::GetWindowDrawList());
+    plot_view_record view;
+    view.element = &n;
+    view.kind = view_kind::diagram;
+    view.area = r;
+    view.zoom = info.ViewZoom;
+    view.center = {info.ViewCenter.x, info.ViewCenter.y};
+    dc.record_view(std::move(view));
+  }
+}
+
+void diagram_class::offer_hovered(const node& n, draw_context& dc, const ImUmlDiagramInfo& info) const {
+  if (info.HoveredNode < 0 && info.HoveredEdge < 0) {
+    return;
+  }
+  const auto text = [](const node& c, const char* field) -> std::string {
+    const int i = c.cls->field_index(field);
+    return i < 0 ? std::string() : c.get<std::string>(static_cast<size_t>(i));
+  };
+  const node* hit = nullptr;
+  walk(n, [&](const node& c, size_t) {
+    if (hit != nullptr) {
+      return;
+    }
+    if (info.HoveredNode >= 0) {
+      const std::string& id = id_of(c);
+      if (!id.empty() && ImHashStr(id.c_str()) == info.HoveredNodeId) {
+        hit = &c;
+      }
+    } else {
+      const std::string from = text(c, "from"), to = text(c, "to");
+      if (!from.empty() && ImHashStr(from.c_str()) == info.HoveredEdgeFrom &&
+          ImHashStr(to.c_str()) == info.HoveredEdgeTo) {
+        hit = &c;
+      }
+    }
+  });
+  if (hit == nullptr) {
+    return;
+  }
+  pick_candidate c;
+  c.color = ImGui::GetColorU32(ImGuiCol_Text);
+  c.hit.element = hit;
+  c.hit.type = std::string(hit->cls->name());
+  if (info.HoveredNode >= 0) {
+    c.hit.index = info.HoveredNode;
+    c.hit.label = id_of(*hit);
+    c.hit.values = {{"id", id_of(*hit)}};
+    for (const char* field : {"name", "text"}) {
+      if (const std::string v = text(*hit, field); !v.empty()) {
+        c.hit.values.push_back({field, v});
+      }
+    }
+    c.outline = true;
+    c.outline_min = info.HoveredMin;
+    c.outline_max = info.HoveredMax;
+  } else {
+    c.hit.index = info.HoveredEdge;
+    c.hit.label = text(*hit, "from") + " -> " + text(*hit, "to");
+    c.hit.values = {{"from", text(*hit, "from")}, {"to", text(*hit, "to")}};
+    if (const std::string v = text(*hit, "label"); !v.empty()) {
+      c.hit.values.push_back({"label", v});
+    }
+  }
+  c.anchor = ImVec2((info.HoveredMin.x + info.HoveredMax.x) * 0.5f, (info.HoveredMin.y + info.HoveredMax.y) * 0.5f);
+  dc.offer_pick(std::move(c));
 }
 
 // ── Field helpers ────────────────────────────────────────────────────────────

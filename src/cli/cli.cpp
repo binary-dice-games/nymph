@@ -304,8 +304,8 @@ int do_fonts(const options& o, std::ostream& out) {
     return 0;
   }
   out << kDefaultFontName << "\n";
-  for (const embedded_file& f : embedded_fonts()) {
-    out << f.name << "\n";
+  for (const font_entry& f : font_catalog()) {
+    out << f.name << (f.data == nullptr ? " (not embedded)" : "") << "\n";
   }
   return 0;
 }

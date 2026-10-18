@@ -16,4 +16,7 @@ The files are unmodified copies from the Google Fonts repository
 (fonts.google.com). To add a font, drop its file and its licence text
 (`<Family>-<Licence>.txt`) here and rebuild; to embed a different set,
 configure with `-DNYMPH_FONTS_DIR=<dir>`. File names must not contain `"`
-or `\`. Each font adds its file size to the binary.
+or `\`. Each font adds its file size to the binary; to embed only some
+(the others are registered at run time, as the web viewer does), configure
+with `-DNYMPH_EMBED_FONTS=none` or a `;`-list of file names (see
+`docs/building.md`).
