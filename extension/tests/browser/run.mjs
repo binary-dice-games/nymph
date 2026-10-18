@@ -240,6 +240,16 @@ const FIXTURES = {
     <img id="good" src="/img/line.png">`),
   // Only plain images.
   plain: () => page(`<img src="/plain/line.png"> <img src="/plain/bars.png">`),
+  // Images centred in fixed-size panes, as image viewers and previews do.
+  centred: () => page(['flex', 'grid'].map((kind) => `
+    <div class="pane ${kind}"><img id="${kind}" src="/img/line.png?${kind}" alt="${kind}"></div>`).join('') +
+    // claude.ai's file preview: size attributes a stylesheet overrides.
+    `<div class="pane flex"><img id="override" class="auto" width="0" height="0" src="/img/line.png?override"></div>`, '')
+    .replace('</style>', `.pane { position: relative; width: 900px; height: 700px; margin-bottom: 8px; }
+      .pane img { max-width: 100%; max-height: 100%; }
+      .flex { display: flex; align-items: center; justify-content: center; }
+      .grid { display: grid; place-items: center; }
+      .pane img.auto { width: auto; height: auto; object-fit: contain; }</style>`),
   // An image from the other origin, which sends no CORS headers.
   cross: (q, port) => page(`<img id="cross" src="http://localhost:${port}/img/line.png?cross">`),
 };
@@ -472,6 +482,20 @@ for (const mode of ['inline', 'frame']) {
     await p.close();
   });
 }
+
+test('a chart centred in a pane stays where its image was', async () => {
+  await setSettings({ off: [SITE] });
+  const p = await openPage('centred');
+  await imagesLoaded(p);
+  const before = await imageBoxes(p);
+  await setSettings({ off: [] });
+  await waitFor(async () => (await visitAll(p), (await charts(p)).length === 3), 'three charts');
+  const after = Object.fromEntries((await charts(p)).map((c) => [c.id, c.box]));
+  for (const id of Object.keys(before)) {
+    assertEq(after[id], before[id], `${id} box`);
+  }
+  await p.close();
+});
 
 test('a chart reflows with the window as its image did', async () => {
   await setSettings({ off: [SITE] });
