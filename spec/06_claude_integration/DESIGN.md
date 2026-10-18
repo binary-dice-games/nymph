@@ -4,8 +4,9 @@
 for each step's result). Verified on Linux with Claude Code 2.1.302,
 Chromium 141 through Playwright (a stand-in MCP Apps host), Wine 9 and
 QEMU, and with the probe in Claude Desktop 2.42304.0 on Windows (chat
-and Code tab). Not yet verified: claude.ai in a browser, Claude Desktop
-on macOS, the plugin's launcher on Windows, native MSVC, and installing
+and Code tab) and with the probe Skill on claude.ai (the binary runs, the
+PNG is delivered). Not yet verified: the full Skill on claude.ai, Claude
+Desktop on macOS, the plugin's launcher on Windows, native MSVC, and installing
 from GitHub, which needs a published release (the repository is
 private).** [PLAN.md](PLAN.md) is the
 ordered implementation plan. This document describes only what this
@@ -97,8 +98,10 @@ New and changed files:
   `dashboard.yaml` with the WebGL rasterizer (first frame 96 ms, redraw
   21 ms; a 1.73 MB page was accepted). The host advertises
   `availableDisplayModes: ["inline"]` only, so the full-screen button
-  stays hidden there. PLAN step 1 records the details; claude.ai in a
-  browser and macOS are still open.
+  stays hidden there. On claude.ai the Skill was tested: the static
+  executable runs in its sandbox and the PNG reaches the user as a file
+  (no live chart, as designed). PLAN step 1 records the details; macOS is
+  still open.
 
 ## 2. Design Goals
 

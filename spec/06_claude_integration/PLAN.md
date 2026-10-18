@@ -46,7 +46,8 @@ answers are in). Each page ran in a fake host iframe (`sandbox=
    needed there. **The same worked in both the chat and the Code tab**
    (the log shows the two connections, `claude-ai` and
    `local-agent-mode-nymph-probe`, both advertising the App extension).
-   **Open**: macOS and claude.ai in a browser.
+   **Open**: macOS. claude.ai cannot run the App with a local server
+   (see answer 5).
 2. **Partly.** Claude Desktop accepted a 1.73 MB `ui://` resource. Larger
    sizes were not tried. `download_anchor` clicked without error, but
    whether a file was saved is **not confirmed**.
@@ -66,12 +67,18 @@ answers are in). Each page ran in a fake host iframe (`sandbox=
    host reports `protocolVersion 2026-01-26`, `serverTools`,
    `serverResources`, `updateModelContext`, `message`, `openLinks`, and
    `availableDisplayModes: ["inline"]` only (no full screen).
-5. **Partly.** The code execution sandbox is Linux x86-64, without
-   network, 5 GiB memory; Skill uploads are limited to 30 MB (the API
-   docs; the claude.ai docs do not say whether compressed). The static
-   x86-64 executable is 10.8 MB (3.7 MB zipped). Whether it runs on
-   claude.ai and how the PNG reaches the user is **open**: the test
-   Skill in `probe/skill/` answers it once uploaded.
+5. **Yes (tested on claude.ai, 2026-10-18).** The code execution
+   sandbox is Linux x86-64, without network, 5 GiB memory; Skill uploads
+   are limited to 30 MB (the API docs; the claude.ai docs do not say
+   whether compressed). The static x86-64 executable is 10.8 MB (4.1 MB
+   zipped, from the `NYMPH_RELEASE` build); the probe Skill zip uploaded
+   without complaint. In a chat, the test Skill ran: `uname -m` gave
+   `x86_64`, `bin/nymph --version` printed `nymph 0.1.0`, `nymph render
+   chart.yaml -o chart.png --rasterizer software` exited 0 and wrote an
+   800x500 PNG (25.9 KB), and Claude shared `chart.png` as an output
+   file the user can download. As designed, claude.ai shows only the
+   PNG, no live chart: it runs no local MCP server, so the App would need
+   the hosted server of DESIGN.md section 10.
 6. **`${CLAUDE_PLUGIN_DATA}`**: Claude Code 2.1.302 expands it for
    plugins (a persistent data folder), besides `${CLAUDE_PLUGIN_ROOT}`.
 
