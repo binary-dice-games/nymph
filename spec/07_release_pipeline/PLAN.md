@@ -78,15 +78,27 @@ system libraries.
   linked against an extra dylib (checked once by hand, recorded).
 - `codesign -v` accepts the release executable on arm64.
 
-### 3. Install from source
+### 3. Install from source, and `nymph` on `PATH`
 
 **Goal:** `cmake --install` installs a working `nymph` and its
-documentation, and a tree without submodules fails with a clear message.
+documentation and leaves `nymph` on `PATH` for a new console on
+Windows, Linux and macOS, and a tree without submodules fails with a
+clear message.
 
 **Deliverables:**
 - `cmake/NymphInstall.cmake` (included from the root `CMakeLists.txt`
   after the targets): option `NYMPH_INSTALL`, the rules of DESIGN
   section 4.3 with `GNUInstallDirs`, component `nymph`.
+- `packaging/install/install.sh` and `install.ps1`: the `PATH` step of
+  DESIGN section 4.9 (`--path-only <bin>`, `--uninstall`,
+  `NYMPH_NO_MODIFY_PATH`), and the release-executable install
+  (`--version <v>`, default latest; `NYMPH_RELEASE_URL` overrides the
+  download base, as in the launcher). Doxygen-style header comments
+  stating each mode and its failures.
+- `cmake/NymphInstall.cmake`: Windows default prefix
+  `%LOCALAPPDATA%/Programs/nymph`; option `NYMPH_INSTALL_UPDATE_PATH`;
+  the script installed to `share/nymph/` and run by `install(CODE)`
+  unless the option is OFF or `DESTDIR` is set.
 - `CMakeLists.txt`: before `NymphDependencies.cmake`, if
   `extern/imgui/imgui.h` is missing and there is no `.git`, a
   `FATAL_ERROR` naming the source tarball and `git clone --recursive`.
@@ -95,9 +107,10 @@ documentation, and a tree without submodules fails with a clear message.
   --component nymph`, then the installed `nymph --version` prints the
   project version, it renders `examples/dashboard.yaml`, and every file
   of the table in DESIGN section 4.3 exists.
-- `docs/building.md`: "Install" section; `README.md` Quick Build gains
-  `cmake --install build`.
-- `CHANGELOG.md`: `cmake --install` installs nymph.
+- `docs/building.md`: "Install" section (prefixes, `PATH`, opting out,
+  `--uninstall`); `README.md` Quick Build gains `cmake --install build`.
+- `CHANGELOG.md`: `cmake --install` installs nymph and puts it on
+  `PATH`.
 
 **Tests:**
 - `nymph_install` passes on every CI job (Linux, macOS, MSVC, MSYS2).
@@ -106,6 +119,19 @@ documentation, and a tree without submodules fails with a clear message.
   `cmake --install` installs nothing of nymph.
 - A copy of the tree without `extern/` contents and `.git` fails to
   configure with the message (script test).
+- `PATH` script tests (ctest, each with a temporary `HOME` /
+  `USERPROFILE` and, on Windows, a scratch registry key in place of
+  `HKCU\Environment` through a test-only override): a folder not on
+  `PATH` gets one block (zsh, bash with and without `~/.bash_profile`,
+  sh) or one `Path` entry; a second run changes nothing; a folder
+  already on `PATH` changes nothing; `NYMPH_NO_MODIFY_PATH=1` writes
+  nothing and prints the line; `--uninstall` restores the files and
+  `Path` byte for byte; as root (Linux CI, `sudo`) nothing is written.
+- `nymph_install` runs with `NYMPH_INSTALL_UPDATE_PATH=OFF` (tests never
+  touch the runner's real profile); a separate CI step on each OS
+  installs for real, then `bash -lc 'command -v nymph'` (Linux),
+  `zsh -lc 'command -v nymph'` (macOS) and a new `pwsh` process
+  (`Get-Command nymph`, Windows) find it.
 
 ### 4. Source tarball
 
@@ -147,7 +173,8 @@ all.
   `lipo -create` the macOS executables and run `cmake/NymphMcpb.cmake`
   in script mode for `nymph-<v>-macos-universal.mcpb`; drop the
   per-arch macOS `.mcpb`; rename the App page to
-  `nymph-mcp-app-<v>.html`; one `SHA256SUMS` over all files; create the
+  `nymph-mcp-app-<v>.html`; copy `packaging/install/install.sh` and
+  `install.ps1`; one `SHA256SUMS` over all files; create the
   draft release with the notes, upload, publish, marked prerelease for
   `-` tags). The `release` job alone has `contents: write`, and it fails
   if the tag's release exists and is published.
@@ -164,6 +191,11 @@ all.
   with exactly the files of DESIGN section 3; `sha256sum -c SHA256SUMS`
   passes on the downloaded files; the universal `.mcpb` passes
   `tests/mcpb_check.cmake` on macOS arm64 and x86-64 runners.
+- On clean Linux, macOS and Windows runners, the prerelease's
+  `install.sh` / `install.ps1` (with `--version <X.Y.Z>-rc.1` and
+  `NYMPH_RELEASE_URL` at the prerelease) installs the executable, a new
+  login shell (`pwsh` process on Windows) runs `nymph --version`, and a
+  tampered `SHA256SUMS` makes it fail without installing anything.
 - A tag whose version differs from `CMakeLists.txt` fails in `check`,
   with no release created.
 - Re-running the workflow for an already published tag fails in
@@ -222,7 +254,8 @@ macOS and Linux.
 
 **Tests:**
 - On a fork with a test tap: the job pushes the formula; on a clean
-  runner `brew install <test-tap>/nymph` then `nymph --version` prints
+  runner `brew install <test-tap>/nymph` (which writes no shell profile)
+  then `nymph --version` from a new shell prints
   the release version, `nymph mcp` answers `initialize` and lists the
   App resource (the App page was passed), and `brew test nymph` passes.
 - Re-running the job is a no-op.
@@ -286,7 +319,8 @@ installs and runs it.
 **Deliverables:**
 - The release commit (version, changelog), the tag.
 - `release.yml` job `verify` (needs the channel jobs; runs on Linux,
-  macOS and Windows): installs from each channel that ran and runs
+  macOS and Windows): installs from each channel that ran and from the
+  release's install scripts, and, in a new console, runs
   `nymph --version` and one render.
 - Results recorded in this plan, statuses in DESIGN.md and
   `spec/INDEX.md`.
@@ -305,6 +339,9 @@ installs and runs it.
   pull request, all green.
 - The source tarball builds, tests and installs with no network, and
   `cmake --install` installs a working `nymph` on every platform.
+- After any install (CMake, install script, Homebrew), a new console on
+  Windows, Linux and macOS finds `nymph` with no further step, and
+  `--uninstall` undoes the `PATH` change.
 - `brew install binary-dice-games/nymph/nymph` works on macOS and Linux.
 - The plugin's version and checksums always name a published release.
 - No published release file is ever replaced; prereleases and dry runs

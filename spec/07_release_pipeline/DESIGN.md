@@ -28,22 +28,26 @@ install nymph from.
 
 In scope:
 
-0. **A GitHub release per build**: each release tag creates a new
+1. **A GitHub release per build**: each release tag creates a new
    GitHub release `v<version>` with the executables and packages for
    Windows, Linux and macOS (section 3).
-1. **macOS as a target**, on the same footing as Linux and Windows:
+2. **macOS as a target**, on the same footing as Linux and Windows:
    built and tested in CI, release executables for arm64 and x86-64, a
    Claude Desktop bundle.
-2. **Install from source**: `cmake --install` installs the `nymph`
+3. **Install from source**: `cmake --install` installs the `nymph`
    command; a release source tarball carries every submodule, so a build
    needs no network and no third-party binary.
-3. **Homebrew**: a tap, `binary-dice-games/homebrew-nymph`, whose formula
+4. **`nymph` on `PATH`**: every way of installing nymph leaves `nymph`
+   runnable from a new console, on Windows, Linux and macOS (section
+   4.9). Release install scripts (`install.sh`, `install.ps1`) install
+   the release executable for users who neither build nor use Homebrew.
+5. **Homebrew**: a tap, `binary-dice-games/homebrew-nymph`, whose formula
    builds the release source tarball; each release updates it.
-4. **Chrome extension**: each release uploads the extension to the Chrome
+6. **Chrome extension**: each release uploads the extension to the Chrome
    Web Store and submits it for review.
-5. **Claude Code plugin**: each release pins its executables in
+7. **Claude Code plugin**: each release pins its executables in
    `claude/plugin/bin/checksums.txt` and bumps the plugin version.
-6. **CI** on every pull request for every target, so a release never
+8. **CI** on every pull request for every target, so a release never
    finds a broken platform.
 
 Out of scope: a Homebrew bottle (section 10), homebrew-core, Linux
@@ -61,7 +65,8 @@ New and changed files:
 | `.github/workflows/build.yml` | Reusable: build and test one target (CI and release share it) |
 | `.github/workflows/ci.yml` | Build and test every target on pull requests and `main` |
 | `.github/workflows/release.yml` | The release, from a `v*` tag |
-| `CMakeLists.txt`, `cmake/NymphInstall.cmake` | `install()` rules, `NYMPH_INSTALL` option, missing-`extern/` error |
+| `CMakeLists.txt`, `cmake/NymphInstall.cmake` | `install()` rules, `NYMPH_INSTALL` and `NYMPH_INSTALL_UPDATE_PATH` options, Windows default prefix, missing-`extern/` error |
+| `packaging/install/install.sh`, `install.ps1` | Install the release executable and put it on `PATH`; also called by `cmake --install` for `PATH` only |
 | `cmake/NymphRelease.cmake` | macOS release flags; `nymph-dist` on macOS |
 | `cmake/NymphSourceDist.cmake` | Script mode: the source tarball |
 | `cmake/NymphPluginSync.cmake` | Plugin version follows the pinned release (section 4.5) |
@@ -91,6 +96,9 @@ New and changed files:
    C++20 compiler.
 6. **macOS is a target like the others**: same tests, same packages,
    same release files, in CI on every pull request.
+7. **Installed means on `PATH`.** After any install, a new console finds
+   `nymph`, with no step left to the user; the change is per user,
+   never machine-wide, and can be undone.
 
 ## 3. Release Files
 
@@ -110,6 +118,7 @@ section 6, `nymph-<version>-<os>-<arch>`):
 | `nymph-extension-<v>.zip` | ubuntu-24.04, Emscripten | Chrome Web Store, "Load unpacked" |
 | `nymph-mcp-app-<v>.html` | same | The MCP App page for source builds (section 4.3) |
 | `nymph-<v>-src.tar.gz` | ubuntu-24.04 | Source builds, Homebrew |
+| `install.sh`, `install.ps1` | copied from `packaging/install/` | Installing the release executable on `PATH` (section 4.9) |
 | `SHA256SUMS` | the release job | Every file above, `sha256sum` format |
 
 The per-architecture macOS `.mcpb` files that `nymph-dist` makes are not
@@ -161,9 +170,18 @@ The release workflow calls the same build steps (a reusable workflow,
 | Path | What |
 |---|---|
 | `bin/nymph` (`nymph.exe`) | The executable |
+| `share/nymph/install.sh` (`install.ps1` on Windows) | The `PATH` script of section 4.9, for `--uninstall` later |
 | `share/doc/nymph/` | `README.md`, `CHANGELOG.md`, `LICENSE`, `docs/agent-guide.md`, `docs/cli.md`, `docs/format.md`, `docs/elements.md` |
 | `share/licenses/nymph/` | `LICENSE` and the embedded fonts' licences (`fonts/*.txt`) |
 
+- On Windows, when the prefix was not given, it is
+  `%LOCALAPPDATA%/Programs/nymph` (no administrator rights needed, and
+  the user `PATH` of section 4.9 fits it), not CMake's
+  `C:/Program Files/Nymph`. Elsewhere CMake's default (`/usr/local`)
+  stays.
+- After the files, `cmake --install` puts `<prefix>/bin` on `PATH`
+  (section 4.9) unless `NYMPH_INSTALL_UPDATE_PATH` is OFF (default ON)
+  or `DESTDIR` is set (a staging install for a package).
 - Option `NYMPH_INSTALL`, default ON when nymph is the top-level project
   and not `NYMPH_WEB`. Off when nymph is a subdirectory, so it adds
   nothing to a host project's install.
@@ -222,7 +240,8 @@ CI checks the pin, and the history shows each pin.
   `nymph-<v>-src.tar.gz` and its `sha256`; `depends_on "cmake" =>
   :build`; a `resource` for `nymph-mcp-app-<v>.html` (with its `sha256`)
   passed as `NYMPH_MCP_VIEWER`, so `nymph mcp` shows the live chart;
-  `NYMPH_BUILD_TESTS=OFF`; `cmake --install`. Its `test do` renders a
+  `NYMPH_BUILD_TESTS=OFF`, `NYMPH_INSTALL_UPDATE_PATH=OFF` (Homebrew
+  links `nymph` onto `PATH` itself); `cmake --install`. Its `test do` renders a
   chart and reads its source back. The same formula works with Homebrew
   on Linux.
 - `packaging/homebrew/nymph.rb.in` in this repository is the template;
@@ -275,6 +294,51 @@ CI checks the pin, and the history shows each pin.
   6). AppleClang contracts `a*b+c` into FMA by default on arm64
   (`-ffp-contract=on`), so its list may differ from GCC's.
 
+### 4.9 `nymph` on `PATH`
+
+| Install route | How `nymph` gets on `PATH` |
+|---|---|
+| Homebrew | Homebrew links `bin/nymph` into its prefix, already on `PATH`; the formula passes `NYMPH_INSTALL_UPDATE_PATH=OFF` |
+| `cmake --install` | The install runs the `PATH` step below for `<prefix>/bin` |
+| `install.sh` / `install.ps1` | They download the release executable for the OS and CPU, check it against the release's `SHA256SUMS`, copy it to `~/.local/bin/nymph` (Windows: `%LOCALAPPDATA%\Programs\nymph\bin\nymph.exe`), then run the `PATH` step |
+| Claude plugin, `.mcpb`, Skill | Unchanged: Claude's own `PATH` (Claude DESIGN section 4.6); they are not console installs |
+
+The `PATH` step, for a folder `<bin>`:
+
+1. If `<bin>` is already on `PATH`, nothing changes (the usual case for
+   `/usr/local/bin`, `/opt/homebrew/bin` and, on most Linux systems,
+   `~/.local/bin`).
+2. **Windows** (also MSYS2): `<bin>` is appended to the **user** `Path`
+   (`HKCU\Environment`, through
+   `[Environment]::SetEnvironmentVariable(..., 'User')`, which tells
+   running programs the environment changed). Never the machine `Path`.
+3. **Linux, macOS**: a block between `# >>> nymph >>>` and
+   `# <<< nymph <<<` that prepends `<bin>` to `PATH` is added to the
+   login file of the user's shell (`$SHELL`): `~/.zprofile` for zsh,
+   `~/.bash_profile` when it exists else `~/.profile` for bash and sh;
+   for fish, `fish_add_path -U <bin>` is run. Another shell gets the
+   line printed, not written.
+4. Run as root (`sudo cmake --install` into a prefix not on `PATH`), no
+   file is written: root's profile is not the user's. The line to add
+   is printed.
+5. It prints what it changed and that a **new** console is needed (a
+   process cannot change its parent's environment).
+
+Running it twice changes nothing (the block or the `Path` entry is
+found). `install.sh --uninstall` / `install.ps1 -Uninstall` removes the
+executable it installed, the block or the `Path` entry; the copy in
+`<prefix>/share/nymph/` does the same for a CMake install (removing the
+`PATH` entry; CMake has no uninstall of files). `NYMPH_NO_MODIFY_PATH=1`
+(environment) makes the scripts print instead of write, for users who
+manage their own dotfiles.
+
+The scripts are the one implementation: `cmake/NymphInstall.cmake`
+runs the installed copy with `--path-only <bin>` (`-PathOnly <bin>`)
+from `install(CODE)`, so CMake, release users and CI share the same
+logic and tests. `install.sh` is POSIX `sh` (like the plugin launcher,
+whose OS, CPU and SHA-256 code it reuses); `install.ps1` runs in
+Windows PowerShell 5.1 and PowerShell 7.
+
 ## 5. Data Flow
 
 ```
@@ -326,7 +390,9 @@ For users:
 | Channel | Command |
 |---|---|
 | Homebrew (macOS, Linux) | `brew install binary-dice-games/nymph/nymph` |
-| Source | download `nymph-<v>-src.tar.gz`, then `cmake -S nymph-<v> -B build && cmake --build build && cmake --install build` |
+| Source | download `nymph-<v>-src.tar.gz`, then `cmake -S nymph-<v> -B build && cmake --build build && cmake --install build` (puts `nymph` on `PATH`) |
+| Release executable, Linux / macOS | `curl -fsSL https://github.com/binary-dice-games/nymph/releases/latest/download/install.sh \| sh` |
+| Release executable, Windows | `irm https://github.com/binary-dice-games/nymph/releases/latest/download/install.ps1 \| iex` |
 | Claude Code | `/plugin install nymph --marketplace binary-dice-games/nymph` (unchanged) |
 | Claude Desktop | the `.mcpb` for the OS (one universal file for macOS) |
 | Chrome | the Chrome Web Store listing |
@@ -361,6 +427,10 @@ secret is missing is skipped with a warning, as wish's APT publish is):
   workflow with the same options.
 - A source build never needs the network: no `FetchContent`, no download
   in CMake; `nymph_ensure_submodules()` runs git only in a git checkout.
+- Installing changes `PATH` only per user, only by adding one entry
+  (never reordering or removing others), only once, and never in a
+  staging (`DESTDIR`) or package-manager install; it can be undone with
+  `--uninstall`.
 - Platform code follows CLAUDE.md: macOS shares the POSIX files
   (`gl_device_posix.cpp` is simply not built when `NYMPH_OPENGL` is off);
   no `_mac` file.
@@ -405,7 +475,17 @@ secret is missing is skipped with a warning, as wish's APT publish is):
    commit cannot contain the checksums of files built from it, so the pin
    is always a later commit; making it a pull request keeps branch
    protection and runs CI on it.
-9. **Changelog section as release notes.** The changelog already exists
+9. **Installing sets `PATH` by default, per user.** The request is
+   that an install leaves `nymph` usable from the console. CMake itself
+   never touches `PATH`, so the install step does it, opt-out
+   (`NYMPH_INSTALL_UPDATE_PATH`, `NYMPH_NO_MODIFY_PATH`). Rejected: a
+   machine-wide `PATH` (needs administrator rights, affects other
+   users); only printing instructions (leaves the step to the user,
+   which is the problem); a Windows installer (`.msi`) for this alone
+   (a signed installer is a larger project; the PowerShell script
+   covers it). Windows' default prefix moves to `%LOCALAPPDATA%` so the
+   user-level install needs no elevation.
+10. **Changelog section as release notes.** The changelog already exists
    in Keep a Changelog form; the release notes are its section for the
    version, so there is one place to write them.
 
