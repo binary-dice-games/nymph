@@ -124,16 +124,26 @@ context_switch::~context_switch() {
 // ── Backend settings and fonts ───────────────────────────────────────────────
 
 void configure(const theme& t, const char* renderer_name, ImGuiBackendFlags backend_flags) {
+  configure_backend(renderer_name, backend_flags);
+  configure_style(t);
+}
+
+void configure_backend(const char* renderer_name, ImGuiBackendFlags backend_flags, bool own_textures) {
   ImGuiIO& io = ImGui::GetIO();
   io.IniFilename = nullptr;
   io.LogFilename = nullptr;
   io.BackendPlatformName = "nymph";
+  if (!own_textures) {
+    io.Fonts->TexDesiredFormat = ImTextureFormat_RGBA32;
+    return;
+  }
   io.BackendRendererName = renderer_name;
   io.BackendFlags |= backend_flags;
   ImGui::GetPlatformIO().DrawCallback_ResetRenderState = &reset_render_state_callback;
-
   io.Fonts->TexDesiredFormat = ImTextureFormat_Alpha8;
+}
 
+void configure_style(const theme& t) {
   ImGuiStyle& style = ImGui::GetStyle();
   t.imgui(&style);
   t.implot(&ImPlot::GetStyle());

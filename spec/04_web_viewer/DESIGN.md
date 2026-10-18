@@ -561,7 +561,10 @@ class NymphError extends Error { line: number; column: number; }
    for synthetic input.
 3. **Browser** (Playwright with the preinstalled Chromium, WebGL2 through
    SwiftShader): the WebGL presenter matches the software presenter within
-   tolerance; dragging a plot fires `view`; hovering a point fires `hover`
+   a browser tolerance (at least 99.5 % of pixels within 16, at most 0.5 %
+   beyond 64, mean below 0.5; looser than GL DESIGN's because ImGui's
+   stock backend samples glyphs with the GPU's filtering and, through
+   ANGLE, breaks pixel-centre ties on the other side of an edge); dragging a plot fires `view`; hovering a point fires `hover`
    with its values and shows the tooltip; `<nymph-viewer src>` loads YAML
    and PNG; a bad source shows the error; twenty viewers on one page use
    one WebGL context and go idle.

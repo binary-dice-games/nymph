@@ -6,6 +6,7 @@
 #pragma once
 
 #include <imgui.h>
+#include <functional>
 #include <memory>
 #include <optional>
 #include <span>
@@ -194,6 +195,18 @@ class live_view {
 
   /// @brief Size and scale of the last frame (or of the next, before any).
   view_geometry geometry() const;
+
+  /// @brief Runs `f` with the view's ImGui, ImPlot, ImPlot3D and ImUml
+  ///        contexts current, e.g. a GPU presenter's RenderDrawData() for
+  ///        the draw data frame() returned.
+  void with_contexts(const std::function<void()>& f);
+
+  /// @brief Calls `on_create` (now, and whenever the view recreates its
+  ///        contexts: reset_view(), an overflow fallback) and `on_destroy`
+  ///        (before contexts are destroyed, the view's destruction
+  ///        included), each with those contexts current: where a GPU
+  ///        presenter initialises and shuts down its ImGui backend.
+  void set_context_hooks(std::function<void()> on_create, std::function<void()> on_destroy);
 
   /// @brief Whether a figure was set.
   bool has_figure() const;

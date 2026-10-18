@@ -518,5 +518,35 @@ TEST(live_view_data, APlainPngClearsTheFigureAndACorruptOneThrows) {
   EXPECT_EQ(v.frame(0.0), nullptr);
 }
 
+// ── GPU presenter hooks (plan step 10) ───────────────────────────────────────
+
+TEST(live_view_gpu, ContextHooksRunWithTheViewsContextsCurrent) {
+  view_options o;
+  o.cpu_textures = false; // a GPU presenter answers the texture requests
+  live_view v(o);
+  std::vector<ImGuiContext*> created, destroyed;
+  v.set_context_hooks(
+      [&] {
+        created.push_back(ImGui::GetCurrentContext());
+        // A GPU backend gets the one atlas format ImGui's OpenGL3 backend uploads.
+        EXPECT_EQ(ImGui::GetIO().Fonts->TexDesiredFormat, ImTextureFormat_RGBA32);
+      },
+      [&] { destroyed.push_back(ImGui::GetCurrentContext()); });
+  ASSERT_EQ(created.size(), 1u); // at once, for the current contexts
+  EXPECT_NE(created[0], nullptr);
+  EXPECT_EQ(ImGui::GetCurrentContext(), nullptr);
+  v.set_source(kLine);
+  v.reset_view(); // new contexts: the old ones are shut down first
+  ASSERT_EQ(destroyed.size(), 1u);
+  EXPECT_EQ(destroyed[0], created[0]);
+  ASSERT_EQ(created.size(), 2u);
+  ImGuiContext* inside = nullptr;
+  v.with_contexts([&] { inside = ImGui::GetCurrentContext(); });
+  EXPECT_EQ(inside, created[1]);
+  { live_view gone = std::move(v); }
+  EXPECT_EQ(destroyed.size(), 2u);
+  EXPECT_EQ(destroyed[1], created[1]);
+}
+
 } // namespace
 } // namespace bdg::nymph

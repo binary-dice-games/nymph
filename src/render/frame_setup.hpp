@@ -105,6 +105,19 @@ class context_scope {
 ///        passes 0.
 void configure(const theme& t, const char* renderer_name, ImGuiBackendFlags backend_flags);
 
+/// @brief The backend part of configure(): no ini or log file and, when
+///        `own_textures`, nymph's renderer name, `backend_flags`, reset
+///        callback and Alpha8 font atlas. A GPU backend that installs
+///        itself (`own_textures` false) gets an RGBA32 atlas, the only
+///        format ImGui's OpenGL3 backend uploads, and keeps its own name,
+///        flags and callbacks.
+void configure_backend(const char* renderer_name, ImGuiBackendFlags backend_flags, bool own_textures = true);
+
+/// @brief The theme part of configure(): the ImGui, ImPlot, ImPlot3D and
+///        ImUml styles of `t` and nymph's style overrides. Safe to call
+///        again to change the theme.
+void configure_style(const theme& t);
+
 /// @brief Adds ImGui's built-in font (the default) and every catalog font
 ///        with bytes (embedded or registered) to the current context's
 ///        atlas and registers them in `ctx` by name. Fonts already in

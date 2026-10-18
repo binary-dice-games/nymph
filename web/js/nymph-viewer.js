@@ -45,6 +45,42 @@ class Core {
     /** @type {Map<string, Promise<void>>} one load per font, shared by every viewer */
     this.fontLoads = new Map();
     this.encoder = new TextEncoder();
+    /** The hidden canvas of the WebGL2 context every viewer shares, once made. */
+    this.glCanvas = null;
+    this.glState = 'untried'; // 'ready', 'unavailable' or 'lost'
+    /** @type {Set<NymphViewer>} viewers drawing with WebGL, to move to the CPU if it is lost */
+    this.glViewers = new Set();
+  }
+
+  /**
+   * Creates the one WebGL2 context of the page, on a hidden canvas (browsers
+   * cap live contexts per page, so viewers share it and copy their frames
+   * out). @returns {boolean} whether WebGL2 can be used
+   */
+  initGl() {
+    if (this.glState !== 'untried') {
+      return this.glState === 'ready';
+    }
+    this.glState = 'unavailable';
+    if (typeof document === 'undefined') {
+      return false;
+    }
+    const canvas = document.createElement('canvas');
+    canvas.width = canvas.height = 1;
+    this.m.specialHTMLTargets['!nymph-gl'] = canvas;
+    if (this.withCString('!nymph-gl', (ptr) => this.m._nymph_gl_init(ptr)) !== 1) {
+      return false;
+    }
+    canvas.addEventListener('webglcontextlost', (e) => {
+      e.preventDefault();
+      this.glState = 'lost';
+      for (const viewer of [...this.glViewers]) {
+        viewer.moveToCpu();
+      }
+    });
+    this.glCanvas = canvas;
+    this.glState = 'ready';
+    return true;
   }
 
   /** Calls `fn(pointer, length)` with `bytes` copied into the module's memory. */
@@ -155,11 +191,161 @@ export function loadNymph(options = {}) {
  */
 export class NymphViewer {
   /** @private Use createViewer(). */
-  constructor(core, handle) {
+  constructor(core, handle, options) {
     this.core = core;
     this.handle = handle;
+    this.options = options;
     this.queue = Promise.resolve();
     this.listeners = new Map();
+    this.webgl = core.m._nymph_viewer_is_webgl(handle) === 1;
+    if (this.webgl) {
+      core.glViewers.add(this);
+    }
+    /** The canvas the chart is shown in (browsers), and its 2D context. */
+    this.canvas = null;
+    this.ctx2d = null;
+    this.frameRequest = 0;
+    this.clockOrigin = typeof performance !== 'undefined' ? performance.now() : 0;
+    /** @type {Array<() => void>} resolvers of rendered() */
+    this.renderedWaiters = [];
+    this.plainImage = null;
+  }
+
+  // ── Showing it in a page ───────────────────────────────────────────────────
+
+  /** @private Puts a canvas for the chart in `container`. */
+  mount(container) {
+    const canvas = document.createElement('canvas');
+    canvas.style.display = 'block';
+    canvas.setAttribute('role', 'img');
+    container.appendChild(canvas);
+    this.container = container;
+    this.canvas = canvas;
+    this.ctx2d = canvas.getContext('2d');
+    this.fitToContainer();
+  }
+
+  /** @private Sizes the chart to its container's box and pixel ratio. */
+  fitToContainer() {
+    if (!this.container) {
+      return;
+    }
+    const fit = this.options.fit ?? 'source';
+    const width = this.container.clientWidth;
+    const height = fit === 'fill' ? this.container.clientHeight : 0;
+    this.resize(width, height, typeof devicePixelRatio === 'number' ? devicePixelRatio : 1);
+  }
+
+  /** @private Asks for an animation frame if one is due and none is asked for. */
+  schedule() {
+    if (this.handle === 0 || !this.canvas || this.frameRequest !== 0 || typeof requestAnimationFrame === 'undefined') {
+      return;
+    }
+    if (!this.wantsFrame()) {
+      this.settled();
+      return;
+    }
+    this.frameRequest = requestAnimationFrame(() => {
+      this.frameRequest = 0;
+      this.drawFrame();
+      this.schedule();
+    });
+  }
+
+  /** @private Runs one frame and shows it in the canvas. */
+  drawFrame() {
+    if (this.handle === 0) {
+      return;
+    }
+    const now = (performance.now() - this.clockOrigin) / 1000;
+    if (this.webgl) {
+      const drawn = this.core.m._nymph_viewer_frame_webgl(this.handle, now);
+      if (drawn < 0) {
+        throw new NymphError(this.core.lastError());
+      }
+      if (drawn === 1) {
+        const width = this.core.m._nymph_viewer_pixel_width(this.handle);
+        const height = this.core.m._nymph_viewer_pixel_height(this.handle);
+        this.sizeCanvas(width, height);
+        // The frame is in the bottom-left corner of the shared canvas.
+        const gl = this.core.glCanvas;
+        this.ctx2d.drawImage(gl, 0, gl.height - height, width, height, 0, 0, width, height);
+      }
+    } else {
+      const frame = this.frameSoftware(now);
+      if (frame) {
+        this.sizeCanvas(frame.width, frame.height);
+        this.ctx2d.putImageData(new ImageData(frame.rgba, frame.width, frame.height), 0, 0);
+      }
+    }
+    this.afterFrame();
+  }
+
+  /** @private Device pixels of the canvas, and its CSS size from the geometry. */
+  sizeCanvas(width, height) {
+    const c = this.canvas;
+    if (c.width !== width || c.height !== height) {
+      c.width = width;
+      c.height = height;
+    }
+    const g = this.state().geometry;
+    c.style.width = `${g.layoutWidth * g.cssScale}px`;
+    c.style.height = `${g.layoutHeight * g.cssScale}px`;
+  }
+
+  /** @private Hook for what follows a frame (events, in step 11). */
+  afterFrame() {}
+
+  /** @private Resolves rendered() once nothing is due and no update is pending. */
+  settled() {
+    const waiters = this.renderedWaiters;
+    this.renderedWaiters = [];
+    waiters.forEach((resolve) => resolve());
+  }
+
+  /**
+   * Resolves once every update made so far is applied and drawn, and no
+   * frame is due: the chart on screen is final.
+   */
+  async rendered() {
+    await this.queue;
+    if (!this.canvas || this.handle === 0 || (!this.wantsFrame() && this.frameRequest === 0)) {
+      return;
+    }
+    await new Promise((resolve) => {
+      this.renderedWaiters.push(resolve);
+      this.schedule();
+    });
+  }
+
+  /** @private The WebGL context was lost: carry on drawing on the CPU. */
+  moveToCpu() {
+    if (!this.webgl || this.handle === 0) {
+      return;
+    }
+    const source = this.core.string(this.core.m._nymph_viewer_source(this.handle));
+    this.core.glViewers.delete(this);
+    this.core.m._nymph_viewer_destroy(this.handle);
+    this.handle = this.core.m._nymph_viewer_create(FIT[this.options.fit ?? 'source'] ?? 0, this.options.tooltips === false ? 0 : 1, 0);
+    this.webgl = false;
+    if (this.themeOverride) {
+      this.setTheme(this.themeOverride);
+    }
+    this.fitToContainer();
+    if (source) {
+      this.setSource(source).catch(() => {});
+    }
+  }
+
+  /** What the viewer is showing and how. */
+  info() {
+    const s = this.handle === 0 ? null : this.state();
+    return {
+      rasterizer: this.webgl ? 'webgl' : 'software',
+      hasFigure: s?.hasFigure ?? false,
+      description: s?.description ?? '',
+      size: s ? { width: s.geometry.layoutWidth * s.geometry.cssScale, height: s.geometry.layoutHeight * s.geometry.cssScale } : { width: 0, height: 0 },
+    };
   }
 
   /** @private Runs `call` (returning a status) after earlier updates, fetching fonts as asked. */
@@ -183,9 +369,33 @@ export class NymphViewer {
       }
       throw new NymphError({ kind: 'fonts', message: 'fonts were registered but are still missing' });
     };
-    const result = this.queue.then(run, run);
+    const result = this.queue.then(run, run).then((shown) => {
+      this.afterUpdate(shown);
+      return shown;
+    });
     this.queue = result.catch(() => {});
     return result;
+  }
+
+  /** @private A new chart (or a plain PNG) is in: label it and draw it. */
+  afterUpdate(shown) {
+    if (!this.canvas || this.handle === 0) {
+      return;
+    }
+    this.canvas.setAttribute('aria-label', this.state().description);
+    if (shown === false && this.plainImage) {
+      this.showPlainImage(this.plainImage);
+    }
+    this.schedule();
+  }
+
+  /** @private Draws a PNG without a nymph source as it is. */
+  async showPlainImage(bytes) {
+    const bitmap = await createImageBitmap(new Blob([bytes], { type: 'image/png' }));
+    this.sizeCanvas(bitmap.width, bitmap.height);
+    this.canvas.style.width = `${Math.min(bitmap.width, this.container?.clientWidth || bitmap.width)}px`;
+    this.canvas.style.height = 'auto';
+    this.ctx2d.drawImage(bitmap, 0, 0);
   }
 
   /** @private */
@@ -221,6 +431,7 @@ export class NymphViewer {
    * @returns {Promise<boolean>} false for a PNG without a nymph source (no chart; show it as an image)
    */
   setPng(bytes, { resetView = true } = {}) {
+    this.plainImage = bytes;
     return this.update(() =>
       this.core.withBytes(bytes, (ptr, size) => this.core.m._nymph_viewer_set_png(this.handle, ptr, size, resetView ? 1 : 0)),
     );
@@ -232,12 +443,15 @@ export class NymphViewer {
     if (this.core.withCString(theme, (ptr) => this.core.m._nymph_viewer_set_theme(this.handle, ptr)) !== STATUS.ok) {
       throw new NymphError(this.core.lastError());
     }
+    this.themeOverride = theme;
+    this.schedule();
   }
 
   /** Sets the box the chart is shown in: CSS pixels and the device pixel ratio. */
   resize(width, height, pixelRatio = 1) {
     this.checkAlive();
     this.core.m._nymph_viewer_resize(this.handle, width, height, pixelRatio);
+    this.schedule();
   }
 
   /**
@@ -248,12 +462,14 @@ export class NymphViewer {
   pointer(type, { x = 0, y = 0, button = 0, wheelX = 0, wheelY = 0, touch = false } = {}) {
     this.checkAlive();
     this.core.m._nymph_viewer_pointer(this.handle, POINTER[type] ?? 0, x, y, button, wheelX, wheelY, touch ? 1 : 0);
+    this.schedule();
   }
 
   /** Back to the view the source describes. */
   resetView() {
     this.checkAlive();
     this.core.m._nymph_viewer_reset_view(this.handle);
+    this.schedule();
   }
 
   /** Whether a frame is due (after an update, input or resize). */
@@ -310,10 +526,18 @@ export class NymphViewer {
 
   /** Frees the chart; the viewer cannot be used afterwards. */
   destroy() {
+    if (this.frameRequest !== 0) {
+      cancelAnimationFrame(this.frameRequest);
+      this.frameRequest = 0;
+    }
+    this.canvas?.remove();
+    this.canvas = null;
+    this.core.glViewers.delete(this);
     if (this.handle !== 0) {
       this.core.m._nymph_viewer_destroy(this.handle);
       this.handle = 0;
     }
+    this.settled();
   }
 }
 
@@ -325,15 +549,21 @@ export class NymphViewer {
  * @param {Uint8Array} [options.png] or a nymph PNG
  * @param {'source'|'width'|'fill'} [options.fit]
  * @param {boolean} [options.tooltips] nymph's own tooltips (default true)
+ * @param {'auto'|'webgl'|'software'} [options.rasterizer] WebGL2 when available (default), or the CPU
  * @returns {Promise<NymphViewer>}
  */
 export async function createViewer(container, options = {}) {
   const core = await loadNymph(options);
-  const handle = core.m._nymph_viewer_create(FIT[options.fit ?? 'source'] ?? 0, options.tooltips === false ? 0 : 1);
+  // WebGL2 in a page unless asked otherwise; the CPU where it is missing.
+  const webgl = container != null && options.rasterizer !== 'software' && core.initGl();
+  const handle = core.m._nymph_viewer_create(FIT[options.fit ?? 'source'] ?? 0, options.tooltips === false ? 0 : 1, webgl ? 1 : 0);
   if (handle === 0) {
     throw new NymphError(core.lastError());
   }
-  const viewer = new NymphViewer(core, handle);
+  const viewer = new NymphViewer(core, handle, options);
+  if (container != null) {
+    viewer.mount(container);
+  }
   if (options.source !== undefined) {
     await viewer.setSource(options.source);
   } else if (options.png !== undefined) {

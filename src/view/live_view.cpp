@@ -75,6 +75,9 @@ struct live_view::impl {
   std::string applied_theme; ///< Theme the contexts are configured with.
   ImU32 clear = IM_COL32(255, 255, 255, 255);
 
+  std::function<void()> on_create; ///< set_context_hooks()
+  std::function<void()> on_destroy;
+
   view_geometry geom;
   bool overflowed = false; ///< The fit overflowed at the current size; laid out at the source size.
   int pending_frames = 0;
@@ -83,6 +86,21 @@ struct live_view::impl {
 
   explicit impl(view_options o) : options(o) {
     reset_contexts();
+  }
+
+  ~impl() {
+    shutdown_contexts();
+  }
+
+  impl(const impl&) = delete;
+  impl& operator=(const impl&) = delete;
+
+  /// Lets a GPU presenter shut its backend down before the contexts go.
+  void shutdown_contexts() {
+    if (contexts && on_destroy) {
+      const context_switch on(*contexts);
+      on_destroy();
+    }
   }
 
   const std::string& effective_theme() const {
@@ -99,6 +117,7 @@ struct live_view::impl {
 
   /// Fresh contexts: drops every view state.
   void reset_contexts() {
+    shutdown_contexts();
     ctx.reset();
     contexts = std::make_unique<imgui_contexts>();
     textures = texture_store();
@@ -107,9 +126,13 @@ struct live_view::impl {
     ctx->set_tooltips(options.tooltips);
     const context_switch on(*contexts);
     applied_theme = effective_theme();
-    configure(*find_theme(applied_theme), "nymph_live_view", backend_flags());
+    configure_backend("nymph_live_view", backend_flags(), options.cpu_textures);
+    configure_style(*find_theme(applied_theme));
     load_fonts(*ctx);
     update_clear_color();
+    if (on_create) {
+      on_create();
+    }
     last_time.reset();
     fresh_frames = 0;
   }
@@ -121,7 +144,7 @@ struct live_view::impl {
       return;
     }
     applied_theme = effective_theme();
-    configure(*find_theme(applied_theme), "nymph_live_view", backend_flags());
+    configure_style(*find_theme(applied_theme));
     update_clear_color();
   }
 
@@ -402,6 +425,21 @@ const ImDrawData* live_view::frame(double now_seconds) {
   m.run_frame(now_seconds);
   --m.pending_frames;
   return ImGui::GetDrawData();
+}
+
+void live_view::with_contexts(const std::function<void()>& f) {
+  const context_switch on(*impl_->contexts);
+  f();
+}
+
+void live_view::set_context_hooks(std::function<void()> on_create, std::function<void()> on_destroy) {
+  impl& m = *impl_;
+  m.on_create = std::move(on_create);
+  m.on_destroy = std::move(on_destroy);
+  if (m.on_create) {
+    const context_switch on(*m.contexts);
+    m.on_create();
+  }
 }
 
 bool live_view::wants_frame() const {

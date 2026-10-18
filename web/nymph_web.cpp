@@ -23,6 +23,7 @@
 #include "render/image.hpp"
 #include "render/soft_rasterizer.hpp"
 #include "view/live_view.hpp"
+#include "webgl_presenter.hpp"
 
 namespace {
 
@@ -94,7 +95,8 @@ void json_pick(std::string& out, const std::optional<view_pick>& p) {
 
 struct viewer {
   live_view view;
-  image pixels; ///< The last software frame.
+  image pixels; ///< The last software frame (WebGL: its size only).
+  bool webgl = false;
   explicit viewer(view_options o) : view(o) {}
 };
 
@@ -203,20 +205,41 @@ EMSCRIPTEN_KEEPALIVE int nymph_register_font(const char* name, const uint8_t* by
   });
 }
 
+/// @brief Creates the shared WebGL2 context on `target` (a key of
+///        Emscripten's specialHTMLTargets). 1 on success, 0 without WebGL2.
+EMSCRIPTEN_KEEPALIVE int nymph_gl_init(const char* target) {
+  return web::gl_init(target) ? 1 : 0;
+}
+
 /// @brief A new viewer; returns its handle (> 0), or 0 with last_error().
 /// @param fit 0 source, 1 width, 2 fill.
-EMSCRIPTEN_KEEPALIVE int nymph_viewer_create(int fit, int tooltips) {
+/// @param webgl draw with the shared WebGL2 context (nymph_gl_init() first);
+///        else on the CPU.
+EMSCRIPTEN_KEEPALIVE int nymph_viewer_create(int fit, int tooltips, int webgl) {
   int handle = 0;
   guarded([&] {
     static int next = 1;
     view_options o;
     o.fit = fit == 1 ? view_fit::width : (fit == 2 ? view_fit::fill : view_fit::source);
     o.tooltips = tooltips != 0;
+    const bool gl = webgl != 0 && web::gl_ready();
+    o.cpu_textures = !gl;
+    auto v = std::make_unique<viewer>(o);
+    v->webgl = gl;
+    if (gl) {
+      web::gl_attach(v->view);
+    }
     handle = next++;
-    viewers()[handle] = std::make_unique<viewer>(o);
+    viewers()[handle] = std::move(v);
     return kOk;
   });
   return handle;
+}
+
+/// @brief Whether the viewer draws with WebGL (1) or on the CPU (0).
+EMSCRIPTEN_KEEPALIVE int nymph_viewer_is_webgl(int handle) {
+  const auto it = viewers().find(handle);
+  return it != viewers().end() && it->second->webgl ? 1 : 0;
 }
 
 EMSCRIPTEN_KEEPALIVE void nymph_viewer_destroy(int handle) {
@@ -265,15 +288,8 @@ EMSCRIPTEN_KEEPALIVE int nymph_viewer_resize(int handle, float width, float heig
 }
 
 /// @brief One pointer event; `type` 0 move, 1 down, 2 up, 3 wheel, 4 leave.
-EMSCRIPTEN_KEEPALIVE int nymph_viewer_pointer(
-    int handle,
-    int type,
-    float x,
-    float y,
-    int button,
-    float wheel_x,
-    float wheel_y,
-    int touch) {
+EMSCRIPTEN_KEEPALIVE int
+nymph_viewer_pointer(int handle, int type, float x, float y, int button, float wheel_x, float wheel_y, int touch) {
   return guarded([&] {
     pointer_event e;
     e.type = static_cast<pointer_event::kind>(type < 0 || type > 4 ? 0 : type);
@@ -309,6 +325,28 @@ EMSCRIPTEN_KEEPALIVE int nymph_viewer_frame_software(int handle, double now_seco
     viewer& v = get(handle);
     if (const ImDrawData* d = v.view.frame(now_seconds)) {
       v.pixels = rasterize(*d, v.view.textures(), v.view.clear_color());
+      drawn = 1;
+    }
+    return kOk;
+  });
+  return s == kOk ? drawn : -1;
+}
+
+/// @brief Runs a due frame and draws it into the bottom-left corner of the
+///        shared WebGL canvas (nymph_viewer_pixel_width() x _height()).
+/// @return 1 when drawn (copy it out before yielding), 0 when no frame was
+///         due, -1 on error (last_error()).
+EMSCRIPTEN_KEEPALIVE int nymph_viewer_frame_webgl(int handle, double now_seconds) {
+  int drawn = 0;
+  const int s = guarded([&] {
+    viewer& v = get(handle);
+    if (!v.webgl) {
+      throw std::logic_error("the viewer draws on the CPU");
+    }
+    if (const ImDrawData* d = v.view.frame(now_seconds)) {
+      // ImGui's backend takes the draw data mutable; it is the view's own.
+      web::gl_draw(v.view, *const_cast<ImDrawData*>(d), &v.pixels.width, &v.pixels.height);
+      v.pixels.rgba.clear();
       drawn = 1;
     }
     return kOk;
