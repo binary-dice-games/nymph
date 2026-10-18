@@ -1,4 +1,4 @@
-# nymph
+<img src="resources/Nymph.png" alt="nymph" height="200"/>
 
 nymph is a command-line tool that turns a YAML file describing a chart
 into a PNG image, and a nymph PNG back into its YAML (the YAML is stored
