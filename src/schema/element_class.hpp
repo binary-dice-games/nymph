@@ -83,6 +83,18 @@ class element_class {
     (void)explicitly_set;
   }
 
+  /// @brief Fonts this element draws with besides the one in effect,
+  ///        `font` (its own `font` field or the inherited one): diagrams
+  ///        use its `-Italic` sibling for abstract names. Listed so a
+  ///        viewer can fetch them before drawing
+  ///        (spec/04_web_viewer/DESIGN.md, "Fonts on demand"). Default:
+  ///        none.
+  virtual std::vector<std::string> implied_fonts(const node& n, const std::string& font) const {
+    (void)n;
+    (void)font;
+    return {};
+  }
+
   /// @brief Called by bind_source() on every node of this class once its
   ///        fields and children are set, for rules between fields (equal
   ///        lengths, grid sizes). Default: nothing.

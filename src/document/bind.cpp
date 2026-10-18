@@ -460,6 +460,11 @@ figure bind_source(std::string_view source, const registry& reg) {
   }
   if (const yaml_node* image = doc.find("image")) {
     out.image = bind_image(*image);
+    for (size_t i = 0; i < image->keys.size(); ++i) {
+      if (image->keys[i].text == "font") {
+        out.image_font_pos = {image->children[i].line, image->children[i].column};
+      }
+    }
   }
   data_set data;
   const yaml_node* data_node = doc.find("data");

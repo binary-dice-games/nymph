@@ -73,6 +73,7 @@ Outputs:
 |--------|---------|-------------|
 | `NYMPH_BUILD_TESTS` | `ON` when top-level | Build the GoogleTest suite |
 | `NYMPH_FONTS_DIR` | `fonts/` | Folder whose `*.ttf` / `*.otf` fonts and `*.txt` licences are compiled into nymph |
+| `NYMPH_EMBED_FONTS` | `all` | Which of those fonts have their bytes compiled in: `all`, `none`, or a `;`-list of file names |
 | `NYMPH_OPENGL` | `ON` | Build the optional OpenGL rasterizer. `OFF` leaves only the software rasterizer; `--rasterizer opengl` then falls back with the reason "nymph was built without OpenGL support". |
 
 ---
@@ -121,6 +122,15 @@ time. Sources name a font by its file name.
   the standard fonts then skip.
 - Each font adds its size to the binary (the standard set is 2.8 MB).
   File names must not contain `"` or `\`.
+- **Embed only some fonts:** `-DNYMPH_EMBED_FONTS=none` (or a `;`-list
+  such as `"FiraSans-Regular.ttf;FiraSans-Bold.ttf"`). Every font name
+  stays valid in sources; a font without bytes must be registered at run
+  time with `bdg::nymph::register_font(name, bytes)` (checked against its
+  size and SHA-256) before a source that names it can render, or
+  rendering fails at its `font` field. The fonts not embedded are copied,
+  with the licences, to `build/fonts/` for hosting. `nymph fonts` marks
+  them `(not embedded)`. The web viewer uses this to load fonts on demand
+  ([spec/04_web_viewer](../spec/04_web_viewer/DESIGN.md)).
 - Licences: the standard fonts are SIL OFL 1.1 (see `fonts/README.md`);
   `nymph fonts --licenses` prints the texts compiled in with them.
 

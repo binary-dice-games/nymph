@@ -682,9 +682,12 @@ as a second line behind `bind()`. Per call:
   `nymph_soft_rasterizer`, `PlatformIO.DrawCallback_ResetRenderState` set
   to the rasterizer's no-op).
 - Fonts: `AddFontDefaultVector()` (registered as `default`), then every
-  embedded font with `AddFontFromMemoryTTF` (`FontDataOwnedByAtlas =
-  false`: the data is static), each registered by file name in the
-  `draw_context`. ImGui 1.92's atlas bakes glyphs on first use, per size
+  font of the catalog that has bytes, embedded or registered at run time
+  ([spec/04_web_viewer](../04_web_viewer/DESIGN.md), "Fonts on demand"),
+  with `AddFontFromMemoryTTF` (`FontDataOwnedByAtlas = false`: the data
+  is never freed), each registered by file name in the `draw_context`.
+  This setup, with the contexts and theme, lives in
+  `src/render/frame_setup` and is shared with the live view. ImGui 1.92's atlas bakes glyphs on first use, per size
   and at the framebuffer scale, so loading every font costs only their
   headers (about 20 ms for eight) and text stays sharp at `scale: 2`.
 - Text style: each frame's drawing runs inside the `image` style; then

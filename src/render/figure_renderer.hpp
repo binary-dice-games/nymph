@@ -52,7 +52,8 @@ image render_frames(const image_options& options, const draw_fn& draw);
 
 /// @brief Renders a bound figure: render_frames() with `f.image`, drawing
 ///        `f.root` in the content rectangle (the image minus padding).
-/// @throws as render_frames().
+/// @throws nymph::error if a font it names has no bytes (require_fonts());
+///         as render_frames().
 image render_figure(const figure& f, raster_backend& backend);
 
 /// @brief render_figure() with the software rasterizer.

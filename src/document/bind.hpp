@@ -20,6 +20,7 @@ namespace bdg::nymph {
 /// must outlive the figure.
 struct figure {
   image_options image;
+  source_pos image_font_pos; ///< Where `image.font` was written; line 0 if not.
   std::string description;
   node root;
 };

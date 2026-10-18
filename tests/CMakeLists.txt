@@ -43,10 +43,15 @@ nymph_add_test(test_layout test_layout.cpp)
 nymph_add_test(test_layout_elements test_layout_elements.cpp)
 target_compile_definitions(test_layout_elements PRIVATE NYMPH_SOURCE_DIR="${PROJECT_SOURCE_DIR}")
 nymph_add_test(test_cli test_cli.cpp)
+target_link_libraries(test_cli PRIVATE nymph_cli)
 nymph_add_test(test_docs test_docs.cpp)
+target_link_libraries(test_docs PRIVATE nymph_cli)
 target_compile_definitions(test_docs PRIVATE NYMPH_SOURCE_DIR="${PROJECT_SOURCE_DIR}")
 nymph_add_test(test_fonts test_fonts.cpp)
 target_compile_definitions(test_fonts PRIVATE NYMPH_FONTS_DIR="${NYMPH_FONTS_DIR}")
+nymph_add_test(test_fonts_on_demand test_fonts_on_demand.cpp)
+target_compile_definitions(test_fonts_on_demand PRIVATE
+  NYMPH_FONTS_DIR="${NYMPH_FONTS_DIR}" NYMPH_SOURCE_DIR="${PROJECT_SOURCE_DIR}")
 
 # ── OpenGL rasterizer (spec/02_opengl_rasterizer) ────────────────────────────
 

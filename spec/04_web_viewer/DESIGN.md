@@ -1,6 +1,6 @@
 # nymph — Interactive Web Viewer: Design
 
-**Status: designed, not started.** [PLAN.md](PLAN.md) is the ordered
+**Status: in progress (see [PLAN.md](PLAN.md) for each step's result).** [PLAN.md](PLAN.md) is the ordered
 implementation plan. This document describes only what this project adds
 or changes; the rest of the architecture is
 [spec/01_core_features/DESIGN.md](../01_core_features/DESIGN.md)
@@ -19,7 +19,9 @@ interact with it:
 - hover a data point, bar, cell, task, flow or diagram node to see its
   values in a tooltip, and report it to the host page;
 - update the data frequently (a live feed) without losing the user's
-  zoom.
+  zoom;
+- load only the fonts a chart uses, when it first uses them, so the
+  download stays small.
 
 The viewer is meant to be embedded in other tools, which are mostly web
 based: markdown viewers, chatbots, notebooks, documentation sites. So the
@@ -52,7 +54,8 @@ Hard requirements, from the request:
 
 In scope: a platform-neutral live view in the library (persistent
 contexts, input, picking), the interaction behaviour of each element
-family, the Emscripten build, a WebGL2 presenter with a software
+family, fonts on demand (a font catalog, a build option choosing which
+fonts are embedded, run-time registration), the Emscripten build, a WebGL2 presenter with a software
 fallback, the JavaScript API and the `<nymph-viewer>` custom element.
 
 Out of scope: a native desktop viewer window (section 9 says how it would
@@ -94,8 +97,14 @@ including the dynamic font atlas (`ImGuiBackendFlags_RendererHasTextures`).
 5. **No I/O in the module.** The wasm module never reads files or the
    network; the host passes source text or PNG bytes. Sources are
    untrusted (often written by an AI) and keep the library's limits.
-6. **Small.** One shared module per page; the gzip size of
-   `nymph-viewer.wasm` stays at or below 2.5 MB.
+6. **Small.** One shared module per page. The web build embeds no font
+   file (ImGui's built-in font is always there); each other font is
+   fetched once, the first time a chart names it. `nymph-viewer.wasm`
+   stays at or below 1.5 MB gzip.
+7. **A source means the same everywhere.** Every build knows the same
+   font names; a build that does not embed a font still accepts the name
+   and asks for the bytes, so a source valid for the CLI is valid in the
+   viewer, and the same font bytes give the same pixels.
 
 ## 3. Behaviour
 
@@ -180,6 +189,44 @@ stay.
   screen**. If there is no previous chart, the viewer shows the error as
   text in its box.
 
+### Fonts on demand
+
+Sources name fonts by file name (`font: FiraSans-Regular.ttf`, core
+DESIGN section 3, "Text style"). Every build carries a **font catalog**:
+the name, size and SHA-256 of every font in `fonts/`, and the bytes of
+the ones it embeds. The native build embeds them all, as today; the web
+build embeds none.
+
+1. Binding accepts any catalog name, embedded or not (the error for an
+   unknown name and its suggestions are unchanged).
+2. Before drawing, the live view lists the fonts the figure uses
+   (`image.font`, every element's `font`, and, for diagrams, the
+   `-Italic` sibling ImUml uses for abstract names) and checks they are
+   available. If some are not, `set_source()` throws a
+   `fonts_needed` error naming them and keeps the previous chart.
+3. The JavaScript module catches it, fetches each missing font from
+   `<fontBaseUrl>/<name>` (default: a `fonts/` folder next to
+   `nymph-viewer.js`), registers the bytes, and retries. Fetches are
+   shared by every viewer on the page and made once per font.
+4. Registration checks the bytes against the catalog's size and SHA-256,
+   so a wrong or corrupt file is rejected, and only catalog names are
+   ever fetched: a source cannot make the viewer request an arbitrary
+   URL.
+5. A font that cannot be fetched fails that `setSource()` with a
+   `NymphError` ("font 'X' could not be loaded from <url>: 404"); the
+   previous chart stays.
+
+Registered fonts belong to the process (the module instance) and are
+added to every live view's ImGui atlas on its next update; ImGui 1.92
+bakes glyphs lazily, so an added font costs only its header until used.
+
+The native library and CLI gain the same mechanism: built with
+`NYMPH_EMBED_FONTS` limited to a subset, `render_png()` of a source
+naming a font that is neither embedded nor registered throws a
+`nymph::error` at the `font` field ("font 'X' is not embedded in this
+build; register it with register_font()"), and `nymph fonts` marks such
+fonts `(not embedded)`.
+
 ### PNG input
 
 `setPng(bytes)` calls `extract_source()`. A nymph PNG behaves like its
@@ -218,6 +265,42 @@ additions: `configure()` takes the renderer flags to set (a WebGL
 presenter without vertex offsets, below), and the frame inputs take the
 mouse state instead of always `-FLT_MAX`.
 
+### Font catalog (`src/fonts/`)
+
+```cpp
+namespace bdg::nymph {
+struct font_entry {
+  const char* name;            // "FiraSans-Regular.ttf"
+  std::size_t size;            // file size
+  uint32_t crc32;              // of the file bytes
+  const unsigned char* data;   // embedded bytes, or nullptr when not embedded
+};
+std::span<const font_entry> font_catalog();         // every font in fonts/, sorted
+
+/// Makes a non-embedded catalog font available (process-wide, thread-safe).
+/// @throws std::invalid_argument for an unknown name, or bytes whose size
+///         or SHA-256 differ from the catalog's.
+void register_font(std::string_view name, std::span<const uint8_t> bytes);
+
+/// The bytes of a catalog font if embedded or registered, else empty.
+std::span<const uint8_t> font_data(std::string_view name);
+
+/// Every font `f` draws with, sorted; and those of them without bytes.
+std::vector<std::string> fonts_used(const figure& f);
+std::vector<std::string> fonts_missing(const figure& f);
+}
+```
+
+`cmake/NymphFonts.cmake` generates the catalog: every font in
+`NYMPH_FONTS_DIR` gets an entry; only those selected by
+`NYMPH_EMBED_FONTS` get their bytes compiled in, the others are copied
+to `<build>/fonts/` (with the licence files) for hosting. Licence texts
+stay embedded in every build (a few KB). `embedded_fonts()` and
+`find_font()` become views over the catalog; `load_fonts()` adds every
+font with bytes. Registered bytes are copied and never freed, so ImGui
+can keep pointing at them (`FontDataOwnedByAtlas = false`, as for
+embedded data).
+
 ### `live_view` (`src/view/live_view.hpp/.cpp`)
 
 The heart of the project, platform-neutral, built in every configuration
@@ -247,7 +330,7 @@ struct axis_range { std::string element; int axis; double min, max; };
 class live_view {
  public:
   explicit live_view(view_options options);
-  void set_source(std::string_view source, bool reset_view = false); // throws nymph::error
+  void set_source(std::string_view source, bool reset_view = false); // throws nymph::error, fonts_needed
   void set_png(std::span<const uint8_t> png);   // throws; no nymph chunk -> has_figure() false
   void set_data(std::string_view data_yaml);    // throws nymph::error
   void resize(view_size size);
@@ -281,6 +364,10 @@ Rules:
   `reset_view`, and for a few settling frames after any of them (ImPlot
   fits one frame late; tooltips and hover fades need a frame or two).
   ImGui is told the real time between frames (`DeltaTime`), clamped.
+- **Fonts.** `set_source()`, `set_png()` and `set_data()` bind, then
+  throw `fonts_needed` (a `std::runtime_error` with the missing names)
+  before replacing the figure if `fonts_missing()` is not empty. Fonts
+  registered since the last update are added to the atlas first.
 - **Static parity.** After `set_source()` and three frames with the
   pointer outside the view, `fit: source`, pixel ratio = `image.scale`,
   the draw data equals `render_figure()`'s, so the software rasterizer
@@ -358,12 +445,15 @@ createViewer(container: HTMLElement, options?: {
   tooltips?: boolean;         // default true
   rasterizer?: "auto" | "webgl" | "software"; // default auto
   wasmUrl?: string;           // default: next to nymph-viewer.js
+  fontBaseUrl?: string;       // default: "fonts/" next to nymph-viewer.js
 }): Promise<NymphViewer>;
 
 class NymphViewer {
-  setSource(yaml: string, opts?: { resetView?: boolean }): void; // throws NymphError
-  setPng(bytes: Uint8Array): void;
-  setData(tables: object): void;                                 // throws NymphError
+  // Each resolves once the chart is shown (after fetching any fonts it
+  // needs) and rejects with NymphError, keeping the previous chart.
+  setSource(yaml: string, opts?: { resetView?: boolean }): Promise<void>;
+  setPng(bytes: Uint8Array): Promise<void>;
+  setData(tables: object): Promise<void>;
   resetView(): void;
   on(event: "hover" | "click" | "view" | "error", cb: (detail) => void): () => void;
   info(): { rasterizer: "webgl" | "software"; hasFigure: boolean;
@@ -375,6 +465,10 @@ class NymphViewer {
 class NymphError extends Error { line: number; column: number; }
 ```
 
+- **Ordering.** Updates are applied in call order: a `setData()` made
+  while an earlier `setSource()` waits for a font is applied after it.
+  When several `setData()` calls queue behind a font fetch, only the
+  last is bound.
 - **Events.** `hover` fires when the pick changes (`null` when it ends);
   `click` on a primary-button click with a pick; `view` after a pan or
   zoom settles, with every plot axis range; `error` when a deferred update
@@ -394,9 +488,11 @@ class NymphError extends Error { line: number; column: number; }
 - **Scheduling.** `requestAnimationFrame` only while some viewer
   `wants_frame()`; `ResizeObserver` for size and pixel-ratio changes;
   `IntersectionObserver` pauses viewers off screen.
-- **Hosting.** Two files, `nymph-viewer.js` and `nymph-viewer.wasm`,
-  served together (or a single-file build with the wasm inlined, about a
-  third larger, for hosts that cannot serve a second file). A page's
+- **Hosting.** `nymph-viewer.js`, `nymph-viewer.wasm` and the `fonts/`
+  folder (the font files and their licences), served together; or a
+  single-file build with the wasm inlined (about a third larger) for
+  hosts that cannot serve a second file, which then needs `fontBaseUrl`
+  or only uses the built-in font. A page's
   Content Security Policy must allow `'wasm-unsafe-eval'`.
 
 ## 6. Build
@@ -406,6 +502,10 @@ class NymphError extends Error { line: number; column: number; }
   `NYMPH_OPENGL` off (the EGL / WGL loader does not apply; WebGL comes
   from Emscripten's GL library, which is linked, unlike the native rule of
   GL DESIGN section 1, because a browser always provides it).
+- New cache variable `NYMPH_EMBED_FONTS`: `all` (default), `none`, or a
+  `;`-separated list of font file names to embed. The web build defaults
+  to `none`. Fonts not embedded are copied to `<build>/fonts/` with the
+  licence texts.
 - The CLI sources (`src/cli/`) move from the `nymph` library to a
   `nymph_cli` library used by `app/` and `test_cli`, so the web module
   does not link `std::filesystem` and the CLI.
@@ -419,7 +519,7 @@ class NymphError extends Error { line: number; column: number; }
   plots above 65,535 vertices would otherwise fail; WebGL2 draws 32-bit
   indices natively. The native build keeps 16-bit indices.
 - Output in `build/web/`: `nymph-viewer.js`, `nymph-viewer.wasm`,
-  `nymph-viewer.single.js`, and `demo/index.html`.
+  `nymph-viewer.single.js`, `fonts/`, and `demo/index.html`.
 
 ## 7. Testing Strategy
 
@@ -428,11 +528,15 @@ class NymphError extends Error { line: number; column: number; }
    `view_state()` and `reset_view()` restores it; `set_data()` keeps the
    view; picks for every element family at known pixel positions; PNG
    bytes of every example unchanged (the existing tests); ImUml pan and
-   zoom.
+   zoom; the font catalog, `register_font()` checks, `fonts_used()` and
+   `fonts_missing()`, and a `NYMPH_EMBED_FONTS=none` build rendering an
+   example once its fonts are registered, with the same bytes as the
+   full build.
 2. **Node** (when the Emscripten toolchain is configured): the built
    module with the software presenter renders every example within the
-   GL DESIGN tolerance of the committed PNGs, reports bind errors with
-   positions, and returns picks for synthetic input.
+   GL DESIGN tolerance of the committed PNGs, fetching their fonts from
+   a local folder, reports bind errors with positions, and returns picks
+   for synthetic input.
 3. **Browser** (Playwright with the preinstalled Chromium, WebGL2 through
    SwiftShader): the WebGL presenter matches the software presenter within
    tolerance; dragging a plot fires `view`; hovering a point fires `hover`
@@ -472,6 +576,13 @@ class NymphError extends Error { line: number; column: number; }
   page's own origin rules; the module only sees bytes. This keeps the
   library's "no file access in `bind()`" property and the attack surface
   of untrusted sources unchanged.
+- **Font names stay valid when bytes are absent.** Rejecting a name the
+  build does not embed would make a source's validity depend on the
+  build. Keeping one catalog in every build, and failing only when bytes
+  are missing at draw time, keeps sources portable and the error precise.
+- **Fetch in JavaScript, verify in C++.** The module stays free of I/O
+  (goal 5); the catalog's size and SHA-256 stop a wrong file from changing
+  how a chart looks.
 - **Alternatives rejected.** SVG output with JavaScript interaction (a
   second renderer that would not match the PNG); a JavaScript chart
   library fed from nymph's YAML (duplicates every element); rendering on
@@ -483,8 +594,6 @@ class NymphError extends Error { line: number; column: number; }
   window and `imgui_impl_opengl3` around the same `live_view`.
 - **Worker rendering**: run the module in a Web Worker with
   `OffscreenCanvas`, so heavy layout never blocks the host page.
-- **Fonts on demand**: embed only the default font and fetch the others
-  by name the first time a source uses them (about 2.5 MB less to load).
 - **Appending data**: `appendData(table, rows)` that extends bound
   columns in place, for feeds of large series.
 - **3D picking** through ImPlot3D's projection, **keyboard navigation**

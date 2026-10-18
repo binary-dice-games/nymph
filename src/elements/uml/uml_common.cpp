@@ -12,6 +12,7 @@
 #include "core/limits.hpp"
 #include "core/suggest.hpp"
 #include "elements/plot_style.hpp"
+#include "fonts/embedded_fonts.hpp"
 #include "render/text_style.hpp"
 
 namespace bdg::nymph::uml {
@@ -177,18 +178,10 @@ std::string px(float v) {
   return std::to_string(static_cast<long>(std::lround(v)));
 }
 
-/// The `-Italic` sibling of the current font, if one is embedded.
+/// The `-Italic` sibling of the current font, if it is loaded.
 ImFont* italic_sibling(const draw_context& dc) {
-  const std::string name(dc.font_name(ImGui::GetFont()));
-  for (const char* style : {"-Regular.", "-Bold."}) {
-    const size_t at = name.find(style);
-    if (at != std::string::npos) {
-      std::string sibling = name;
-      sibling.replace(at, std::char_traits<char>::length(style), "-Italic.");
-      return dc.font(sibling);
-    }
-  }
-  return nullptr;
+  const std::string sibling = italic_sibling_name(dc.font_name(ImGui::GetFont()));
+  return sibling.empty() ? nullptr : dc.font(sibling);
 }
 
 } // namespace
@@ -444,6 +437,15 @@ void diagram_class::arrange(const node& n, draw_context& dc, const rect& r) cons
             "), has " + px(r.width()) + " x " + px(r.height()) +
             "; enlarge the image or the diagram's space, lower min_zoom, or split the diagram");
   }
+}
+
+std::vector<std::string> diagram_class::implied_fonts(const node& n, const std::string& font) const {
+  (void)n;
+  std::string sibling = italic_sibling_name(font);
+  if (sibling.empty()) {
+    return {};
+  }
+  return {std::move(sibling)};
 }
 
 void diagram_class::draw(const node& n, draw_context& dc) const {

@@ -1,10 +1,13 @@
 # MIT License © 2026 Binary Dice Games
 #
-# nymph_embed_fonts(<target>): compiles every font in NYMPH_FONTS_DIR
-# (*.ttf, *.otf) and every licence text next to them (*.txt) into
-# <target>, so the binary needs no font files at run time. Fonts are found
-# by their file name (`font: FiraSans-Regular.ttf`); see
-# src/fonts/embedded_fonts.hpp.
+# nymph_embed_fonts(<target>): compiles the font catalog into <target>:
+# the name, size and SHA-256 of every font in NYMPH_FONTS_DIR (*.ttf,
+# *.otf), the bytes of the fonts NYMPH_EMBED_FONTS selects, and every
+# licence text next to them (*.txt). Fonts are found by their file name
+# (`font: FiraSans-Regular.ttf`); see src/fonts/embedded_fonts.hpp. Fonts
+# not embedded are copied, with the licences, to <build>/fonts/ so they
+# can be served next to the web viewer and registered at run time
+# (spec/04_web_viewer/DESIGN.md, "Fonts on demand").
 #
 # Each file becomes its own generated .cpp, rebuilt only when that file
 # changes; adding or removing a file re-runs the configure step (the glob
@@ -12,6 +15,8 @@
 
 set(NYMPH_FONTS_DIR "${PROJECT_SOURCE_DIR}/fonts" CACHE PATH
   "Directory whose *.ttf / *.otf fonts and *.txt licences are embedded into nymph")
+set(NYMPH_EMBED_FONTS "all" CACHE STRING
+  "Fonts of NYMPH_FONTS_DIR whose bytes are compiled in: all, none, or a ;-list of file names")
 
 function(nymph_embed_fonts target)
   file(GLOB fonts CONFIGURE_DEPENDS "${NYMPH_FONTS_DIR}/*.ttf" "${NYMPH_FONTS_DIR}/*.otf")
@@ -19,10 +24,30 @@ function(nymph_embed_fonts target)
   list(SORT fonts)
   list(SORT licenses)
 
+  # Which fonts get their bytes compiled in.
+  set(embed_names "")
+  set(all_names "")
+  foreach(file IN LISTS fonts)
+    get_filename_component(name "${file}" NAME)
+    list(APPEND all_names "${name}")
+  endforeach()
+  if(NYMPH_EMBED_FONTS STREQUAL "all")
+    set(embed_names ${all_names})
+  elseif(NOT NYMPH_EMBED_FONTS STREQUAL "none")
+    foreach(name IN LISTS NYMPH_EMBED_FONTS)
+      if(NOT name IN_LIST all_names)
+        message(FATAL_ERROR "nymph: NYMPH_EMBED_FONTS names '${name}', which is not a font in ${NYMPH_FONTS_DIR}")
+      endif()
+    endforeach()
+    set(embed_names ${NYMPH_EMBED_FONTS})
+  endif()
+  set(hosted_dir "${PROJECT_BINARY_DIR}/fonts")
+
   set(out_dir "${CMAKE_CURRENT_BINARY_DIR}/generated/fonts")
   file(MAKE_DIRECTORY "${out_dir}")
   set(script "${PROJECT_SOURCE_DIR}/cmake/NymphEmbedFile.cmake")
   set(declarations "")
+  set(catalog "")
   set(sources "")
 
   foreach(kind font license)
@@ -38,6 +63,18 @@ function(nymph_embed_fonts target)
       if(name MATCHES "[\"\\\\]")
         message(FATAL_ERROR "nymph: cannot embed '${name}': quotes and backslashes are not allowed in font file names")
       endif()
+      if(kind STREQUAL "font")
+        file(SIZE "${file}" font_size)
+        file(SHA256 "${file}" font_sha)
+        if(NOT name IN_LIST embed_names)
+          # Served next to the web viewer instead; fetched on demand.
+          configure_file("${file}" "${hosted_dir}/${name}" COPYONLY)
+          string(APPEND catalog "      {\"${name}\", ${font_size}, \"${font_sha}\", nullptr},\n")
+          continue()
+        endif()
+      else()
+        configure_file("${file}" "${hosted_dir}/${name}" COPYONLY)
+      endif()
       set(symbol "${kind}_${index}")
       set(source "${out_dir}/${symbol}.cpp")
       add_custom_command(
@@ -50,9 +87,12 @@ function(nymph_embed_fonts target)
       string(APPEND declarations
         "extern const unsigned char ${symbol}[];\nextern const std::size_t ${symbol}_size;\n")
       string(APPEND entries_${kind} "      {\"${name}\", ${symbol}, ${symbol}_size},\n")
+      if(kind STREQUAL "font")
+        string(APPEND catalog "      {\"${name}\", ${font_size}, \"${font_sha}\", ${symbol}},\n")
+      endif()
       math(EXPR index "${index} + 1")
     endforeach()
-    list(LENGTH files count_${kind})
+    set(count_${kind} ${index})
   endforeach()
 
   # The lookup table. Written only when its text changes, so a configure
@@ -69,6 +109,13 @@ function(nymph_embed_fonts target)
       string(APPEND table "  static const embedded_file files[] = {\n${entries_${kind}}  };\n  return files;\n}\n\n")
     endif()
   endforeach()
+  string(APPEND table "std::span<const font_entry> font_catalog() {\n")
+  if(all_names)
+    string(APPEND table "  using namespace embedded;\n")
+    string(APPEND table "  static const font_entry entries[] = {\n${catalog}  };\n  return entries;\n}\n\n")
+  else()
+    string(APPEND table "  return {};\n}\n\n")
+  endif()
   string(APPEND table "} // namespace bdg::nymph\n")
   file(WRITE "${out_dir}/embedded_table.cpp.in" "${table}")
   configure_file("${out_dir}/embedded_table.cpp.in" "${out_dir}/embedded_table.cpp" COPYONLY)

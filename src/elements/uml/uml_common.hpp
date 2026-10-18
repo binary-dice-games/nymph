@@ -112,6 +112,8 @@ class diagram_class : public element_class {
   /// @throws nymph::error when the diagram needs a zoom below `min_zoom` to fit.
   void arrange(const node& n, draw_context& dc, const rect& r) const override;
   void draw(const node& n, draw_context& dc) const override;
+  /// @brief The `-Italic` sibling of `font`, used for abstract names.
+  std::vector<std::string> implied_fonts(const node& n, const std::string& font) const override;
 
  protected:
   /// @brief The diagram's own rules (edge kinds, UML constraints), after

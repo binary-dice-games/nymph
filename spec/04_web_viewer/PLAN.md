@@ -12,13 +12,18 @@ every committed example PNG must not change. Native tests are GoogleTest
 files in `tests/`, added with `nymph_add_test()`.
 
 Web steps need the Emscripten SDK (`emcmake`); their tests are registered
-with CTest only in a `NYMPH_WEB` build and run with Node (step 8 on) and
-Playwright with the preinstalled Chromium (steps 9 and 10). Each web
+with CTest only in a `NYMPH_WEB` build and run with Node (step 9 on) and
+Playwright with the preinstalled Chromium (steps 10 and 11). Each web
 step records the Emscripten version it was verified with.
 
 ## Steps
 
 ### 1. Split the CLI and share the frame setup
+
+*Result: done.* `src/render/frame_setup.hpp/.cpp` and `nymph_cli`.
+`set_frame_inputs()` (fixed clock, no mouse) stayed in
+`figure_renderer.cpp`: it is the PNG path's own input, and the live view
+feeds ImGui events instead. All 340 existing tests pass unmodified.
 
 **Goal:** `render_frames()` and a future live view share one frame setup,
 and the `nymph` library no longer contains the command line; nothing
@@ -27,10 +32,8 @@ changes for users.
 **Deliverables:**
 - `src/render/frame_setup.hpp/.cpp` (internal): the context scope,
   theme table, `check_options()`, `configure()`, `load_fonts()`,
-  `image_text_style()` and `set_frame_inputs()` moved from
-  `figure_renderer.cpp`. `configure()` takes the backend flags to set;
-  `set_frame_inputs()` takes a mouse position (the PNG path passes
-  `-FLT_MAX`).
+  and `image_text_style()` moved from `figure_renderer.cpp`.
+  `configure()` takes the backend flags to set.
 - `src/render/figure_renderer.cpp`: uses them; behaviour unchanged.
 - `src/CMakeLists.txt`: `src/cli/` sources move to a new static library
   `nymph_cli` (links `nymph`); `app/CMakeLists.txt` and the `test_cli`
@@ -40,7 +43,60 @@ changes for users.
 - All existing tests pass unmodified, including the byte-exact example
   renders in `test_docs`.
 
-### 2. `live_view` with static parity
+### 2. Font catalog and fonts on demand
+
+*Result: done.* SHA-256 instead of CRC-32 (CMake's `file(SHA256)`
+computes it at configure time; CMake has no CRC-32), with nymph's own
+`src/core/sha256.cpp`. Instead of compiling the library a second time
+with no fonts, the tests use a hook (`fonts/font_testing.hpp`,
+`hide_embedded_fonts_for_testing()`) that makes the default build behave
+like `NYMPH_EMBED_FONTS=none`; a real `none` build was checked by hand
+(`nymph fonts` marks every font, the line example renders byte for byte,
+the fonts example fails at `image.font`). `register_font()` is also
+declared in `nymph.hpp`. 11 tests in `test_fonts_on_demand.cpp`; 351
+tests pass.
+
+**Goal:** every build knows every font name, a build can embed a subset
+of the fonts, and the missing ones can be registered at run time with
+their bytes checked; the default build is unchanged.
+
+**Deliverables:**
+- `cmake/NymphFonts.cmake`: cache variable `NYMPH_EMBED_FONTS` (`all`
+  default, `none`, or a `;` list of file names; an unknown name is a
+  configure error). The generated table holds every font's name, size and
+  SHA-256 and, for embedded ones, its bytes; fonts not embedded are copied
+  with the licence texts to `<build>/fonts/`.
+- `src/fonts/embedded_fonts.hpp`, `fonts.cpp`: `font_entry`,
+  `font_catalog()`, `register_font()`, `font_data()`; `find_font()` and
+  `check_font_name()` work on the catalog; `embedded_fonts()` returns
+  the embedded entries only.
+- `src/fonts/fonts_used.hpp/.cpp`: `fonts_used(figure)` (with the
+  `-Italic` siblings of fonts used inside diagrams) and
+  `fonts_missing(figure)`.
+- `src/render/figure_renderer.cpp`: `load_fonts()` adds every font with
+  bytes; `render_figure()` throws `nymph::error` at the `font` field
+  (or `image.font`) of the first element naming a font without bytes.
+- `src/cli/cli.cpp`: `nymph fonts` marks fonts `(not embedded)`.
+- `src/fonts/font_testing.hpp`: `hide_embedded_fonts_for_testing()`, so
+  tests can run the on-demand path in the default build.
+- `docs/building.md`, `fonts/README.md`: the option.
+
+**Tests** (`tests/test_fonts_on_demand.cpp`):
+- The catalog lists every file in `fonts/`, sorted, with the right size
+  and SHA-256; in the default build every entry has bytes.
+- `register_font()` rejects an unknown name, a wrong size and a wrong
+  SHA-256, and accepts the right bytes; registering twice is harmless.
+- `fonts_used()` of `examples/fonts.yaml` lists its fonts; a class
+  diagram drawn in `FiraSans-Regular.ttf` also lists
+  `FiraSans-Italic.ttf`.
+- With embedded fonts hidden: binding a source naming `FiraSans-Bold.ttf`
+  succeeds; `render_png()` throws a positioned `nymph::error` naming the
+  font; after registering the file's bytes, it gives the same bytes as
+  the committed `examples/fonts.png`. A source using only the default
+  font renders without registering anything.
+- All existing tests pass unmodified.
+
+### 3. `live_view` with static parity
 
 **Goal:** a `live_view` keeps its contexts across frames, runs frames on
 demand at a given size and pixel ratio, and with no input draws exactly
@@ -64,6 +120,10 @@ what `render_figure()` draws.
   once the settling frames have run; `frame()` then returns nullptr.
 - A bind error throws `nymph::error` with its position and keeps the
   previous figure (`has_figure()` stays true, the next frame draws it).
+- In the no-fonts build, a source naming an unregistered font throws
+  `fonts_needed` listing it and keeps the previous figure; after
+  `register_font()` the same `set_source()` succeeds and the font is
+  drawn.
 - `fit: width` at half the source width lays the root out at half width
   (rectangles from the frame); a box too small for the layout falls back
   to the source size.
@@ -71,7 +131,7 @@ what `render_figure()` draws.
   other's output; the contexts current before each call are current
   after it.
 
-### 3. Pointer input, axis limits and view state
+### 4. Pointer input, axis limits and view state
 
 **Goal:** plots pan and zoom under synthetic pointer input in a live view,
 the view can be reset and read back, and PNG output is unchanged.
@@ -99,7 +159,7 @@ the view can be reset and read back, and PNG output is unchanged.
 - A Gantt chart pans in time; its rows do not move.
 - All PNG tests pass unmodified.
 
-### 4. Picks and tooltips for XY series
+### 5. Picks and tooltips for XY series
 
 **Goal:** hovering a data point of a 2D series reports it and shows a
 tooltip, in a live view only.
@@ -123,7 +183,7 @@ tooltip, in a live view only.
   (draw data equal to a frame without the pointer).
 - A hidden series (legend click) is not picked.
 
-### 5. Picks for bars, cells, slices, Gantt and Sankey
+### 6. Picks for bars, cells, slices, Gantt and Sankey
 
 **Goal:** every 2D element family in DESIGN.md section 3 reports what is
 under the pointer.
@@ -139,7 +199,7 @@ under the pointer.
   slice, task, node and flow gives the documented payload; in a gap,
   none.
 
-### 6. Pan, zoom and picks in diagrams
+### 7. Pan, zoom and picks in diagrams
 
 **Goal:** UML diagrams and flowcharts pan, zoom around the pointer and
 report the hovered node or edge, only when interactive.
@@ -163,7 +223,7 @@ report the hovered node or edge, only when interactive.
   restores the fit; zoom stays within its clamp.
 - The pointer over a class box gives its id; over an edge, its two ends.
 
-### 7. Data updates and PNG input
+### 8. Data updates and PNG input
 
 **Goal:** a live view replaces its data from JSON and opens nymph PNGs.
 
@@ -184,7 +244,7 @@ report the hovered node or edge, only when interactive.
   PNG without a nymph chunk leaves `has_figure()` false; a corrupt PNG
   throws.
 
-### 8. Emscripten build with the software presenter
+### 9. Emscripten build with the software presenter
 
 **Goal:** `NYMPH_WEB` builds `nymph-viewer.wasm` and a minimal JS loader,
 and Node can drive a viewer end to end on the CPU.
@@ -208,9 +268,12 @@ and Node can drive a viewer end to end on the CPU.
 - A bad source throws `NymphError` with the same line, column and message
   as the native library.
 - A synthetic hover over a known point returns its pick.
-- The gzip size of `nymph-viewer.wasm` is at most 2.5 MB.
+- `examples/fonts.yaml` renders after the loader fetches its fonts from
+  `<build>/fonts/` (a file-system fetch in Node), and a font file with
+  one byte changed is rejected.
+- The gzip size of `nymph-viewer.wasm` is at most 1.5 MB.
 
-### 9. WebGL2 presenter
+### 10. WebGL2 presenter
 
 **Goal:** viewers draw through one shared WebGL2 context and match the
 software presenter.
@@ -232,7 +295,7 @@ software presenter.
 - `rasterizer: "software"` and a page without WebGL2 both draw with the
   software presenter.
 
-### 10. Browser input, scheduling and the custom element
+### 11. Browser input, scheduling and the custom element
 
 **Goal:** a person can pan, zoom and hover in the browser, viewers go idle
 when untouched, and `<nymph-viewer>` works from a tag.
@@ -247,6 +310,9 @@ when untouched, and `<nymph-viewer>` works from a tag.
 - `web/js/nymph-viewer-element.js` (bundled in the module):
   `<nymph-viewer>` with `src`, inline YAML text, `fit`, `theme`,
   `tooltips`, DOM events, error text in the box.
+- Font fetching: `fontBaseUrl`, one fetch per font shared by all
+  viewers, retry of the update after registration, queued updates in
+  call order.
 
 **Tests** (`web/tests/browser/`):
 - Dragging across a plot fires `view` with moved ranges; the wheel over
@@ -260,10 +326,12 @@ when untouched, and `<nymph-viewer>` works from a tag.
 - `toPng()` returns a PNG whose `extract_source()` equals the current
   source with its data.
 - `theme="auto"` follows an emulated `prefers-color-scheme` change.
+- Two viewers using the same font make one request for it; a 404 font
+  rejects `setSource()` with the URL and keeps the previous chart.
 - A viewer resized from 800 to 400 px wide with `fit="width"` lays out
   again at 400.
 
-### 11. Packaging, documentation and close
+### 12. Packaging, documentation and close
 
 **Goal:** the viewer ships as documented files, and every document
 matches the code.
@@ -294,8 +362,9 @@ matches the code.
 - [ ] Plots, Gantt charts and diagrams pan and zoom; 3D plots rotate;
       every 2D element family and diagrams report picks, natively and in
       the browser.
-- [ ] `nymph-viewer.wasm` builds with Emscripten, is at most 2.5 MB
-      gzip, and its Node and Playwright tests pass.
+- [ ] `nymph-viewer.wasm` builds with Emscripten, embeds no font file,
+      is at most 1.5 MB gzip, fetches only the fonts a chart uses, and its
+      Node and Playwright tests pass.
 - [ ] WebGL2 output matches the software presenter within tolerance;
       a page with twenty viewers uses one WebGL context and no frames
       while idle.
