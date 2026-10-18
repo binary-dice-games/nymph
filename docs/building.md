@@ -204,7 +204,9 @@ libEGL reliably; the software rasterizer draws an example in well under
 0.1 s), with MinGW it links the GCC runtime statically, and with MSVC it
 uses the static runtime (`/MT`). Its tests also check that the Linux
 executable is static and that it reproduces every example PNG byte for
-byte.
+byte (exactly on x86-64, where they were drawn; on arm64 floating-point
+results differ by a colour level at some pixels, and the test lists
+those examples).
 
 Cross builds use the toolchain files in `cmake/toolchains/`; their tests
 run through an emulator when one is installed (Wine for Windows, QEMU for

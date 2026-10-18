@@ -295,6 +295,31 @@ section 4.4 describes.
 
 ### 7. Release builds
 
+*Result: done; native MSVC not verified (no MSVC here).* Built from Linux
+with GCC 13 (x86-64), MinGW-w64 GCC 13 (POSIX threads) and
+aarch64-linux-gnu GCC 13, each with the App embedded:
+
+| Executable | Size | gzip | Tests |
+|---|---|---|---|
+| `nymph-0.1.0-linux-x86_64` | 13.6 MB | 4.7 MB | all 461 pass; static; 24 examples byte for byte |
+| `nymph-0.1.0-windows-x86_64.exe` | 12.3 MB | 4.0 MB | all 478 pass under Wine 9 with a virtual X server (`xvfb-run`); 24 examples byte for byte |
+| `nymph-0.1.0-linux-arm64` | 13.1 MB | 4.4 MB | all 461 pass under QEMU; static; 13 of 24 examples not byte-identical |
+
+The arm64 differences are floating point: one colour level at a few
+pixels, and in `flowchart` a one-pixel shift of the layout (2.5 % of the
+pixels, invisible side by side). `-ffp-contract=off` fixed only `gantt`,
+so most of it is not FMA but the C library's maths; not pursued. The
+promise stays as documented, "the same bytes for the same source and
+nymph build on every machine", so the examples test is exact on x86-64
+only and lists the differences elsewhere; `render_chart`'s description
+now says "for one nymph build". Without a display, Wine reports the
+OpenGL probe's window error differently on two calls (0, then 6), which
+fails `cli.RasterizersReportsWhatIsAvailable`; with `xvfb-run` it passes,
+as in spec 02. The OpenGL linkage check now accepts a fully static ELF
+(no dynamic section). Tests: `nymph_release_static`,
+`nymph_release_examples`, and `test_mcp_process` checks the App resource
+when it is embedded and runs through the toolchain's emulator.
+
 **Goal:** one command produces the static executables with the App
 embedded and their SHA-256 sums.
 

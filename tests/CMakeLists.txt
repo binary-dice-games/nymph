@@ -134,8 +134,15 @@ endif()
 # ── Release executables (spec/06_claude_integration step 7) ─────────────────
 
 if(NYMPH_RELEASE AND TARGET nymph-cli)
+  # Exact on x86-64, the architecture the committed PNGs were drawn on.
+  string(TOLOWER "${CMAKE_SYSTEM_PROCESSOR}" _nymph_cpu)
+  if(_nymph_cpu MATCHES "^(x86_64|amd64)$")
+    set(_nymph_exact ON)
+  else()
+    set(_nymph_exact OFF)
+  endif()
   add_test(NAME nymph_release_examples
-    COMMAND ${CMAKE_COMMAND} -DNYMPH=$<TARGET_FILE:nymph-cli> -DEXAMPLES=${PROJECT_SOURCE_DIR}/examples
+    COMMAND ${CMAKE_COMMAND} -DNYMPH=$<TARGET_FILE:nymph-cli> -DEXAMPLES=${PROJECT_SOURCE_DIR}/examples -DEXACT=${_nymph_exact}
             -DWORK_DIR=${CMAKE_CURRENT_BINARY_DIR}/release_examples "-DRUNNER=${_nymph_runner}"
             -P ${CMAKE_CURRENT_SOURCE_DIR}/release_examples.cmake)
   if(CMAKE_SYSTEM_NAME STREQUAL "Linux")

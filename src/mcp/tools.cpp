@@ -383,7 +383,8 @@ void add_builtin_tools(tool_registry& registry) {
       {"type", "string"},
       {"enum", {"software", "opengl"}},
       {"description",
-       "software: byte-identical on every machine. opengl: the GPU when there is one (falls back to software). "
+       "software: the same bytes on every machine for one nymph build. opengl: the GPU when there is one (falls back to "
+       "software). "
        "Default: the server's."}};
   registry.add(
       {{{"name", "render_chart"},

@@ -389,7 +389,10 @@ fails, 2 for bad arguments (`docs/cli.md` gains the row).
   (`.exe` on Windows; `os` linux / windows / macos, `arch` x86_64 /
   arm64; `NYMPH_DIST_NAME` overrides) and writes `<build>/dist/SHA256SUMS`
   in `sha256sum` format (`cmake/NymphChecksums.cmake`), over every file
-  of `dist/`. The package targets of steps 8 to 10 (`nymph-mcpb`,
+  of `dist/`. Byte-identical output holds per build: arm64 differs from
+  x86-64 by a colour level at some pixels (PLAN step 7), so the release
+  test of the examples is exact on x86-64 only. The package targets of
+  steps 8 to 10 (`nymph-mcpb`,
   `nymph-skill`, `nymph-plugin-sync`, which copies `SKILL.md` and
   `reference.md` and writes `checksums.txt` into `claude/plugin/`) put
   their files in `dist/` too. A release without `NYMPH_MCP_VIEWER` warns.
