@@ -16,9 +16,11 @@ The [Chrome extension](docs/extension.md) does it on any page you read:
 nymph PNGs on GitHub or any site become live charts of the same size.
 
 It started as wish's `nymph` module and is now standalone, with no wish or
-bison dependency (and no compatibility with wish's format). **Status: first
-version complete on Linux**; MSYS2 and MSVC builds are not yet verified
-(see [spec/01_core_features](spec/01_core_features/PLAN.md)).
+bison dependency (and no compatibility with wish's format). **Status:**
+verified on Linux. CI builds and tests Linux, macOS and Windows (MSVC,
+MSYS2) on every pull request and a tag push publishes a release
+([docs/releasing.md](docs/releasing.md)); macOS and Windows have not yet
+passed there ([spec/07_release_pipeline](spec/07_release_pipeline/PLAN.md)).
 
 <img src="examples/dashboard.png" alt="A nymph layout: two line plots and a pie chart under a heading" width="600"/>
 
@@ -28,12 +30,29 @@ conversation: in Claude Code,
 `/plugin install nymph --marketplace binary-dice-games/nymph`; Claude
 Desktop and claude.ai in [docs/claude.md](docs/claude.md).
 
+## Install
+
+From a published release:
+
+```sh
+brew install binary-dice-games/nymph/nymph       # macOS, Linux (Homebrew)
+curl -fsSL https://github.com/binary-dice-games/nymph/releases/latest/download/install.sh | sh
+irm https://github.com/binary-dice-games/nymph/releases/latest/download/install.ps1 | iex   # Windows
+```
+
+The scripts install the release executable for your system (checked
+against the release's SHA-256 sums) and put it on your `PATH`. Where
+third-party binaries are not allowed, build the release's
+`nymph-<version>-src.tar.gz`, which carries every dependency and builds
+offline ([docs/building.md](docs/building.md#from-the-source-tarball)).
+
 ## Quick Build
 
 ```sh
 cmake -S . -B build
 cmake --build build
 ctest --test-dir build
+cmake --install build      # puts nymph on your PATH
 ```
 
 See [docs/building.md](docs/building.md) for prerequisites, CMake options,
@@ -98,6 +117,8 @@ carries its source: `bdg::nymph::extract_source(png)` returns it.
 | `cmake/` | CMake helper modules |
 | `docs/` | Detailed documentation |
 | `spec/` | Design and plan of each project, one numbered folder per project ([INDEX.md](spec/INDEX.md)) |
+| `packaging/` | Install scripts (`install.sh`, `install.ps1`), the Homebrew formula template and the Chrome Web Store upload |
+| `.github/` | CI and release workflows and their scripts |
 | `extern/` | Third-party dependencies (git submodules) |
 
 ## Core Concepts
@@ -127,6 +148,7 @@ carries its source: `bdg::nymph::extract_source(png)` returns it.
 | [docs/examples.md](docs/examples.md) | The example charts with their sources and images |
 | [docs/viewer.md](docs/viewer.md) | The web viewer: files, embedding, JavaScript API, events, interaction |
 | [docs/extension.md](docs/extension.md) | The Chrome extension: install, the toolbar button, sites, privacy, limits |
+| [docs/releasing.md](docs/releasing.md) | Publishing a release from a tag: the workflow, the release files, one-time setup of each channel |
 | [spec/INDEX.md](spec/INDEX.md) | Index of the project specifications (one folder per project, with its DESIGN.md and PLAN.md) |
 | [spec/01_core_features/DESIGN.md](spec/01_core_features/DESIGN.md) | Architecture, source format, key abstractions, design decisions |
 | [spec/01_core_features/PLAN.md](spec/01_core_features/PLAN.md) | Ordered implementation steps and their tests |

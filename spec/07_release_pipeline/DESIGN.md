@@ -1,6 +1,11 @@
 # nymph — Release Pipeline: Design
 
-**Status: design; nothing implemented yet.** [PLAN.md](PLAN.md) is the
+**Status: implemented (plan steps 1-9 in code; step 10, the first real
+release, waits on the owner's setup). Verified on Linux only: everything
+that runs on Linux passes there, including the source tarball built
+offline. The workflows have not run on GitHub yet, so macOS, Windows,
+Homebrew and the Chrome Web Store are untested; see [PLAN.md](PLAN.md)
+for each step's result.** [PLAN.md](PLAN.md) is the
 ordered implementation plan. This document describes only what this
 project adds or changes; the rest is
 [spec/01_core_features/DESIGN.md](../01_core_features/DESIGN.md)
@@ -62,17 +67,21 @@ New and changed files:
 
 | Path | What |
 |---|---|
-| `.github/workflows/build.yml` | Reusable: build and test one target (CI and release share it) |
+| `.github/workflows/build.yml` | Reusable: set up a runner, build and test one target (CI and release share it) |
+| `.github/workflows/source.yml` | Reusable: the source tarball, then its offline build |
 | `.github/workflows/ci.yml` | Build and test every target on pull requests and `main` |
 | `.github/workflows/release.yml` | The release, from a `v*` tag |
-| `CMakeLists.txt`, `cmake/NymphInstall.cmake` | `install()` rules, `NYMPH_INSTALL` and `NYMPH_INSTALL_UPDATE_PATH` options, Windows default prefix, missing-`extern/` error |
+| `.github/scripts/` | `ci-build.sh` (configure, build, test, `PATH` check), `release-check.sh` (tag, version, notes), `release-assemble.sh` (the release files), `homebrew-formula.sh`, `release-verify.sh` |
+| `CMakeLists.txt`, `cmake/NymphInstall.cmake`, `cmake/NymphInstallPath.cmake` | `install()` rules, `NYMPH_INSTALL` and `NYMPH_INSTALL_UPDATE_PATH` options, Windows default prefix, the install-time `PATH` step, missing-`extern/` error, macOS defaults |
+| `src/core/charconv.*` | `from_chars_double()`: `std::from_chars` for `double`, with a portable fallback for Apple's libc++ |
+| `app/CMakeLists.txt` | macOS release: strip and sign after the link (`NYMPH_CODESIGN_IDENTITY`) |
 | `packaging/install/install.sh`, `install.ps1` | Install the release executable and put it on `PATH`; also called by `cmake --install` for `PATH` only |
 | `cmake/NymphRelease.cmake` | macOS release flags; `nymph-dist` on macOS |
 | `cmake/NymphSourceDist.cmake` | Script mode: the source tarball |
 | `cmake/NymphPluginSync.cmake` | Plugin version follows the pinned release (section 4.5) |
 | `packaging/homebrew/nymph.rb.in` | The formula template |
 | `packaging/chrome/publish.sh` | Chrome Web Store upload and publish |
-| `tests/` | Install, linkage (macOS), source tarball tests |
+| `tests/` | `install_check.cmake`, `install_subproject.cmake`, `install_script.sh` / `.ps1`, `release_linkage.cmake` (was `release_static.cmake`), `source_dist_check.cmake`, `plugin_sync_versions.cmake`, `chrome_publish_test.mjs`, `test_charconv.cpp` |
 | `docs/building.md`, `docs/releasing.md` (new), `docs/extension.md`, `docs/claude.md`, `README.md`, `CLAUDE.md` | macOS, installing, releasing |
 
 ## 2. Design Goals
@@ -244,11 +253,14 @@ CI checks the pin, and the history shows each pin.
   links `nymph` onto `PATH` itself); `cmake --install`. Its `test do` renders a
   chart and reads its source back. The same formula works with Homebrew
   on Linux.
-- `packaging/homebrew/nymph.rb.in` in this repository is the template;
-  the `homebrew` job fills version and SHA-256s, runs
+- `packaging/homebrew/nymph.rb.in` in this repository is the template,
+  filled by `.github/scripts/homebrew-formula.sh` from the release's
+  `SHA256SUMS`. The `homebrew-test` job fills it with `file://` URLs of
+  the release files (so it works while downloads are private) and runs
   `brew install --build-from-source`, `brew test` and
-  `brew audit --strict` on macOS arm64 and Linux, then pushes the
-  formula to the tap's default branch.
+  `brew audit --strict` from a local tap on macOS arm64 and Linux; the
+  `homebrew` job then fills it with the release URLs and pushes it to the
+  tap's default branch.
 
 ### 4.7 Chrome Web Store
 
@@ -256,10 +268,14 @@ CI checks the pin, and the history shows each pin.
   (`CHROME_EXTENSION_ID` repository variable) and publishes it, which
   submits it for review; the store releases it when review passes
   (`<all_urls>` host access means an in-depth review: days, not hours).
-- `packaging/chrome/publish.sh` calls the Chrome Web Store API with
-  curl (upload, check the upload state, publish); credentials come from
-  secrets. It fails when the store refuses the upload or the version is
-  not newer than the published one.
+- `packaging/chrome/publish.sh` calls the Chrome Web Store API v2 with
+  curl: an access token from the OAuth refresh token, `:upload` to
+  `publishers/<CHROME_PUBLISHER_ID>/items/<CHROME_EXTENSION_ID>`,
+  `:fetchStatus` while the upload is in progress, then `:publish`. It
+  fails when the store refuses the upload; a refusal because the store
+  already has the version is success (a re-run). It never prints a
+  credential. The endpoints are settable for its stub test; that the
+  real API matches is checked on the first release (PLAN step 8).
 - The item, its listing, screenshots, privacy answers and the
   `<all_urls>` justification are created by hand once
   (docs/releasing.md); the workflow only updates the package.
@@ -267,16 +283,27 @@ CI checks the pin, and the history shows each pin.
 ### 4.8 macOS target
 
 - Builds with AppleClang (Xcode on the runner), C++20,
-  `CMAKE_OSX_DEPLOYMENT_TARGET` default 13.0 (lowered if every test
-  passes on an older one; PLAN step 2 measures).
+  `CMAKE_OSX_DEPLOYMENT_TARGET` default 13.3 (below; `MACOSX_DEPLOYMENT_TARGET`
+  in the environment wins, as Homebrew sets it).
 - `NYMPH_OPENGL` defaults OFF on macOS (decision 4). `nymph rasterizers`
   then says "nymph was built without OpenGL support"; the CLI's default
   `--rasterizer opengl` falls back silently, as on any machine without
   OpenGL (GL DESIGN).
+- Apple's libc++ lacks `std::from_chars` for `double` (and has
+  `std::to_chars` for `double` only from macOS 13.3, hence the 13.3
+  default). `from_chars_double()` (`src/core/charconv.hpp`) uses the
+  standard overload when a configure check finds it
+  (`NYMPH_HAS_FLOAT_FROM_CHARS`) and otherwise a portable parser with
+  the same results: a scanner for `from_chars`'s grammar, then a
+  classic-locale stream conversion. The fallback is built and tested on
+  every platform.
 - `NYMPH_RELEASE` on macOS: MinSizeRel, `-Wl,-dead_strip`, no `-static`
   (Apple supports no static executables), stripped with `strip -x`
-  after link, then signed ad hoc (`codesign -s -`; arm64 runs no
-  unsigned code, and `strip` invalidates the linker's signature). The
+  after link, then signed (`codesign`; arm64 runs no unsigned code, and
+  `strip` invalidates the linker's signature): ad hoc by default, or
+  with the Developer ID that `NYMPH_CODESIGN_IDENTITY` names (hardened
+  runtime, timestamp), as the release workflow sets when the Apple
+  secrets exist. The
   executable links only `/usr/lib/libSystem.B.dylib` and
   `/usr/lib/libc++.1.dylib`, both part of macOS; the release linkage
   test checks that list with `otool -L`, as `release_linkage` checks the
@@ -313,11 +340,15 @@ The `PATH` step, for a folder `<bin>`:
    `[Environment]::SetEnvironmentVariable(..., 'User')`, which tells
    running programs the environment changed). Never the machine `Path`.
 3. **Linux, macOS**: a block between `# >>> nymph >>>` and
-   `# <<< nymph <<<` that prepends `<bin>` to `PATH` is added to the
-   login file of the user's shell (`$SHELL`): `~/.zprofile` for zsh,
-   `~/.bash_profile` when it exists else `~/.profile` for bash and sh;
-   for fish, `fish_add_path -U <bin>` is run. Another shell gets the
-   line printed, not written.
+   `# <<< nymph <<<` that prepends `<bin>` to `PATH` is written, as
+   rustup does, to `~/.profile` (login shells, desktop sessions),
+   `~/.bash_profile` when it exists (bash then skips `~/.profile`),
+   `~/.bashrc` for bash users or when it exists (interactive non-login
+   bash) and `$ZDOTDIR/.zshenv` for zsh users or when `~/.zshrc` exists
+   (every zsh, login or not; macOS' `path_helper` keeps the entry). For
+   fish, `fish_add_path -U <bin>` is run (the folder is made first:
+   fish skips a missing one). An older block is replaced, so one file
+   never has two.
 4. Run as root (`sudo cmake --install` into a prefix not on `PATH`), no
    file is written: root's profile is not the user's. The line to add
    is printed.
@@ -325,7 +356,9 @@ The `PATH` step, for a folder `<bin>`:
    process cannot change its parent's environment).
 
 Running it twice changes nothing (the block or the `Path` entry is
-found). `install.sh --uninstall` / `install.ps1 -Uninstall` removes the
+found). Two test-only overrides keep tests off the real machine:
+`NYMPH_PATH_STORE` (a file standing in for the user `Path`) and
+`NYMPH_INSTALL_UID` (the user id the root check sees). `install.sh --uninstall` / `install.ps1 -Uninstall` removes the
 executable it installed, the block or the `Path` entry; the copy in
 `<prefix>/share/nymph/` does the same for a CMake install (removing the
 `PATH` entry; CMake has no uninstall of files). `NYMPH_NO_MODIFY_PATH=1`
@@ -365,9 +398,10 @@ release ───────────── universal macOS .mcpb, one SHA25
   └─► chrome ──────── upload and publish to the Web Store
   │
   ▼
-verify ────────────── on linux, macOS, windows: the plugin launcher (with
-                      the new checksums) downloads and runs the release;
-                      brew installs from the tap and runs `nymph --version`
+verify ────────────── on linux, macOS, windows, from the release files:
+                      install.sh (and install.ps1) install, a new console
+                      finds nymph, the plugin launcher pinned to the new
+                      SHA256SUMS downloads, checks and runs it
 ```
 
 A failed channel job does not undo the release or the other channels;
@@ -405,7 +439,7 @@ secret is missing is skipped with a warning, as wish's APT publish is):
 |---|---|---|
 | `NYMPH_RELEASE_TOKEN` | secret: token with contents and pull-request write on this repository | plugin pull request (one made with `GITHUB_TOKEN` starts no CI) |
 | `HOMEBREW_TAP_TOKEN` | secret: contents write on the tap | homebrew |
-| `CHROME_EXTENSION_ID` | variable | chrome |
+| `CHROME_EXTENSION_ID`, `CHROME_PUBLISHER_ID` | variables | chrome |
 | `CHROME_CLIENT_ID`, `CHROME_CLIENT_SECRET`, `CHROME_REFRESH_TOKEN` | secrets | chrome |
 | `APPLE_CERTIFICATE_P12`, `APPLE_CERTIFICATE_PASSWORD`, `APPLE_API_KEY`, `APPLE_API_KEY_ID`, `APPLE_API_ISSUER` | secrets | macOS signing and notarization |
 

@@ -2,12 +2,12 @@
 /// @file test_charconv.cpp
 /// @brief from_chars_double() and its fallback parse like std::from_chars
 ///        (spec/07_release_pipeline/PLAN.md step 2).
-#include "core/charconv.hpp"
 #include <gtest/gtest.h>
 #include <cmath>
 #include <cstring>
 #include <string>
 #include <system_error>
+#include "core/charconv.hpp"
 
 using namespace bdg::nymph;
 
@@ -40,8 +40,22 @@ parsed parse_selected(const std::string& text) {
 // ── Numbers ─────────────────────────────────────────────────────────────────
 
 TEST(charconv, ParsesPlainNumbersExactly) {
-  for (const char* text : {"0", "1", "-1", "1.5", "-0.25", ".5", "5.", "1e3", "1E-3", "2.5e+10", "123456789012345678",
-                           "0.1", "3.141592653589793", "1.7976931348623157e308", "2.2250738585072014e-308"}) {
+  for (const char* text :
+       {"0",
+        "1",
+        "-1",
+        "1.5",
+        "-0.25",
+        ".5",
+        "5.",
+        "1e3",
+        "1E-3",
+        "2.5e+10",
+        "123456789012345678",
+        "0.1",
+        "3.141592653589793",
+        "1.7976931348623157e308",
+        "2.2250738585072014e-308"}) {
     const parsed p = parse_fallback(text);
     EXPECT_EQ(p.ec, std::errc{}) << text;
     EXPECT_EQ(p.length, std::strlen(text)) << text;

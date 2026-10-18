@@ -17,6 +17,17 @@ tool versions it was verified with.
 
 ### 1. CI for the existing targets
 
+*Result: written, not yet run.* `build.yml` takes `target`, `runner`,
+`release`, `build_type` and `path_check` (the App page comes from the
+`build-web` artifact, not an input); the steps call
+`.github/scripts/ci-build.sh`, which runs locally (Linux: 491 tests
+pass, and the real-install `PATH` check). `source.yml` holds the source
+job. All workflows pass `actionlint` (with shellcheck); actions are
+pinned to commits (checkout v7.0.1, upload-artifact v7.0.2,
+download-artifact v8.0.2, setup-node v7.1.0, setup-msys2 v2.33.0,
+msvc-dev-cmd v1.13.0). Open: the first run on GitHub, and the MSVC and
+MSYS2 fixes it will reveal (needs a pull request).
+
 **Goal:** every pull request builds and tests nymph on Linux x86-64 and
 arm64, Windows (MSVC and MSYS2) and the web, and fails when any of them
 fails.
@@ -45,6 +56,20 @@ fails.
   dropped).
 
 ### 2. macOS target
+
+*Result: written, verified on Linux only.* Found while preparing it:
+Apple's libc++ has no `std::from_chars` for `double`, used by the YAML
+and table parsers; `src/core/charconv.*` adds `from_chars_double()`
+with a configure check and a portable fallback (`test_charconv`, run on
+every platform, compares it with the standard one). `std::to_chars` for
+`double` needs macOS 13.3, so the default deployment target is 13.3,
+not 13.0. The release post-link strip and sign live in
+`app/CMakeLists.txt` (a post-build command must be in the target's
+directory), with `NYMPH_CODESIGN_IDENTITY`. `release_linkage.cmake`'s
+`otool -L` parsing was checked with a stand-in `otool` (passes on
+libSystem + libc++, fails on an extra dylib). Open: a build and test run
+on macos-15 and macos-15-intel, and the AppleClang arm64 list of
+`release_examples`.
 
 **Goal:** nymph builds and passes its tests on macOS arm64 and x86-64,
 and `NYMPH_RELEASE` makes a signed, stripped executable that links only
@@ -79,6 +104,17 @@ system libraries.
 - `codesign -v` accepts the release executable on arm64.
 
 ### 3. Install from source, and `nymph` on `PATH`
+
+*Result: done on Linux.* `nymph_install`, `nymph_install_subproject`,
+`nymph_install_script_sh` (29 checks; 22 of them fail against a script
+that does nothing) and `nymph_install_script_ps1` (17 checks, PowerShell
+7.4 on Linux with `NYMPH_PATH_STORE`) pass; the scripts pass
+`shellcheck`. By hand: a real `cmake --install` into a scratch home
+wrote the block and a new `bash -l` found `nymph`; `install.ps1` also
+works piped to `iex`. Changes from the deliverables: the start-up files
+follow rustup (section 4.9 of DESIGN.md), and `NYMPH_INSTALL_UID` lets
+tests run the user path as root. Open: the Windows registry path and
+MSYS2 shells (CI).
 
 **Goal:** `cmake --install` installs a working `nymph` and its
 documentation and leaves `nymph` on `PATH` for a new console on
@@ -135,6 +171,12 @@ clear message.
 
 ### 4. Source tarball
 
+*Result: done on Linux.* 7.0 MB (the exclusion list drops about 18 MB
+of submodule documentation and tests). Unpacked under `unshare -rn` (no
+network), it configured, built, passed all 491 tests and installed
+(`tests/source_dist_check.cmake`). Only scripts carry the executable
+bit; no `.git`, `.wasm` or generated file. Open: the macOS run (CI).
+
 **Goal:** `nymph-<v>-src.tar.gz` builds, tests and installs offline on
 Linux and macOS.
 
@@ -160,6 +202,13 @@ Linux and macOS.
 - Two runs on the same commit give the same file list.
 
 ### 5. Release workflow
+
+*Result: written, not yet run.* `release-check.sh` was exercised on
+every case (version mismatch, missing changelog section, prerelease,
+dry run); `release-assemble.sh` on stand-in artifacts made from a local
+Linux release build (477 tests pass, with a stand-in App page since
+Emscripten is not installed here) gives the 16 files and fails on a
+missing one. Open: a dry run and a prerelease on GitHub.
 
 **Goal:** pushing a `v*` tag produces a complete published GitHub
 release with every file of DESIGN section 3, or no published release at
@@ -203,6 +252,12 @@ all.
 
 ### 6. Claude Code plugin deployment
 
+*Result: done on Linux.* `plugin.json` is now `0.0.0` (nothing pinned
+yet); `nymph_plugin_sync_versions` checks the pin of five executables
+(and nothing else) from a release `SHA256SUMS`, the version, a sync
+without sums, and a mismatch; `claude plugin validate --strict` accepts
+the plugin. Open: the pull request on a real release.
+
 **Goal:** a published release opens and merges a pull request that pins
 its executables in the plugin, and the plugin's version always equals
 the pinned release.
@@ -235,6 +290,10 @@ the pinned release.
 
 ### 7. Homebrew tap
 
+*Result: written; the formula renders and parses (`ruby -c`), but
+Homebrew could not run here (its package host is blocked).* Open: the
+tap repository (owner), `homebrew-test` on macOS and Linux.
+
 **Goal:** each release updates `binary-dice-games/homebrew-nymph`, and
 `brew install binary-dice-games/nymph/nymph` installs a working nymph on
 macOS and Linux.
@@ -262,6 +321,12 @@ macOS and Linux.
 
 ### 8. Chrome Web Store
 
+*Result: written; `nymph_chrome_publish` (9 checks) passes against a
+stub.* The script targets the Chrome Web Store API v2 and needs
+`CHROME_PUBLISHER_ID` besides the item id. Open: the store item and
+credentials (owner), and a check of the real API's answers on the first
+release.
+
 **Goal:** each release uploads the extension to the Web Store and
 submits it for review.
 
@@ -288,6 +353,11 @@ submits it for review.
 
 ### 9. macOS signing and Claude Desktop on macOS
 
+*Result: written, not run.* The Developer ID keychain and notarization
+steps are in `build.yml`, skipped without the secrets. Open: everything
+in this step's tests (needs a Mac and the owner's Apple account for the
+Developer ID part).
+
 **Goal:** macOS release files run without a Gatekeeper prompt in every
 channel, and the universal `.mcpb` works in Claude Desktop on a Mac.
 
@@ -312,6 +382,10 @@ channel, and the universal `.mcpb` works in Claude Desktop on a Mac.
   whether Gatekeeper blocks it.
 
 ### 10. First release
+
+*Result: not started (needs the owner's setup in docs/releasing.md).*
+The `verify` job and `release-verify.sh` exist; the script passes
+locally on the assembled stand-in files.
 
 **Goal:** a real `v<X.Y.Z>` release reaches every channel and each one
 installs and runs it.
