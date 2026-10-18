@@ -148,6 +148,25 @@ if(NYMPH_MCP)
       VERBATIM)
     target_sources(nymph_mcp PRIVATE "${_mcp_out}/mcp_${_doc}.cpp")
   endforeach()
+
+  # The MCP App page, built by the NYMPH_WEB build (web/CMakeLists.txt,
+  # nymph-claude-app); without it the server offers only PNGs.
+  set(NYMPH_MCP_VIEWER "" CACHE FILEPATH
+    "The MCP App page to embed (<build-web>/claude/viewer.html); empty for none")
+  if(NYMPH_MCP_VIEWER)
+    if(NOT EXISTS "${NYMPH_MCP_VIEWER}")
+      message(FATAL_ERROR "nymph: NYMPH_MCP_VIEWER names '${NYMPH_MCP_VIEWER}', which does not exist (build the web viewer first)")
+    endif()
+    add_custom_command(
+      OUTPUT "${_mcp_out}/mcp_viewer.cpp"
+      COMMAND "${CMAKE_COMMAND}" "-DINPUT=${NYMPH_MCP_VIEWER}" "-DOUTPUT=${_mcp_out}/mcp_viewer.cpp" "-DSYMBOL=mcp_viewer"
+              -P "${PROJECT_SOURCE_DIR}/cmake/NymphEmbedFile.cmake"
+      DEPENDS "${NYMPH_MCP_VIEWER}" "${PROJECT_SOURCE_DIR}/cmake/NymphEmbedFile.cmake"
+      COMMENT "Embedding the MCP App ${NYMPH_MCP_VIEWER}"
+      VERBATIM)
+    target_sources(nymph_mcp PRIVATE "${_mcp_out}/mcp_viewer.cpp")
+    target_compile_definitions(nymph_mcp PRIVATE NYMPH_MCP_HAS_VIEWER=1)
+  endif()
 endif()
 
 # ── OpenGL rasterizer (optional; OpenGL itself is loaded at run time) ────────

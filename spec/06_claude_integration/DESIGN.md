@@ -163,8 +163,18 @@ host's style variables with fallbacks) with `app.js` and the viewer's
 `nymph-viewer.single.js` (viewer DESIGN section 6) inlined at build
 time. CMake writes it to `<build>/claude/viewer.html`, and the native
 build embeds it in `nymph_mcp` when the cache variable
-`NYMPH_MCP_VIEWER` names that file (section 6). Without it the server
-offers no resource and no `_meta.ui`, and works as a PNG-only server.
+`NYMPH_MCP_VIEWER` names that file (section 6). `nymph mcp` hands it to
+the session as `server_options::viewer_html` (tests pass their own page).
+Without it the server offers no resource, no `_meta.ui` and no
+`viewer_font`, and works as a PNG-only server.
+
+The page is about 2.4 MB, nearly all of it the viewer, whose WebAssembly
+travels as a string of raw characters, NUL included: Emscripten's decoder
+maps the U+FFFD the HTML parser puts in place of NUL back to 0, and
+escapes CR, so the module survives inline in a `<script>`. CMake strings
+cannot hold NUL, so `cmake/NymphClaudeApp.cmake` joins the template's
+pieces and the two scripts byte for byte with `cmake -E cat`, and fails
+the build if a script contains `</script`, `<script` or `<!--`.
 
 `render_chart` declares `_meta.ui.resourceUri: "ui://nymph/viewer"`
 (visibility `["model", "app"]`) for every client, whether or not its
@@ -180,8 +190,10 @@ for WebAssembly, which Claude's hosts grant (section 1, feasibility).
 lines), not the `@modelcontextprotocol/ext-apps` SDK (section 8):
 
 1. `ui/initialize` with `appCapabilities.availableDisplayModes:
-   ["inline", "fullscreen"]`; reads `hostContext.theme` and the
-   container dimensions.
+   ["inline", "fullscreen"]`; reads `hostContext.theme` and
+   `availableDisplayModes`. The chart takes the host's `light` or `dark`
+   theme so it matches the conversation, and the source's own theme when
+   the host gives none (the PNG Claude sees keeps the source's).
 2. On `ui/notifications/tool-result`: takes `structuredContent.source`
    and calls `createViewer(box, {source, fit: "width", theme, menu,
    fetchFont})`, then reports its height with
@@ -193,8 +205,9 @@ lines), not the `@modelcontextprotocol/ext-apps` SDK (section 8):
 4. On the viewer's `view` and `click` events (debounced 500 ms): sends
    `ui/update-model-context` with the text of section 4.4.
 5. On `ui/notifications/host-context-changed`: `setTheme()`.
-6. A fullscreen button sends `ui/request-display-mode`; the viewer
-   refits on resize.
+6. A fullscreen button, shown only when the host offers `fullscreen`,
+   sends `ui/request-display-mode` and follows the mode the host
+   returns; the viewer (`fit: "width"`) refits on resize.
 7. The right-click menu stays (Save as PNG / YAML) where the sandbox
    allows downloads; otherwise its items are hidden (`menu: false`) and
    the user asks Claude to save.
@@ -202,7 +215,10 @@ lines), not the `@modelcontextprotocol/ext-apps` SDK (section 8):
 A render that fails shows nothing in the App (the host shows the error
 result); a viewer error (a font the tool cannot provide) shows the
 viewer's own error text and the PNG from the result's image content
-instead.
+instead. A later tool result in the same frame goes through
+`setSource()`, keeping the user's zoom where the chart allows. The page
+exposes `window.nymphApp` (`viewer`, `host`, `displayMode`, `error`) for
+tests.
 
 ### 4.3 Viewer change
 
@@ -347,9 +363,10 @@ fails, 2 for bad arguments (`docs/cli.md` gains the row).
   `nymph_ensure_submodules(extern/json)`.
 - New cache variable `NYMPH_MCP_VIEWER` (default empty): path to a
   `viewer.html` built by the `NYMPH_WEB` build. When set, it is embedded
-  as a byte array like the fonts (`cmake/NymphFonts.cmake` style). The
-  native build cannot make it itself (it needs Emscripten), so a release
-  configures the web build first and passes its output.
+  with `cmake/NymphEmbedFile.cmake`, like the fonts, and `nymph_mcp` gets
+  `NYMPH_MCP_HAS_VIEWER`. The native build cannot make it itself (it
+  needs Emscripten), so a release configures the web build first and
+  passes its output; a missing file is a configure error.
 - `cmake/NymphRelease.cmake` (option `NYMPH_RELEASE`, default OFF):
   MinSizeRel, `NYMPH_OPENGL=OFF` and `-static` on Linux (section 8), `/MT`
   on MSVC, stripped; package targets `nymph-mcpb`, `nymph-skill`,

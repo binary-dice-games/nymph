@@ -6,6 +6,7 @@
 #include <istream>
 #include <ostream>
 #include <string>
+#include "mcp/resources.hpp"
 
 namespace bdg::nymph::mcp {
 
@@ -88,7 +89,9 @@ int run_mcp_cli(std::span<const std::string_view> args, std::istream& in, std::o
     }
   }
   try {
-    return run_mcp(in, out, err, parse(args));
+    server_options options = parse(args);
+    options.viewer_html = embedded_viewer_html();
+    return run_mcp(in, out, err, options);
   } catch (const usage_error& e) {
     err << "nymph: " << e.message << "\n" << kUsage;
     return 2;

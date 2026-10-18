@@ -45,6 +45,9 @@ class tool_registry {
   /// @brief Adds a tool, replacing one of the same name.
   void add(tool t);
 
+  /// @brief The tool called `name`, or nullptr.
+  tool* find(const std::string& name);
+
   /// @brief The `tools/list` result: every tool, in the order added.
   json list() const;
 
@@ -69,7 +72,9 @@ class tool_registry {
 };
 
 /// @brief Adds the built-in tools (render_chart, check_chart,
-///        extract_chart, chart_schema, list_fonts) to `registry`.
+///        extract_chart, chart_schema, list_fonts) to `registry`, and when
+///        its options carry the App page, render_chart's `_meta.ui` and
+///        the app-only viewer_font (DESIGN.md section 4.2).
 void add_builtin_tools(tool_registry& registry);
 
 /// @brief A result with one text block, and `isError` when `error`.

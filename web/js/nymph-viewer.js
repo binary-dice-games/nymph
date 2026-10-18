@@ -178,9 +178,20 @@ class Core {
 
 let corePromise = null;
 
-/** The default font fetcher: `fetch(fontBaseUrl + name)`. */
-function fetchFrom(baseUrl) {
+/**
+ * The default font fetcher: `fetch(fontBaseUrl + name)`. The folder is
+ * resolved on the first fetch, so a page with no usable base URL (an
+ * inline `about:srcdoc` frame) fails only when a font is needed
+ * (spec/06_claude_integration/DESIGN.md section 4.3).
+ */
+function fetchFrom(base, here) {
   return async (name) => {
+    let baseUrl;
+    try {
+      baseUrl = new URL(base ?? './fonts/', here);
+    } catch {
+      throw new Error(`no font folder: '${base ?? './fonts/'}' has no base URL here (give fontBaseUrl or fetchFont)`);
+    }
     const response = await fetch(new URL(encodeURIComponent(name), baseUrl));
     if (!response.ok) {
       throw new Error(`${response.status} from ${response.url}`);
@@ -210,8 +221,10 @@ export function loadNymph(options = {}) {
           : (await import(new URL('./nymph-viewer-core.js', here).href)).default;
       const wasmUrl = options.wasmUrl ? new URL(options.wasmUrl, here).href : undefined;
       const module = await create(wasmUrl ? { locateFile: (path) => (path.endsWith('.wasm') ? wasmUrl : path) } : {});
-      const fontBaseUrl = new URL(options.fontBaseUrl ?? './fonts/', here);
-      return new Core(module, { fontBaseUrl, fetchFont: options.fetchFont ?? fetchFrom(fontBaseUrl) });
+      return new Core(module, {
+        fontBaseUrl: options.fontBaseUrl,
+        fetchFont: options.fetchFont ?? fetchFrom(options.fontBaseUrl, here),
+      });
     })();
     corePromise.catch(() => {
       corePromise = null;

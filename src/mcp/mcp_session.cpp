@@ -72,9 +72,9 @@ json session::dispatch(const std::string& method, const json& params) {
     return tools_->call(params);
   }
   if (method == "resources/read") {
-    return read_resource(params);
+    return read_resource(params, tools_->options().viewer_html);
   }
-  return list_resources();
+  return list_resources(tools_->options().viewer_html);
 }
 
 json session::initialize(const json& params) {

@@ -4,6 +4,7 @@
 #pragma once
 
 #include <cstddef>
+#include <string_view>
 #include "nymph.hpp"
 #include "render/renderer_options.hpp"
 
@@ -17,6 +18,9 @@ struct server_options {
   /// (DESIGN.md section 5.1). Tests lower it.
   size_t max_image_base64 = 8u * 1024u * 1024u;
   renderer_test_options gl_options; ///< tests: simulate machines without OpenGL
+  /// The MCP App page (DESIGN.md section 4.2); empty for a PNG-only server.
+  /// `nymph mcp` passes embedded_viewer_html(); tests pass their own.
+  std::string_view viewer_html;
 };
 
 } // namespace bdg::nymph::mcp

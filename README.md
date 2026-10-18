@@ -87,7 +87,7 @@ carries its source: `bdg::nymph::extract_source(png)` returns it.
 | `app/` | The `nymph` command-line executable |
 | `tests/` | GoogleTest suite, run with `ctest` |
 | `web/` | The interactive web viewer: WebAssembly module and JavaScript API (`NYMPH_WEB`) |
-| `claude/` | Claude integration: the agent skill text (`claude/skill/`), used by `nymph mcp` |
+| `claude/` | Claude integration: the agent skill text (`claude/skill/`) and the MCP App that shows charts live in the chat (`claude/app/`), used by `nymph mcp` |
 | `extension/` | The Chrome extension that turns nymph PNGs on any page into live viewers (built with `NYMPH_WEB`) |
 | `examples/` | Example sources and the PNGs rendered from them |
 | `fonts/` | Fonts (Google Fonts, OFL) compiled into the binary |

@@ -15,13 +15,20 @@ namespace bdg::nymph::mcp {
 ///        without its front matter, as compiled in.
 std::string server_instructions();
 
-/// @brief The `resources/list` result.
-json list_resources();
+/// @brief The URI of the MCP App page.
+inline constexpr const char* kViewerUri = "ui://nymph/viewer";
+
+/// @brief The MCP App page compiled in with `NYMPH_MCP_VIEWER`, or empty.
+std::string_view embedded_viewer_html();
+
+/// @brief The `resources/list` result; the App page is listed when
+///        `viewer_html` is not empty.
+json list_resources(std::string_view viewer_html);
 
 /// @brief Runs `resources/read`.
-/// @return `{"contents": [{uri, mimeType, text}]}`.
+/// @return `{"contents": [{uri, mimeType, text, ...}]}`.
 /// @throws rpc_error invalid_params without a string `uri`;
 ///         resource_not_found for a URI the server does not have.
-json read_resource(const json& params);
+json read_resource(const json& params, std::string_view viewer_html);
 
 } // namespace bdg::nymph::mcp

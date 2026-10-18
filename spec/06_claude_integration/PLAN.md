@@ -212,6 +212,23 @@ server itself.
 
 ### 5. The App page
 
+*Result: done.* The page is joined byte for byte with `cmake -E cat`
+(`cmake/NymphClaudeApp.cmake`): the viewer's wasm string holds NUL, which
+CMake strings cannot carry, and a regex check over its 4.8 MB of hex
+crashed CMake, so the script searches the hex with `string(FIND)`. The
+App takes the host's light / dark theme, shows its full-screen button only
+when offered, and already falls back to the result's PNG on a viewer
+error (planned for step 6; its test is here). The App's page reaches the
+session as `server_options::viewer_html`, so one test build checks the
+server with and without it. 3 native tests in `test_mcp_tools`, 5
+browser tests (WebGL against the PNG within the viewer tolerance, a
+`viewer_font` call, theme changes, the PNG fallback, full screen; the
+`about:srcdoc` regression is covered by every App test, which runs in
+such a frame). Native 477 and web 4 CTest tests pass. End to end, the
+real `nymph mcp` (built with `NYMPH_MCP_VIEWER`) served a 2.2 M-character
+page that showed `dashboard.yaml` live in the stand-in host, panned and
+hovered.
+
 **Goal:** `ui://nymph/viewer` shows the result of `render_chart` live in
 a host that implements MCP Apps.
 

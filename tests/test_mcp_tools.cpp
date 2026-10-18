@@ -13,6 +13,7 @@
 #include <string_view>
 #include <vector>
 #include "cli/cli.hpp"
+#include "fonts/embedded_fonts.hpp"
 #include "mcp/base64.hpp"
 #include "mcp/mcp_session.hpp"
 #include "nymph.hpp"
@@ -344,6 +345,77 @@ TEST_F(mcp_tools, schema_matches_the_cli) {
 TEST_F(mcp_tools, fonts_match_the_cli) {
   EXPECT_EQ(text_of(call("list_fonts")), cli_output({"fonts"}));
   EXPECT_NE(error_text(call("list_fonts", {{"all", true}})).find("takes no arguments"), std::string::npos);
+}
+
+// ── The MCP App (step 5) ────────────────────────────────────────────────────
+
+/// A stand-in App page, with a NUL like the real one (its wasm as text).
+const std::string kViewerHtml = std::string("<!doctype html><p>viewer\0</p>", 30);
+
+json rpc(session& s, const std::string& method, const json& params) {
+  rpc_message m;
+  m.id = 99;
+  m.method = method;
+  m.params = params;
+  return *s.handle(m);
+}
+
+TEST_F(mcp_tools, without_the_app_there_is_no_ui) {
+  const json tools = rpc(*session_, "tools/list", json::object())["result"]["tools"];
+  for (const json& t : tools) {
+    EXPECT_FALSE(t.contains("_meta")) << t["name"];
+    EXPECT_NE(t["name"], "viewer_font");
+  }
+  for (const json& r : rpc(*session_, "resources/list", json::object())["result"]["resources"]) {
+    EXPECT_NE(r["uri"], "ui://nymph/viewer");
+  }
+  EXPECT_EQ(rpc(*session_, "resources/read", {{"uri", "ui://nymph/viewer"}})["error"]["code"], -32002);
+}
+
+TEST_F(mcp_tools, the_app_is_a_resource_linked_from_render_chart) {
+  server_options o;
+  o.viewer_html = kViewerHtml;
+  start(o);
+  const json tools = rpc(*session_, "tools/list", json::object())["result"]["tools"];
+  ASSERT_EQ(tools[0]["name"], "render_chart");
+  EXPECT_EQ(tools[0]["_meta"]["ui"]["resourceUri"], "ui://nymph/viewer");
+  EXPECT_EQ(tools[0]["_meta"]["ui"]["visibility"], json({"model", "app"}));
+  ASSERT_EQ(tools.back()["name"], "viewer_font");
+  EXPECT_EQ(tools.back()["_meta"]["ui"]["visibility"], json({"app"}));
+
+  const json resources = rpc(*session_, "resources/list", json::object())["result"]["resources"];
+  ASSERT_EQ(resources.size(), 3u);
+  EXPECT_EQ(resources[0]["uri"], "ui://nymph/viewer");
+  EXPECT_EQ(resources[0]["mimeType"], "text/html;profile=mcp-app");
+
+  const json content = rpc(*session_, "resources/read", {{"uri", "ui://nymph/viewer"}})["result"]["contents"][0];
+  EXPECT_EQ(content["mimeType"], "text/html;profile=mcp-app");
+  EXPECT_EQ(content["text"].get<std::string>(), kViewerHtml);
+  EXPECT_EQ(content["_meta"]["ui"]["prefersBorder"], true);
+  EXPECT_EQ(content["_meta"]["ui"]["csp"], json::object());
+}
+
+TEST_F(mcp_tools, viewer_font_returns_an_embedded_font) {
+  server_options o;
+  o.viewer_html = kViewerHtml;
+  start(o);
+  const font_entry* font = nullptr;
+  for (const font_entry& f : font_catalog()) {
+    if (f.data != nullptr) {
+      font = &f;
+      break;
+    }
+  }
+  ASSERT_NE(font, nullptr) << "the native build embeds the fonts";
+  const json result = call("viewer_font", {{"name", font->name}});
+  ASSERT_FALSE(result.value("isError", false)) << result.dump().substr(0, 300);
+  EXPECT_EQ(result["structuredContent"]["name"], font->name);
+  const auto bytes = base64_decode(result["structuredContent"]["base64"].get<std::string>());
+  ASSERT_TRUE(bytes.has_value());
+  EXPECT_EQ(*bytes, std::vector<uint8_t>(font->data, font->data + font->size));
+
+  EXPECT_NE(error_text(call("viewer_font", {{"name", "FiraSans-Regular.tt"}})).find("did you mean"), std::string::npos);
+  EXPECT_EQ(error_text(call("viewer_font")), "viewer_font needs 'name'");
 }
 
 // ── base64 ──────────────────────────────────────────────────────────────────

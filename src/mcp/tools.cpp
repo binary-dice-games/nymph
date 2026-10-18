@@ -16,7 +16,9 @@
 #include "core/error.hpp"
 #include "core/suggest.hpp"
 #include "elements/register_builtin.hpp"
+#include "fonts/embedded_fonts.hpp"
 #include "mcp/base64.hpp"
+#include "mcp/resources.hpp"
 #include "png/png_meta.hpp"
 
 namespace bdg::nymph::mcp {
@@ -262,6 +264,26 @@ json list_fonts(const json& args) {
   return text_result(fonts_text());
 }
 
+/// The App's fonts: the bytes of an embedded catalog font, by file name.
+json viewer_font(const json& args) {
+  check_known(args, {"name"});
+  const std::optional<std::string> name = optional_string(args, "name");
+  if (!name) {
+    throw tool_error("viewer_font needs 'name'");
+  }
+  const font_entry* font = find_font(*name);
+  if (font == nullptr) {
+    throw tool_error(check_font_name(*name));
+  }
+  if (font->data == nullptr) {
+    throw tool_error("font '" + *name + "' is not embedded in this nymph");
+  }
+  return {
+      {"content",
+       json::array({json{{"type", "text"}, {"text", *name + ", " + std::to_string(font->size) + " bytes"}}})},
+      {"structuredContent", {{"name", *name}, {"base64", base64_encode(std::span(font->data, font->size))}}}};
+}
+
 json annotations(const char* title, bool read_only) {
   json a = {{"title", title}, {"readOnlyHint", read_only}, {"openWorldHint", false}};
   if (!read_only) {
@@ -296,6 +318,12 @@ void tool_registry::add(tool t) {
   } else {
     tools_.push_back(std::move(t));
   }
+}
+
+tool* tool_registry::find(const std::string& name) {
+  const auto it =
+      std::find_if(tools_.begin(), tools_.end(), [&](const tool& t) { return t.definition.at("name") == name; });
+  return it == tools_.end() ? nullptr : &*it;
 }
 
 json tool_registry::list() const {
@@ -429,6 +457,26 @@ void add_builtin_tools(tool_registry& registry) {
         {"inputSchema", {{"type", "object"}, {"properties", json::object()}, {"additionalProperties", false}}},
         {"annotations", annotations("List fonts", true)}},
        list_fonts});
+
+  if (registry.options().viewer_html.empty()) {
+    return;
+  }
+  // The App shows render_chart's result; it is also a plain tool for the model.
+  registry.find("render_chart")->definition["_meta"] = {
+      {"ui", {{"resourceUri", kViewerUri}, {"visibility", {"model", "app"}}}}};
+  registry.add(
+      {{{"name", "viewer_font"},
+        {"title", "Viewer font"},
+        {"description", "The bytes of a font the chart viewer needs (used by the viewer, not the model)."},
+        {"inputSchema",
+         {{"type", "object"},
+          {"properties",
+           {{"name", {{"type", "string"}, {"description", "A font file name, e.g. FiraSans-Regular.ttf."}}}}},
+          {"required", {"name"}},
+          {"additionalProperties", false}}},
+        {"annotations", annotations("Viewer font", true)},
+        {"_meta", {{"ui", {{"visibility", {"app"}}}}}}},
+       viewer_font});
 }
 
 } // namespace bdg::nymph::mcp
