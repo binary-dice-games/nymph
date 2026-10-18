@@ -112,6 +112,13 @@ nymph_add_test(test_saved_view test_saved_view.cpp)
 if(NYMPH_MCP)
   nymph_add_test(test_mcp test_mcp.cpp)
   target_link_libraries(test_mcp PRIVATE nymph_mcp)
+  target_compile_definitions(test_mcp PRIVATE NYMPH_SOURCE_DIR="${PROJECT_SOURCE_DIR}")
+  if(TARGET nymph-cli)
+    # string(JSON) needs CMake 3.19 in the script, whatever the project minimum.
+    add_test(NAME test_mcp_process
+      COMMAND ${CMAKE_COMMAND} -DNYMPH=$<TARGET_FILE:nymph-cli> -DWORK_DIR=${CMAKE_CURRENT_BINARY_DIR}/mcp_process
+              -P ${CMAKE_CURRENT_SOURCE_DIR}/mcp_process.cmake)
+  endif()
 endif()
 if(NYMPH_MCP)
   nymph_add_test(test_mcp_tools test_mcp_tools.cpp)

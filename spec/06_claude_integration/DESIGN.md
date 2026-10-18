@@ -331,6 +331,9 @@ Rules for every tool:
 | `nymph://docs/agent-guide` | `text/markdown` | `docs/agent-guide.md` |
 | `nymph://docs/elements` | `text/markdown` | `docs/elements.md` |
 
+`resources/read` of any other URI is the MCP error `-32002` (resource
+not found).
+
 ### 5.3 Command line
 
 `nymph mcp [--rasterizer software|opengl]`: runs the server until

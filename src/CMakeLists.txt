@@ -125,8 +125,29 @@ if(NYMPH_MCP)
     mcp/base64.cpp
     mcp/tools.hpp
     mcp/tools.cpp
+    mcp/resources.hpp
+    mcp/resources.cpp
   )
   target_link_libraries(nymph_mcp PUBLIC nymph_cli nymph_json)
+
+  # The agent text and the guides the server hands to clients
+  # (spec/06_claude_integration/DESIGN.md sections 4.5 and 5.2).
+  set(_mcp_skill "${PROJECT_SOURCE_DIR}/claude/skill/nymph/SKILL.md")
+  set(_mcp_agent_guide "${PROJECT_SOURCE_DIR}/docs/agent-guide.md")
+  set(_mcp_elements "${PROJECT_SOURCE_DIR}/docs/elements.md")
+  set(_mcp_out "${CMAKE_CURRENT_BINARY_DIR}/generated/mcp")
+  file(MAKE_DIRECTORY "${_mcp_out}")
+  foreach(_doc skill agent_guide elements)
+    set(_file "${_mcp_${_doc}}")
+    add_custom_command(
+      OUTPUT "${_mcp_out}/mcp_${_doc}.cpp"
+      COMMAND "${CMAKE_COMMAND}" "-DINPUT=${_file}" "-DOUTPUT=${_mcp_out}/mcp_${_doc}.cpp" "-DSYMBOL=mcp_${_doc}"
+              -P "${PROJECT_SOURCE_DIR}/cmake/NymphEmbedFile.cmake"
+      DEPENDS "${_file}" "${PROJECT_SOURCE_DIR}/cmake/NymphEmbedFile.cmake"
+      COMMENT "Embedding ${_file}"
+      VERBATIM)
+    target_sources(nymph_mcp PRIVATE "${_mcp_out}/mcp_${_doc}.cpp")
+  endforeach()
 endif()
 
 # ── OpenGL rasterizer (optional; OpenGL itself is loaded at run time) ────────

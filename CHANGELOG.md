@@ -9,7 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- `nymph mcp`: an MCP server on stdin / stdout for AI agents, with tools to render a chart (returning the PNG, optionally writing it), check it, extract a PNG's source, show the element schema and list fonts; source errors come back with their line and column. `NYMPH_MCP` CMake option (default `ON`); new submodule `extern/json`.
+- `nymph mcp`: an MCP server on stdin / stdout for AI agents, with tools to render a chart (returning the PNG, optionally writing it), check it, extract a PNG's source, show the element schema and list fonts; source errors come back with their line and column. It gives clients usage instructions, and the agent guide and element reference as resources (`nymph://docs/agent-guide`, `nymph://docs/elements`). `NYMPH_MCP` CMake option (default `ON`); new submodule `extern/json`.
 - Chrome extension (built with `NYMPH_WEB`, in `build-web/extension/`): turns nymph PNGs on any page into live charts of the same size, following pages that change (comments, previews, feeds); a toolbar button turns it off or on per site and counts the charts; options for the theme and the sites turned off. See `docs/extension.md`.
 - Web viewer: `fit: 'scale'` (and `fit="scale"`) lays the chart out at its source size and scales it to the box width, up or down.
 

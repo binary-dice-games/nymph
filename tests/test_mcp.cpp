@@ -3,6 +3,9 @@
 /// @brief spec/06_claude_integration/PLAN.md step 2: `nymph mcp`'s JSON-RPC
 ///        layer and MCP session, driven in-process through string streams.
 #include <gtest/gtest.h>
+#include <filesystem>
+#include <fstream>
+#include <iterator>
 #include <sstream>
 #include <string>
 #include <string_view>
@@ -121,7 +124,7 @@ TEST(mcp_session, lists_answer_after_initialize) {
       request(3, "resources/list", {{"cursor", "x"}}));
   ASSERT_EQ(r.responses.size(), 3u);
   EXPECT_EQ(r.responses[1]["result"]["tools"].size(), 5u);
-  EXPECT_EQ(r.responses[2]["result"], json({{"resources", json::array()}}));
+  EXPECT_EQ(r.responses[2]["result"]["resources"].size(), 2u);
 }
 
 TEST(mcp_session, ping_works_before_and_after_initialize) {
@@ -141,6 +144,67 @@ TEST(mcp_session, a_newer_revisions_discovery_gets_method_not_found) {
   EXPECT_EQ(r.responses[0]["id"], "server-discover-probe-1");
   EXPECT_EQ(error_code(r.responses[0]), -32601);
   EXPECT_TRUE(r.responses[1].contains("result"));
+}
+
+// ── Instructions and resources (step 4) ─────────────────────────────────────
+
+std::string read_file(const std::filesystem::path& path) {
+  std::ifstream f(path, std::ios::binary);
+  return std::string(std::istreambuf_iterator<char>(f), std::istreambuf_iterator<char>());
+}
+
+TEST(mcp_session, initialize_gives_the_skill_text_as_instructions) {
+  const run_result r = serve(initialize());
+  ASSERT_EQ(r.responses.size(), 1u);
+  const std::string instructions = r.responses[0]["result"]["instructions"];
+  EXPECT_EQ(instructions.rfind("# nymph", 0), 0u) << instructions.substr(0, 80);
+  EXPECT_EQ(instructions.find("\n---\n"), std::string::npos);
+  EXPECT_EQ(instructions.find("name: nymph"), std::string::npos);
+  // The rest of SKILL.md, byte for byte.
+  const std::string skill = read_file(std::filesystem::path(NYMPH_SOURCE_DIR) / "claude/skill/nymph/SKILL.md");
+  EXPECT_EQ(skill.substr(skill.size() - instructions.size()), instructions);
+}
+
+TEST(mcp_session, resources_list_and_read_the_guides) {
+  const run_result r = serve(
+      initialize() + request(2, "resources/list") +
+      request(3, "resources/read", {{"uri", "nymph://docs/agent-guide"}}) +
+      request(4, "resources/read", {{"uri", "nymph://docs/elements"}}));
+  ASSERT_EQ(r.responses.size(), 4u);
+  const json& list = r.responses[1]["result"]["resources"];
+  ASSERT_EQ(list.size(), 2u);
+  EXPECT_EQ(list[0]["uri"], "nymph://docs/agent-guide");
+  EXPECT_EQ(list[1]["uri"], "nymph://docs/elements");
+  const std::filesystem::path docs = std::filesystem::path(NYMPH_SOURCE_DIR) / "docs";
+  const std::string guide = read_file(docs / "agent-guide.md");
+  const std::string elements = read_file(docs / "elements.md");
+  EXPECT_EQ(list[0]["size"], guide.size());
+  for (const json& entry : list) {
+    EXPECT_EQ(entry["mimeType"], "text/markdown");
+    EXPECT_FALSE(entry["description"].get<std::string>().empty());
+  }
+  const json& read_guide = r.responses[2]["result"]["contents"][0];
+  EXPECT_EQ(read_guide["uri"], "nymph://docs/agent-guide");
+  EXPECT_EQ(read_guide["mimeType"], "text/markdown");
+  EXPECT_EQ(read_guide["text"], guide);
+  EXPECT_EQ(r.responses[3]["result"]["contents"][0]["text"], elements);
+}
+
+TEST(mcp_session, reading_an_unknown_resource_is_an_error) {
+  const run_result r = serve(
+      initialize() + request(2, "resources/read", {{"uri", "nymph://docs/nope"}}) +
+      request(3, "resources/read", json::object()) + request(4, "resources/read", {{"uri", 5}}));
+  ASSERT_EQ(r.responses.size(), 4u);
+  EXPECT_EQ(error_code(r.responses[1]), -32002);
+  EXPECT_NE(r.responses[1]["error"]["message"].get<std::string>().find("nymph://docs/nope"), std::string::npos);
+  EXPECT_EQ(error_code(r.responses[2]), -32602);
+  EXPECT_EQ(error_code(r.responses[3]), -32602);
+}
+
+TEST(mcp_session, resources_are_refused_before_initialize) {
+  const run_result r = serve(request(1, "resources/read", {{"uri", "nymph://docs/elements"}}));
+  ASSERT_EQ(r.responses.size(), 1u);
+  EXPECT_EQ(error_code(r.responses[0]), -32600);
 }
 
 // ── JSON-RPC ────────────────────────────────────────────────────────────────

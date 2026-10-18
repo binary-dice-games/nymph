@@ -175,6 +175,19 @@ works, with errors as `isError` results.
 
 ### 4. Instructions, documents and the process test
 
+*Result: done.* `SKILL.md` (about 90 lines) is written for both the MCP
+tools and the CLI, since the same text serves the server, the plugin
+and the claude.ai Skill; its example and every type it names are
+checked valid. The three files are compiled in with
+`cmake/NymphEmbedFile.cmake`. The process test is a CMake script
+(`tests/mcp_process.cmake`, input from a file), portable without
+process code in C++; it fails as it should against a binary that exits
+1. 4 new tests in `test_mcp`; 474 tests pass. Manual, Claude Code
+2.1.302: the model received the instructions (it quoted the rules line
+exactly) and drew a Gantt chart with milestone and dependencies right
+on the first render, after three `chart_schema` calls; it did not read
+the resources.
+
 **Goal:** a client that connects learns how to use nymph from the
 server itself.
 

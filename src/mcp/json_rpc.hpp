@@ -21,6 +21,7 @@ enum class rpc_code : int {
   method_not_found = -32601, ///< no such method
   invalid_params = -32602, ///< the method's params are wrong
   internal_error = -32603, ///< the server failed
+  resource_not_found = -32002, ///< MCP: resources/read of an unknown URI
 };
 
 /// @brief A request that gets an error response instead of a result.

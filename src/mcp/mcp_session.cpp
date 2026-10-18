@@ -6,6 +6,7 @@
 #include <array>
 #include <exception>
 #include <utility>
+#include "mcp/resources.hpp"
 
 namespace bdg::nymph::mcp {
 
@@ -14,7 +15,11 @@ namespace {
 constexpr std::array<std::string_view, 3> kProtocolVersions = {"2025-11-25", "2025-06-18", "2025-03-26"};
 
 /// The methods answered after `initialize`, besides `ping`.
-constexpr std::array<std::string_view, 3> kSessionMethods = {"tools/list", "tools/call", "resources/list"};
+constexpr std::array<std::string_view, 4> kSessionMethods = {
+    "tools/list",
+    "tools/call",
+    "resources/list",
+    "resources/read"};
 
 bool is_session_method(const std::string& method) {
   return std::find(kSessionMethods.begin(), kSessionMethods.end(), method) != kSessionMethods.end();
@@ -66,7 +71,10 @@ json session::dispatch(const std::string& method, const json& params) {
   if (method == "tools/call") {
     return tools_->call(params);
   }
-  return json{{"resources", json::array()}};
+  if (method == "resources/read") {
+    return read_resource(params);
+  }
+  return list_resources();
 }
 
 json session::initialize(const json& params) {
@@ -89,6 +97,7 @@ json session::initialize(const json& params) {
            {"resources", {{"subscribe", false}, {"listChanged", false}}},
        }},
       {"serverInfo", {{"name", "nymph"}, {"title", "nymph"}, {"version", std::string(version())}}},
+      {"instructions", server_instructions()},
   };
 }
 
