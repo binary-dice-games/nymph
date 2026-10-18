@@ -35,6 +35,7 @@ constexpr const char* kUsage =
     "       nymph schema [<Type>] [--markdown]    element reference\n"
     "       nymph fonts [--licenses]              embedded fonts (names for `font:`), or their licences\n"
     "       nymph rasterizers                     whether OpenGL can be used here, and why not\n"
+    "       nymph view <in> [--theme <t>] [--fit <f>]  open <in> in a window: pan, zoom, hover (nymph view --help)\n"
     "       nymph mcp [--rasterizer <r>]          run as an MCP server on stdin / stdout (for AI agents)\n"
     "       nymph --version | --help\n"
     "render writes <in> with its extension replaced by .png unless -o is given; -o - writes to stdout.\n"
@@ -230,6 +231,10 @@ int run_cli(
     // here means it was built without the server.
     if (!args.empty() && args[0] == "mcp") {
       throw usage_error{"this nymph was built without the MCP server (NYMPH_MCP=OFF)"};
+    }
+    // Likewise `nymph view`, built with NYMPH_VIEW.
+    if (!args.empty() && args[0] == "view") {
+      throw usage_error{"this nymph was built without the viewer window (NYMPH_VIEW=OFF)"};
     }
     o = parse(args);
     if (o.raster && !o.command.empty() && o.command != "render") {

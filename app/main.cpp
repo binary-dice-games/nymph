@@ -1,7 +1,8 @@
 // MIT License © 2026 Binary Dice Games
 /// @file main.cpp
 /// @brief `nymph` command-line entry point: forwards `nymph mcp` to
-///        run_mcp_cli() and everything else to run_cli().
+///        run_mcp_cli(), `nymph view` to run_view_cli() and everything else
+///        to run_cli().
 #include <cli/cli.hpp>
 #include <iostream>
 #include <span>
@@ -9,6 +10,9 @@
 #include <vector>
 #if defined(NYMPH_HAS_MCP)
 #include <mcp/mcp_server.hpp>
+#endif
+#if defined(NYMPH_HAS_VIEW)
+#include <window/view_command.hpp>
 #endif
 #if defined(_WIN32)
 #include <fcntl.h>
@@ -27,6 +31,11 @@ int main(int argc, char** argv) {
 #if defined(NYMPH_HAS_MCP)
   if (!args.empty() && args[0] == "mcp") {
     return bdg::nymph::mcp::run_mcp_cli(std::span(args).subspan(1), std::cin, std::cout, std::cerr);
+  }
+#endif
+#if defined(NYMPH_HAS_VIEW)
+  if (!args.empty() && args[0] == "view") {
+    return bdg::nymph::run_view_cli(std::span(args).subspan(1), std::cerr);
   }
 #endif
   return bdg::nymph::run_cli(args, std::cin, std::cout, std::cerr);

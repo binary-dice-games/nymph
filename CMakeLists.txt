@@ -24,6 +24,19 @@ option(NYMPH_WEB "Build the WebAssembly web viewer (with emcmake)" OFF)
 # `nymph mcp`: an MCP server over stdio in the nymph executable
 # (spec/06_claude_integration/DESIGN.md section 4.1). Native only.
 option(NYMPH_MCP "Build the MCP server (nymph mcp)" ON)
+# `nymph view`: the viewer in a native window, a Win32 window over the
+# system's OpenGL, loaded at run time (spec/04_web_viewer/DESIGN.md
+# section 10). Windows only for now.
+option(NYMPH_VIEW "Build the native viewer window (nymph view, Windows only)" ${WIN32})
+if(NYMPH_VIEW AND NOT WIN32)
+  message(FATAL_ERROR "NYMPH_VIEW (nymph view) is Windows only: configure with -DNYMPH_VIEW=OFF")
+endif()
+if(NYMPH_RELEASE)
+  set(NYMPH_VIEW OFF CACHE BOOL "" FORCE)
+endif()
+if(NYMPH_WEB)
+  set(NYMPH_VIEW OFF CACHE BOOL "" FORCE)
+endif()
 if(NYMPH_WEB)
   if(NOT EMSCRIPTEN)
     message(FATAL_ERROR "NYMPH_WEB needs the Emscripten toolchain: configure with emcmake cmake ...")
