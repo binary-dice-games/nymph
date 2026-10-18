@@ -177,9 +177,9 @@ endif()
 
 # ── nymph_window — `nymph view`, the viewer in a native window ──────────────
 
-# spec/04_web_viewer/DESIGN.md section 10. A Win32 window and an OpenGL 3.3
-# context of the system's opengl32.dll, every user32 / gdi32 / opengl32
-# function looked up at run time (nothing is linked); Dear ImGui's OpenGL3
+# spec/04_web_viewer/DESIGN.md section 10. A window and an OpenGL 3.3
+# context of the system's own libraries (Win32 and opengl32.dll, or X11 and
+# libGL.so.1), every function looked up at run time (nothing is linked); Dear ImGui's OpenGL3
 # backend (which loads OpenGL itself, at run time) draws the live_view into
 # it, as the web viewer does with WebGL.
 if(NYMPH_VIEW)
@@ -188,8 +188,17 @@ if(NYMPH_VIEW)
     window/view_command.cpp
     window/viewer_window.hpp
     window/viewer_window.cpp
+    window/window_host.hpp
     "${NYMPH_EXTERN_DIR}/imgui/backends/imgui_impl_opengl3.cpp"
   )
+  # One window implementation per platform (window_host.hpp); no header or
+  # library of either is needed.
+  if(WIN32)
+    target_sources(nymph_window PRIVATE window/window_win32.cpp)
+  else()
+    target_sources(nymph_window PRIVATE window/window_x11.cpp)
+    target_link_libraries(nymph_window PRIVATE ${CMAKE_DL_LIBS})
+  endif()
   target_include_directories(nymph_window PRIVATE "${NYMPH_EXTERN_DIR}/imgui/backends")
   target_link_libraries(nymph_window PUBLIC nymph_cli)
 endif()

@@ -24,12 +24,17 @@ option(NYMPH_WEB "Build the WebAssembly web viewer (with emcmake)" OFF)
 # `nymph mcp`: an MCP server over stdio in the nymph executable
 # (spec/06_claude_integration/DESIGN.md section 4.1). Native only.
 option(NYMPH_MCP "Build the MCP server (nymph mcp)" ON)
-# `nymph view`: the viewer in a native window, a Win32 window over the
+# `nymph view`: the viewer in a native window (Win32 or X11) over the
 # system's OpenGL, loaded at run time (spec/04_web_viewer/DESIGN.md
-# section 10). Windows only for now.
-option(NYMPH_VIEW "Build the native viewer window (nymph view, Windows only)" ${WIN32})
-if(NYMPH_VIEW AND NOT WIN32)
-  message(FATAL_ERROR "NYMPH_VIEW (nymph view) is Windows only: configure with -DNYMPH_VIEW=OFF")
+# section 10). No macOS window yet.
+if(APPLE)
+  set(_nymph_view_default OFF)
+else()
+  set(_nymph_view_default ON)
+endif()
+option(NYMPH_VIEW "Build the native viewer window (nymph view; Windows and X11)" ${_nymph_view_default})
+if(NYMPH_VIEW AND APPLE)
+  message(FATAL_ERROR "NYMPH_VIEW (nymph view) has no macOS window yet: configure with -DNYMPH_VIEW=OFF")
 endif()
 if(NYMPH_RELEASE)
   set(NYMPH_VIEW OFF CACHE BOOL "" FORCE)

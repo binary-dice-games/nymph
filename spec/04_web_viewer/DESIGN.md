@@ -623,8 +623,8 @@ class NymphError extends Error { line: number; column: number; }
   (Emscripten's loader, which it imports), `nymph-viewer-core.wasm`,
   `nymph-viewer.single.js`, `fonts/`, and `demo/index.html`.
 
-Native window (section 10): `NYMPH_VIEW` (default ON on Windows; ON
-elsewhere is a configure error; always OFF with `NYMPH_WEB` and
+Native window (section 10): `NYMPH_VIEW` (default ON on Windows and Linux;
+ON on macOS is a configure error; always OFF with `NYMPH_WEB` and
 `NYMPH_RELEASE`) adds the `nymph_window` library and the `view` command to
 the executable. It adds no dependency and no file to ship.
 `shared_library` is always built now (it was part of the OpenGL
@@ -701,15 +701,18 @@ rasterizer).
 - **Fetch in JavaScript, verify in C++.** The module stays free of I/O
   (goal 5); the catalog's size and SHA-256 stop a wrong file from changing
   how a chart looks.
-- **A plain Win32 window over the system's OpenGL, all loaded at run
-  time** (section 10). Like OpenGL (GL DESIGN section 1), `user32`,
-  `gdi32` and `opengl32` are never linked: `shared_library` opens them and
-  every function is looked up by name, so the executable imports only
-  `kernel32` and the C runtime, and users need nothing installed or
+- **A plain native window over the system's OpenGL, all loaded at run
+  time** (section 10). Like OpenGL (GL DESIGN section 1), the window
+  libraries (`user32`, `gdi32`, `opengl32`; `libX11.so.6`, `libGL.so.1`)
+  are never linked: `shared_library` opens them and every function is
+  looked up by name (the X11 and GLX types are declared in the source, so
+  no X or GL header or development package is needed to build), so the
+  executable's imports do not change and users need nothing installed or
   shipped beside it. A windowing library (GLFW was tried first) would mean
-  a DLL to build and distribute, or a static link of `user32` / `gdi32` /
-  `shell32`. The price: one window implementation per platform; only
-  Windows exists (X11 / Wayland and Cocoa are future work).
+  a DLL to build and distribute, or a static link of the OS libraries. The
+  price: one small window implementation per platform behind
+  `window_host.hpp`: Win32 and X11 exist (Wayland runs through XWayland);
+  Cocoa is future work.
 - **Alternatives rejected.** SVG output with JavaScript interaction (a
   second renderer that would not match the PNG); a JavaScript chart
   library fed from nymph's YAML (duplicates every element); rendering on
@@ -735,12 +738,15 @@ opens a window on a nymph YAML source or PNG with the viewer of the
 previous sections: the very same `live_view`, so pan, zoom, picks,
 tooltips, saved-view state and the picture itself are the web viewer's.
 Only the host layer is new, in the `nymph_window` library
-(`src/window/`), linked into the executable like `nymph mcp`:
+(`src/window/`), linked into the executable like `nymph mcp`. The viewer
+(`viewer_window.cpp`) is platform neutral; it talks to a `native_window`
+(`window_host.hpp`: context, swap, size, scale, title, an event pump and the
+events it reports) made by `window_win32.cpp` or `window_x11.cpp`:
 
 ```
  nymph view ──► view_command (arguments, input, checks) ──► viewer_window
                                                               │
-   Win32 window ─ events ──► pointer_event ──► live_view ◄────┤ frame(now)
+   native_window ─ events ──► pointer_event ──► live_view ◄───┤ frame(now)
    (OpenGL 3 context)                              │ ImDrawData
                        imgui_impl_opengl3 ◄────────┘ (view_options::cpu_textures = false)
 ```
@@ -766,11 +772,14 @@ Only the host layer is new, in the `nymph_window` library
   copy), cleared to `clear_color()`. OpenGL is loaded by that backend at
   run time, as the rest of nymph does; the window, its device context and
   an OpenGL 3.3 core context (as `gl_device_win.cpp` makes one) come from
-  user32, gdi32 and opengl32 through a function table filled by
-  `shared_library::symbol()`. Per-monitor DPI awareness is requested when
-  the system has it, and the pixel ratio is the window's DPI over 96. A
-  machine that cannot create an OpenGL 3.3 context gets an error (exit 1)
-  that names `nymph render`, which needs none; there is no CPU path.
+  user32, gdi32 and opengl32 (Windows: WGL), or libX11 and libGL (Linux:
+  GLX, `glXCreateContextAttribsARB`), through function tables filled by
+  `shared_library::symbol()`. On Windows per-monitor DPI awareness is
+  requested when the system has it and the pixel ratio is the window's DPI
+  over 96; the X11 window uses a pixel ratio of 1. The wheel is X11's
+  button 4 / 5 (6 / 7 sideways). A machine with no display or no OpenGL
+  3.3 context gets an error (exit 1) that names `nymph render`, which
+  needs none; there is no CPU path.
 - **Idle.** The loop waits for events and draws only while `wants_frame()`
   (goal 4); an exposed or resized window is redrawn from the last frame's
   draw data, also inside the operating system's resize loop.

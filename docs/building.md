@@ -77,7 +77,7 @@ Outputs:
 | `NYMPH_EMBED_FONTS` | `all` | Which of those fonts have their bytes compiled in: `all`, `none`, or a `;`-list of file names |
 | `NYMPH_WEB` | `OFF` | Build the interactive web viewer (WebAssembly) instead of the CLI; needs Emscripten (`emcmake`). See "Web viewer" below. |
 | `NYMPH_MCP` | `ON` | Build the MCP server, `nymph mcp` (off in the web build). `OFF` drops the `extern/json` dependency; `nymph mcp` then exits 2. |
-| `NYMPH_VIEW` | `ON` on Windows, else `OFF` | Build `nymph view`, the viewer in a window: a Win32 window over the system's `opengl32.dll`, both opened at run time (nothing is linked, no extra file needed). Windows only: `ON` elsewhere is a configure error. Off in the web and release builds. `OFF`: `nymph view` exits 2. |
+| `NYMPH_VIEW` | `ON` (`OFF` on macOS) | Build `nymph view`, the viewer in a window: Win32 / WGL on Windows, X11 / GLX on Linux, from the system's libraries opened at run time (nothing is linked, no extra file and no X or GL development package is needed). `ON` on macOS is a configure error. Off in the web and release builds. `OFF`: `nymph view` exits 2. |
 | `NYMPH_RELEASE` | `OFF` | Build the published executables: MinSizeRel, stripped, static (see "Release executables"). |
 | `NYMPH_MCP_VIEWER` | empty | The MCP App page to embed in `nymph mcp`, `build-web/claude/viewer.html` from the web build (below); empty: the server returns PNGs only. |
 | `NYMPH_OPENGL` | `ON` | Build the optional OpenGL rasterizer. `OFF` leaves only the software rasterizer; `--rasterizer opengl` then falls back with the reason "nymph was built without OpenGL support". |
