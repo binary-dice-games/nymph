@@ -310,7 +310,12 @@ and unit-tested natively.
 namespace bdg::nymph {
 struct view_size { float width, height, pixel_ratio; };  // CSS px, DPR
 enum class view_fit { source, width, fill };
-struct view_options { view_fit fit; std::string theme; bool tooltips; };
+struct view_options { view_fit fit; bool cpu_textures; bool tooltips; };
+struct view_geometry {           // of the last frame
+  float layout_width, layout_height;   // logical px (ImGui's DisplaySize)
+  float css_scale, framebuffer_scale;  // CSS px and device px per logical px
+  int pixel_width, pixel_height; bool fit_fallback;
+};
 
 struct pointer_input {           // one event, in CSS px of the view
   enum kind { move, down, up, wheel, leave } type;
@@ -333,6 +338,7 @@ class live_view {
   void set_source(std::string_view source, bool reset_view = false); // throws nymph::error, fonts_needed
   void set_png(std::span<const uint8_t> png);   // throws; no nymph chunk -> has_figure() false
   void set_data(std::string_view data_yaml);    // throws nymph::error
+  void set_theme(std::string theme);           // "" = the source's image.theme
   void resize(view_size size);
   void input(const pointer_input& event);
   void reset_view();
@@ -345,6 +351,7 @@ class live_view {
   std::optional<pick> hovered() const;
   std::optional<pick> take_click();             // last click, once
   std::vector<axis_range> view_state() const;   // every plot axis, after the last frame
+  view_geometry geometry() const;
   bool has_figure() const;
   const std::string& description() const;
   std::string_view source() const;              // with set_data() applied
@@ -356,9 +363,10 @@ class live_view {
 Rules:
 
 - **Persistent contexts.** The live view owns one ImGui, ImPlot,
-  ImPlot3D and ImUml context for its lifetime (with its own font atlas)
-  and makes them current only inside its own calls, restoring the
-  previous ones afterwards, like `render_frames()`. Several live views
+  ImPlot3D and ImUml context for its lifetime (with its own font atlas;
+  `imgui_contexts` in `frame_setup`) and makes them current only inside
+  its own calls (`context_switch`), restoring the previous ones
+  afterwards, like `render_frames()`. Several live views
   can exist on one thread; none may be used from two threads at once.
 - **Frames on demand.** A frame is due after input, `set_*`, `resize`,
   `reset_view`, and for a few settling frames after any of them (ImPlot

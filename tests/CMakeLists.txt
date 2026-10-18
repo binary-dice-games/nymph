@@ -98,3 +98,8 @@ nymph_add_test(test_uml_sequence test_uml_sequence.cpp)
 nymph_add_test(test_flowchart test_flowchart.cpp)
 nymph_add_test(test_uml_er test_uml_er.cpp)
 nymph_add_test(test_uml_dfd_network test_uml_dfd_network.cpp)
+
+# ── Web viewer (spec/04_web_viewer) ──────────────────────────────────────────
+
+nymph_add_test(test_live_view test_live_view.cpp)
+target_compile_definitions(test_live_view PRIVATE NYMPH_SOURCE_DIR="${PROJECT_SOURCE_DIR}")

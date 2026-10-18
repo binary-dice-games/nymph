@@ -19,6 +19,8 @@ add_library(nymph STATIC
   render/figure_renderer.cpp
   render/frame_setup.hpp
   render/frame_setup.cpp
+  view/live_view.hpp
+  view/live_view.cpp
   core/limits.hpp
   png/png_meta.hpp
   png/png_meta.cpp

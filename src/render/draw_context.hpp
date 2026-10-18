@@ -41,6 +41,24 @@ class draw_context {
     return options_;
   }
 
+  /// @brief Whether the frame belongs to a live view that takes pointer
+  ///        input (spec/04_web_viewer/DESIGN.md section 4). False for
+  ///        PNG rendering, where nothing interactive may change the image.
+  bool interactive() const {
+    return interactive_;
+  }
+
+  /// @brief Set by the live view; never by the PNG frame driver.
+  void set_interactive(bool interactive) {
+    interactive_ = interactive;
+  }
+
+  /// @brief Forgets every rectangle; called before each live frame, since
+  ///        the figure (and its node addresses) may have changed.
+  void clear_rects() {
+    rects_.clear();
+  }
+
   /// @brief Output pixels per logical pixel (`image.scale`).
   float scale() const {
     return static_cast<float>(options_.scale);
@@ -110,6 +128,7 @@ class draw_context {
 
  private:
   const image_options& options_;
+  bool interactive_ = false;
   std::unordered_map<const node*, rect> rects_;
   std::map<std::string, ImFont*, std::less<>> fonts_;
 };

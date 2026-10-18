@@ -98,6 +98,17 @@ their bytes checked; the default build is unchanged.
 
 ### 3. `live_view` with static parity
 
+*Result: done.* `src/view/live_view.hpp/.cpp`; 14 tests in
+`test_live_view.cpp`, the parity test covering all 24 examples
+byte for byte. Additions to the plan: `set_theme()` (the override,
+resolved from `theme: auto` by the JavaScript side), `geometry()` (layout
+size, CSS and framebuffer scales, `fit_fallback`), and a layout check at
+the source size in `set_source()` (`layout_figure()`, separate contexts,
+so a failing update keeps the view state). A fit that overflows at the
+box size is found by the frame itself: the contexts are recreated and
+the view lays out at the source size until the next resize. 365 tests
+pass.
+
 **Goal:** a `live_view` keeps its contexts across frames, runs frames on
 demand at a given size and pixel ratio, and with no input draws exactly
 what `render_figure()` draws.
