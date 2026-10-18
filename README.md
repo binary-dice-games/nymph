@@ -119,6 +119,8 @@ carries its source: `bdg::nymph::extract_source(png)` returns it.
 | [spec/02_opengl_rasterizer/PLAN.md](spec/02_opengl_rasterizer/PLAN.md) | Its implementation steps and tests |
 | [spec/03_uml_diagrams/DESIGN.md](spec/03_uml_diagrams/DESIGN.md) | UML diagrams and the ImUml library: layouts, API, decisions |
 | [spec/03_uml_diagrams/PLAN.md](spec/03_uml_diagrams/PLAN.md) | Its implementation steps and tests |
+| [spec/04_web_viewer/DESIGN.md](spec/04_web_viewer/DESIGN.md) | The interactive web viewer: WebAssembly build, WebGL2, live view, picks, JS API |
+| [spec/04_web_viewer/PLAN.md](spec/04_web_viewer/PLAN.md) | Its implementation steps and tests |
 | [CHANGELOG.md](CHANGELOG.md) | User-facing changes between releases |
 | [CLAUDE.md](CLAUDE.md) | Coding style and project rules for AI agents and contributors |
 

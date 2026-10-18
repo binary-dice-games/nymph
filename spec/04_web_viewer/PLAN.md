@@ -1,0 +1,308 @@
+# nymph — Interactive Web Viewer: Implementation Plan
+
+See [DESIGN.md](DESIGN.md) for the design this plan implements, and
+[spec/01_core_features/DESIGN.md](../01_core_features/DESIGN.md) section 4
+(`render_figure()`, `draw_context`, `figure`) for the code it builds on.
+
+Steps are ordered so the library comes first and is tested natively
+(nothing changes for PNG users), then interaction element by element, then
+the WebAssembly build, then the browser layer. Every step leaves the
+existing tests passing unmodified: the software rasterizer's bytes and
+every committed example PNG must not change. Native tests are GoogleTest
+files in `tests/`, added with `nymph_add_test()`.
+
+Web steps need the Emscripten SDK (`emcmake`); their tests are registered
+with CTest only in a `NYMPH_WEB` build and run with Node (step 8 on) and
+Playwright with the preinstalled Chromium (steps 9 and 10). Each web
+step records the Emscripten version it was verified with.
+
+## Steps
+
+### 1. Split the CLI and share the frame setup
+
+**Goal:** `render_frames()` and a future live view share one frame setup,
+and the `nymph` library no longer contains the command line; nothing
+changes for users.
+
+**Deliverables:**
+- `src/render/frame_setup.hpp/.cpp` (internal): the context scope,
+  theme table, `check_options()`, `configure()`, `load_fonts()`,
+  `image_text_style()` and `set_frame_inputs()` moved from
+  `figure_renderer.cpp`. `configure()` takes the backend flags to set;
+  `set_frame_inputs()` takes a mouse position (the PNG path passes
+  `-FLT_MAX`).
+- `src/render/figure_renderer.cpp`: uses them; behaviour unchanged.
+- `src/CMakeLists.txt`: `src/cli/` sources move to a new static library
+  `nymph_cli` (links `nymph`); `app/CMakeLists.txt` and the `test_cli`
+  entry link it.
+
+**Tests:**
+- All existing tests pass unmodified, including the byte-exact example
+  renders in `test_docs`.
+
+### 2. `live_view` with static parity
+
+**Goal:** a `live_view` keeps its contexts across frames, runs frames on
+demand at a given size and pixel ratio, and with no input draws exactly
+what `render_figure()` draws.
+
+**Deliverables:**
+- `src/view/live_view.hpp/.cpp`: `view_options`, `view_size`,
+  `live_view` with `set_source()`, `resize()`, `frame()`,
+  `wants_frame()`, `clear_color()`, `has_figure()`, `description()`,
+  `source()`, `textures()` (DESIGN.md section 4). Persistent ImGui,
+  ImPlot, ImPlot3D and ImUml contexts, made current only inside its calls.
+  `fit` (`source`, `width`, `fill`) and the `theme` override.
+- `src/render/draw_context.hpp`: `interactive()` (false by default).
+- `src/CMakeLists.txt`: the new files.
+
+**Tests** (`tests/test_live_view.cpp`):
+- For every example source: `set_source()`, `resize({width, height,
+  scale})`, three `frame()` calls, software-rasterized: the same bytes as
+  `render_figure()`.
+- `wants_frame()` is true after `set_source()` and `resize()`, and false
+  once the settling frames have run; `frame()` then returns nullptr.
+- A bind error throws `nymph::error` with its position and keeps the
+  previous figure (`has_figure()` stays true, the next frame draws it).
+- `fit: width` at half the source width lays the root out at half width
+  (rectangles from the frame); a box too small for the layout falls back
+  to the source size.
+- Two live views alternate frames on one thread without disturbing each
+  other's output; the contexts current before each call are current
+  after it.
+
+### 3. Pointer input, axis limits and view state
+
+**Goal:** plots pan and zoom under synthetic pointer input in a live view,
+the view can be reset and read back, and PNG output is unchanged.
+
+**Deliverables:**
+- `live_view::input()`, `reset_view()`, `view_state()`; pointer events
+  fed to ImGui (`AddMousePosEvent`, `AddMouseButtonEvent`,
+  `AddMouseWheelEvent`, `AddMouseSourceEvent` for touch), with real
+  `DeltaTime`.
+- `draw_context::limits_cond()`; `plot2d.cpp` and `gantt.cpp` use it
+  instead of `ImPlotCond_Always`. The Gantt chart locks its Y axis
+  (time axis only).
+- `view_state()` collects every `Plot` axis range after each frame
+  (`ImPlot::GetPlotLimits()` inside the plot, recorded by element path).
+
+**Tests** (`tests/test_live_view.cpp`):
+- A drag across a plot moves its X and Y ranges by the dragged amount
+  (within a pixel); a wheel step over the plot shrinks both ranges around
+  the pointer; over the X axis only X changes.
+- A plot with `x_min` / `x_max` keeps the user's pan on later frames,
+  and `reset_view()` restores the source limits.
+- `set_source()` with the same structure and new data keeps the view;
+  with `reset_view = true` it does not.
+- A plot with `flags: NoInputs` does not move.
+- A Gantt chart pans in time; its rows do not move.
+- All PNG tests pass unmodified.
+
+### 4. Picks and tooltips for XY series
+
+**Goal:** hovering a data point of a 2D series reports it and shows a
+tooltip, in a live view only.
+
+**Deliverables:**
+- `src/view/pick.hpp`: `pick`, `pick_tracker` (per-frame candidates,
+  best within 8 px).
+- `draw_context::picks()`; `xy_series` and `PlotErrorBars` offer their
+  nearest point when the plot is hovered; `Plot` resolves the best
+  candidate after its children, draws the tooltip (label, x, y, formatted
+  as the axes format them, dates on time axes) and a highlight ring.
+- `live_view::hovered()`, `take_click()`; `view_options::tooltips`.
+
+**Tests** (`tests/test_pick.cpp`):
+- Pointer on the pixel of point 2 of a `PlotLine` → pick with that
+  series' label, index 2, its x and y; 20 px away → no pick.
+- Two series near the pointer → the closer one wins.
+- A time-axis plot formats x as an ISO date in the pick.
+- A click fires `take_click()` once.
+- With `tooltips: false` the pick is reported and nothing extra is drawn
+  (draw data equal to a frame without the pointer).
+- A hidden series (legend click) is not picked.
+
+### 5. Picks for bars, cells, slices, Gantt and Sankey
+
+**Goal:** every 2D element family in DESIGN.md section 3 reports what is
+under the pointer.
+
+**Deliverables:**
+- Picks in `PlotBars`, `PlotBarsH`, `PlotBarGroups`, `PlotHistogram`,
+  `PlotHeatmap`, `PlotHistogram2D`, `PlotPieChart` (`plot2d.cpp`),
+  `GanttChart` (`gantt.cpp`), `SankeyDiagram` (`sankey.cpp`, nodes and
+  flows from the layout it already computes).
+
+**Tests** (`tests/test_pick.cpp`):
+- One test per element: the pointer at the centre of a known bar, cell,
+  slice, task, node and flow gives the documented payload; in a gap,
+  none.
+
+### 6. Pan, zoom and picks in diagrams
+
+**Goal:** UML diagrams and flowcharts pan, zoom around the pointer and
+report the hovered node or edge, only when interactive.
+
+**Deliverables:**
+- `imuml/imuml.h`: `ImUmlDiagramFlags_Interactive`; hovered node / edge
+  ids in `ImUmlDiagramInfo`.
+- `imuml/imuml.cpp`, `imuml_internal.h`, `imuml_render.cpp`: per-diagram
+  `Pan` / `ZoomFactor` in the pool entry, applied on top of the fit;
+  wheel zoom about the pointer clamped to 0.25x-8x, drag pan, double-click
+  reset; hit tests on node rectangles and edge polylines.
+- `src/elements/uml/uml_common.cpp`: passes the flag when
+  `dc.interactive()`, turns the hovered id into a pick and tooltip.
+- `spec/03_uml_diagrams/DESIGN.md`: the view transform and the flag.
+
+**Tests** (`tests/test_imuml_context.cpp`, `tests/test_pick.cpp`):
+- Without the flag, draw data is unchanged (all UML tests pass
+  unmodified).
+- With it: a wheel step at a point keeps that point fixed on screen and
+  scales the diagram; a drag moves it by the dragged amount; double-click
+  restores the fit; zoom stays within its clamp.
+- The pointer over a class box gives its id; over an edge, its two ends.
+
+### 7. Data updates and PNG input
+
+**Goal:** a live view replaces its data from JSON and opens nymph PNGs.
+
+**Deliverables:**
+- `src/document/bind.hpp/.cpp`: `bind_source()` overload taking a
+  replacement for the top-level `data` value (YAML / JSON text), checked
+  with the same rules and limits; errors point into the replacement
+  ("data (from setData) line 1 column 14: ...").
+- `live_view::set_data()`, `set_png()`.
+
+**Tests** (`tests/test_live_view.cpp`, `tests/test_bind.cpp`):
+- `set_data()` with new columns draws the new values, keeps the view and
+  the rest of the source; `source()` returns the source with the new
+  `data`.
+- A `set_data()` naming a missing column throws and keeps the previous
+  data on screen.
+- `set_png()` of every example PNG gives the same frame as its YAML; a
+  PNG without a nymph chunk leaves `has_figure()` false; a corrupt PNG
+  throws.
+
+### 8. Emscripten build with the software presenter
+
+**Goal:** `NYMPH_WEB` builds `nymph-viewer.wasm` and a minimal JS loader,
+and Node can drive a viewer end to end on the CPU.
+
+**Deliverables:**
+- `CMakeLists.txt`: option `NYMPH_WEB` (error without the Emscripten
+  toolchain; forces `NYMPH_OPENGL` off, tests' native GoogleTest off);
+  `ImDrawIdx=unsigned int` on `nymph_imgui` in this build.
+- `web/CMakeLists.txt`: target `nymph-viewer` with the flags of
+  DESIGN.md section 6.
+- `web/nymph_web.cpp`: the C exports over a handle table, exceptions
+  caught, errors as JSON.
+- `web/software_presenter.cpp`.
+- `web/js/nymph-viewer.js`: module loading and a `NymphViewer` subset
+  working in Node (`setSource`, `setData`, frame to RGBA, picks).
+- `docs/building.md`: the web build.
+
+**Tests** (`web/tests/node/`, CTest `nymph_web_node`):
+- Every example renders within the GL DESIGN tolerance of its committed
+  PNG.
+- A bad source throws `NymphError` with the same line, column and message
+  as the native library.
+- A synthetic hover over a known point returns its pick.
+- The gzip size of `nymph-viewer.wasm` is at most 2.5 MB.
+
+### 9. WebGL2 presenter
+
+**Goal:** viewers draw through one shared WebGL2 context and match the
+software presenter.
+
+**Deliverables:**
+- `web/webgl_presenter.cpp`: `imgui_impl_opengl3` (from
+  `extern/imgui/backends`) per ImGui context on one shared context over a
+  hidden canvas; context-loss handling (fall back to software, recreate
+  on restore).
+- `nymph-viewer.js`: copies each finished frame to the viewer's canvas;
+  `rasterizer` option; `info().rasterizer`.
+- `web/demo/index.html`: every example, side by side with its PNG.
+
+**Tests** (`web/tests/browser/`, Playwright, CTest `nymph_web_browser`):
+- Every example in WebGL matches the software presenter within the GL
+  DESIGN tolerance.
+- A plot with more than 65,535 vertices draws (32-bit indices).
+- Twenty viewers on a page create exactly one WebGL context.
+- `rasterizer: "software"` and a page without WebGL2 both draw with the
+  software presenter.
+
+### 10. Browser input, scheduling and the custom element
+
+**Goal:** a person can pan, zoom and hover in the browser, viewers go idle
+when untouched, and `<nymph-viewer>` works from a tag.
+
+**Deliverables:**
+- `nymph-viewer.js`: pointer events with capture, wheel (default
+  prevented only over interactive elements), pinch and double tap,
+  `ResizeObserver` and pixel ratio, `requestAnimationFrame` only while a
+  frame is wanted, `IntersectionObserver`, events (`hover`, `click`,
+  `view`, `error`), `resetView()`, `toPng()`, `destroy()`, `theme:
+  "auto"`, `aria-label`.
+- `web/js/nymph-viewer-element.js` (bundled in the module):
+  `<nymph-viewer>` with `src`, inline YAML text, `fit`, `theme`,
+  `tooltips`, DOM events, error text in the box.
+
+**Tests** (`web/tests/browser/`):
+- Dragging across a plot fires `view` with moved ranges; the wheel over
+  the plot zooms and does not scroll the page; the wheel over a label
+  scrolls the page.
+- Hovering a known point fires `hover` with its values and the canvas
+  shows the tooltip (pixels change near the point).
+- After input stops, no animation frame is requested within one second.
+- `<nymph-viewer src="line.yaml">`, `src="line.png"` and inline YAML show
+  the chart; a plain PNG shows as an image; a bad source shows its error.
+- `toPng()` returns a PNG whose `extract_source()` equals the current
+  source with its data.
+- `theme="auto"` follows an emulated `prefers-color-scheme` change.
+- A viewer resized from 800 to 400 px wide with `fit="width"` lays out
+  again at 400.
+
+### 11. Packaging, documentation and close
+
+**Goal:** the viewer ships as documented files, and every document
+matches the code.
+
+**Deliverables:**
+- Single-file build `nymph-viewer.single.js`.
+- `docs/viewer.md`: embedding (tag, module, markdown fenced blocks,
+  chatbots), the API, events, interaction per element, CSP and hosting,
+  limits; a row in README's "Further Documentation".
+- `README.md`: the viewer in the overview and layout table (`web/`).
+- `CHANGELOG.md`: the viewer and the `live_view` API under
+  `[Unreleased]`.
+- `spec/04_web_viewer/DESIGN.md`: status and any change made during
+  implementation; `spec/01_core_features/DESIGN.md` section 4 points to
+  `frame_setup`, `draw_context::interactive()` and `nymph_cli`.
+- `spec/INDEX.md`: status and topics.
+
+**Tests:**
+- `ctest -j` passes three times in a row natively and in the `NYMPH_WEB`
+  build.
+
+## Completion Criteria
+
+- [ ] All native tests pass under `ctest -j`, and every committed example
+      PNG is reproduced byte for byte by the CLI and `render_png()`.
+- [ ] A live view with no input draws the same bytes as
+      `render_figure()` for every example (software rasterizer).
+- [ ] Plots, Gantt charts and diagrams pan and zoom; 3D plots rotate;
+      every 2D element family and diagrams report picks, natively and in
+      the browser.
+- [ ] `nymph-viewer.wasm` builds with Emscripten, is at most 2.5 MB
+      gzip, and its Node and Playwright tests pass.
+- [ ] WebGL2 output matches the software presenter within tolerance;
+      a page with twenty viewers uses one WebGL context and no frames
+      while idle.
+- [ ] `<nymph-viewer>` works from a `src` URL (YAML and PNG) and from
+      inline YAML.
+- [ ] Native builds still pass on Linux (GCC); MSYS2 and MSVC are not
+      affected by `NYMPH_WEB` (the option is off and `web/` is not
+      added).
+- [ ] README, `docs/`, CHANGELOG, the DESIGN.md files and
+      `spec/INDEX.md` match the code.
