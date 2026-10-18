@@ -145,6 +145,19 @@ if(NYMPH_RELEASE AND TARGET nymph-cli)
     COMMAND ${CMAKE_COMMAND} -DNYMPH=$<TARGET_FILE:nymph-cli> -DEXAMPLES=${PROJECT_SOURCE_DIR}/examples -DEXACT=${_nymph_exact}
             -DWORK_DIR=${CMAKE_CURRENT_BINARY_DIR}/release_examples "-DRUNNER=${_nymph_runner}"
             -P ${CMAKE_CURRENT_SOURCE_DIR}/release_examples.cmake)
+  if(NYMPH_MCPB_FILE)
+    if(CMAKE_SYSTEM_NAME STREQUAL "Windows")
+      set(_nymph_platform win32)
+    elseif(CMAKE_SYSTEM_NAME STREQUAL "Darwin")
+      set(_nymph_platform darwin)
+    else()
+      set(_nymph_platform linux)
+    endif()
+    add_test(NAME nymph_release_mcpb
+      COMMAND ${CMAKE_COMMAND} -DMCPB=${NYMPH_MCPB_FILE} -DVERSION=${PROJECT_VERSION} -DPLATFORM=${_nymph_platform}
+              -DWORK_DIR=${CMAKE_CURRENT_BINARY_DIR}/release_mcpb "-DRUNNER=${_nymph_runner}"
+              -P ${CMAKE_CURRENT_SOURCE_DIR}/mcpb_check.cmake)
+  endif()
   if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
     find_program(NYMPH_READELF NAMES readelf ${CMAKE_READELF})
     if(NYMPH_READELF)

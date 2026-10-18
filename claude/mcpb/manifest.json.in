@@ -1,0 +1,31 @@
+{
+  "manifest_version": "0.3",
+  "name": "nymph",
+  "display_name": "nymph",
+  "version": "@NYMPH_VERSION@",
+  "description": "Charts and diagrams from short YAML sources, as PNG images and live in the conversation.",
+  "long_description": "nymph draws plots (lines, bars, scatter, pies, heatmaps, 3D), dashboards of several charts, UML, ER, network and data-flow diagrams, flowcharts, Gantt and Sankey charts from a small YAML source. Claude writes the source and gets the PNG back to check it; you see the chart live in the conversation, where you can pan, zoom and hover the data, and Claude follows the view you leave. Everything runs on your machine: the server makes no network request.",
+  "author": { "name": "Binary Dice Games" },
+  "repository": { "type": "git", "url": "https://github.com/binary-dice-games/nymph" },
+  "license": "MIT",
+  "keywords": ["charts", "plots", "diagrams", "visualization", "uml", "png"],
+  "icon": "icon.png",
+  "server": {
+    "type": "binary",
+    "entry_point": "server/@NYMPH_EXE@",
+    "mcp_config": {
+      "command": "${__dirname}/server/nymph",
+      "args": ["mcp"]
+    }
+  },
+  "tools": [
+    { "name": "render_chart", "description": "Render a nymph chart from its YAML source to a PNG, shown live in the conversation." },
+    { "name": "check_chart", "description": "Validate a chart source without drawing it." },
+    { "name": "extract_chart", "description": "Return the YAML source a nymph PNG carries." },
+    { "name": "chart_schema", "description": "The fields of a nymph element type." },
+    { "name": "list_fonts", "description": "The font names a chart accepts." }
+  ],
+  "compatibility": {
+    "platforms": ["@NYMPH_MCPB_PLATFORM@"]
+  }
+}

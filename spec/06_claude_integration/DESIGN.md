@@ -115,7 +115,7 @@ New and changed files:
 |---|---|---|---|
 | Claude Code (terminal) | Plugin | `/plugin install nymph --marketplace binary-dice-games/nymph` (Claude Code 2.1.275 or later; before: `/plugin marketplace add binary-dice-games/nymph`, then `/plugin install nymph@nymph`) | Claude renders and sees PNGs, and writes them into the project. The terminal shows no image; the user opens the file. |
 | Claude Code (desktop app, Code tab) | Same plugin | Same | Also the App in the conversation. |
-| Claude Desktop (chat) | `nymph-<version>-<os>-<arch>.mcpb` | Double-click, or Settings > Extensions | PNG and App in the conversation. |
+| Claude Desktop (chat) | `nymph-<version>-windows-x86_64.mcpb` (macOS once built) | Double-click, or Settings > Extensions | PNG and App in the conversation. |
 | claude.ai (web, mobile) | `nymph-skill-<version>.zip` | Upload in claude.ai's Skills settings (code execution on) | Claude runs the static Linux binary in its code sandbox and shares the PNG as a file. No App (no local MCP server there). |
 
 The four packages carry the same executable and the same agent text
@@ -321,11 +321,23 @@ plugin is for Claude Code, and claude.ai gets the Skill (section 4.8).
 
 ### 4.7 The MCP bundle (`claude/mcpb/`)
 
-`manifest.json.in` (MCPB manifest, `server.type: "binary"`,
-`entry_point: "bin/nymph"`, `args: ["mcp"]`, the tool list, no user
-configuration). `cmake --build . --target nymph-mcpb` zips it with the
-executable into `nymph-<version>-<os>-<arch>.mcpb`. The executable is
-inside, so the bundle downloads nothing.
+`manifest.json.in`: MCPB manifest version 0.3 (the version the spec
+calls current; nothing of 0.4 is needed), `server.type: "binary"`,
+`entry_point: "server/nymph"` (`server/nymph.exe` on Windows), command
+`${__dirname}/server/nymph` (Claude Desktop appends `.exe` on Windows),
+`args: ["mcp"]`, the tools the server offers the model, one
+`compatibility.platforms` entry (`linux`, `win32` or `darwin`), no user
+configuration, and `icon.png` (`claude/mcpb/icon.png`, 512 x 512, the
+dragonfly of `resources/Nymph.png`). In release builds the `nymph-mcpb`
+target (`cmake/NymphMcpb.cmake`) zips the manifest, the icon and the
+executable (mode 755) into `dist/nymph-<version>-<os>-<arch>.mcpb`
+before `SHA256SUMS` is written. The zip holds files only: `mcpb unpack`
+(2.1.2) fails on a directory entry. The executable is inside, so the
+bundle downloads nothing. The manifest cannot name a CPU, so the arm64
+and x86-64 bundles of one OS differ only by file name. Claude Desktop
+runs on macOS and Windows; until nymph builds for macOS the Windows
+bundle is the one for most users, and the Linux bundles serve unofficial
+Linux builds of Claude Desktop.
 
 ### 4.8 The claude.ai Skill (`claude/skill/`)
 

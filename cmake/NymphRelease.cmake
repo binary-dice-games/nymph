@@ -65,4 +65,31 @@ function(nymph_add_dist_target)
     DEPENDS nymph-cli
     COMMENT "Writing ${NYMPH_DIST_DIR}"
     VERBATIM)
+
+  # The Claude Desktop extension (cmake/NymphMcpb.cmake), into dist/ before
+  # its SHA256SUMS is written.
+  if(NYMPH_MCP)
+    if(CMAKE_SYSTEM_NAME STREQUAL "Windows")
+      set(platform win32)
+    elseif(CMAKE_SYSTEM_NAME STREQUAL "Darwin")
+      set(platform darwin)
+    else()
+      set(platform linux)
+    endif()
+    set(NYMPH_MCPB_FILE "${NYMPH_DIST_DIR}/${NYMPH_DIST_NAME}.mcpb" PARENT_SCOPE)
+    add_custom_target(nymph-mcpb
+      COMMAND "${CMAKE_COMMAND}" -E make_directory "${NYMPH_DIST_DIR}"
+      COMMAND "${CMAKE_COMMAND}"
+              "-DTEMPLATE=${PROJECT_SOURCE_DIR}/claude/mcpb/manifest.json.in"
+              "-DEXE=$<TARGET_FILE:nymph-cli>"
+              "-DICON=${PROJECT_SOURCE_DIR}/claude/mcpb/icon.png"
+              "-DVERSION=${PROJECT_VERSION}" "-DPLATFORM=${platform}"
+              "-DSTAGE=${PROJECT_BINARY_DIR}/mcpb"
+              "-DOUTPUT=${NYMPH_DIST_DIR}/${NYMPH_DIST_NAME}.mcpb"
+              -P "${PROJECT_SOURCE_DIR}/cmake/NymphMcpb.cmake"
+      DEPENDS nymph-cli
+      COMMENT "Writing ${NYMPH_DIST_NAME}.mcpb"
+      VERBATIM)
+    add_dependencies(nymph-dist nymph-mcpb)
+  endif()
 endfunction()

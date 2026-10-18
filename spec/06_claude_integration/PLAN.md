@@ -385,6 +385,21 @@ else to do.
 
 ### 9. The Claude Desktop bundle
 
+*Result: done; not installed in Claude Desktop (none here).* Bundles of
+4.9 MB (Linux x86-64), similar for Windows and arm64, written into
+`dist/` and its `SHA256SUMS`. The official CLI, `@anthropic-ai/mcpb`
+2.1.2 from npm: `mcpb validate` passes for the Linux and Windows
+manifests (it recommends a 512 x 512 icon, so `claude/mcpb/icon.png` was
+made from the logo); `mcpb unpack` first failed with `EISDIR` on the
+zip's `server/` directory entry, so the zip now lists files only, and it
+then unpacks with the executable's mode kept and the unpacked server
+offering the App. `nymph_release_mcpb` (release builds) unpacks the
+bundle, checks entries, version, platform and command, and runs the
+unpacked server to compare the manifest's tools with the ones it offers
+the model (a renamed tool fails it); it passes on Linux x86-64, Windows
+(Wine) and arm64 (QEMU). The mcpb CLI is not a CTest test: it needs npm
+at test time.
+
 **Goal:** double-clicking `nymph-<version>-<os>-<arch>.mcpb` installs
 nymph in Claude Desktop, App included.
 

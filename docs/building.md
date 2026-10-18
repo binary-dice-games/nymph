@@ -197,7 +197,10 @@ ctest --test-dir build-release
 ```
 
 `build-release/dist/` then holds `nymph-<version>-<os>-<arch>` (`.exe` on
-Windows) and `SHA256SUMS` (`sha256sum -c SHA256SUMS` checks it).
+Windows), `nymph-<version>-<os>-<arch>.mcpb` (the Claude Desktop
+extension: double-click it to install) and `SHA256SUMS` (`sha256sum -c
+SHA256SUMS` checks them). `npx @anthropic-ai/mcpb validate
+build-release/mcpb/manifest.json` checks the extension's manifest.
 `NYMPH_RELEASE` builds MinSizeRel and strips the executable; on Linux it
 links statically and turns `NYMPH_OPENGL` off (a static glibc cannot load
 libEGL reliably; the software rasterizer draws an example in well under
@@ -222,8 +225,8 @@ cmake -S . -B build-arm64 -DCMAKE_TOOLCHAIN_FILE=cmake/toolchains/aarch64-linux-
 (On Ubuntu: `g++-mingw-w64-x86-64-posix wine64`, `g++-aarch64-linux-gnu
 qemu-user`.)
 
-To publish a release for the Claude Code plugin: upload the executables
-of every `dist/` to the GitHub release `v<version>`, then pin them in the
+To publish a release: upload the files of every `dist/` to the GitHub
+release `v<version>`, then pin them in the
 plugin and commit the result:
 
 ```sh
