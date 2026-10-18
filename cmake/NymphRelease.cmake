@@ -92,4 +92,23 @@ function(nymph_add_dist_target)
       VERBATIM)
     add_dependencies(nymph-dist nymph-mcpb)
   endif()
+
+  # The claude.ai Skill (cmake/NymphSkill.cmake): the code execution
+  # sandbox is Linux x86-64, so only that build makes it.
+  if(CMAKE_SYSTEM_NAME STREQUAL "Linux" AND _nymph_arch STREQUAL "x86_64")
+    set(NYMPH_SKILL_FILE "${NYMPH_DIST_DIR}/nymph-skill-${PROJECT_VERSION}.zip" PARENT_SCOPE)
+    add_custom_target(nymph-skill
+      COMMAND "${CMAKE_COMMAND}" -E make_directory "${NYMPH_DIST_DIR}"
+      COMMAND "${CMAKE_COMMAND}"
+              "-DSKILL=${PROJECT_SOURCE_DIR}/claude/skill/nymph/SKILL.md"
+              "-DGUIDE=${PROJECT_SOURCE_DIR}/docs/agent-guide.md"
+              "-DEXE=$<TARGET_FILE:nymph-cli>"
+              "-DSTAGE=${PROJECT_BINARY_DIR}/skill"
+              "-DOUTPUT=${NYMPH_DIST_DIR}/nymph-skill-${PROJECT_VERSION}.zip"
+              -P "${PROJECT_SOURCE_DIR}/cmake/NymphSkill.cmake"
+      DEPENDS nymph-cli
+      COMMENT "Writing nymph-skill-${PROJECT_VERSION}.zip"
+      VERBATIM)
+    add_dependencies(nymph-dist nymph-skill)
+  endif()
 endfunction()

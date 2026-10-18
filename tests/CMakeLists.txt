@@ -158,6 +158,11 @@ if(NYMPH_RELEASE AND TARGET nymph-cli)
               -DWORK_DIR=${CMAKE_CURRENT_BINARY_DIR}/release_mcpb "-DRUNNER=${_nymph_runner}"
               -P ${CMAKE_CURRENT_SOURCE_DIR}/mcpb_check.cmake)
   endif()
+  if(NYMPH_SKILL_FILE)
+    add_test(NAME nymph_release_skill
+      COMMAND ${CMAKE_COMMAND} -DSKILL_ZIP=${NYMPH_SKILL_FILE} -DSOURCE_DIR=${PROJECT_SOURCE_DIR}
+              -DWORK_DIR=${CMAKE_CURRENT_BINARY_DIR}/release_skill -P ${CMAKE_CURRENT_SOURCE_DIR}/skill_check.cmake)
+  endif()
   if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
     find_program(NYMPH_READELF NAMES readelf ${CMAKE_READELF})
     if(NYMPH_READELF)

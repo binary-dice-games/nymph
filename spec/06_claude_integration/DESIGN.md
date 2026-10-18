@@ -1,7 +1,11 @@
 # nymph — Claude Integration: Design
 
-**Status: in progress; PLAN step 1 done except the checks that need a
-real Claude client.** [PLAN.md](PLAN.md) is the
+**Status: done in this repository (plan steps 1-10; see [PLAN.md](PLAN.md)
+for each step's result). Verified on Linux with Claude Code 2.1.302,
+Chromium 141 through Playwright (a stand-in MCP Apps host), Wine 9 and
+QEMU. Not yet verified: Claude Desktop and claude.ai themselves, the
+plugin's launcher on Windows, native MSVC, and installing from GitHub,
+which needs a published release (the repository is private).** [PLAN.md](PLAN.md) is the
 ordered implementation plan. This document describes only what this
 project adds or changes; the rest of the architecture is
 [spec/01_core_features/DESIGN.md](../01_core_features/DESIGN.md)
@@ -341,13 +345,17 @@ Linux builds of Claude Desktop.
 
 ### 4.8 The claude.ai Skill (`claude/skill/`)
 
-`nymph-skill-<version>.zip`: `nymph/SKILL.md`, `nymph/reference.md`,
-`nymph/bin/nymph` (static Linux x86-64 only: the code execution
-sandbox is x86-64; the executable is 10.8 MB, under the 30 MB upload
-limit; PLAN step 1). The zip stores the executable with mode 755. `SKILL.md` tells Claude to run
-`bin/nymph` with `--rasterizer software`, look at the PNG it wrote, and
-share it as an output file. claude.ai's code sandbox has no network, so
-the binary must be inside the zip.
+`dist/nymph-skill-<version>.zip`, written by the `nymph-skill` target
+(`cmake/NymphSkill.cmake`) in Linux x86-64 release builds only (the code
+execution sandbox is x86-64): `nymph/SKILL.md`, `nymph/reference.md`
+(`docs/agent-guide.md`) and `nymph/bin/nymph`, the release executable
+(13.6 MB with the App, 4.7 MB zipped, under the 30 MB upload limit;
+PLAN step 1), mode 755, files only. The skill folder is the zip's top
+level, as claude.ai requires. `SKILL.md` says that when `nymph` is not on
+`PATH` it is `bin/nymph` next to it, to be run with `--rasterizer
+software`, and that a chart made in a sandbox goes to the user as files
+(PNG and YAML). claude.ai's code sandbox has no network, so the
+executable must be inside the zip.
 
 ## 5. Public Contract
 

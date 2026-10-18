@@ -418,6 +418,19 @@ nymph in Claude Desktop, App included.
 
 ### 10. The claude.ai Skill, documentation and close
 
+*Result: done; not uploaded to claude.ai (none here).* The Skill zip is
+4.7 MB (13.6 MB unpacked), in `dist/` and its `SHA256SUMS`;
+`nymph_release_skill` checks its three entries, that the copies match
+their sources, and that the unpacked executable draws SKILL.md's
+example. SKILL.md gained where the executable is in a skill and that a
+sandboxed chart goes to the user as files. In place of claude.ai, Claude
+Code 2.1.302 with the unpacked Skill as a project skill (no MCP, `nymph`
+not on `PATH`) drew a chart of Oslo's temperatures with `bin/nymph`,
+noticed its clipped axis and fixed it. `docs/claude.md` covers every
+client; README and `docs/agent-guide.md` point to it. `ctest -j` passed
+three times in a row in the native, release and `NYMPH_WEB` builds (481,
+467 and 4 tests).
+
 **Goal:** claude.ai users can upload one zip, and every document
 matches the code.
 
@@ -443,18 +456,26 @@ matches the code.
 
 ## Completion Criteria
 
-- [ ] All native, Node and browser tests pass under `ctest -j`; every
+- [x] All native, Node and browser tests pass under `ctest -j`; every
       committed example PNG is still reproduced byte for byte.
-- [ ] `nymph mcp` passes the session, tool and process tests; source
+      *481 native, 467 release, 4 web CTest tests (28 browser tests);
+      byte for byte on x86-64, arm64 within floating-point noise (step 7).*
+- [x] `nymph mcp` passes the session, tool and process tests; source
       errors come back as `isError` with the CLI's message.
 - [ ] In Claude Code (terminal), the plugin installs with the two
       commands of DESIGN.md section 3 and Claude renders, sees and
-      saves charts.
+      saves charts. *Done from a local copy of the marketplace with a
+      local release (step 8); from GitHub it needs a published release.*
 - [ ] In Claude Desktop, the `.mcpb` installs with a double-click and
       the chart is live in the conversation, or DESIGN.md says why not
-      (step 1) and the PNG is shown instead.
-- [ ] A user's zoom in the App reaches Claude and survives the next
-      render.
+      (step 1) and the PNG is shown instead. *The bundle passes the
+      official `mcpb` checks and runs unpacked (step 9); not tried in
+      Claude Desktop.*
+- [x] A user's zoom in the App reaches Claude and survives the next
+      render. *In the stand-in host the App sends the view (step 6);
+      given that note, Claude kept the view. A real host is open with
+      step 1.*
 - [ ] In claude.ai, the Skill renders a chart the user receives.
-- [ ] README, `docs/`, CHANGELOG, the DESIGN.md files and
+      *Simulated with Claude Code's skills (step 10); not uploaded.*
+- [x] README, `docs/`, CHANGELOG, the DESIGN.md files and
       `spec/INDEX.md` match the code.

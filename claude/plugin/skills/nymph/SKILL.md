@@ -17,7 +17,10 @@ its source, so it can be read back and changed later.
 - Without them: the `nymph` command. `nymph chart.yaml` writes
   `chart.png`; `nymph check chart.yaml` validates; `nymph schema
   PlotLine` lists fields; `nymph chart.png` prints the source back. Exit
-  code 0 is success; on 1, one line on standard error says why.
+  code 0 is success; on 1, one line on standard error says why. When
+  `nymph` is not on `PATH`, it is `bin/nymph` in this skill's folder: run
+  it by that path (once `chmod +x` if it is not executable), with
+  `--rasterizer software`.
 
 ## Workflow
 
@@ -25,7 +28,9 @@ its source, so it can be read back and changed later.
    how in `source` (the prompt, query or code).
 2. Render it. An error names `<line>:<column>` in the source and usually
    suggests the right name: fix that spot and render again.
-3. Look at the image and improve it if it is unclear, then show it.
+3. Look at the image and improve it if it is unclear, then show it. When
+   you made it with the command in a sandbox the user cannot see, give
+   them the PNG as a file (and the YAML, which they need to change it).
 4. To change a nymph PNG, read its source back first (its `view` key
    keeps the zoom the user chose in the viewer: keep it unless asked).
 5. Where the chart is shown live (the nymph viewer in the conversation),

@@ -15,6 +15,11 @@ sentence: trends over time, comparisons, distributions, proportions.
 
 ## The command
 
+With the nymph MCP tools (`nymph mcp`, the Claude Code plugin or the
+Claude Desktop extension: [claude.md](claude.md)), call `render_chart`
+with the YAML instead of running the command: it returns the PNG, and
+errors read the same. Everything else in this guide applies unchanged.
+
 If `nymph` is not on `PATH`, use the full path to the binary (in a source
 checkout: `build/app/nymph`). It needs no window, display or GPU and
 takes well under a second. It uses the GPU through OpenGL when there is

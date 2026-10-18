@@ -13,6 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `NYMPH_RELEASE` CMake option: static, stripped executables (`dist/nymph-<version>-<os>-<arch>`) with `SHA256SUMS`; toolchain files for Windows (MinGW-w64) and Linux arm64 cross builds in `cmake/toolchains/`.
 - Claude Code plugin (`claude/plugin/`; this repository is its marketplace): `/plugin install nymph --marketplace binary-dice-games/nymph` gives Claude the nymph MCP tools and the `nymph` command; its launcher downloads the release executable for the platform, checks its pinned SHA-256 and caches it in `~/.cache/nymph` (`NYMPH_BIN` uses your own).
 - Claude Desktop extension: release builds also write `dist/nymph-<version>-<os>-<arch>.mcpb`, an MCP bundle with the executable inside, installed with a double-click.
+- claude.ai skill: Linux x86-64 release builds also write `dist/nymph-skill-<version>.zip` (the skill instructions, the agent guide and the executable) to upload in claude.ai's skills settings.
 - Chrome extension (built with `NYMPH_WEB`, in `build-web/extension/`): turns nymph PNGs on any page into live charts of the same size, following pages that change (comments, previews, feeds); a toolbar button turns it off or on per site and counts the charts; options for the theme and the sites turned off. See `docs/extension.md`.
 - Web viewer: `fit: 'scale'` (and `fit="scale"`) lays the chart out at its source size and scales it to the box width, up or down.
 

@@ -198,8 +198,10 @@ ctest --test-dir build-release
 
 `build-release/dist/` then holds `nymph-<version>-<os>-<arch>` (`.exe` on
 Windows), `nymph-<version>-<os>-<arch>.mcpb` (the Claude Desktop
-extension: double-click it to install) and `SHA256SUMS` (`sha256sum -c
-SHA256SUMS` checks them). `npx @anthropic-ai/mcpb validate
+extension: double-click it to install), on Linux x86-64
+`nymph-skill-<version>.zip` (the claude.ai skill) and `SHA256SUMS`
+(`sha256sum -c SHA256SUMS` checks them). [claude.md](claude.md) says how
+each is installed. `npx @anthropic-ai/mcpb validate
 build-release/mcpb/manifest.json` checks the extension's manifest.
 `NYMPH_RELEASE` builds MinSizeRel and strips the executable; on Linux it
 links statically and turns `NYMPH_OPENGL` off (a static glibc cannot load
