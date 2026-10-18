@@ -68,9 +68,17 @@ image render_frames(const image_options& options, const draw_fn& draw) {
 
 image render_figure(const figure& f, raster_backend& backend) {
   require_fonts(f);
+  // The saved view (the `view` key) is found by element path.
+  std::unordered_map<const node*, std::string> paths;
+  if (!f.views.empty()) {
+    for (const auto& [path, n] : element_paths(f.root)) {
+      paths[n] = path;
+    }
+  }
   return render_frames(
       f.image,
       [&](draw_context& dc) {
+        dc.set_views(&f.views, &paths);
         layout_root(f.root, dc);
         dc.draw_node(f.root);
       },

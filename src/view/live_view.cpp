@@ -7,6 +7,7 @@
 #include <cfloat>
 #include <cmath>
 #include <optional>
+#include <set>
 #include <unordered_map>
 #include <utility>
 #include "core/error.hpp"
@@ -67,6 +68,11 @@ struct live_view::impl {
   std::vector<rect> input_areas; ///< Of the last frame, logical pixels.
   std::optional<view_pick> hovered;
   std::optional<view_pick> click;
+  /// The saved-view state of every viewable element after the last frame,
+  /// and the paths the user changed (they are saved by source_with_view()).
+  view_map last_states;
+  std::set<std::string> touched;
+  int input_frames_left = 0;
 
   // The ImGui side; recreated by reset_contexts().
   std::unique_ptr<imgui_contexts> contexts;
@@ -205,6 +211,81 @@ struct live_view::impl {
     frame_options.theme = effective_theme();
   }
 
+  /// What a recorded view would save, rounded to what matters on screen.
+  static element_view to_view(const plot_view_record& r) {
+    // To 10^-decimals, dividing by an exact power of ten so that 1.44
+    // stays 1.44 (multiplying by 1e-4 would give 1.4400000000000002).
+    const auto round_dec = [](double v, int decimals) {
+      if (decimals >= 0) {
+        const double p = std::pow(10.0, std::min(decimals, 300));
+        return std::round(v * p) / p;
+      }
+      const double p = std::pow(10.0, -decimals);
+      return std::round(v / p) * p;
+    };
+    // Six significant digits of the visible span.
+    const auto range = [&](double lo, double hi) {
+      const int decimals = 5 - static_cast<int>(std::floor(std::log10(std::max(hi - lo, 1e-300))));
+      return view_range{round_dec(lo, decimals), round_dec(hi, decimals)};
+    };
+    element_view v;
+    switch (r.kind) {
+      case view_kind::plot2d:
+        v.x = range(r.x_min, r.x_max);
+        v.y = range(r.y_min, r.y_max);
+        if (r.has_y2) {
+          v.y2 = range(r.y2_min, r.y2_max);
+        }
+        break;
+      case view_kind::gantt:
+        v.x = range(r.x_min, r.x_max);
+        break;
+      case view_kind::plot3d:
+        v.x = range(r.x_min, r.x_max);
+        v.y = range(r.y_min, r.y_max);
+        v.z = range(r.z_min, r.z_max);
+        v.rotation = std::array<double, 4>{
+            round_dec(r.rotation[0], 6),
+            round_dec(r.rotation[1], 6),
+            round_dec(r.rotation[2], 6),
+            round_dec(r.rotation[3], 6)};
+        break;
+      case view_kind::diagram:
+        v.zoom = round_dec(r.zoom, 4);
+        v.center = std::array<double, 2>{round_dec(r.center[0], 2), round_dec(r.center[1], 2)};
+        break;
+      case view_kind::none:
+        break;
+    }
+    for (const std::string& h : r.hidden) {
+      if (std::find(v.hidden.begin(), v.hidden.end(), h) == v.hidden.end()) {
+        v.hidden.push_back(h);
+      }
+    }
+    return v;
+  }
+
+  /// Notes the elements whose view changed in the frames after an input.
+  void track_changes() {
+    view_map now;
+    for (const plot_view_record& r : ctx->plot_views()) {
+      const auto it = paths.find(r.element);
+      if (it != paths.end()) {
+        now[it->second] = to_view(r);
+      }
+    }
+    if (input_frames_left > 0) {
+      --input_frames_left;
+      for (const auto& [path, v] : now) {
+        const auto before = last_states.find(path);
+        if (before != last_states.end() && !(before->second == v)) {
+          touched.insert(path);
+        }
+      }
+    }
+    last_states = std::move(now);
+  }
+
   /// One frame in the current contexts.
   void run_frame(double now) {
     ImGuiIO& io = ImGui::GetIO();
@@ -214,6 +295,7 @@ struct live_view::impl {
     io.DeltaTime = static_cast<float>(std::clamp(step, 1e-4, 0.25));
     last_time = now;
     ctx->begin_frame();
+    ctx->set_views(&fig->views, &paths);
     // Source limits stay fixed while fresh contexts settle (static parity
     // with render_figure()); then they let go for pan and zoom.
     ctx->set_lock_limits(fresh_frames < kFigureFrames);
@@ -244,6 +326,7 @@ struct live_view::impl {
       click = hovered;
     }
     input_areas = ctx->input_areas();
+    track_changes();
     views.clear();
     const float s = geom.css_scale;
     for (const plot_view_record& r : ctx->plot_views()) {
@@ -261,6 +344,16 @@ struct live_view::impl {
       v.has_y2 = r.has_y2;
       v.y2_min = r.y2_min;
       v.y2_max = r.y2_max;
+      v.kind = r.kind == view_kind::gantt ? "gantt"
+          : r.kind == view_kind::plot3d   ? "plot3d"
+          : r.kind == view_kind::diagram  ? "diagram"
+                                          : "plot";
+      v.z_min = r.z_min;
+      v.z_max = r.z_max;
+      v.rotation = r.rotation;
+      v.zoom = r.zoom;
+      v.center = r.center;
+      v.hidden = r.hidden;
       views.push_back(std::move(v));
     }
   }
@@ -283,6 +376,10 @@ void live_view::set_source(std::string_view source, bool reset_view) {
   // source; checked in separate contexts so the view state survives it.
   (void)layout_figure(f);
 
+  // A different saved view is meant to be shown: start from it.
+  if (m.fig && !(m.fig->views == f.views)) {
+    reset_view = true;
+  }
   m.fig = std::make_unique<figure>(std::move(f));
   m.source = std::string(source);
   m.paths.clear();
@@ -290,6 +387,10 @@ void live_view::set_source(std::string_view source, bool reset_view) {
   m.views.clear();
   m.hovered.reset();
   m.click.reset();
+  m.last_states.clear();
+  if (reset_view) {
+    m.touched.clear();
+  }
   m.overflowed = false;
   if (reset_view) {
     m.reset_contexts();
@@ -377,10 +478,13 @@ void live_view::input(const pointer_event& e) {
     io.AddMouseWheelEvent(e.wheel_x, e.wheel_y);
   }
   m.pending_frames = std::max(m.pending_frames, kInputFrames);
+  m.input_frames_left = kInputFrames + 1; // ImPlot applies some changes a frame late
 }
 
 void live_view::reset_view() {
   impl& m = *impl_;
+  m.touched.clear();
+  m.last_states.clear();
   m.reset_contexts();
   m.views.clear();
   m.update_geometry();
@@ -479,6 +583,24 @@ const std::string& live_view::description() const {
 
 std::string_view live_view::source() const {
   return impl_->source;
+}
+
+std::string live_view::source_with_view() const {
+  const impl& m = *impl_;
+  if (!m.fig) {
+    return m.source;
+  }
+  view_map saved = m.fig->views;
+  for (const std::string& path : m.touched) {
+    if (const auto it = m.last_states.find(path); it != m.last_states.end()) {
+      saved[path] = it->second;
+    }
+  }
+  const std::string text = write_view(saved);
+  if (text == write_view(m.fig->views)) {
+    return m.source; // nothing changed: the source as written
+  }
+  return replace_top_level(m.source, "view", text).source;
 }
 
 const texture_store& live_view::textures() const {

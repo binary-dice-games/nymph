@@ -8,6 +8,7 @@
 
 #include <string>
 #include <string_view>
+#include "document/view.hpp"
 #include "render/image_options.hpp"
 #include "schema/node.hpp"
 #include "schema/registry.hpp"
@@ -23,6 +24,9 @@ struct figure {
   source_pos image_font_pos; ///< Where `image.font` was written; line 0 if not.
   std::string description;
   node root;
+  /// The `view` key by element path (spec/04_web_viewer/DESIGN.md
+  /// section 3, "Saved view"); entries for missing elements are dropped.
+  view_map views;
 };
 
 /// @brief Parses and checks a source (spec/01_core_features/DESIGN.md section 3).
@@ -55,5 +59,10 @@ struct data_replacement {
 /// @throws nymph::error if `source` does not parse, or its top level is
 ///         not a block mapping (`key: value` lines starting at column 1).
 data_replacement replace_data(std::string_view source, std::string_view data_yaml);
+
+/// @brief replace_data() for any top-level key: replaces (or appends) the
+///        value of `key`; an empty `value_yaml` removes the key.
+/// @throws nymph::error as replace_data().
+data_replacement replace_top_level(std::string_view source, std::string_view key, std::string_view value_yaml);
 
 } // namespace bdg::nymph

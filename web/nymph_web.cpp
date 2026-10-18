@@ -410,6 +410,8 @@ EMSCRIPTEN_KEEPALIVE const char* nymph_viewer_state(int handle) {
       const plot_view& p = views[i];
       j += i == 0 ? "{\"element\":" : ",{\"element\":";
       json_string(j, p.element);
+      j += ",\"kind\":";
+      json_string(j, p.kind);
       const std::pair<const char*, double> fields[] = {
           {"x", p.x},
           {"y", p.y},
@@ -429,7 +431,33 @@ EMSCRIPTEN_KEEPALIVE const char* nymph_viewer_state(int handle) {
         j += ",\"y2Max\":";
         json_number(j, p.y2_max);
       }
-      j += '}';
+      if (p.kind == "plot3d") {
+        j += ",\"zMin\":";
+        json_number(j, p.z_min);
+        j += ",\"zMax\":";
+        json_number(j, p.z_max);
+        j += ",\"rotation\":[";
+        for (size_t q = 0; q < 4; ++q) {
+          j += q == 0 ? "" : ",";
+          json_number(j, p.rotation[q]);
+        }
+        j += ']';
+      }
+      if (p.kind == "diagram") {
+        j += ",\"zoom\":";
+        json_number(j, p.zoom);
+        j += ",\"center\":[";
+        json_number(j, p.center[0]);
+        j += ',';
+        json_number(j, p.center[1]);
+        j += ']';
+      }
+      j += ",\"hidden\":[";
+      for (size_t h = 0; h < p.hidden.size(); ++h) {
+        j += h == 0 ? "" : ",";
+        json_string(j, p.hidden[h]);
+      }
+      j += "]}";
     }
     j += "]}";
     return kOk;
@@ -448,11 +476,25 @@ EMSCRIPTEN_KEEPALIVE const char* nymph_viewer_source(int handle) {
   return j.c_str();
 }
 
-/// @brief render_png() of the viewer's source: 0 with the bytes in
-///        nymph_png_data() / nymph_png_size(), or 1 with last_error().
+/// @brief The viewer's source with the view on screen saved in its `view`
+///        key (live_view::source_with_view()); "" with last_error() when it
+///        cannot be written.
+EMSCRIPTEN_KEEPALIVE const char* nymph_viewer_yaml(int handle) {
+  std::string& j = scratch();
+  j.clear();
+  guarded([&] {
+    j = get(handle).view.source_with_view();
+    return kOk;
+  });
+  return j.c_str();
+}
+
+/// @brief render_png() of nymph_viewer_yaml(): the image on screen, its
+///        source embedded. 0 with the bytes in nymph_png_data() /
+///        nymph_png_size(), or 1 with last_error().
 EMSCRIPTEN_KEEPALIVE int nymph_viewer_to_png(int handle) {
   return guarded([&] {
-    png_buffer() = render_png(get(handle).view.source());
+    png_buffer() = render_png(get(handle).view.source_with_view());
     return kOk;
   });
 }

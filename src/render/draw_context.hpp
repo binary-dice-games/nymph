@@ -5,12 +5,14 @@
 
 #include <imgui.h>
 #include <implot.h>
+#include <array>
 #include <map>
 #include <optional>
 #include <string>
 #include <string_view>
 #include <unordered_map>
 #include <vector>
+#include "document/view.hpp"
 #include "render/image_options.hpp"
 #include "schema/node.hpp"
 
@@ -33,11 +35,19 @@ struct rect {
 ///        section 4, `view_state()`).
 struct plot_view_record {
   const node* element = nullptr;
+  view_kind kind = view_kind::plot2d;
   rect area; ///< The plot area (inside the axes), logical pixels.
   double x_min = 0, x_max = 0;
   double y_min = 0, y_max = 0;
   bool has_y2 = false;
   double y2_min = 0, y2_max = 0;
+  // 3D plots:
+  double z_min = 0, z_max = 0;
+  std::array<double, 4> rotation{0, 0, 0, 1};
+  // Diagrams:
+  double zoom = 1.0;
+  std::array<double, 2> center{0, 0};
+  std::vector<std::string> hidden; ///< Legend entries switched off.
 };
 
 /// @brief What is under the pointer in a live view: a data point, bar,
@@ -109,6 +119,61 @@ class draw_context {
     lock_limits_ = lock;
   }
 
+  // ── Saved view (the `view` key) ────────────────────────────────────────
+
+  /// @brief The saved views of the figure and the path of every node
+  ///        (both outlive the frames), or nulls for none.
+  void set_views(const view_map* views, const std::unordered_map<const node*, std::string>* paths) {
+    views_map_ = views;
+    paths_ = paths;
+  }
+
+  /// @brief `n`'s saved view, or nullptr.
+  const element_view* view_of(const node& n) const {
+    if (views_map_ == nullptr || paths_ == nullptr) {
+      return nullptr;
+    }
+    const auto p = paths_->find(&n);
+    if (p == paths_->end()) {
+      return nullptr;
+    }
+    const auto v = views_map_->find(p->second);
+    return v == views_map_->end() ? nullptr : &v->second;
+  }
+
+  /// @brief Whether elements apply their saved view (and source limits)
+  ///        this frame: always for PNGs, in a live view while fresh
+  ///        contexts settle.
+  bool apply_view() const {
+    return limits_cond() == ImPlotCond_Always;
+  }
+
+  /// @brief The plot whose items are being drawn (set by Plot and Plot3D
+  ///        around their children), or nullptr.
+  const node* current_plot() const {
+    return current_plot_;
+  }
+  void set_current_plot(const node* n) {
+    current_plot_ = n;
+    pending_hidden_.clear();
+  }
+
+  /// @brief Notes that legend entry `label` of the current plot is hidden.
+  void record_hidden(const std::string& label) {
+    if (interactive_) {
+      pending_hidden_.push_back(label);
+    }
+  }
+
+  /// @brief Records a view of a kind other than a 2D plot (3D plot,
+  ///        diagram); the current plot's hidden entries are attached.
+  void record_view(plot_view_record r) {
+    if (interactive_) {
+      r.hidden = pending_hidden_;
+      views_.push_back(std::move(r));
+    }
+  }
+
   /// @brief Called by the live view before each frame: forgets every
   ///        rectangle (the figure, and its node addresses, may have
   ///        changed) and keeps the last frame's plot views as previous.
@@ -159,7 +224,7 @@ class draw_context {
   /// @brief In a live view, records the current ImPlot plot's area and
   ///        limits for `n`; call between BeginPlot and EndPlot, after its
   ///        items. Does nothing when not interactive.
-  void record_current_plot(const node& n, bool with_y2);
+  void record_current_plot(const node& n, bool with_y2, view_kind kind = view_kind::plot2d);
 
   /// @brief In a live view, records `r` as an area that takes pointer input
   ///        (a plot or diagram that pans and zooms), so the host lets the
@@ -261,6 +326,10 @@ class draw_context {
   const image_options& options_;
   bool interactive_ = false;
   bool lock_limits_ = false;
+  const view_map* views_map_ = nullptr;
+  const std::unordered_map<const node*, std::string>* paths_ = nullptr;
+  const node* current_plot_ = nullptr;
+  std::vector<std::string> pending_hidden_;
   bool tooltips_ = true;
   std::optional<pick_candidate> candidate_;
   std::optional<pick> hovered_;

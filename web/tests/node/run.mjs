@@ -268,6 +268,41 @@ test('the single-file build draws the same pixels as the two-file one', async ()
   b.destroy();
 });
 
+test('toYaml saves the view the user left, and reopening it shows the same', async () => {
+  const source =
+    'image: {width: 400, height: 300}\nroot:\n  type: Plot\n  x_min: 0\n  x_max: 10\n  y_min: 0\n  y_max: 10\n' +
+    '  children:\n    - {type: PlotLine, label: a, xs: [0, 10], ys: [0, 10]}\n';
+  const v = await viewer(source);
+  v.resize(400, 300, 1);
+  const clock = { t: 0 };
+  settle(v, clock);
+  assertEq(v.toYaml(), source, 'nothing changed');
+  const p = v.state().views[0];
+  const at = (dx) => ({ x: p.x + p.width / 2 + dx, y: p.y + p.height / 2 });
+  v.pointer('move', at(0));
+  settle(v, clock);
+  v.pointer('down', at(0));
+  settle(v, clock);
+  for (let k = 1; k <= 4; ++k) {
+    v.pointer('move', at(-15 * k));
+    settle(v, clock);
+  }
+  v.pointer('up', at(-60));
+  settle(v, clock);
+  const moved = v.state().views[0];
+  const yaml = v.toYaml();
+  assert(/\nview:\n  root: \{x: \[/.test(yaml), yaml);
+  const again = await viewer(yaml);
+  again.resize(400, 300, 1);
+  settle(again);
+  const reopened = again.state().views[0];
+  assert(Math.abs(reopened.xMin - moved.xMin) < 1e-4 && Math.abs(reopened.xMax - moved.xMax) < 1e-4, `${reopened.xMin} vs ${moved.xMin}`);
+  // The PNG shows the view on screen and carries the YAML.
+  assert(Buffer.from(v.toPng()).includes('view:'), 'the PNG carries the view');
+  v.destroy();
+  again.destroy();
+});
+
 // ── Run ──────────────────────────────────────────────────────────────────────
 
 let failed = 0;

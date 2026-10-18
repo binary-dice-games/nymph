@@ -240,6 +240,58 @@ YAML. A PNG without a nymph chunk is drawn as a plain image (by the
 browser, through `createImageBitmap`) with no interaction, and `info()`
 says so. A corrupt PNG throws.
 
+### Saved view (added after the first release)
+
+The view a user leaves (zoom, pan, 3D rotation, series hidden from the
+legend) is saved in a new top-level `view` key, so a chart saved from the
+viewer reopens the same way, in the viewer and as a PNG
+([docs/format.md](../../docs/format.md#view) has the format):
+
+```yaml
+view:
+  root/children/0: {x: [2, 6.5], y: [10, 40], hidden: [memory]}
+  root/children/1: {zoom: 1.5, center: [310, 220]}
+```
+
+- **Keyed by element path**, the path picks already use. A separate key
+  rather than rewriting `x_min` / `x_max`: the author's limits stay (reset
+  view still means "as the source describes it"), the YAML is rewritten
+  in one place (`replace_top_level()`, as `setData`), and elements with no
+  such fields (diagrams, 3D rotation) fit the same scheme.
+- **What a kind saves** (`element_class::viewable()`): `Plot` `x`, `y`,
+  `y2`, `hidden`; `GanttChart` `x`; `Plot3D` `x`, `y`, `z`, `rotation`,
+  `hidden`; diagrams `zoom` (on top of the fit) and `center` (content
+  point at the centre, at zoom 1, so it does not depend on the box size).
+- **Applied like source limits**: always for PNGs, in a live view while
+  fresh contexts settle (`draw_context::apply_view()`), so PNG and viewer
+  agree byte for byte. Hidden entries are switched off right after their
+  item is plotted (hiding before would make ImPlot skip the item's colour
+  assignment); both paths run several frames first.
+- **Only what the user changed is saved.** The live view compares each
+  element's state before and after the frames that follow an input; such
+  elements are "touched" and `source_with_view()` saves their state, the
+  source's own entries staying for the others. An element the user never
+  touched keeps following its data (new data from an agent is not frozen
+  into a view). Values are rounded to six significant digits of the span
+  (centres to 0.01, zoom to 1e-4) so the YAML stays readable. Nothing
+  changed: the source comes back byte for byte.
+- **Lenient on paths, strict on content**: an entry naming an element
+  that no longer exists is ignored (the source changed since the view was
+  saved); a malformed entry of an existing element is a positioned error
+  with suggestions. A `setSource()` whose view differs from the chart's
+  starts from fresh contexts so the new view shows.
+
+### Menu
+
+A right click that did not drag opens a DOM menu: Save as PNG (the image
+on screen: `render_png()` of `source_with_view()`), Save as YAML
+(`toYaml()`), About (version, rasterizer, controls, licences). It opens
+on release, not on `contextmenu`, because Chrome fires that on press on
+Linux and macOS, and the press may start a right-drag box zoom. ImPlot's
+own right-click menus are off in live views (`NoMenus`; they draw
+nothing in PNGs). `menu: false` / `menu="false"` leaves the right click
+to the host.
+
 ### Accessibility
 
 The canvas gets `role="img"` and an `aria-label` from the source's
@@ -425,6 +477,11 @@ pays nothing:
 
 ### ImUml view transform (`imuml/`)
 
+(Later: `ImUml::SetNextDiagramView(zoom, center)` sets the view of the
+next diagram drawn, with or without the flag, for the saved view; the
+info reports `ViewCenter`.)
+
+
 ImUml fits each diagram to its rectangle (UML DESIGN, fit-to-rectangle
 zoom). It gains a per-diagram view (`Pan`, `ZoomFactor`) kept in the
 diagram's pool entry next to the layout cache, applied on top of the fit:
@@ -468,6 +525,8 @@ createViewer(container: HTMLElement, options?: {
   theme?: "source" | "light" | "dark" | "classic" | "auto";
   tooltips?: boolean;         // default true
   rasterizer?: "auto" | "webgl" | "software"; // default auto
+  menu?: boolean;             // the right-click menu, default true
+  fileName?: string;          // for saving; default from src, or "chart"
   wasmUrl?: string;           // default: next to nymph-viewer.js
   fontBaseUrl?: string;       // default: "fonts/" next to nymph-viewer.js
 }): Promise<NymphViewer>;
@@ -486,7 +545,9 @@ class NymphViewer {
   source(): string;           // with setData applied
   info(): { rasterizer: "webgl" | "software"; hasFigure: boolean;
             description: string; size: { width: number; height: number } };
-  toPng(): Uint8Array;        // render_png() of the current source and data: YAML embedded
+  toYaml(): string;           // the source, with data and the user's view (`view` key)
+  toPng(): Uint8Array;        // the image on screen: render_png() of toYaml(), which it embeds
+  save(kind: "png" | "yaml"): void; // downloads one of them (the menu's items)
   destroy(): void;
 }
 

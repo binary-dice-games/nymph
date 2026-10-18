@@ -6,6 +6,7 @@
 #pragma once
 
 #include <imgui.h>
+#include <array>
 #include <functional>
 #include <memory>
 #include <optional>
@@ -83,16 +84,22 @@ struct view_pick {
   bool operator==(const view_pick&) const = default;
 };
 
-/// @brief A 2D plot as the last frame left it: where its plot area is and
-///        what its axes show.
+/// @brief A plot, Gantt chart, 3D plot or diagram as the last frame left
+///        it: where it is and what it shows.
 struct plot_view {
   std::string element; ///< Element path, e.g. "root/children/1".
-  float x = 0.0f, y = 0.0f; ///< Plot area (inside the axes), CSS pixels.
+  std::string kind; ///< "plot", "gantt", "plot3d" or "diagram".
+  float x = 0.0f, y = 0.0f; ///< Plot area (inside the axes; the element for 3D plots and diagrams), CSS pixels.
   float width = 0.0f, height = 0.0f;
-  double x_min = 0, x_max = 0;
+  double x_min = 0, x_max = 0; ///< Plots, Gantt charts, 3D plots.
   double y_min = 0, y_max = 0;
   bool has_y2 = false;
   double y2_min = 0, y2_max = 0;
+  double z_min = 0, z_max = 0; ///< 3D plots.
+  std::array<double, 4> rotation{0, 0, 0, 1}; ///< 3D plots: quaternion x, y, z, w.
+  double zoom = 1.0; ///< Diagrams: on top of the fit.
+  std::array<double, 2> center{0, 0}; ///< Diagrams: content point at the centre.
+  std::vector<std::string> hidden; ///< Legend entries switched off.
 };
 
 /// @brief Thrown by an update whose figure names fonts without bytes. The
@@ -219,6 +226,15 @@ class live_view {
   const std::string& description() const;
   /// @brief The source of the figure on screen.
   std::string_view source() const;
+
+  /// @brief source() with the view on screen saved in its `view` key
+  ///        (spec/04_web_viewer/DESIGN.md section 3, "Saved view"): the
+  ///        elements the user zoomed, panned, rotated or hid series of,
+  ///        plus the source's own entries for the others. The source as it
+  ///        is when nothing changed.
+  /// @throws nymph::error for a source whose top level is not `key: value`
+  ///         lines and whose view must change.
+  std::string source_with_view() const;
   /// @brief The CPU textures (view_options::cpu_textures) the draw data
   ///        refers to.
   const texture_store& textures() const;

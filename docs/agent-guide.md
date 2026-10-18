@@ -97,6 +97,7 @@ data: |
 | `root` | Required. The element to draw. |
 | `data` | The table (or named tables) that `$column` values refer to. Optional if every number is written inline. |
 | `source` | Optional. How the data was made: the prompt, query, command or code. Never drawn; kept in the PNG for the next edit. |
+| `view` | Written by the web viewer: the zoom, pan and hidden series the user left. Keep it when you edit the chart (it is ignored for elements that no longer exist); remove it to show the chart as you describe it. |
 
 Rules that cause most errors:
 

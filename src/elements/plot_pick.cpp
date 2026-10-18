@@ -217,6 +217,22 @@ void draw_pick(const draw_context& dc, const pick_candidate& c, ImDrawList* dl) 
 
 } // namespace
 
+void sync_hidden(draw_context& dc, const char* label) {
+  ImPlotItem* item = label == nullptr ? nullptr : ImPlot::GetItem(label);
+  if (item == nullptr) {
+    return;
+  }
+  if (const node* plot = dc.current_plot(); plot != nullptr && dc.apply_view()) {
+    if (const element_view* v = dc.view_of(*plot);
+        v != nullptr && std::find(v->hidden.begin(), v->hidden.end(), label) != v->hidden.end()) {
+      item->Show = false;
+    }
+  }
+  if (!item->Show) {
+    dc.record_hidden(label);
+  }
+}
+
 void finish_picks(draw_context& dc, ImDrawList* dl) {
   std::optional<pick_candidate> c = dc.take_pick_candidate();
   if (!c) {

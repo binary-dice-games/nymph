@@ -467,6 +467,10 @@ class chart_class : public element_class {
     return ImVec2(600.0f, std::ceil(h));
   }
 
+  view_kind viewable() const override {
+    return view_kind::gantt;
+  }
+
   void draw(const node& n, draw_context& dc) const override {
     using namespace chart_field;
     const schedule s = schedule_of(n);
@@ -485,7 +489,7 @@ class chart_class : public element_class {
       setup(n, s, r.width(), dc);
       plot(n, s, dc);
       finish_plot_picks(dc);
-      dc.record_current_plot(n, false);
+      dc.record_current_plot(n, false, view_kind::gantt);
       ImPlot::EndPlot();
     }
     if (cmap != kColormapDefault) {
@@ -524,6 +528,11 @@ class chart_class : public element_class {
     // and the date ticks follow the range on screen.
     ImPlot::SetupAxisLimits(ImAxis_X1, x0, x1, dc.limits_cond());
     double t0 = x0, t1 = x1;
+    if (const element_view* saved = dc.view_of(n); saved != nullptr && saved->x) {
+      ImPlot::SetupAxisLimits(ImAxis_X1, saved->x->min, saved->x->max, dc.limits_cond());
+      t0 = saved->x->min;
+      t1 = saved->x->max;
+    }
     if (const plot_view_record* view = dc.previous_plot_view(n)) {
       t0 = view->x_min;
       t1 = view->x_max;

@@ -1921,6 +1921,18 @@ void EndDiagram(int kind) {
   bool hovered = false;
   bool held = false;
   ImVec2 pan(0.0f, 0.0f);
+  const bool next_view = d->HasNextView;
+  if (next_view) {
+    // The content point NextCenter at the centre of the space below the
+    // title: origin = centre - NextCenter * zoom, as an offset from the fit.
+    d->HasNextView = false;
+    d->ViewZoom = d->NextZoom;
+    const float z = zoom * d->ViewZoom;
+    const ImVec2 c(
+        (d->NextCenter.x != d->NextCenter.x) ? content.x * 0.5f : d->NextCenter.x,
+        (d->NextCenter.y != d->NextCenter.y) ? content.y * 0.5f : d->NextCenter.y);
+    d->ViewPan = ImVec2((content.x * 0.5f - c.x) * z, (content.y * 0.5f - c.y) * z);
+  }
   if (interactive) {
     ImGui::ButtonBehavior(bb, d->ID, &hovered, &held, ImGuiButtonFlags_MouseButtonLeft);
     ImGuiIO& io = ImGui::GetIO();
@@ -1944,7 +1956,13 @@ void EndDiagram(int kind) {
     }
     zoom = fit * d->ViewZoom;
     pan = d->ViewPan;
+  } else if (next_view) {
+    zoom *= d->ViewZoom;
+    pan = d->ViewPan;
+  }
+  if (interactive || next_view) {
     info.ViewZoom = d->ViewZoom;
+    info.ViewCenter = ImVec2(content.x * 0.5f - pan.x / zoom, content.y * 0.5f - pan.y / zoom);
   }
   info.Zoom = zoom;
   ImDrawList* dl = ImGui::GetWindowDrawList();

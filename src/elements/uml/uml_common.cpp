@@ -6,6 +6,7 @@
 #include <imgui.h>
 #include <imgui_internal.h> // ImHashStr: ImUml hashes item ids with it
 #include <cmath>
+#include <limits>
 #include <memory>
 #include <stdexcept>
 #include <string>
@@ -395,6 +396,14 @@ ImUmlDiagramInfo diagram_class::submit(const node& n, draw_context& dc, const re
     size = ImVec2(r->width(), r->height());
     // A live view pans and zooms the diagram (spec/04_web_viewer).
     flags = dc.interactive() ? ImUmlDiagramFlags_Interactive : ImUmlDiagramFlags_None;
+    // The saved view (the `view` key).
+    if (const element_view* v = dc.view_of(n); v != nullptr && dc.apply_view() && (v->zoom || v->center)) {
+      const float nan = std::numeric_limits<float>::quiet_NaN();
+      ImUml::SetNextDiagramView(
+          v->zoom ? static_cast<float>(*v->zoom) : 1.0f,
+          v->center ? ImVec2(static_cast<float>((*v->center)[0]), static_cast<float>((*v->center)[1]))
+                    : ImVec2(nan, nan));
+    }
     ImGui::SetCursorScreenPos(r->min);
   }
   if (begin_of(kind_)(id.c_str(), size, flags)) {
@@ -458,6 +467,13 @@ void diagram_class::draw(const node& n, draw_context& dc) const {
   if (dc.interactive()) {
     offer_hovered(n, dc, info);
     finish_picks(dc, ImGui::GetWindowDrawList());
+    plot_view_record view;
+    view.element = &n;
+    view.kind = view_kind::diagram;
+    view.area = r;
+    view.zoom = info.ViewZoom;
+    view.center = {info.ViewCenter.x, info.ViewCenter.y};
+    dc.record_view(std::move(view));
   }
 }
 

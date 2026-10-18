@@ -332,6 +332,7 @@ struct ImUmlDiagramInfo {
   int SkippedItems; ///< Edges or messages naming an unknown id.
   // ImUmlDiagramFlags_Interactive only:
   float ViewZoom; ///< The user's zoom on top of the fit (1 = fitted).
+  ImVec2 ViewCenter; ///< Content point (zoom-1 units) at the centre of the view; also with SetNextDiagramView().
   int HoveredNode; ///< Node under the mouse, in submission order; -1 for none.
   ImGuiID HoveredNodeId; ///< Its id hashed with ImHashStr; 0 for none.
   int HoveredEdge; ///< Edge under the mouse (not a node), in submission order; -1 for none.
@@ -343,6 +344,7 @@ struct ImUmlDiagramInfo {
     Zoom = 1.0f;
     NodeCount = EdgeCount = SkippedItems = 0;
     ViewZoom = 1.0f;
+    ViewCenter = ImVec2(0, 0);
     HoveredNode = HoveredEdge = -1;
     HoveredNodeId = HoveredEdgeFrom = HoveredEdgeTo = 0;
     HoveredMin = HoveredMax = ImVec2(0, 0);
@@ -603,5 +605,11 @@ IMGUI_API void Link(
 // ── Queries ──────────────────────────────────────────────────────────────────
 
 IMGUI_API const ImUmlDiagramInfo& GetLastDiagramInfo();
+/// Sets the view of the next diagram drawn (not measured): `zoom` on top of
+/// the fit (0.25 to 8) and the content point (zoom-1 units, as
+/// ImUmlDiagramInfo::ViewCenter) at the centre; a NaN component centres the
+/// content on that axis. Applies with or without ImUmlDiagramFlags_Interactive
+/// (a saved view drawn into an image); with it, the user moves on from there.
+IMGUI_API void SetNextDiagramView(float zoom, const ImVec2& center);
 
 } // namespace ImUml

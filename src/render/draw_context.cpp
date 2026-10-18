@@ -23,12 +23,13 @@ void draw_context::draw_children(const node& n) {
   }
 }
 
-void draw_context::record_current_plot(const node& n, bool with_y2) {
+void draw_context::record_current_plot(const node& n, bool with_y2, view_kind kind) {
   if (!interactive_) {
     return;
   }
   plot_view_record v;
   v.element = &n;
+  v.kind = kind;
   const ImVec2 pos = ImPlot::GetPlotPos();
   const ImVec2 size = ImPlot::GetPlotSize();
   v.area = {pos, ImVec2(pos.x + size.x, pos.y + size.y)};
@@ -43,6 +44,7 @@ void draw_context::record_current_plot(const node& n, bool with_y2) {
     v.y2_min = r2.Y.Min;
     v.y2_max = r2.Y.Max;
   }
+  v.hidden = pending_hidden_;
   views_.push_back(v);
 }
 

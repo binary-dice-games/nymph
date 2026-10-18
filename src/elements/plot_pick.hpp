@@ -87,6 +87,16 @@ void offer_bars(
 ///        pick. For elements drawn outside an ImPlot plot.
 void finish_picks(draw_context& dc, ImDrawList* dl);
 
+// ── Saved view: hidden legend entries ─────────────────────────────────────
+
+/// @brief After an item labelled `label` is plotted in the current 2D
+///        plot: hides it when the plot's saved view lists it and views
+///        apply this frame (draw_context::apply_view()), then records it if
+///        hidden, for the live view to save. Hiding after plotting leaves
+///        ImPlot's colour assignment alone; it shows from the next frame,
+///        and PNGs and fresh live views run several frames first.
+void sync_hidden(draw_context& dc, const char* label);
+
 /// @brief Ends picking for the open plot: takes the best candidate, draws
 ///        its highlight ring and (when enabled) the tooltip, and makes it
 ///        the frame's hovered pick. Call before EndPlot().

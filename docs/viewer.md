@@ -46,7 +46,8 @@ its text:
 A markdown renderer can turn a fenced block whose language is `nymph`
 into the last form (escape `<` and `&` in the text). Attributes: `src`,
 `fit` (`source`, `width`, `fill`), `theme` (`source`, `light`, `dark`,
-`classic`, `auto`), `tooltips` (`false` turns nymph's own off). Events,
+`classic`, `auto`), `tooltips` (`false` turns nymph's own off), `menu`
+(`false` turns the right-click menu off). Events,
 bubbling: `nymph-load` (shown; `detail` is `info()`), `nymph-hover`,
 `nymph-click`, `nymph-view`, `nymph-error` (the error is also shown as
 text in the element). Its `viewer` property is the `NymphViewer`.
@@ -63,15 +64,17 @@ setInterval(() => viewer.setData({ revenue: latestValues() }), 250);
 
 | Call | What |
 |------|------|
-| `createViewer(container, options)` | A viewer in `container` (a canvas is added to it). Options: `source` or `png`, `fit`, `theme`, `tooltips`, `rasterizer` (`auto`, `webgl`, `software`), and for the first viewer of the page `wasmUrl`, `fontBaseUrl`, `fetchFont(name)`. |
+| `createViewer(container, options)` | A viewer in `container` (a canvas is added to it). Options: `source` or `png`, `fit`, `theme`, `tooltips`, `menu` (`false` turns the right-click menu off), `fileName` (for saving; default from `src`, or `chart`), `rasterizer` (`auto`, `webgl`, `software`), and for the first viewer of the page `wasmUrl`, `fontBaseUrl`, `fetchFont(name)`. |
 | `setSource(yaml, {resetView})` | Shows a new source; the zoom of elements that did not change is kept unless `resetView`. |
 | `setData(tables)` | Replaces the source's `data` (an object, or YAML / JSON text); the view is kept. |
 | `setPng(bytes)` | Shows the source a nymph PNG carries; resolves `false` for a PNG without one (shown as a plain image). |
 | `setTheme(theme)`, `resetView()`, `resize(w, h, ratio)` | Theme override (`''` for the source's), back to the source's view, box size (the element and `createViewer` follow their container themselves). |
-| `on(event, callback)` | `hover` (pick or `null`), `click` (pick), `view` (every plot's area and ranges after a pan or zoom settles), `error` (an update failed). Returns a function that removes the listener. |
+| `on(event, callback)` | `hover` (pick or `null`), `click` (pick), `view` (every plot, Gantt chart, 3D plot and diagram after a pan, zoom, rotation or legend click settles: ranges, rotation, zoom, hidden series), `error` (an update failed). Returns a function that removes the listener. |
 | `rendered()` | Resolves when every update so far is on screen. |
 | `info()`, `state()`, `source()` | Rasterizer, description and size; geometry, hovered pick and plot views; the source on screen. |
-| `toPng()` | The chart as a nymph PNG (its source, with the current data, embedded). |
+| `toYaml()` | The chart's YAML as it is on screen: the source with the current data and the user's zoom, pan, rotation and hidden series saved in its [`view` key](format.md#view). The source as written when the user changed nothing. |
+| `toPng()` | The image on screen as a nymph PNG, `toYaml()` embedded. |
+| `save('png' \| 'yaml')` | Downloads `toPng()` or `toYaml()` (what the menu's items do). |
 | `destroy()` | Removes the canvas and frees the viewer. |
 
 Updates resolve once the chart is shown and reject with a `NymphError`
@@ -99,6 +102,23 @@ vertical swipe scrolls the page, a horizontal one pans, two fingers zoom.
 Source limits (`x_min`, ...) are where a plot starts; double-click or
 `resetView()` goes back. New data outside the visible range is not
 followed unless the axis has the `AutoFit` flag.
+
+## Saving and iterating
+
+A right click (without dragging: a right-drag zooms to a box) opens a
+menu: **Save as PNG** (the image on screen), **Save as YAML** and **About
+nymph viewer**; the menu key or Shift+F10 opens it from the keyboard.
+Both files keep the view: the zoom, pan, rotation and hidden series of
+the elements the user changed go into the source's
+[`view` key](format.md#view), so the chart reopens the same way in the
+viewer and the `nymph` CLI draws the same PNG.
+
+An AI agent in a chat can iterate without the CLI: show the chart with
+`setSource(yaml)`, let the user explore it, read it back with `toYaml()`
+(the user's view included), change the data or the elements, and show it
+again. A `setSource()` whose `view` differs from the chart's starts from
+that view; otherwise the user's zoom stays. Only what the user changed is
+saved: an element the user never touched keeps following its data.
 
 ## Rendering
 

@@ -37,6 +37,7 @@ supported.
 | `root` | yes | The element to draw. |
 | `data` | no | The table, or named tables, that fields refer to with `$column` / `$table:column`. |
 | `source` | no | How the data was made: the prompt, query or code. Kept in the PNG, never drawn. |
+| `view` | no | Zoom, pan, rotation and hidden series per element, as the [web viewer](viewer.md) saves them. Below. |
 
 Any other key is an error.
 
@@ -261,6 +262,34 @@ source:
 ```
 
 A `$` inside `source` is plain text, not a column reference.
+
+## `view`
+
+`view` holds what a user did to the chart in the [web viewer](viewer.md)
+(zoom, pan, rotation, series hidden from the legend), so the chart opens
+the same way again, in the viewer and as a PNG. The viewer writes it when
+the chart is saved (`toYaml()`, `toPng()`, the right-click menu); it can
+also be written by hand. Each entry names an element by its path in the
+source (`root`, `root/children/1`, `root/children/0/children/2`):
+
+```yaml
+view:
+  root/children/0: {x: [2, 6.5], y: [10, 40], hidden: [memory]}
+  root/children/1: {zoom: 1.5, center: [310, 220]}
+  root/children/2: {rotation: [0.11, 0.23, 0.31, 0.92], z: [-1, 1]}
+```
+
+| Element | Keys |
+|---|---|
+| `Plot` | `x`, `y`, `y2`: `[min, max]` ranges, which win over `x_min` / `x_max` ...; `hidden`: legend labels switched off. |
+| `GanttChart` | `x`: the time range shown, in the chart's time unit (UNIX seconds for dates). |
+| `Plot3D` | `x`, `y`, `z`; `rotation`: a quaternion `[x, y, z, w]`; `hidden`. |
+| UML diagrams, `Flowchart` | `zoom`: 0.25 to 8 times the fit; `center`: the diagram point at the centre, in diagram units at zoom 1. |
+
+An entry whose path names no such element (the source changed since the
+view was saved) is ignored; a malformed entry of an element that has a
+view is an error. The ranges and hidden series of a view are where the
+chart starts: the user can still pan, zoom and show them again.
 
 ## UML diagrams
 

@@ -398,6 +398,10 @@ class plot_class : public element_class {
   }
 
   /// Natural size (a 0 hint): wish's default height, 400 wide.
+  view_kind viewable() const override {
+    return view_kind::plot2d;
+  }
+
   ImVec2 measure(const node&, draw_context&, float) const override {
     return ImVec2(400.0f, 300.0f);
   }
@@ -416,7 +420,10 @@ class plot_class : public element_class {
     if ((n.get<int64_t>(flags) & ImPlotFlags_NoInputs) == 0) {
       dc.add_input_area(r);
     }
-    if (ImPlot::BeginPlot(str(n, title), size, static_cast<ImPlotFlags>(n.get<int64_t>(flags)))) {
+    // In a live view the host's own menu takes the right click (ImPlot's
+    // menus change nothing that is drawn).
+    const ImPlotFlags live_flags = dc.interactive() ? ImPlotFlags_NoMenus : 0;
+    if (ImPlot::BeginPlot(str(n, title), size, static_cast<ImPlotFlags>(n.get<int64_t>(flags)) | live_flags)) {
       const std::string& xl = n.get<std::string>(x_label);
       const std::string& yl = n.get<std::string>(y_label);
       const auto xf = static_cast<ImPlotAxisFlags>(n.get<int64_t>(x_flags));
@@ -439,6 +446,18 @@ class plot_class : public element_class {
           setup_axis(n, a, dc);
         }
       }
+      // The saved view (the `view` key) wins over the source limits.
+      if (const element_view* v = dc.view_of(n)) {
+        if (v->x) {
+          ImPlot::SetupAxisLimits(ImAxis_X1, v->x->min, v->x->max, dc.limits_cond());
+        }
+        if (v->y) {
+          ImPlot::SetupAxisLimits(ImAxis_Y1, v->y->min, v->y->max, dc.limits_cond());
+        }
+        if (v->y2 && y2) {
+          ImPlot::SetupAxisLimits(ImAxis_Y2, v->y2->min, v->y2->max, dc.limits_cond());
+        }
+      }
       const int64_t location = n.get<int64_t>(legend_location);
       const int64_t lflags = n.get<int64_t>(legend_flags);
       if (location >= 0 || lflags != 0) {
@@ -446,9 +465,11 @@ class plot_class : public element_class {
             static_cast<ImPlotLocation>(location < 0 ? int64_t{ImPlotLocation_NorthWest} : location),
             static_cast<ImPlotLegendFlags>(lflags));
       }
+      dc.set_current_plot(&n);
       dc.draw_children(n);
       finish_plot_picks(dc);
       dc.record_current_plot(n, y2);
+      dc.set_current_plot(nullptr);
       ImPlot::EndPlot();
     }
     if (colormap_value != kColormapDefault) {
@@ -528,9 +549,18 @@ class series_class : public element_class {
       ImPlot::SetAxes(ImAxis_X1, ImAxis_Y2);
     }
     plot(n, dc);
+    // Legend entries the saved view hides, and those the user hid.
+    for (const std::string& l : legend_labels(n)) {
+      sync_hidden(dc, l.c_str());
+    }
     if (y2) {
       ImPlot::SetAxes(ImAxis_X1, ImAxis_Y1);
     }
+  }
+
+  /// The legend labels of the items `n` plots. Default: its `label`.
+  virtual std::vector<std::string> legend_labels(const node& n) const {
+    return {n.get<std::string>(item_field::label)};
   }
 
  protected:
@@ -1031,6 +1061,10 @@ class pie_class : public series_class {
     }
   }
 
+  std::vector<std::string> legend_labels(const node& n) const override {
+    return split_lines(n.get<std::string>(labels));
+  }
+
   void plot(const node& n, draw_context& dc) const override {
     const std::vector<std::string> names = split_lines(n.get<std::string>(labels));
     std::vector<const char*> ids;
@@ -1410,6 +1444,10 @@ class bar_groups_class : public series_class {
           "has " + std::to_string(count) + " values, not a whole number of groups of " + std::to_string(names) +
               " (one value per label in each group)");
     }
+  }
+
+  std::vector<std::string> legend_labels(const node& n) const override {
+    return n.get<std::vector<std::string>>(labels);
   }
 
   void plot(const node& n, draw_context& dc) const override {

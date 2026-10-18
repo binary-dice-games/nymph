@@ -36,6 +36,8 @@ add_library(nymph STATIC
   fonts/fonts_used.cpp
   document/yaml_doc.hpp
   document/yaml_doc.cpp
+  document/view.hpp
+  document/view.cpp
   document/table.hpp
   document/table.cpp
   document/bind.hpp

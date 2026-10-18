@@ -15,6 +15,39 @@ const FIT = { source: 0, width: 1, fill: 2 };
 const POINTER = { move: 0, down: 1, up: 2, wheel: 3, leave: 4 };
 const STATUS = { ok: 0, error: 1, fontsNeeded: 2, plainPng: 3 };
 
+/** The menu's and About panel's styles, added to the page once. */
+function injectStyle() {
+  if (document.getElementById('nymph-viewer-style')) {
+    return;
+  }
+  const style = document.createElement('style');
+  style.id = 'nymph-viewer-style';
+  style.textContent = `
+.nymph-menu, .nymph-about > div {
+  --nv-bg: #fff; --nv-fg: #1f1f1f; --nv-line: #d0d0d0; --nv-hover: #e8eefc;
+  font: 13px/1.4 system-ui, sans-serif; color: var(--nv-fg); background: var(--nv-bg);
+  border: 1px solid var(--nv-line); border-radius: 6px; box-shadow: 0 4px 16px rgba(0,0,0,.18);
+}
+@media (prefers-color-scheme: dark) {
+  .nymph-menu, .nymph-about > div { --nv-bg: #262626; --nv-fg: #e6e6e6; --nv-line: #444; --nv-hover: #34405a; }
+}
+.nymph-menu { position: fixed; z-index: 2147483647; min-width: 170px; padding: 4px; }
+.nymph-menu button { display: block; width: 100%; text-align: left; font: inherit; color: inherit;
+  background: none; border: 0; border-radius: 4px; padding: 6px 10px; cursor: pointer; }
+.nymph-menu button:hover:not(:disabled), .nymph-menu button:focus-visible { background: var(--nv-hover); outline: none; }
+.nymph-menu button:disabled { opacity: .45; cursor: default; }
+.nymph-menu hr { border: 0; border-top: 1px solid var(--nv-line); margin: 4px 2px; }
+.nymph-about { position: fixed; inset: 0; z-index: 2147483647; display: grid; place-items: center; background: rgba(0,0,0,.25); }
+.nymph-about > div { max-width: min(420px, calc(100vw - 32px)); padding: 16px 18px; }
+.nymph-about h2 { font-size: 16px; margin: 0 0 6px; }
+.nymph-about p, .nymph-about ul { margin: 6px 0; }
+.nymph-about ul { padding-left: 18px; }
+.nymph-about small { display: block; opacity: .75; margin: 10px 0; }
+.nymph-about button { font: inherit; padding: 4px 14px; border-radius: 4px; border: 1px solid var(--nv-line);
+  background: var(--nv-hover); color: inherit; cursor: pointer; }`;
+  document.head.appendChild(style);
+}
+
 /** A problem in a nymph source (or a failed update). */
 export class NymphError extends Error {
   /**
@@ -293,6 +326,10 @@ export class NymphViewer {
     add('pointerdown', (e) => {
       canvas.setPointerCapture(e.pointerId);
       ++this.buttonsDown;
+      this.closeMenu();
+      if (e.button === 2) {
+        this.rightDown = { x: e.clientX, y: e.clientY };
+      }
       if (e.pointerType === 'touch') {
         this.touches.set(e.pointerId, { x: e.offsetX, y: e.offsetY });
         if (this.touches.size === 2) {
@@ -318,6 +355,14 @@ export class NymphViewer {
     });
     const release = (e) => {
       this.buttonsDown = Math.max(0, this.buttonsDown - 1);
+      // A right click that did not drag (a drag box-zooms a plot) opens the menu.
+      if (e.type === 'pointerup' && e.button === 2 && this.rightDown && this.options.menu !== false) {
+        const moved = Math.hypot(e.clientX - this.rightDown.x, e.clientY - this.rightDown.y);
+        if (moved < 4) {
+          setTimeout(() => this.openMenu(e.clientX, e.clientY), 0);
+        }
+      }
+      this.rightDown = null;
       const pinching = this.touches.size >= 2;
       this.touches.delete(e.pointerId);
       if (!pinching) {
@@ -350,10 +395,20 @@ export class NymphViewer {
       { passive: false },
     );
     add('contextmenu', (e) => {
-      if (this.handle !== 0 && this.core.m._nymph_viewer_takes_wheel(this.handle, e.offsetX, e.offsetY) === 1) {
-        e.preventDefault(); // the right button box-zooms plots
+      // nymph's menu opens on release instead (the press may start a box
+      // zoom); without it, the browser's menu stays outside plots.
+      if (this.options.menu !== false || (this.handle !== 0 && this.core.m._nymph_viewer_takes_wheel(this.handle, e.offsetX, e.offsetY) === 1)) {
+        e.preventDefault();
       }
     });
+    add('keydown', (e) => {
+      if (e.key === 'ContextMenu' || (e.shiftKey && e.key === 'F10')) {
+        e.preventDefault();
+        const box = canvas.getBoundingClientRect();
+        this.openMenu(box.left + 8, box.top + 8);
+      }
+    });
+    canvas.tabIndex = 0; // reachable from the keyboard, for the menu key
   }
 
   /** @private */
@@ -510,7 +565,8 @@ export class NymphViewer {
 
   /** @private What a view event reports, as a comparable string. */
   viewKey(state) {
-    return JSON.stringify(state.views.map(({ element, xMin, xMax, yMin, yMax, y2Min, y2Max }) => ({ element, xMin, xMax, yMin, yMax, y2Min, y2Max })));
+    // Everything a view can save, not where it is drawn.
+    return JSON.stringify(state.views.map(({ x, y, width, height, ...view }) => view));
   }
 
   /** @private Resolves rendered() once nothing is due and no update is pending. */
@@ -553,6 +609,160 @@ export class NymphViewer {
     if (source) {
       this.setSource(source).catch(() => {});
     }
+  }
+
+  // ── Menu: save, about ──────────────────────────────────────────────────────
+
+  /** The file name to save under, without extension. */
+  fileName() {
+    if (this.options.fileName) {
+      return this.options.fileName;
+    }
+    const src = this.options.src;
+    const base = src ? decodeURIComponent(new URL(src, location.href).pathname.split('/').pop() || '') : '';
+    return base.replace(/\.(ya?ml|png)$/i, '') || 'chart';
+  }
+
+  /** Saves the chart as `kind`: "png" (what is on screen) or "yaml" (toYaml()). */
+  save(kind) {
+    const png = kind === 'png';
+    const body = png ? this.toPng() : this.toYaml();
+    const blob = new Blob([body], { type: png ? 'image/png' : 'application/yaml' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${this.fileName()}.${png ? 'png' : 'yaml'}`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  }
+
+  /** @private The right-click menu at viewport position (x, y). */
+  openMenu(x, y) {
+    if (this.handle === 0 || this.options.menu === false || typeof document === 'undefined') {
+      return;
+    }
+    this.closeMenu();
+    injectStyle();
+    const menu = document.createElement('div');
+    menu.className = 'nymph-menu';
+    menu.setAttribute('role', 'menu');
+    const items = [];
+    const item = (label, action, enabled = true) => {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.setAttribute('role', 'menuitem');
+      b.textContent = label;
+      b.disabled = !enabled;
+      b.addEventListener('click', () => {
+        this.closeMenu();
+        try {
+          action();
+        } catch (e) {
+          this.emit('error', e);
+          console.error(e);
+        }
+      });
+      menu.appendChild(b);
+      items.push(b);
+    };
+    const chart = this.state().hasFigure;
+    item('Save as PNG', () => this.save('png'), chart);
+    item('Save as YAML', () => this.save('yaml'), chart);
+    menu.appendChild(Object.assign(document.createElement('hr'), { role: 'separator' }));
+    item('About nymph viewer', () => this.openAbout());
+    document.body.appendChild(menu);
+    // Inside the window.
+    const w = menu.offsetWidth, h = menu.offsetHeight;
+    menu.style.left = `${Math.max(0, Math.min(x, innerWidth - w - 4))}px`;
+    menu.style.top = `${Math.max(0, Math.min(y, innerHeight - h - 4))}px`;
+    const enabled = items.filter((b) => !b.disabled);
+    enabled[0]?.focus();
+    const away = (e) => {
+      if (!menu.contains(e.target)) {
+        this.closeMenu();
+      }
+    };
+    const keys = (e) => {
+      const at = enabled.indexOf(document.activeElement);
+      if (e.key === 'Escape') {
+        this.closeMenu();
+        this.canvas?.focus();
+      } else if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+        e.preventDefault();
+        const step = e.key === 'ArrowDown' ? 1 : -1;
+        enabled[(at + step + enabled.length) % enabled.length]?.focus();
+      }
+    };
+    const close = () => this.closeMenu();
+    document.addEventListener('pointerdown', away, true);
+    document.addEventListener('keydown', keys, true);
+    addEventListener('blur', close);
+    addEventListener('scroll', close, true);
+    this.menu = {
+      element: menu,
+      undo: () => {
+        document.removeEventListener('pointerdown', away, true);
+        document.removeEventListener('keydown', keys, true);
+        removeEventListener('blur', close);
+        removeEventListener('scroll', close, true);
+        menu.remove();
+      },
+    };
+  }
+
+  /** @private */
+  closeMenu() {
+    this.menu?.undo();
+    this.menu = null;
+  }
+
+  /** @private A small panel about the viewer, over the page. */
+  openAbout() {
+    this.closeAbout();
+    injectStyle();
+    const m = this.core.m;
+    const overlay = document.createElement('div');
+    overlay.className = 'nymph-about';
+    const panel = document.createElement('div');
+    panel.setAttribute('role', 'dialog');
+    panel.setAttribute('aria-modal', 'true');
+    panel.setAttribute('aria-label', 'About nymph viewer');
+    const p = (text, tag = 'p') => panel.appendChild(Object.assign(document.createElement(tag), { textContent: text }));
+    p('nymph viewer', 'h2');
+    p(`Version ${this.core.string(m._nymph_version())}, drawn with ${this.webgl ? 'WebGL2' : 'the CPU'}.`);
+    p('Charts described in YAML, drawn live: the same picture as the nymph PNG.');
+    const help = panel.appendChild(document.createElement('ul'));
+    for (const line of [
+      'Drag: pan. Wheel or pinch: zoom (over an axis: that axis).',
+      'Right-drag: zoom to a box. Double-click: fit.',
+      'Hover or click: values. Legend click: hide a series.',
+      'Right-click: save as PNG or YAML (with the zoom and hidden series).',
+    ]) {
+      help.appendChild(Object.assign(document.createElement('li'), { textContent: line }));
+    }
+    p('MIT License \u00a9 2026 Binary Dice Games. Built on Dear ImGui, ImPlot, ImPlot3D and libyaml (MIT). Fonts: SIL Open Font License 1.1.', 'small');
+    const close = panel.appendChild(Object.assign(document.createElement('button'), { type: 'button', textContent: 'Close' }));
+    close.addEventListener('click', () => this.closeAbout());
+    overlay.appendChild(panel);
+    overlay.addEventListener('pointerdown', (e) => e.target === overlay && this.closeAbout());
+    const keys = (e) => e.key === 'Escape' && this.closeAbout();
+    document.addEventListener('keydown', keys, true);
+    document.body.appendChild(overlay);
+    close.focus();
+    this.about = {
+      undo: () => {
+        document.removeEventListener('keydown', keys, true);
+        overlay.remove();
+      },
+    };
+  }
+
+  /** @private */
+  closeAbout() {
+    this.about?.undo();
+    this.about = null;
   }
 
   /** What the viewer is showing and how. */
@@ -749,7 +959,24 @@ export class NymphViewer {
     return this.core.string(this.core.m._nymph_viewer_source(this.handle));
   }
 
-  /** The chart as a nymph PNG (drawn on the CPU), its source embedded. */
+  /**
+   * The chart's YAML as it is on screen: the source, with setData applied,
+   * and the view the user left (zoom, pan, rotation, hidden series) saved
+   * in its `view` key, so reopening it shows the same. Feed it back with
+   * setSource(), or to the `nymph` CLI. Nothing the user did: the source as
+   * written.
+   */
+  toYaml() {
+    this.checkAlive();
+    const yaml = this.core.string(this.core.m._nymph_viewer_yaml(this.handle));
+    const error = JSON.parse(this.core.string(this.core.m._nymph_last_error()));
+    if (error) {
+      throw new NymphError(error);
+    }
+    return yaml;
+  }
+
+  /** The chart as a nymph PNG (drawn on the CPU) of what is on screen, toYaml() embedded. */
   toPng() {
     this.checkAlive();
     const m = this.core.m;
@@ -766,6 +993,8 @@ export class NymphViewer {
       cancelAnimationFrame(this.frameRequest);
       this.frameRequest = 0;
     }
+    this.closeMenu();
+    this.closeAbout();
     this.cleanup.forEach((undo) => undo());
     this.cleanup = [];
     this.canvas?.remove();
@@ -789,6 +1018,8 @@ export class NymphViewer {
  * @param {boolean} [options.tooltips] nymph's own tooltips (default true)
  * @param {'auto'|'webgl'|'software'} [options.rasterizer] WebGL2 when available (default), or the CPU
  * @param {'source'|'light'|'dark'|'classic'|'auto'} [options.theme] the source's theme (default), a fixed one, or the page's colour scheme
+ * @param {boolean} [options.menu] the right-click menu: save as PNG / YAML, about (default true)
+ * @param {string} [options.fileName] the name files are saved under, without extension (default: from `src`, or "chart")
  * @returns {Promise<NymphViewer>}
  */
 export async function createViewer(container, options = {}) {
@@ -837,7 +1068,7 @@ function isPng(bytes) {
  * `nymph-view` and `nymph-error`.
  */
 export class NymphViewerElement extends (typeof HTMLElement === 'undefined' ? class {} : HTMLElement) {
-  static observedAttributes = ['src', 'fit', 'theme', 'tooltips'];
+  static observedAttributes = ['src', 'fit', 'theme', 'tooltips', 'menu'];
 
   constructor() {
     super();
@@ -904,6 +1135,8 @@ export class NymphViewerElement extends (typeof HTMLElement === 'undefined' ? cl
           fit: this.getAttribute('fit') ?? 'source',
           theme: this.getAttribute('theme') ?? 'source',
           tooltips: this.getAttribute('tooltips') !== 'false',
+          menu: this.getAttribute('menu') !== 'false',
+          src: src ?? undefined,
         });
         this.viewer = viewer;
         // Errors are reported once, by showError().

@@ -482,6 +482,41 @@ matches the code.
 - `ctest -j` passes three times in a row natively and in the `NYMPH_WEB`
   build.
 
+### 13. Follow-up: toYaml, the right-click menu, the saved view
+
+*Requested after step 12; done.* **Goal:** an agent can read the chart
+back as YAML, a user can save it as PNG or YAML from a right-click menu,
+and zoom, pan, rotation and hidden series survive saving and reopening.
+
+**Deliverables:** the `view` top-level key (`src/document/view.hpp/.cpp`:
+`bind_view()`, `write_view()`, `element_paths()`; `figure::views`;
+`element_class::viewable()`); `replace_top_level()` (`replace_data()`
+generalised, an empty value removes the key); views applied by `Plot`,
+`GanttChart`, `Plot3D` and diagrams in PNGs and fresh live views, and
+recorded in live views (`draw_context::set_views()`, `view_of()`,
+`apply_view()`, `record_view()`, `sync_hidden()`);
+`ImUml::SetNextDiagramView()` and `ImUmlDiagramInfo::ViewCenter`;
+`live_view::source_with_view()` (touched elements only) and a richer
+`plot_view` (kind, z range, rotation, zoom, centre, hidden);
+`nymph_viewer_yaml` and `toPng()` of it; `toYaml()`, `save()`, the menu
+(Save as PNG / YAML, About), `menu` and `fileName` options and the
+`menu` attribute; ImPlot menus off in live views; docs (`format.md`
+`view`, `viewer.md`, `agent-guide.md`), CHANGELOG.
+
+**Result:** 13 tests in `test_saved_view.cpp` (parsing and its errors,
+writing round trip, PNGs with saved ranges and hidden series, live view
+and PNG byte-equal for 2D, diagram and 3D views, a pan / legend click /
+diagram zoom / 3D rotation saved and reopened, untouched elements not
+saved, reset, a new view from `setSource()`); 1 Node test (`toYaml()`
+round trip, PNG with the view); 4 browser tests (menu items, PNG and
+YAML downloads with the view, right-drag box zoom opens no menu, About,
+`menu: false`, file name from `src`). Found while testing: hiding an
+item before ImPlot first plots it skipped its colour (and did not hide
+it), so entries are hidden right after plotting; rounding by multiplying
+with 1e-4 wrote `1.4400000000000002`, so values are rounded by exact
+powers of ten. 426 native tests, 10 Node and 20 browser tests pass. The
+module is 650 KB gzip.
+
 ## Completion Criteria
 
 - [x] All native tests pass under `ctest -j`, and every committed example

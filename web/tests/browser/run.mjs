@@ -497,6 +497,109 @@ test('the single-file build works on its own in a page', async () => {
   await page.close();
 });
 
+// ── Tests: the menu (save, about) ────────────────────────────────────────────
+
+/** Clicks menu item `label` and returns the download it starts. */
+async function download(page, x, y, label) {
+  await page.mouse.click(x, y, { button: 'right' });
+  await page.waitForSelector('.nymph-menu');
+  const [file] = await Promise.all([page.waitForEvent('download'), page.click(`.nymph-menu button:text-is("${label}")`)]);
+  return { name: file.suggestedFilename(), bytes: await readFile(await file.path()) };
+}
+
+test('right-click saves PNG and YAML with the view on screen', async () => {
+  const page = await openPage();
+  await plotPage(page);
+  const a = await page.evaluate(() => window.at(2, 5));
+  await page.mouse.move(a.x, a.y);
+  await page.mouse.down();
+  await page.mouse.move(a.x - 50, a.y, { steps: 5 });
+  await page.mouse.up();
+  await settleIn(page);
+  const items = await (async () => {
+    await page.mouse.click(a.x, a.y, { button: 'right' });
+    await page.waitForSelector('.nymph-menu');
+    const labels = await page.$$eval('.nymph-menu button', (bs) => bs.map((b) => b.textContent));
+    await page.keyboard.press('Escape');
+    return labels;
+  })();
+  assert(items.join('|') === 'Save as PNG|Save as YAML|About nymph viewer', items.join('|'));
+  assert((await page.$('.nymph-menu')) === null, 'Escape closes the menu');
+  const yaml = await download(page, a.x, a.y, 'Save as YAML');
+  assert(yaml.name === 'chart.yaml', yaml.name);
+  assert(/\nview:\n  root: \{x: \[/.test(yaml.bytes.toString()), yaml.bytes.toString());
+  const png = await download(page, a.x, a.y, 'Save as PNG');
+  assert(png.name === 'chart.png' && png.bytes.subarray(1, 4).toString() === 'PNG', png.name);
+  assert(png.bytes.includes('view:'), 'the PNG carries the YAML with its view');
+  await page.close();
+});
+
+test('a right-drag box-zooms and opens no menu', async () => {
+  const page = await openPage();
+  await plotPage(page);
+  const a = await page.evaluate(() => window.at(1, 8));
+  const b = await page.evaluate(() => window.at(3, 2));
+  await page.mouse.move(a.x, a.y);
+  await page.mouse.down({ button: 'right' });
+  await page.mouse.move(b.x, b.y, { steps: 6 });
+  await page.mouse.up({ button: 'right' });
+  await settleIn(page);
+  const range = await page.evaluate(() => window.v.state().views[0]);
+  assert((await page.$('.nymph-menu')) === null, 'no menu after a drag');
+  assert(range.xMax - range.xMin < 3, `x range ${range.xMin} to ${range.xMax}`);
+  await page.close();
+});
+
+test('About shows the version; menu: false turns the menu off', async () => {
+  const page = await openPage();
+  await plotPage(page);
+  const a = await page.evaluate(() => window.at(2, 5));
+  await page.mouse.click(a.x, a.y, { button: 'right' });
+  await page.click('.nymph-menu button:text-is("About nymph viewer")');
+  const text = await page.textContent('.nymph-about');
+  assert(/nymph viewer/.test(text) && /Version \d+\.\d+\.\d+, drawn with WebGL2/.test(text), text);
+  await page.keyboard.press('Escape');
+  assert((await page.$('.nymph-about')) === null, 'Escape closes About');
+  await page.evaluate(async () => {
+    window.v.destroy();
+    window.v = await window.nymph.createViewer(window.box(400), {
+      source: 'image: {width: 400, height: 300}\nroot: {type: Label, text: no menu}\n',
+      menu: false,
+    });
+    await window.v.rendered();
+  });
+  const box = await page.evaluate(() => {
+    const r = window.v.canvas.getBoundingClientRect();
+    return { x: r.left + 50, y: r.top + 20 };
+  });
+  await page.mouse.click(box.x, box.y, { button: 'right' });
+  await page.waitForTimeout(100);
+  assert((await page.$('.nymph-menu')) === null, 'no menu');
+  await page.close();
+});
+
+test('the element saves under the name of its src', async () => {
+  const page = await openPage();
+  await page.evaluate(
+    () =>
+      new Promise((resolve) => {
+        const holder = document.createElement('div');
+        holder.style.width = '820px';
+        holder.innerHTML = '<nymph-viewer src="/examples/line.yaml"></nymph-viewer>';
+        holder.firstElementChild.addEventListener('nymph-load', resolve);
+        document.body.appendChild(holder);
+      }),
+  );
+  const at = await page.evaluate(() => {
+    const r = document.querySelector('nymph-viewer').viewer.canvas.getBoundingClientRect();
+    return { x: r.left + 200, y: r.top + 200 };
+  });
+  const file = await download(page, at.x, at.y, 'Save as YAML');
+  assert(file.name === 'line.yaml', file.name);
+  assert(file.bytes.toString() === (await readFile(join(sourceDir, 'examples', 'line.yaml'), 'utf8')), 'unchanged source');
+  await page.close();
+});
+
 // ── Run ──────────────────────────────────────────────────────────────────────
 
 let failed = 0;
