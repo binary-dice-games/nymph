@@ -811,7 +811,7 @@ struct ComponentLayout {
 /// mean key of its nodes, ties by current position; then each block in
 /// turn. A cluster's own borders sort first and last.
 void FlattenCluster(const ComponentLayout& c, int x, const ImVector<int>& members, const ImVector<float>& key,
-                    ImVector<int>* out) {
+                    ImVector<int>* out, const ImVector<float>* block_key = nullptr) {
   struct Item {
     int Block; ///< Child cluster, or -1 for a node.
     int Node;
@@ -849,7 +849,9 @@ void FlattenCluster(const ComponentLayout& c, int x, const ImVector<int>& member
   }
   for (int k = 0; k < items.Size; ++k) {
     if (items[k].Block >= 0) {
-      items[k].Key = items[k].Count > 0 ? items[k].Sum / (float)items[k].Count : (float)items[k].First;
+      items[k].Key = block_key != nullptr ? (*block_key)[items[k].Block]
+                     : items[k].Count > 0 ? items[k].Sum / (float)items[k].Count
+                                          : (float)items[k].First;
     }
   }
   StableSort(items.Data, items.Size, [](const Item& a, const Item& b) {
@@ -869,18 +871,20 @@ void FlattenCluster(const ComponentLayout& c, int x, const ImVector<int>& member
       }
     }
     ImVector<int> nested;
-    FlattenCluster(c, items[k].Block, sub, key, &nested);
+    FlattenCluster(c, items[k].Block, sub, key, &nested, block_key);
     for (int i = 0; i < nested.Size; ++i) {
       out->push_back(nested[i]);
     }
   }
 }
 
-/// Re-sorts rank `r` by `key` keeping clusters together.
-void SortLayerClustered(ComponentLayout& c, int r, const ImVector<float>& key) {
+/// Re-sorts rank `r` by `key` keeping clusters together; with `block_key`,
+/// cluster blocks sort by it instead of their members' mean key.
+void SortLayerClustered(ComponentLayout& c, int r, const ImVector<float>& key,
+                        const ImVector<float>* block_key = nullptr) {
   ImVector<int>& layer = *c.Layers[r];
   ImVector<int> sorted;
-  FlattenCluster(c, -1, layer, key, &sorted);
+  FlattenCluster(c, -1, layer, key, &sorted, block_key);
   layer = sorted;
   for (int i = 0; i < layer.Size; ++i) {
     c.Pos[layer[i]] = i;
@@ -1307,6 +1311,32 @@ void Order(ComponentLayout& c) {
       }
       restore();
     }
+    // Sibling boxes must be in the same order in every rank they share, or
+    // they would overlap: sort every rank's blocks by one key per cluster,
+    // the mean position of its block over its ranks (dot orders a cluster
+    // skeleton once for the same reason).
+    ImVector<float> block_key, key;
+    block_key.resize(c.Cl->Parent.Size);
+    for (int k = 0; k < block_key.Size; ++k) {
+      block_key[k] = 0.0f;
+    }
+    for (int b = 0; b < c.Borders.Size; ++b) {
+      const ClusterBorders& cb = *c.Borders[b];
+      float sum = 0.0f;
+      for (int i = 0; i < cb.L.Size; ++i) {
+        sum += (c.Pos[cb.L[i]] + c.Pos[cb.R[i]]) * 0.5f;
+      }
+      block_key[cb.Cluster] = sum / (float)ImMax(1, cb.L.Size);
+    }
+    key.resize(n);
+    for (int i = 0; i < n; ++i) {
+      key[i] = (float)c.Pos[i];
+    }
+    for (int r = 0; r < c.Layers.Size; ++r) {
+      SortLayerClustered(c, r, key, &block_key);
+    }
+    Transpose(c);
+    best_crossings = CountCrossings(c);
   }
   c.Crossings = best_crossings;
 }
@@ -1362,6 +1392,25 @@ void PositionX(ComponentLayout& c, const ImVector<int>& extra_right, const ImUml
         ImUmlNsEdge e2 = {node, nodes[i + 1], 0, kBorderWeight};
         aux.push_back(e1);
         aux.push_back(e2);
+      }
+    }
+    // Whatever is beside the box in any of its ranks stays clear of the
+    // box's sides in all its ranks (hard constraints; the alignment above
+    // is only a preference), so nothing intrudes where the box is wider.
+    for (int i = 0; i < cb.L.Size; ++i) {
+      const ImVector<int>& layer = *c.Layers[cb.RTop + i];
+      const int pl = c.Pos[cb.L[i]], pr = c.Pos[cb.R[i]];
+      const int left = pl > 0 ? layer[pl - 1] : -1;
+      const int right = pr + 1 < layer.Size ? layer[pr + 1] : -1;
+      for (int j = 0; j < cb.L.Size; ++j) {
+        if (left >= 0) {
+          ImUmlNsEdge e = {left, cb.L[j], separation(left, cb.L[i]), 0};
+          aux.push_back(e);
+        }
+        if (right >= 0) {
+          ImUmlNsEdge e = {cb.R[j], right, separation(cb.R[i], right), 0};
+          aux.push_back(e);
+        }
       }
     }
     const int hr = c.Cl->HeaderAtBottom ? cb.L.Size - 1 : 0;

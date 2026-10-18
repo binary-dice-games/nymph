@@ -16,6 +16,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `SankeyDiagram` (`SankeyFlow`, `SankeyNode`): flows between nodes as bands proportional to their value, from `from` / `to` / `values` lists (table columns) or child elements, laid out in columns automatically.
 - `GanttChart` (`GanttSection`, `GanttTask`): tasks on a date or number axis, with `after` dependencies drawn as arrows, milestones, statuses and a `today` line.
 - UML diagrams, described in YAML and laid out automatically: `ClassDiagram` (`Class`, `ClassRelation`), `SequenceDiagram` (`Participant`, `Message`, `Fragment`, `Else`), `StateDiagram` (`State`, composite states, `Transition`), `ActivityDiagram` (`Action`, `ActivityControl`, `Flow`), `UseCaseDiagram` (`Actor`, `UseCase`, `UseCaseRelation`), and `Note` for all of them. Graph diagrams use a Graphviz dot-style layered layout steered by `direction`, `rank`, `weight`, `min_length` and `constraint`; diagrams scale to fit down to `min_zoom`.
+- Data flow diagrams: `DataFlowDiagram` with `ExternalEntity`, `Process`, `DataStore`, `DataFlow` and `TrustBoundary` groups.
+- Network diagrams: `NetworkDiagram` with `Device` (14 icon kinds, address), `Link` (wired, wireless, VPN; port labels) and `Zone` groups.
+- ER diagrams of database structure: `ERDiagram` with `Entity` (tables with typed attributes and PK / FK / UK keys) and `Relationship` (crow's foot cardinalities, identifying or not).
 - ImUml: a UML diagram library for Dear ImGui in the style of ImPlot (`imuml/`, CMake target `imuml`).
 - Fields can hold lists of text (`attributes: ["+id: int"]`), also from a `$column`.
 - UML example diagrams in `examples/`.

@@ -75,6 +75,12 @@ begin_fn begin_of(diagram_kind k) {
       return &ImUml::BeginUseCaseDiagram;
     case diagram_kind::flowchart:
       return &ImUml::BeginFlowchart;
+    case diagram_kind::er:
+      return &ImUml::BeginERDiagram;
+    case diagram_kind::data_flow:
+      return &ImUml::BeginDataFlowDiagram;
+    case diagram_kind::network:
+      return &ImUml::BeginNetworkDiagram;
     default:
       return &ImUml::BeginClassDiagram;
   }
@@ -92,6 +98,12 @@ end_fn end_of(diagram_kind k) {
       return &ImUml::EndUseCaseDiagram;
     case diagram_kind::flowchart:
       return &ImUml::EndFlowchart;
+    case diagram_kind::er:
+      return &ImUml::EndERDiagram;
+    case diagram_kind::data_flow:
+      return &ImUml::EndDataFlowDiagram;
+    case diagram_kind::network:
+      return &ImUml::EndNetworkDiagram;
     default:
       return &ImUml::EndClassDiagram;
   }
@@ -116,7 +128,8 @@ std::vector<field_desc> diagram_fields(diagram_kind kind, std::vector<field_desc
   if (is_graph(kind)) {
     f.push_back(enum_field(
         "direction",
-        kind == diagram_kind::use_case ? ImUmlDirection_LeftRight : ImUmlDirection_TopDown,
+        kind == diagram_kind::use_case || kind == diagram_kind::data_flow ? ImUmlDirection_LeftRight
+                                                                            : ImUmlDirection_TopDown,
         direction_names(),
         "Direction of the ranks (Graphviz dot's rankdir; mermaid's TB, BT, LR, RL)."));
     f.push_back(enum_field(
@@ -631,6 +644,9 @@ void register_uml(registry& reg) {
   uml::register_activity_diagram(reg);
   uml::register_usecase_diagram(reg);
   uml::register_flowchart(reg);
+  uml::register_er_diagram(reg);
+  uml::register_dataflow_diagram(reg);
+  uml::register_network_diagram(reg);
 }
 
 } // namespace bdg::nymph

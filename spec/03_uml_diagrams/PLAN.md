@@ -312,6 +312,57 @@ example gains a composite state.
 - `test_docs` (schema doc in step) passes; every example renders to its
   committed PNG byte for byte with the software rasterizer.
 
+### 14. ER diagrams (added after the project shipped)
+
+*Result: done.* `examples/uml_er.yaml`; 6 tests in `test_uml_er.cpp`.
+
+**Goal:** database structure can be drawn as an entity-relationship
+diagram in crow's foot notation.
+
+**Deliverables:**
+- ImUml: `Begin/EndERDiagram`, `BeginEntity`, `EntityAttribute`,
+  `EndEntity`, `Entity`, `Relationship`; `ImUmlCardinality_`,
+  `ImUmlAttributeKeys_`, `ImUmlRelationshipFlags_`; entity tables and
+  `RenderCardinality`.
+- `src/elements/uml/er_diagram.cpp`: `ERDiagram`, `Entity`,
+  `Relationship`; `examples/uml_er.yaml`; docs.
+
+**Tests** (`tests/test_uml_er.cpp`):
+- The example renders, round-trips and is deterministic; a relationship
+  ranks `from` above `to`; a table grows with its attributes.
+- Malformed attributes (no name, an unknown key, an unterminated comment)
+  and relationships naming a non-entity are errors at the field.
+- A non-identifying relationship is dashed; zero ends draw a circle,
+  many ends a crow's foot.
+
+### 15. Data flow and network diagrams (added after the project shipped)
+
+*Result: done.* `examples/uml_dataflow.yaml`, `examples/uml_network.yaml`;
+8 tests in `test_uml_dfd_network.cpp`, plus
+`imuml_clusters.SiblingBoxesNeverOverlap`.
+
+**Goal:** data flow diagrams (with trust boundaries) and network diagrams
+(device icons, links, zones) can be drawn.
+
+**Deliverables:**
+- ImUml: `Begin/EndDataFlowDiagram`, `ExternalEntity`, `Process`,
+  `DataStore`, `DataFlow`; `Begin/EndNetworkDiagram`, `Device`, `Link`;
+  `BeginGroup` / `EndGroup` laid out as clusters; `ImUmlDeviceKind_`,
+  `ImUmlLinkKind_`, `ImUmlLinkFlags_`, `ImUmlDataFlowFlags_`;
+  `RenderDeviceIcon`.
+- Cluster layout: one block order across ranks and hard exclusion
+  constraints, so sibling boxes never overlap.
+- `src/elements/uml/dataflow_diagram.cpp`, `network_diagram.cpp`; the two
+  examples; docs.
+
+**Tests** (`tests/test_uml_dfd_network.cpp`):
+- Both examples render, round-trip and are deterministic.
+- Boundary and zone boxes contain their nodes and never overlap siblings.
+- A flow between two non-processes, a flow or link naming a group, and
+  an unknown device kind are errors at the field.
+- Every device kind draws a distinct icon; wireless and VPN links are
+  dashed.
+
 ## Completion Criteria
 
 - [x] All tests pass under `ctest -j` three times in a row. *Linux (GCC).*

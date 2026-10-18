@@ -225,6 +225,9 @@ enum ImUmlDiagramKind_ {
   ImUmlDiagramKind_Activity,
   ImUmlDiagramKind_UseCase,
   ImUmlDiagramKind_Flowchart,
+  ImUmlDiagramKind_ER,
+  ImUmlDiagramKind_DataFlow,
+  ImUmlDiagramKind_Network,
 };
 
 enum ImUmlNodeType_ {
@@ -234,6 +237,12 @@ enum ImUmlNodeType_ {
   ImUmlNodeType_Control,
   ImUmlNodeType_Actor,
   ImUmlNodeType_UseCase,
+  ImUmlNodeType_Entity,
+  ImUmlNodeType_Group,
+  ImUmlNodeType_ExternalEntity,
+  ImUmlNodeType_Process,
+  ImUmlNodeType_DataStore,
+  ImUmlNodeType_Device,
   ImUmlNodeType_Note,
   ImUmlNodeType_Participant,
   ImUmlNodeType_FlowNode, ///< Kind: ImUmlFlowShape_.
@@ -245,6 +254,9 @@ enum ImUmlEdgeType_ {
   ImUmlEdgeType_Transition,
   ImUmlEdgeType_Flow,
   ImUmlEdgeType_UseCaseLink,
+  ImUmlEdgeType_Relationship,
+  ImUmlEdgeType_DataFlow,
+  ImUmlEdgeType_Link,
   ImUmlEdgeType_NoteLink,
   ImUmlEdgeType_FlowLink, ///< Kind: ImUmlFlowLinkFlags_.
 };
@@ -270,16 +282,18 @@ struct ImUmlTextStyle {
 };
 
 struct ImUmlLine {
-  ImUmlStr Text;
+  ImUmlStr Text; ///< Member, activity, or ER attribute name.
   int Section; ///< 0 attributes / activities, 1 methods.
   bool Static, Abstract;
+  ImUmlStr Type, Comment; ///< ER attributes.
+  int Keys; ///< ER attributes: ImUmlAttributeKeys_.
 };
 
 struct ImUmlNodeRec {
   ImGuiID Id;
   int Type; ///< ImUmlNodeType_
   int Kind;
-  ImUmlStr Name, Stereotype, Generic;
+  ImUmlStr Name, Stereotype, Generic; ///< Stereotype also holds a process / store number, a device address.
   int FirstLine, LineCount;
   int FirstAttach, AttachCount; ///< Notes: ids in AttachIds.
   int Parent; ///< Composite state containing it, or -1.
@@ -448,6 +462,20 @@ void RenderMarker(
     float lw);
 /// @brief How far back from the tip a marker reaches (where the line stops).
 float MarkerLength(ImUmlMarker marker, float size);
+/// @brief An ER cardinality end (crow's foot notation) at `tip`, the line
+///        arriving along `dir` (unit, pointing at the tip). The line runs
+///        through it to the tip; circles are filled with `bg`.
+/// @brief The icon of a network device, filling `a`..`b`.
+void RenderDeviceIcon(ImDrawList* dl, ImUmlDeviceKind kind, const ImVec2& a, const ImVec2& b, ImU32 line, ImU32 fill, float lw);
+void RenderCardinality(
+    ImDrawList* dl,
+    ImUmlCardinality cardinality,
+    const ImVec2& tip,
+    const ImVec2& dir,
+    float size,
+    ImU32 line,
+    ImU32 bg,
+    float lw);
 void RenderDashedRect(ImDrawList* dl, const ImVec2& a, const ImVec2& b, ImU32 col, float lw, float dash, float gap);
 void RenderNoteShape(ImDrawList* dl, const ImVec2& a, const ImVec2& b, float fold, ImU32 fill, ImU32 border, float lw);
 /// @brief A stick figure filling `a`..`b`.
