@@ -1,6 +1,7 @@
 # nymph — Claude Integration: Design
 
-**Status: design in progress; not started.** [PLAN.md](PLAN.md) is the
+**Status: in progress; PLAN step 1 done except the checks that need a
+real Claude client.** [PLAN.md](PLAN.md) is the
 ordered implementation plan. This document describes only what this
 project adds or changes; the rest of the architecture is
 [spec/01_core_features/DESIGN.md](../01_core_features/DESIGN.md)
@@ -76,9 +77,16 @@ New and changed files:
   (chat and the Code tab). The Claude Code terminal shows no widgets.
 - The spec's iframe Content Security Policy has no way to allow
   WebAssembly (`'wasm-unsafe-eval'`); the proposal to add one
-  (modelcontextprotocol/ext-apps issue 605) is open. Whether Claude's
-  hosts allow it anyway is **not known**: PLAN step 1 measures it and
-  section 8 lists the fallbacks.
+  (modelcontextprotocol/ext-apps issue 605) is open, and under the
+  spec's default policy the viewer cannot start. **Claude's hosts allow
+  it anyway**: the policy users quote from claude.ai, Claude Desktop
+  (macOS) and the iOS app (anthropics/claude-ai-mcp issue 40, July to
+  August 2026) has `script-src 'self' 'unsafe-inline' 'unsafe-eval'
+  blob: data:`, and under that policy, in Chromium, the single-file
+  viewer draws `dashboard.yaml` (first frame 218 ms, no violation).
+  Nested frames are refused (`frame-src 'self' blob: data:`, by
+  Anthropic's choice). PLAN step 1 records the details; confirmation in
+  a real Claude client is still open there.
 
 ## 2. Design Goals
 
@@ -126,10 +134,14 @@ streams, and `run_cli` dispatches `nymph mcp [--rasterizer R]` to it.
   turns malformed input into JSON-RPC errors (`-32700`, `-32600`,
   `-32601`, `-32602`). Batches are rejected (MCP removed them).
 - `mcp_session` — `initialize` (protocol version negotiation, server
-  info, capabilities `tools` and `resources`, the server instructions),
+  info, capabilities `tools` and `resources`, the server instructions;
+  revisions `2025-11-25`, `2025-06-18` and `2025-03-26`),
   `notifications/initialized`, `ping`, `tools/list`, `tools/call`,
   `resources/list`, `resources/read`. Requests are handled in arrival
-  order on one thread.
+  order on one thread. Claude Code 2.1.302 first sends `server/discover`
+  (the stateless `2026-07-28` revision) and falls back to `initialize`
+  on `-32601` (PLAN step 1); the session answers it with `-32601` until
+  that revision is implemented (section 10).
 - `tool_registry` — the tools of section 5.1, each a name, a JSON input
   schema, an output schema where it returns structured content, its
   `_meta` (section 4.2) and a handler.
@@ -152,9 +164,14 @@ build embeds it in `nymph_mcp` when the cache variable
 offers no resource and no `_meta.ui`, and works as a PNG-only server.
 
 `render_chart` declares `_meta.ui.resourceUri: "ui://nymph/viewer"`
-(visibility `["model", "app"]`). The resource is served as
+(visibility `["model", "app"]`) for every client, whether or not its
+`initialize` lists the `io.modelcontextprotocol/ui` extension (the
+Claude Code terminal does not): clients ignore `_meta` they do not
+know, and one tool list is simpler to test. The resource is served as
 `text/html;profile=mcp-app` with `_meta.ui.csp` empty (no network: the
-page needs none) and `prefersBorder: true`.
+page needs none) and `prefersBorder: true`. The page relies on
+`'unsafe-eval'` (or `'wasm-unsafe-eval'`) in the host's `script-src`
+for WebAssembly, which Claude's hosts grant (section 1, feasibility).
 
 `app.js` is a hand-written host bridge (postMessage JSON-RPC, about 200
 lines), not the `@modelcontextprotocol/ext-apps` SDK (section 8):
@@ -187,9 +204,13 @@ instead.
 ### 4.3 Viewer change
 
 None to the API; `fetchFont(name)` (viewer DESIGN section 5) already
-lets the embedder supply font bytes. If PLAN step 1 finds WebAssembly
-blocked, a third viewer build output is added (section 8, "WebAssembly
-in the sandbox").
+lets the embedder supply font bytes. One fix: `createViewer()` resolves
+the default `fontBaseUrl` against `import.meta.url` even when
+`fetchFont` is given, and inside an inline page (`about:srcdoc`, how a
+host may load the App) `new URL('./fonts/', 'about:srcdoc')` throws
+`Invalid URL` (PLAN step 1). The default base is resolved only when the
+default fetcher is used, and a base that cannot be resolved fails only
+the first font fetch, with the viewer's usual `NymphError`.
 
 ### 4.4 The context sent back to Claude
 
@@ -234,8 +255,9 @@ claude/plugin/
 ```
 
 The launcher finds the executable in this order: `$NYMPH_BIN`; a cached
-download (in the plugin's data directory, or the user cache directory
-`~/.cache/nymph/<version>/` / `%LOCALAPPDATA%\nymph\<version>\`); else
+download in `$NYMPH_CACHE/<version>/`, which `.mcp.json` sets to
+`${CLAUDE_PLUGIN_DATA}` (the plugin's persistent data directory, which
+Claude Code expands; PLAN step 1); else
 it downloads the release asset for this OS and architecture, checks it
 against `checksums.txt`, and caches it. A mismatch or a failed download
 prints one line on standard error and exits 1 (the client shows the
@@ -255,8 +277,9 @@ inside, so the bundle downloads nothing.
 ### 4.8 The claude.ai Skill (`claude/skill/`)
 
 `nymph-skill-<version>.zip`: `nymph/SKILL.md`, `nymph/reference.md`,
-`nymph/bin/nymph` (static Linux x86-64; arm64 too if the sandbox
-architecture requires it, PLAN step 1). `SKILL.md` tells Claude to run
+`nymph/bin/nymph` (static Linux x86-64 only: the code execution
+sandbox is x86-64; the executable is 10.8 MB, under the 30 MB upload
+limit; PLAN step 1). The zip stores the executable with mode 755. `SKILL.md` tells Claude to run
 `bin/nymph` with `--rasterizer software`, look at the PNG it wrote, and
 share it as an output file. claude.ai's code sandbox has no network, so
 the binary must be inside the zip.
@@ -378,16 +401,21 @@ fails, 2 for bad arguments (`docs/cli.md` gains the row).
   download as trustworthy as the plugin itself. While the repository is
   private, release assets need authentication: the launcher then
   depends on `$NYMPH_BIN` (open question in section 10).
-- **WebAssembly in the sandbox** (decided by PLAN step 1). If Claude's
-  hosts allow `'wasm-unsafe-eval'`, the App inlines the normal single-file
-  viewer. If not, in order of preference:
-  1. a `-sWASM=0` viewer build (wasm2js: JavaScript only, allowed by the
-     spec's default `'unsafe-inline'`), which needs JavaScript
-     exceptions (`-fexceptions`) instead of `-fwasm-exceptions`; larger
-     and slower, measured in step 1;
-  2. a nested iframe (`_meta.ui.csp.frameDomains`) to a hosted copy of
-     the viewer, which needs hosting and the host's consent;
-  3. no App: the PNG only, until ext-apps issue 605 is resolved.
+- **The normal WebAssembly viewer in the App** (PLAN step 1). Claude's
+  hosts put `'unsafe-eval'` in the App's `script-src`, which permits
+  WebAssembly, so the App inlines the existing single-file viewer
+  (2.4 MB, 815 KB gzip). Rejected:
+  1. a `-sWASM=0` viewer build (wasm2js). It works under the spec's
+     strict default policy (first frame 456 ms against 218 ms; built
+     with `-fexceptions` in place of `-fwasm-exceptions`; 4.6 MB,
+     1.17 MB gzip), but Emscripten 6.0.12 marks `WASM=0` deprecated and
+     "under consideration for removal" (emscripten issue 27608), and
+     Claude does not need it. It stays the answer for a stricter host
+     if that ever matters;
+  2. a nested iframe (`frameDomains`) to a hosted viewer: claude.ai
+     refuses nested frames (anthropics/claude-ai-mcp issue 40).
+  If a real client still blocks WebAssembly, the App falls back to the
+  PNG of the result (section 4.2) and the decision is reopened.
 
 ## 9. Testing Strategy
 
@@ -424,6 +452,9 @@ fails, 2 for bad arguments (`docs/cli.md` gains the row).
   works for users with access; release downloads by the launcher do not
   without a token. Either the repository (or a releases-only mirror)
   becomes public, or the launcher documents `$NYMPH_BIN`.
+- **The `2026-07-28` protocol revision** (stateless, `server/discover`).
+  Claude Code already tries it first; supporting it is a new front end
+  on the same tools, worth doing when Claude Desktop sends it too.
 - **Hosted server.** For an App on claude.ai and mobile, `nymph mcp
   --http <port>` (streamable HTTP) behind a public URL, added as a
   custom connector. Needs hosting, authentication and abuse limits; a

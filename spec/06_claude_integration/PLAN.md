@@ -15,6 +15,53 @@ touches a Claude client records the client and its version.
 
 ### 1. Feasibility check
 
+*Result: done, partly.* Checked with Emscripten 6.0.12, Playwright
+1.56's Chromium 141 (SwiftShader WebGL2) and Claude Code 2.1.302, using
+the probe in [probe/](probe/) (kept, not throwaway, until the open
+answers are in). Each page ran in a fake host iframe (`sandbox=
+"allow-scripts"`, the policy as a `<meta>` CSP). Answers:
+1. **Yes, by evidence short of a real client.** Under the spec's default
+   policy WebAssembly and `eval` are refused and the viewer aborts
+   (`CompileError`). Users quote Claude's real policy (claude.ai,
+   Claude Desktop 1.34493.1 on macOS, iOS 1.260716.0;
+   anthropics/claude-ai-mcp issue 40): `script-src 'self'
+   'unsafe-inline' 'unsafe-eval' blob: data: https://assets.claude.ai`,
+   `frame-src 'self' blob: data:`, `connect-src 'self'`. Under it
+   WebAssembly, `eval`, WebGL2 and a blob worker running WebAssembly
+   all work, and the single-file viewer draws `dashboard.yaml`: first
+   frame 218 ms, redraw (resize) 50 ms, no violation. The `-sWASM=0`
+   build (`-fexceptions`) works even under the default policy: 4.6 MB
+   (1.17 MB gzip) against 2.4 MB (815 KB gzip), first frame 456 ms,
+   redraw 50 ms; Emscripten warns `WASM=0` is deprecated. Anthropic has
+   said nested frames stay refused on claude.ai. Also found: the viewer
+   throws `Invalid URL` in an `about:srcdoc` page (default `fontBaseUrl`
+   resolved against `import.meta.url`); step 5 fixes it. **Open**: a
+   run in Claude Desktop (chat and Code tab), on macOS and Windows.
+2. **Partly.** A 2.4 MB inline page loads in the fake host; the size
+   Claude accepts and whether its sandbox saves downloads are **open**
+   (a real client).
+3. **Partly.** In Claude Code the model receives the tool's image
+   content (`claude -p` described the dashboard correctly). Whether
+   Claude Desktop shows that image to the user beside the App is
+   **open**.
+4. **Claude Code 2.1.302** sends `server/discover` with
+   `io.modelcontextprotocol/protocolVersion: 2026-07-28` first; on
+   `-32601` it sends `initialize` with `2025-11-25`, capabilities
+   `roots` and `elicitation`, and **no** `io.modelcontextprotocol/ui`
+   extension (the terminal shows no App). It hides app-only tools
+   (`visibility: ["app"]`) from the model. Claude Desktop: **open**.
+5. **Partly.** The code execution sandbox is Linux x86-64, without
+   network, 5 GiB memory; Skill uploads are limited to 30 MB (the API
+   docs; the claude.ai docs do not say whether compressed). The static
+   x86-64 executable is 10.8 MB (3.7 MB zipped). Whether it runs on
+   claude.ai and how the PNG reaches the user is **open**: the test
+   Skill in `probe/skill/` answers it once uploaded.
+6. **`${CLAUDE_PLUGIN_DATA}`**: Claude Code 2.1.302 expands it for
+   plugins (a persistent data folder), besides `${CLAUDE_PLUGIN_ROOT}`.
+
+DESIGN.md sections 1, 4.1, 4.2, 4.3, 4.6, 4.8, 8 and 10 were updated
+with these.
+
 **Goal:** the questions DESIGN.md leaves open are answered with
 evidence, and DESIGN.md is updated before any code depends on them.
 
@@ -137,8 +184,11 @@ a host that implements MCP Apps.
 **Deliverables:**
 - `claude/app/viewer.html.in`, `claude/app/app.js` (DESIGN.md section
   4.2, steps 1-3, 5 and 6).
+- `web/js/nymph-viewer.js`: the default `fontBaseUrl` resolved only for
+  the default fetcher (DESIGN.md section 4.3), with a browser test
+  creating a viewer with `fetchFont` in an `about:srcdoc` frame.
 - `web/CMakeLists.txt`: the `nymph-claude-app` target writing
-  `<build-web>/claude/viewer.html` (with the viewer build step 1 chose).
+  `<build-web>/claude/viewer.html` (the WebAssembly single-file viewer).
 - `NYMPH_MCP_VIEWER` in the native build; `resources/list` and
   `render_chart`'s `_meta.ui` only when set; `viewer_font`.
 - `web/tests/browser/mcp_host.html` and its test: a fixture host that
