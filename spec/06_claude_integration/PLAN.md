@@ -261,6 +261,18 @@ a host that implements MCP Apps.
 
 ### 6. The view back to Claude
 
+*Result: done.* The browser test found that the viewer's `click` event
+never fired (a `state()` read in `sizeCanvas()` took the click first);
+fixed in `nymph-viewer.js`, with a viewer test. The App sends a note only
+when its text changes, since resizes also fire `view`. The menu is off
+(DESIGN.md section 4.2, step 7). 2 browser tests (the App's click and
+drag notes, no menu; the viewer's click event); 28 browser tests and the
+4 web CTest tests pass. The manual check needs Claude Desktop and stays
+open with step 1's; in its place, Claude Code 2.1.302 was given the note
+the App sends and asked to "add a linear trend line to what I am looking
+at, and mark the point I clicked": it kept the `view` key, drew the
+trend and marked the clicked point.
+
 **Goal:** the user's pan, zoom and clicks reach the model as DESIGN.md
 section 4.4 describes.
 

@@ -353,6 +353,22 @@ test('the wheel zooms a plot without scrolling the page, and scrolls it elsewher
   await page.close();
 });
 
+test('clicking a point fires click with its pick', async () => {
+  const page = await openPage();
+  await plotPage(page);
+  const p = await page.evaluate(() => window.at(2, 7));
+  await page.mouse.move(p.x, p.y);
+  await settleIn(page);
+  await page.mouse.down();
+  await page.waitForTimeout(50);
+  await page.mouse.up();
+  await settleIn(page);
+  const clicks = await page.evaluate(() => window.events.filter((e) => e.e === 'click').map((e) => e.detail));
+  assert(clicks.length === 1, `${clicks.length} click events`);
+  assert(clicks[0].element === 'root/children/0' && clicks[0].index === 2 && clicks[0].values.y === '7', JSON.stringify(clicks[0]));
+  await page.close();
+});
+
 test('hovering a point fires hover and draws the tooltip', async () => {
   const page = await openPage();
   await plotPage(page);
@@ -773,6 +789,71 @@ test('the MCP App asks the host for full screen', async () => {
   const plain = await openApp({ context: { theme: 'light' }, result: await renderResult('line') });
   assert(await plain.frame.evaluate(() => document.getElementById('fullscreen').hidden), 'no button without full screen');
   await plain.page.close();
+});
+
+// ── Tests: the view back to the model (spec/06_claude_integration step 6) ────
+
+const POINTS_SOURCE =
+  'description: Test points\nimage: {width: 600, height: 400}\n' +
+  'root:\n  type: Plot\n  title: Points\n  children:\n' +
+  '    - {type: PlotLine, label: v, xs: [0, 1, 2, 3, 4], ys: [1, 7, 3, 5, 2]}\n';
+
+/** Page coordinates of data point (x, y) of the App's first plot (the frame sits at 0, 0). */
+const appPoint = (frame, x, y) =>
+  frame.evaluate(
+    ([x, y]) => {
+      const viewer = window.nymphApp.viewer;
+      const p = viewer.state().views[0];
+      const box = viewer.canvas.getBoundingClientRect();
+      return {
+        x: box.left + p.x + ((x - p.xMin) / (p.xMax - p.xMin)) * p.width,
+        y: box.top + p.y + ((p.yMax - y) / (p.yMax - p.yMin)) * p.height,
+      };
+    },
+    [x, y],
+  );
+const contextUpdates = (page) =>
+  page.evaluate(() => window.host.messages.filter((m) => m.method === 'ui/update-model-context').map((m) => m.params));
+
+test('the MCP App tells the model what the user clicked and the view they left', async () => {
+  const { page, frame } = await openApp({ result: { content: [], structuredContent: { source: POINTS_SOURCE } } });
+  await page.waitForTimeout(800);
+  assert((await contextUpdates(page)).length === 0, 'nothing sent before the user touches the chart');
+
+  const point = await appPoint(frame, 1, 7);
+  await page.mouse.click(point.x, point.y);
+  await page.waitForTimeout(800);
+  let updates = await contextUpdates(page);
+  assert(updates.length === 1, `${updates.length} updates after a click`);
+  let text = updates[0].content[0].text;
+  assert(text.startsWith('nymph chart "Test points": the user changed the view.'), text);
+  assert(text.includes('Last clicked: root/children/0 (PlotLine "v") x=1 y=7'), text);
+  assert(text.includes('as written'), text);
+  assert(updates[0].structuredContent.lastClicked.element === 'root/children/0', JSON.stringify(updates[0].structuredContent));
+
+  const from = await appPoint(frame, 2, 4);
+  await page.mouse.move(from.x, from.y);
+  await page.mouse.down();
+  await page.mouse.move(from.x - 120, from.y + 40, { steps: 8 });
+  await page.mouse.up();
+  await page.waitForTimeout(900);
+  updates = await contextUpdates(page);
+  assert(updates.length === 2, `${updates.length} updates after a drag (debounced into one)`);
+  text = updates[1].content[0].text;
+  const expected = await frame.evaluate(() => {
+    const yaml = window.nymphApp.viewer.toYaml();
+    return yaml.slice(yaml.indexOf('\nview:') + 1).trimEnd();
+  });
+  assert(expected.startsWith('view:\n  root: {x: ['), expected);
+  assert(text.includes(`\n${expected}\n`), `${text}\n--- expected ---\n${expected}`);
+  assert(updates[1].structuredContent.view === expected, 'the same view block as structured content');
+  assert(text.includes('Last clicked: root/children/0'), 'the click is still reported');
+  assert(text.endsWith('To keep this view, render the source with this view key.'), text);
+
+  await page.mouse.click(from.x, from.y, { button: 'right' });
+  await page.waitForTimeout(200);
+  assert(!(await frame.evaluate(() => document.querySelector('.nymph-menu') !== null)), 'no right-click menu in the App');
+  await page.close();
 });
 
 // ── Run ──────────────────────────────────────────────────────────────────────

@@ -66,7 +66,7 @@ const message = document.getElementById('message');
 const fullscreenButton = document.getElementById('fullscreen');
 
 /** What tests (and a curious user's console) can look at. */
-const app = { viewer: null, host: null, displayMode: 'inline', error: null };
+const app = { viewer: null, host: null, displayMode: 'inline', error: null, lastContext: null };
 window.nymphApp = app;
 
 /** The viewer theme for the host's: the chat's light or dark, else the source's. */
@@ -103,6 +103,78 @@ async function fetchFont(name) {
   return base64ToBytes(result.structuredContent.base64);
 }
 
+// ── What the user does, told to the model (DESIGN.md section 4.4) ─────────────
+
+const CONTEXT_DELAY_MS = 500;
+let contextTimer = null;
+let lastClicked = null;
+
+/** The `view` block of the chart on screen (only what the user changed), or "". */
+function viewBlock(yaml) {
+  const match = /^view:[ \t]*\r?\n((?:[ \t]+.*(?:\r?\n|$))*)/m.exec(yaml);
+  return match ? `view:\n${match[1].replace(/\s+$/, '')}` : '';
+}
+
+function describeClick(pick) {
+  const name = [pick.type, pick.label ? `"${pick.label}"` : ''].filter(Boolean).join(' ');
+  const values = Object.entries(pick.values ?? {})
+    .map(([k, v]) => `${k}=${v}`)
+    .join(' ');
+  return `Last clicked: ${pick.element}${name ? ` (${name})` : ''}${values ? ` ${values}` : ''}`;
+}
+
+/** The text the model gets: the chart, its view key, the last click. */
+function contextText() {
+  const viewer = app.viewer;
+  const title = viewer.info().description || 'chart';
+  const view = viewBlock(viewer.toYaml());
+  const lines = [`nymph chart "${title}": the user changed the view.`];
+  lines.push(view || 'The view is the chart as written (no zoom, pan or hidden series).');
+  if (lastClicked) {
+    lines.push(describeClick(lastClicked));
+  }
+  if (view) {
+    lines.push('To keep this view, render the source with this view key.');
+  }
+  return { text: lines.join('\n'), view };
+}
+
+async function sendContext() {
+  contextTimer = null;
+  if (!app.viewer) {
+    return;
+  }
+  const { text, view } = contextText();
+  // The viewer also reports refits (a resize); the note changes only with
+  // what the user did, so an unchanged note, or an untouched chart, is not sent.
+  if (text === app.lastContext || (app.lastContext === null && !view && !lastClicked)) {
+    return;
+  }
+  app.lastContext = text;
+  try {
+    await request('ui/update-model-context', {
+      content: [{ type: 'text', text }],
+      structuredContent: { view, lastClicked },
+    });
+  } catch {
+    // A host without model context: nothing to do.
+  }
+}
+
+/** After the user stops moving the chart for a moment. */
+function scheduleContext() {
+  clearTimeout(contextTimer);
+  contextTimer = setTimeout(sendContext, CONTEXT_DELAY_MS);
+}
+
+function watchUser(viewer) {
+  viewer.on('view', scheduleContext);
+  viewer.on('click', (pick) => {
+    lastClicked = pick;
+    scheduleContext();
+  });
+}
+
 /** The PNG of the result, for when the viewer cannot show the chart. */
 function showFallback(result, why) {
   app.error = why;
@@ -126,9 +198,14 @@ async function showResult(result) {
   }
   try {
     if (app.viewer) {
+      lastClicked = null;
+      app.lastContext = null;
       await app.viewer.setSource(source);
     } else {
-      app.viewer = await createViewer(chartBox, { source, fit: 'width', theme: themeOf(app.host?.hostContext), fetchFont });
+      // No right-click menu: a sandboxed frame usually cannot download, so
+      // the user asks Claude to save (DESIGN.md section 4.2, step 7).
+      app.viewer = await createViewer(chartBox, { source, fit: 'width', theme: themeOf(app.host?.hostContext), menu: false, fetchFont });
+      watchUser(app.viewer);
     }
     await app.viewer.rendered();
     message.textContent = '';

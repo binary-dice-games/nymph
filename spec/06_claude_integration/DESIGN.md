@@ -203,14 +203,20 @@ lines), not the `@modelcontextprotocol/ext-apps` SDK (section 8):
    against the catalog as for any fetch (viewer DESIGN, "Fonts on
    demand").
 4. On the viewer's `view` and `click` events (debounced 500 ms): sends
-   `ui/update-model-context` with the text of section 4.4.
+   `ui/update-model-context` with the text of section 4.4, only when that
+   text changed since the last one sent. The viewer also fires `view`
+   when the frame resizes and a plot refits; the `view` key lists only
+   what the user changed, so a refit changes no text and sends nothing,
+   and an untouched chart sends nothing at all.
 5. On `ui/notifications/host-context-changed`: `setTheme()`.
 6. A fullscreen button, shown only when the host offers `fullscreen`,
    sends `ui/request-display-mode` and follows the mode the host
    returns; the viewer (`fit: "width"`) refits on resize.
-7. The right-click menu stays (Save as PNG / YAML) where the sandbox
-   allows downloads; otherwise its items are hidden (`menu: false`) and
-   the user asks Claude to save.
+7. No right-click menu (`menu: false`). A sandboxed frame without
+   `allow-downloads` cannot save files, and the sandbox attributes of
+   Claude's hosts are not known (PLAN step 1); the user asks Claude to
+   save, which renders the chart with the `view` key it was sent. Kept
+   off unless a real client shows that downloads work.
 
 A render that fails shows nothing in the App (the host shows the error
 result); a viewer error (a font the tool cannot provide) shows the
@@ -223,7 +229,10 @@ tests.
 ### 4.3 Viewer change
 
 None to the API; `fetchFont(name)` (viewer DESIGN section 5) already
-lets the embedder supply font bytes. One fix: `createViewer()` resolves
+lets the embedder supply font bytes. Two fixes. The `click` event never fired: `state()` hands out the
+click once, and `sizeCanvas()` read `state()` in every drawn frame
+before `afterFrame()` could emit it; `state()` now keeps the click for
+the event (PLAN step 6). And `createViewer()` resolves
 the default `fontBaseUrl` against `import.meta.url` even when
 `fetchFont` is given, and inside an inline page (`about:srcdoc`, how a
 host may load the App) `new URL('./fonts/', 'about:srcdoc')` throws
@@ -246,7 +255,12 @@ To keep this view, render the source with this view key.
 ```
 
 The `view` lines are the `view` key of `toYaml()` (only what the user
-changed); "Last clicked" appears after a click. The host decides when
+changed); "Last clicked" appears after a click. When only a click
+happened, or the user went back to the chart as written, the `view`
+block is replaced by "The view is the chart as written (no zoom, pan or
+hidden series)." and the last line is left out. The same message carries
+`structuredContent: {view, lastClicked}` (the block's text and the
+pick), for hosts that pass structured context on. The host decides when
 the model sees it (MCP Apps: the latest update before the next user
 message).
 

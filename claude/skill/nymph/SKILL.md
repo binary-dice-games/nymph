@@ -28,6 +28,14 @@ its source, so it can be read back and changed later.
 3. Look at the image and improve it if it is unclear, then show it.
 4. To change a nymph PNG, read its source back first (its `view` key
    keeps the zoom the user chose in the viewer: keep it unless asked).
+5. Where the chart is shown live (the nymph viewer in the conversation),
+   the user can pan, zoom, hide series and click points. You then get a
+   note starting `nymph chart "...": the user changed the view.` with a
+   `view:` block and the last clicked point. "This", "here" or "what I'm
+   looking at" mean that view and point. When you render the chart
+   again, put that `view:` block in the source (replacing any `view`
+   key) so the user keeps their zoom; leave it out to show the whole
+   chart again.
 
 ## Source
 

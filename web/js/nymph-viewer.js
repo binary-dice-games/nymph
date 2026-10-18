@@ -563,8 +563,10 @@ export class NymphViewer {
       this.lastHover = hover;
       this.emit('hover', state.hovered);
     }
-    if (state.click) {
-      this.emit('click', state.click);
+    const click = this.pendingClick;
+    this.pendingClick = null;
+    if (click) {
+      this.emit('click', click);
     }
     const view = this.viewKey(state);
     if (!state.wantsFrame && this.buttonsDown === 0 && view !== this.lastView) {
@@ -963,7 +965,13 @@ export class NymphViewer {
    */
   state() {
     this.checkAlive();
-    return JSON.parse(this.core.string(this.core.m._nymph_viewer_state(this.handle)));
+    const state = JSON.parse(this.core.string(this.core.m._nymph_viewer_state(this.handle)));
+    if (state.click) {
+      // Taken by this call; kept for the click event, which a state() read
+      // inside the frame (sizeCanvas) would otherwise swallow.
+      this.pendingClick = state.click;
+    }
+    return state;
   }
 
   /** The source on screen (with setData applied). */

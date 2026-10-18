@@ -9,7 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- `nymph mcp`: an MCP server on stdin / stdout for AI agents, with tools to render a chart (returning the PNG, optionally writing it), check it, extract a PNG's source, show the element schema and list fonts; source errors come back with their line and column. It gives clients usage instructions, and the agent guide and element reference as resources (`nymph://docs/agent-guide`, `nymph://docs/elements`). Built with `NYMPH_MCP_VIEWER` (the web build's `claude/viewer.html`), it also serves an MCP App that shows the chart live in the conversation: pan, zoom and hover, the chat's light or dark theme, full screen. `NYMPH_MCP` CMake option (default `ON`); new submodule `extern/json`.
+- `nymph mcp`: an MCP server on stdin / stdout for AI agents, with tools to render a chart (returning the PNG, optionally writing it), check it, extract a PNG's source, show the element schema and list fonts; source errors come back with their line and column. It gives clients usage instructions, and the agent guide and element reference as resources (`nymph://docs/agent-guide`, `nymph://docs/elements`). Built with `NYMPH_MCP_VIEWER` (the web build's `claude/viewer.html`), it also serves an MCP App that shows the chart live in the conversation: pan, zoom and hover, the chat's light or dark theme, full screen; what the user zooms to and clicks is passed to Claude, so the next render keeps their view. `NYMPH_MCP` CMake option (default `ON`); new submodule `extern/json`.
 - Chrome extension (built with `NYMPH_WEB`, in `build-web/extension/`): turns nymph PNGs on any page into live charts of the same size, following pages that change (comments, previews, feeds); a toolbar button turns it off or on per site and counts the charts; options for the theme and the sites turned off. See `docs/extension.md`.
 - Web viewer: `fit: 'scale'` (and `fit="scale"`) lays the chart out at its source size and scales it to the box width, up or down.
 
@@ -60,4 +60,5 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Web viewer: the `click` event (and `nymph-click`) now fires when a data point is clicked; it never did.
 - Web viewer: a viewer given `fetchFont` in a page without a base URL (an inline `srcdoc` frame) no longer fails to start; the default font folder is resolved only when a font is first fetched.
