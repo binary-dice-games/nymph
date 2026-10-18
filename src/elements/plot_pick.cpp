@@ -11,10 +11,7 @@
 
 namespace bdg::nymph {
 
-namespace {
-
-/// ISO 8601 date (and time when not midnight) of a UTC time in seconds.
-std::string iso_time(double seconds) {
+std::string format_iso_time(double seconds) {
   const double day_seconds = 86400.0;
   const auto days = static_cast<int64_t>(std::floor(seconds / day_seconds));
   const civil_date d = civil_from_days(days);
@@ -37,16 +34,24 @@ std::string iso_time(double seconds) {
   return buf;
 }
 
-} // namespace
-
 std::optional<ImVec2> plot_pointer(const draw_context& dc, const char* label) {
   if (!dc.interactive() || !ImPlot::IsPlotHovered()) {
     return std::nullopt;
   }
-  if (const ImPlotItem* item = ImPlot::GetItem(label); item != nullptr && !item->Show) {
-    return std::nullopt; // hidden from the legend
+  if (label != nullptr) {
+    if (const ImPlotItem* item = ImPlot::GetItem(label); item != nullptr && !item->Show) {
+      return std::nullopt; // hidden from the legend
+    }
   }
   return ImGui::GetIO().MousePos;
+}
+
+std::optional<ImPlotPoint> plot_pointer_value(const draw_context& dc, const char* label) {
+  const std::optional<ImVec2> p = plot_pointer(dc, label);
+  if (!p) {
+    return std::nullopt;
+  }
+  return ImPlot::PixelsToPlot(*p);
 }
 
 std::string format_axis_value(ImAxis axis_id, double value) {
@@ -63,7 +68,7 @@ std::string format_axis_value(ImAxis axis_id, double value) {
     }
   }
   if (axis.Scale == ImPlotScale_Time) {
-    return iso_time(value);
+    return format_iso_time(value);
   }
   char buf[IMPLOT_LABEL_MAX_SIZE];
   if (axis.Formatter != nullptr) {
@@ -129,25 +134,106 @@ void offer_nearest_point(
   dc.offer_pick(std::move(c));
 }
 
+void offer_rect_px(draw_context& dc, const ImVec2& pointer, pick hit, ImVec2 a, ImVec2 b, ImU32 color) {
+  const ImVec2 lo(std::min(a.x, b.x), std::min(a.y, b.y));
+  const ImVec2 hi(std::max(a.x, b.x), std::max(a.y, b.y));
+  if (pointer.x < lo.x || pointer.x > hi.x || pointer.y < lo.y || pointer.y > hi.y) {
+    return;
+  }
+  pick_candidate c;
+  c.distance = 0.0f;
+  c.hit = std::move(hit);
+  c.anchor = ImVec2((lo.x + hi.x) * 0.5f, (lo.y + hi.y) * 0.5f);
+  c.color = color;
+  c.outline = true;
+  c.outline_min = lo;
+  c.outline_max = hi;
+  dc.offer_pick(std::move(c));
+}
+
+void offer_bars(
+    draw_context& dc,
+    const node& n,
+    const char* label,
+    int count,
+    double size,
+    bool horizontal,
+    const std::function<bar_shape(int)>& shape,
+    const pick_extra& values,
+    ImU32 color) {
+  const std::optional<ImVec2> pointer = plot_pointer(dc, label);
+  if (!pointer) {
+    return;
+  }
+  if (color == 0) {
+    color = ImGui::ColorConvertFloat4ToU32(ImPlot::GetLastItemColor());
+  }
+  // Later bars are drawn over earlier ones: the last hit wins.
+  for (int i = count - 1; i >= 0; --i) {
+    const bar_shape b = shape(i);
+    if (!std::isfinite(b.pos) || !std::isfinite(b.lo) || !std::isfinite(b.hi)) {
+      continue;
+    }
+    const double half = size * 0.5;
+    const ImVec2 a = horizontal ? ImPlot::PlotToPixels(b.lo, b.pos - half) : ImPlot::PlotToPixels(b.pos - half, b.lo);
+    const ImVec2 z = horizontal ? ImPlot::PlotToPixels(b.hi, b.pos + half) : ImPlot::PlotToPixels(b.pos + half, b.hi);
+    const ImVec2 lo(std::min(a.x, z.x), std::min(a.y, z.y));
+    const ImVec2 hi(std::max(a.x, z.x), std::max(a.y, z.y));
+    if (pointer->x >= lo.x && pointer->x <= hi.x && pointer->y >= lo.y && pointer->y <= hi.y) {
+      pick hit;
+      hit.element = &n;
+      hit.type = std::string(n.cls->name());
+      hit.label = display_label(label);
+      hit.index = i;
+      if (values) {
+        values(i, hit);
+      }
+      offer_rect_px(dc, *pointer, std::move(hit), lo, hi, color);
+      return;
+    }
+  }
+}
+
+namespace {
+
+/// The highlight and tooltip of `c`, on `dl` (clipping already set).
+void draw_pick(const draw_context& dc, const pick_candidate& c, ImDrawList* dl) {
+  if (c.outline) {
+    dl->AddRect(c.outline_min, c.outline_max, c.color, 0.0f, ImDrawFlags_None, 2.0f);
+  } else {
+    dl->AddCircle(c.anchor, 6.0f, c.color, 0, 2.0f);
+  }
+  if (dc.tooltips()) {
+    ImGui::BeginTooltip();
+    if (!c.hit.label.empty()) {
+      ImGui::TextUnformatted(c.hit.label.c_str());
+    }
+    for (const auto& [name, value] : c.hit.values) {
+      ImGui::Text("%s: %s", name.c_str(), value.c_str());
+    }
+    ImGui::EndTooltip();
+  }
+}
+
+} // namespace
+
+void finish_picks(draw_context& dc, ImDrawList* dl) {
+  std::optional<pick_candidate> c = dc.take_pick_candidate();
+  if (!c) {
+    return;
+  }
+  draw_pick(dc, *c, dl);
+  dc.set_hovered(std::move(c->hit));
+}
+
 void finish_plot_picks(draw_context& dc) {
   std::optional<pick_candidate> c = dc.take_pick_candidate();
   if (!c) {
     return;
   }
-  ImDrawList* dl = ImPlot::GetPlotDrawList();
   ImPlot::PushPlotClipRect();
-  dl->AddCircle(c->anchor, 6.0f, c->color, 0, 2.0f);
+  draw_pick(dc, *c, ImPlot::GetPlotDrawList());
   ImPlot::PopPlotClipRect();
-  if (dc.tooltips()) {
-    ImGui::BeginTooltip();
-    if (!c->hit.label.empty()) {
-      ImGui::TextUnformatted(c->hit.label.c_str());
-    }
-    for (const auto& [name, value] : c->hit.values) {
-      ImGui::Text("%s: %s", name.c_str(), value.c_str());
-    }
-    ImGui::EndTooltip();
-  }
   dc.set_hovered(std::move(c->hit));
 }
 

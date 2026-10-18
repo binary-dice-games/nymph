@@ -218,6 +218,15 @@ tooltip, in a live view only.
 
 ### 6. Picks for bars, cells, slices, Gantt and Sankey
 
+*Result: done.* Bars and bar groups (side by side and stacked) through
+`offer_bars()`, histograms from ImPlot's own bin centres and heights
+(left in its scratch buffers), heatmap and 2D histogram cells, pie
+slices (ImPlot's angle and normalisation rules), Gantt tasks and
+milestones (the task element's path, ISO dates, section) and Sankey
+nodes and flows (`finish_picks()` for draw-list elements). Rectangle
+hits are highlighted with an outline. 10 tests in `test_pick.cpp`
+(`pick_shapes`); 395 tests pass.
+
 **Goal:** every 2D element family in DESIGN.md section 3 reports what is
 under the pointer.
 

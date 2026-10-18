@@ -57,7 +57,9 @@ struct pick_candidate {
   float distance = 0.0f; ///< From the pointer, logical pixels; 0 inside a shape.
   pick hit;
   ImVec2 anchor; ///< Where to draw the highlight ring, logical pixels.
-  ImU32 color = 0; ///< The series colour, for the ring.
+  ImU32 color = 0; ///< The series colour, for the ring or outline.
+  bool outline = false; ///< Highlight with a rectangle instead of a ring.
+  ImVec2 outline_min, outline_max; ///< The rectangle, logical pixels.
 };
 
 /// @brief Largest distance at which a point is picked, logical pixels.

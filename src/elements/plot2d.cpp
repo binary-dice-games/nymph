@@ -662,7 +662,28 @@ class xy_series : public series_class {
     }
     if (kind_ != xy_kind::bars && kind_ != xy_kind::bars_h) {
       offer_nearest_point(dc, n, label, xs.data(), ys.data(), count);
+      return;
     }
+    // Bars: "Draws horizontal bars at each ys[i] with length xs[i]"; without
+    // xs, bars at 0, 1, 2, ... of ys[i].
+    const bool h = kind_ == xy_kind::bars_h;
+    const bool own_xs = !n.get<doubles>(kXs).empty();
+    const auto pos = [&](int i) { return own_xs ? (h ? ys[i] : xs[i]) : static_cast<double>(i); };
+    const auto len = [&](int i) { return own_xs && h ? xs[i] : ys[i]; };
+    offer_bars(
+        dc,
+        n,
+        label,
+        count,
+        n.get<double>(kExtra),
+        h,
+        [&](int i) { return bar_shape{pos(i), std::min(0.0, len(i)), std::max(0.0, len(i))}; },
+        [&](int i, pick& p) {
+          const ImPlotPlot* plot = ImPlot::GetCurrentPlot();
+          p.values = {
+              {"x", format_axis_value(plot->CurrentX, h ? len(i) : pos(i))},
+              {"y", format_axis_value(plot->CurrentY, h ? pos(i) : len(i))}};
+        });
   }
 
  private:
@@ -704,7 +725,7 @@ class histogram_class : public series_class {
     }
   }
 
-  void plot(const node& n, draw_context&) const override {
+  void plot(const node& n, draw_context& dc) const override {
     ImPlotSpec spec = item_spec(n);
     spec.Flags = (n.get<bool>(cumulative) ? ImPlotHistogramFlags_Cumulative : 0) |
         (n.get<bool>(density) ? ImPlotHistogramFlags_Density : 0);
@@ -713,8 +734,38 @@ class histogram_class : public series_class {
       range = ImPlotRange(n.get<double>(range_min), n.get<double>(range_max));
     }
     const doubles& v = n.get<doubles>(values);
-    ImPlot::PlotHistogram(
-        str(n, item_field::label), v.data(), count_of(v), static_cast<int>(n.get<int64_t>(bins)), 1.0, range, spec);
+    const char* label = str(n, item_field::label);
+    ImPlot::PlotHistogram(label, v.data(), count_of(v), static_cast<int>(n.get<int64_t>(bins)), 1.0, range, spec);
+    if (!dc.interactive() || v.empty()) {
+      return;
+    }
+    // ImPlot leaves the bin centres and heights in its scratch buffers.
+    const ImPlotContext& gp = *ImPlot::GetCurrentContext();
+    const std::vector<double> centers(gp.TempDouble1.begin(), gp.TempDouble1.end());
+    const std::vector<double> heights(gp.TempDouble2.begin(), gp.TempDouble2.end());
+    if (centers.empty() || centers.size() != heights.size()) {
+      return;
+    }
+    if (range.Min == 0 && range.Max == 0) {
+      range = ImPlotRange(*std::min_element(v.begin(), v.end()), *std::max_element(v.begin(), v.end()));
+    }
+    const double width = centers.size() > 1 ? centers[1] - centers[0] : range.Size();
+    const char* what = n.get<bool>(density) ? "density" : "count";
+    offer_bars(
+        dc,
+        n,
+        label,
+        static_cast<int>(centers.size()),
+        width,
+        false,
+        [&](int i) { return bar_shape{centers[i], 0.0, heights[i]}; },
+        [&](int i, pick& p) {
+          const ImAxis xa = ImPlot::GetCurrentPlot()->CurrentX;
+          p.values = {
+              {"range",
+               format_axis_value(xa, centers[i] - width / 2) + " to " + format_axis_value(xa, centers[i] + width / 2)},
+              {what, format_axis_value(ImPlot::GetCurrentPlot()->CurrentY, heights[i])}};
+        });
   }
 };
 
@@ -744,7 +795,7 @@ class histogram2d_class : public series_class {
     }
   }
 
-  void plot(const node& n, draw_context&) const override {
+  void plot(const node& n, draw_context& dc) const override {
     const doubles& x = n.get<doubles>(xs);
     const doubles& y = n.get<doubles>(ys);
     // The range is always passed explicitly: ImPlot v1.0's PlotHistogram2D
@@ -759,6 +810,47 @@ class histogram2d_class : public series_class {
         static_cast<int>(n.get<int64_t>(x_bins)),
         static_cast<int>(n.get<int64_t>(y_bins)),
         range);
+    const char* label = str(n, item_field::label);
+    const std::optional<ImPlotPoint> at = plot_pointer_value(dc, label);
+    if (!at) {
+      return;
+    }
+    // The bins as ImPlot computes them; its counts are left in TempDouble1,
+    // row by row from the bottom (index yb * x bins + xb).
+    int nx = static_cast<int>(n.get<int64_t>(x_bins)), ny = static_cast<int>(n.get<int64_t>(y_bins));
+    double w = range.X.Size() / nx, h = range.Y.Size() / ny;
+    if (nx < 0) {
+      ImPlot::CalculateBins(x.data(), count_of(x), nx, range.X, nx, w);
+    }
+    if (ny < 0) {
+      ImPlot::CalculateBins(y.data(), count_of(y), ny, range.Y, ny, h);
+    }
+    const ImVector<double>& counts = ImPlot::GetCurrentContext()->TempDouble1;
+    const int xb = static_cast<int>(std::floor((at->x - range.X.Min) / w));
+    const int yb = static_cast<int>(std::floor((at->y - range.Y.Min) / h));
+    if (xb < 0 || xb >= nx || yb < 0 || yb >= ny || counts.Size != nx * ny) {
+      return;
+    }
+    const ImPlotPlot* plot = ImPlot::GetCurrentPlot();
+    pick hit;
+    hit.element = &n;
+    hit.type = std::string(name());
+    hit.label = display_label(label);
+    hit.index = yb * nx + xb;
+    char count[64];
+    std::snprintf(count, sizeof(count), "%g", counts[hit.index]);
+    const double x0 = range.X.Min + xb * w, y0 = range.Y.Min + yb * h;
+    hit.values = {
+        {"x", format_axis_value(plot->CurrentX, x0) + " to " + format_axis_value(plot->CurrentX, x0 + w)},
+        {"y", format_axis_value(plot->CurrentY, y0) + " to " + format_axis_value(plot->CurrentY, y0 + h)},
+        {"count", count}};
+    offer_rect_px(
+        dc,
+        ImPlot::PlotToPixels(*at),
+        std::move(hit),
+        ImPlot::PlotToPixels(x0, y0),
+        ImPlot::PlotToPixels(x0 + w, y0 + h),
+        ImGui::GetColorU32(ImGuiCol_Text));
   }
 
  private:
@@ -823,10 +915,11 @@ class heatmap_class : public series_class {
     }
   }
 
-  void plot(const node& n, draw_context&) const override {
+  void plot(const node& n, draw_context& dc) const override {
     const std::string& fmt = n.get<std::string>(format);
+    const char* label = str(n, item_field::label);
     ImPlot::PlotHeatmap(
-        str(n, item_field::label),
+        label,
         n.get<doubles>(values).data(),
         static_cast<int>(n.get<int64_t>(rows)),
         static_cast<int>(n.get<int64_t>(cols)),
@@ -835,6 +928,36 @@ class heatmap_class : public series_class {
         fmt.empty() ? nullptr : fmt.c_str(),
         ImPlotPoint(n.get<double>(x_min), n.get<double>(y_min)),
         ImPlotPoint(n.get<double>(x_max), n.get<double>(y_max)));
+    const std::optional<ImPlotPoint> at = plot_pointer_value(dc, label);
+    if (!at) {
+      return;
+    }
+    // Row 0 is at the top (ImPlot draws heatmaps with y reversed).
+    const int r_count = static_cast<int>(n.get<int64_t>(rows));
+    const int c_count = static_cast<int>(n.get<int64_t>(cols));
+    const double x0 = n.get<double>(x_min), x1 = n.get<double>(x_max);
+    const double y0 = n.get<double>(y_min), y1 = n.get<double>(y_max);
+    const double w = (x1 - x0) / c_count, h = (y1 - y0) / r_count;
+    const int c = static_cast<int>(std::floor((at->x - x0) / w));
+    const int r = static_cast<int>(std::floor((y1 - at->y) / h));
+    if (c < 0 || c >= c_count || r < 0 || r >= r_count) {
+      return;
+    }
+    pick hit;
+    hit.element = &n;
+    hit.type = std::string(name());
+    hit.label = display_label(label);
+    hit.index = r * c_count + c;
+    char value[64];
+    std::snprintf(value, sizeof(value), "%g", n.get<doubles>(values)[static_cast<size_t>(hit.index)]);
+    hit.values = {{"row", std::to_string(r)}, {"column", std::to_string(c)}, {"value", value}};
+    offer_rect_px(
+        dc,
+        ImPlot::PlotToPixels(*at),
+        std::move(hit),
+        ImPlot::PlotToPixels(x0 + c * w, y1 - r * h),
+        ImPlot::PlotToPixels(x0 + (c + 1) * w, y1 - (r + 1) * h),
+        ImGui::GetColorU32(ImGuiCol_Text));
   }
 };
 
@@ -905,7 +1028,7 @@ class pie_class : public series_class {
     }
   }
 
-  void plot(const node& n, draw_context&) const override {
+  void plot(const node& n, draw_context& dc) const override {
     const std::vector<std::string> names = split_lines(n.get<std::string>(labels));
     std::vector<const char*> ids;
     for (const std::string& s : names) {
@@ -924,7 +1047,62 @@ class pie_class : public series_class {
         str(n, label_fmt),
         n.get<double>(angle0),
         spec);
+    offer_slice(n, dc, names, v);
   }
+
+ private:
+  /// The slice under the pointer, laid out as ImPlot's PlotPieChart does:
+  /// counter-clockwise from angle0, fractions of the sum when normalized
+  /// or when the values add up to more than 1.
+  void offer_slice(const node& n, draw_context& dc, const std::vector<std::string>& names, const doubles& v) const {
+    const std::optional<ImPlotPoint> at = plot_pointer_value(dc, nullptr);
+    if (!at || v.empty()) {
+      return;
+    }
+    const double cx = n.get<double>(x), cy = n.get<double>(y), r = n.get<double>(radius);
+    const double dx = at->x - cx, dy = at->y - cy;
+    if (dx * dx + dy * dy > r * r) {
+      return;
+    }
+    double sum = 0.0;
+    for (double d : v) {
+      sum += d;
+    }
+    const bool fractions = n.get<bool>(normalize) || sum > 1.0;
+    const double two_pi = 2.0 * 3.14159265358979323846;
+    const double start = n.get<double>(angle0) * two_pi / 360.0;
+    double angle = std::fmod(std::atan2(dy, dx) - start, two_pi);
+    if (angle < 0.0) {
+      angle += two_pi;
+    }
+    double a = 0.0;
+    for (size_t i = 0; i < v.size(); ++i) {
+      const double span = two_pi * (fractions ? v[i] / sum : v[i]);
+      if (angle >= a && angle < a + span) {
+        if (const ImPlotItem* item = ImPlot::GetItem(names[i].c_str()); item != nullptr && !item->Show) {
+          return;
+        }
+        const double mid = start + a + span / 2;
+        pick_candidate c;
+        c.anchor = ImPlot::PlotToPixels(cx + 0.6 * r * std::cos(mid), cy + 0.6 * r * std::sin(mid));
+        const ImPlotItem* item = ImPlot::GetItem(names[i].c_str());
+        c.color = item != nullptr ? item->Color : ImGui::GetColorU32(ImGuiCol_Text);
+        c.hit.element = &n;
+        c.hit.type = std::string(name());
+        c.hit.label = display_label(names[i].c_str());
+        c.hit.index = static_cast<int>(i);
+        char value[64], share[64];
+        std::snprintf(value, sizeof(value), "%g", v[i]);
+        std::snprintf(share, sizeof(share), "%.1f%%", sum != 0.0 ? 100.0 * v[i] / sum : 0.0);
+        c.hit.values = {{"value", value}, {"share", share}};
+        dc.offer_pick(std::move(c));
+        return;
+      }
+      a += span;
+    }
+  }
+
+ public:
 };
 
 // ── Annotations ──────────────────────────────────────────────────────────────
@@ -1231,7 +1409,7 @@ class bar_groups_class : public series_class {
     }
   }
 
-  void plot(const node& n, draw_context&) const override {
+  void plot(const node& n, draw_context& dc) const override {
     const auto& names = n.get<std::vector<std::string>>(labels);
     const doubles& v = n.get<doubles>(values);
     const size_t items = names.size();
@@ -1261,7 +1439,66 @@ class bar_groups_class : public series_class {
         n.get<double>(group_size),
         n.get<double>(shift),
         spec);
+    if (dc.interactive()) {
+      offer_groups(n, dc, ids, by_item, groups);
+    }
   }
+
+ private:
+  /// The bar under the pointer, laid out as ImPlot's PlotBarGroups does:
+  /// side by side, each item `group_size / items` wide, or stacked (hidden
+  /// items take no room).
+  void offer_groups(
+      const node& n,
+      draw_context& dc,
+      const std::vector<const char*>& ids,
+      const doubles& by_item,
+      size_t groups) const {
+    const size_t items = ids.size();
+    const double size = n.get<double>(group_size), off = n.get<double>(shift);
+    const bool h = n.get<bool>(horizontal), stack = n.get<bool>(stacked);
+    std::vector<double> pos(groups, 0.0), neg(groups, 0.0);
+    for (size_t i = 0; i < items; ++i) {
+      const ImPlotItem* item = ImPlot::GetItem(ids[i]);
+      if (item != nullptr && !item->Show) {
+        continue;
+      }
+      std::vector<bar_shape> shapes(groups);
+      for (size_t g = 0; g < groups; ++g) {
+        const double value = by_item[i * groups + g];
+        if (stack) {
+          double& base = value > 0 ? pos[g] : neg[g];
+          shapes[g] = {static_cast<double>(g) + off, std::min(base, base + value), std::max(base, base + value)};
+          base += value;
+        } else {
+          const double sub = size / static_cast<double>(items);
+          shapes[g] = {
+              static_cast<double>(g) + off + (static_cast<double>(i) + 0.5) * sub - size / 2,
+              std::min(0.0, value),
+              std::max(0.0, value)};
+        }
+      }
+      offer_bars(
+          dc,
+          n,
+          ids[i],
+          static_cast<int>(groups),
+          stack ? size : size / static_cast<double>(items),
+          h,
+          [&](int g) { return shapes[static_cast<size_t>(g)]; },
+          [&](int g, pick& p) {
+            const ImPlotPlot* plot = ImPlot::GetCurrentPlot();
+            const double value = by_item[i * groups + static_cast<size_t>(g)];
+            p.index = static_cast<int>(i * groups) + g;
+            p.values = {
+                {"group", format_axis_value(h ? plot->CurrentY : plot->CurrentX, static_cast<double>(g) + off)},
+                {"value", format_axis_value(h ? plot->CurrentX : plot->CurrentY, value)}};
+          },
+          item != nullptr ? item->Color : 0);
+    }
+  }
+
+ public:
 };
 
 // ── ColorScale ───────────────────────────────────────────────────────────────

@@ -27,6 +27,7 @@
 #include "core/error.hpp"
 #include "core/limits.hpp"
 #include "core/suggest.hpp"
+#include "elements/plot_pick.hpp"
 #include "elements/plot_style.hpp"
 #include "render/draw_context.hpp"
 #include "render/text_style.hpp"
@@ -481,7 +482,8 @@ class chart_class : public element_class {
         (s.sections.empty() ? ImPlotFlags_NoLegend : 0);
     if (ImPlot::BeginPlot(id.c_str(), ImVec2(r.width(), r.height()), flags)) {
       setup(n, s, r.width(), dc);
-      plot(n, s);
+      plot(n, s, dc);
+      finish_plot_picks(dc);
       dc.record_current_plot(n, false);
       ImPlot::EndPlot();
     }
@@ -552,7 +554,7 @@ class chart_class : public element_class {
     }
   }
 
-  void plot(const node& n, const schedule& s) const {
+  void plot(const node& n, const schedule& s, draw_context& dc) const {
     using namespace chart_field;
     // One legend item per section (tasks outside sections share a hidden
     // one), whose colour the section's tasks take.
@@ -600,6 +602,7 @@ class chart_class : public element_class {
       if (t.milestone) {
         const ImVec2 c = ImPlot::PlotToPixels(t.start, row);
         const float h = std::max(bar_half_px, 4.0f);
+        offer_task(dc, s, i, ImVec2(c.x - h, c.y - h), ImVec2(c.x + h, c.y + h), border);
         dl->AddQuadFilled(ImVec2(c.x, c.y - h), ImVec2(c.x + h, c.y), ImVec2(c.x, c.y + h), ImVec2(c.x - h, c.y), fill);
         dl->AddQuad(
             ImVec2(c.x, c.y - h), ImVec2(c.x + h, c.y), ImVec2(c.x, c.y + h), ImVec2(c.x - h, c.y), border, outline);
@@ -611,6 +614,7 @@ class chart_class : public element_class {
       b = ImVec2(std::max(std::floor(b.x), a.x + 1.0f), std::floor(b.y + bar_half_px));
       dl->AddRectFilled(a, b, fill, 3.0f);
       dl->AddRect(a, b, border, 3.0f, ImDrawFlags_None, outline);
+      offer_task(dc, s, i, a, b, border);
     }
     ImPlot::PopPlotClipRect();
     if (const std::string& today = n.get<std::string>(chart_field::today); !today.empty()) {
@@ -621,6 +625,35 @@ class chart_class : public element_class {
       ImPlot::PlotInfLines("##today", &x, 1, spec);
       ImPlot::TagX(x, spec.LineColor, "%s", "today");
     }
+  }
+
+  /// In a live view, offers task `i` (drawn in `a`-`b`) when the pointer
+  /// is on it.
+  static void offer_task(draw_context& dc, const schedule& s, size_t i, ImVec2 a, ImVec2 b, ImU32 color) {
+    const std::optional<ImVec2> pointer = plot_pointer(dc, nullptr);
+    if (!pointer) {
+      return;
+    }
+    const scheduled_task& t = s.tasks[i];
+    const auto time = [&](double v) {
+      char buf[64];
+      std::snprintf(buf, sizeof(buf), "%g", v);
+      return s.dates ? format_iso_time(v) : std::string(buf);
+    };
+    pick hit;
+    hit.element = t.n;
+    hit.type = std::string(t.n->cls->name());
+    hit.label = task_name(*t.n);
+    hit.index = static_cast<int>(i);
+    if (t.milestone) {
+      hit.values = {{"at", time(t.start)}};
+    } else {
+      hit.values = {{"start", time(t.start)}, {"end", time(t.end)}};
+    }
+    if (t.section >= 0) {
+      hit.values.push_back({"section", s.sections[static_cast<size_t>(t.section)]->get<std::string>(0)});
+    }
+    offer_rect_px(dc, *pointer, std::move(hit), a, b, color);
   }
 
   /// An elbow arrow from the end of task `from` into the start of task
