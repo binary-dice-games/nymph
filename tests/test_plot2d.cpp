@@ -76,6 +76,19 @@ size_t distinct_colors(const image& img, int x0, int y0, int x1, int y1) {
   return colors.size();
 }
 
+/// Pixels of dark grey text in a region: unlike the number of distinct
+/// colours, anti-aliased line edges do not change it.
+size_t text_pixels(const image& img, int x0, int y0, int x1, int y1) {
+  size_t count = 0;
+  for (int y = y0; y < y1; ++y) {
+    for (int x = x0; x < x1; ++x) {
+      const uint8_t* p = img.at(x, y);
+      count += (p[0] < 110 && std::abs(p[0] - p[1]) < 10 && std::abs(p[1] - p[2]) < 10) ? 1 : 0;
+    }
+  }
+  return count;
+}
+
 // ── Pinned schema ──────────────────────────────────────────────────
 
 /// "name=default" for every field of a class, sorted.
@@ -423,7 +436,7 @@ TEST(plot2d, SecondYAxisAppearsOnTheRightForItsSeries) {
   const image with_y2 = render(plot_with("", two));
   const image without = render(plot_with("", one));
   // Tick labels of Y2 fill a strip down the right side of the plot.
-  EXPECT_GT(distinct_colors(with_y2, 250, 20, 300, 180), distinct_colors(without, 250, 20, 300, 180));
+  EXPECT_GT(text_pixels(with_y2, 250, 20, 300, 180), text_pixels(without, 250, 20, 300, 180));
   // Any y2_ field shows the axis without a series on it.
   const image labelled = render(plot_with("  y2_label: rate\n", one));
   EXPECT_FALSE(labelled.rgba == without.rgba);

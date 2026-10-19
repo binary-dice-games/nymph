@@ -109,7 +109,7 @@ jobs:
           mkdir -p out
           lipo -create -output "$RUNNER_TEMP/nymph" \
             "$a/build-macos-arm64/nymph-$V-macos-arm64" "$a/build-macos-x86_64/nymph-$V-macos-x86_64"
-          lipo -verify_arch "$RUNNER_TEMP/nymph" arm64 x86_64
+          lipo "$RUNNER_TEMP/nymph" -verify_arch arm64 x86_64
           codesign --verify --verbose "$RUNNER_TEMP/nymph"
           cmake -DTEMPLATE=claude/mcpb/manifest.json.in -DEXE="$RUNNER_TEMP/nymph" -DICON=claude/mcpb/icon.png \
             -DVERSION="$V" -DPLATFORM=darwin -DSTAGE="$RUNNER_TEMP/mcpb" \

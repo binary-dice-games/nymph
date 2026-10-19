@@ -74,6 +74,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Plot lines are now anti-aliased in the software and OpenGL rasterizers, in PNGs and live views; they were jagged. The example PNGs are redrawn.
 - An unknown name in an enumeration or flags field now suggests the closest one.
 - `Separator` and `SeparatorText` also go in user-interface windows, as ImGui's own.
 - The Claude Code plugin's version is now the version of the nymph release it pins (`0.0.0` until a release is pinned), so Claude Code offers an update exactly when the pin changes.

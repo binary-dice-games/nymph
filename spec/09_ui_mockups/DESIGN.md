@@ -431,9 +431,8 @@ DESIGN section 8). nymph instead builds in a small catalog of
   settle over the first two (measured in plan steps 2 to 8), so the frame
   count did not change and other figures keep their bytes (goal 5).
 - **Determinism.** Widgets are drawn at the fixed `DeltaTime` and time of
-  the frame driver, with no mouse; ImGui draws them with geometry only
-  (`AntiAliasedLinesUseTex` is already off), so the software rasterizer
-  gives the same bytes on every machine. `ProgressBar.fraction` is 0-1:
+  the frame driver, with no mouse; the software rasterizer samples the
+  line texture in integers, so it gives the same bytes on every machine. `ProgressBar.fraction` is 0-1:
   ImGui's indeterminate bar (a negative fraction) depends on time and is
   not offered.
 - **No printf.** `Text*` draw with `TextUnformatted` (or `"%s"`), never
