@@ -61,6 +61,9 @@ if(NOT output MATCHES "NYMPH_NO_MODIFY_PATH=1|already on PATH")
   message(FATAL_ERROR "the PATH step did not run:\n${output}\n${errors}")
 endif()
 file(GLOB_RECURSE home_files "${WORK_DIR}/home/*")
+# Windows PowerShell keeps its own startup cache under the profile; that is
+# the shell's doing, not the install's.
+list(FILTER home_files EXCLUDE REGEX "/AppData/Local/Microsoft/PowerShell/")
 if(home_files)
   message(FATAL_ERROR "the install wrote into HOME: ${home_files}")
 endif()
