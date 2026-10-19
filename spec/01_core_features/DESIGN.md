@@ -701,7 +701,7 @@ as a second line behind `bind()`. Per call:
   as drawing.
 - Style: the `image.theme` ImGui, ImPlot and ImPlot3D styles
   (`StyleColorsLight` / `Dark` / `Classic`), with
-  `AntiAliasedLinesUseTex = false` (see section 7) and window rounding,
+  `AntiAliasedLinesUseTex = true` (see section 7) and window rounding,
   border and padding 0. The image is cleared to the theme's `WindowBg`,
   made opaque.
 - One window covering the display (no decoration, no saved settings, no
@@ -922,10 +922,16 @@ it as an invalid source.
 - **Overflow is an error, not clipping.** An agent cannot see that a plot
   was squeezed to nothing or a label cut off; a positioned error with the
   needed and available pixels tells it what to change.
-- **Geometry anti-aliasing, not textured lines**
-  (`AntiAliasedLinesUseTex = false`). Learned in wish nymph: textured lines
-  depend on GPU-exact bilinear filtering and came out uneven on a
-  software renderer. Geometry fringes need no texture at all.
+- **Textured line anti-aliasing** (`AntiAliasedLinesUseTex = true`).
+  wish nymph turned it off: textured lines depend on GPU-exact bilinear
+  filtering and came out uneven on its software renderer. That no longer
+  holds here: `sample()` rounds the position to 1/256 texel and weights the
+  four texels in integers, and the result matches a GPU within one level at
+  every line slope tried. ImPlot anti-aliases its plot lines only through
+  the line texture, so with it off they were drawn jagged. A pixel centre
+  lying exactly on a line's end cap is covered by one rasterizer and not the
+  other (a tie, full alpha), which the rasterizer comparison allows for
+  (spec/02_opengl_rasterizer/DESIGN.md section 6).
 - **The whole source is one YAML document**, not wish nymph's three parts
   separated by `--` lines. A YAML file is what the tool is asked to read;
   any YAML tool or library can read, generate or edit it; and there is one

@@ -438,7 +438,9 @@ GPU tests cannot assume a GPU. Three layers:
    otherwise): every scene of `test_soft_rasterizer` and every example
    rendered by both rasterizers and compared with a tolerance: at least
    99.5 % of pixels within 2 per channel (in images of under 200 pixels,
-   all but one), none beyond 64, and the mean absolute difference below
+   all but one), at most one pixel in 50 000 (and at least one) beyond 64
+   (a pixel centre exactly on a line's end cap is a tie that the two
+   rasterizers break differently), and the mean absolute difference below
    0.5. Measured on llvmpipe (plan step 4): the scenes are within 1 per
    channel everywhere (mean 0.09); the examples are 100.000 % within 2
    (rounded), worst single channel 44 (an anti-aliased edge pixel), mean

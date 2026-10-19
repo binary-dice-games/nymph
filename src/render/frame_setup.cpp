@@ -157,10 +157,12 @@ void configure_style(const theme& t) {
   t.implot3d(&ImPlot3D::GetStyle());
   t.imuml(&ImUml::GetStyle());
   style.FontSizeBase = kFigureFontSize;
-  // ImGui's textured line anti-aliasing relies on GPU-exact bilinear
-  // filtering of a small line texture; geometry fringes need no texture
-  // and rasterize evenly (lesson from wish nymph).
-  style.AntiAliasedLinesUseTex = false;
+  // Textured lines: ImPlot anti-aliases its lines only this way, and the
+  // software rasterizer's integer bilinear sampling (soft_rasterizer.cpp,
+  // sample()) matches a GPU's filtering within one level, so both
+  // rasterizers draw the same smooth lines (spec/01_core_features/DESIGN.md
+  // section 7).
+  style.AntiAliasedLinesUseTex = true;
   style.WindowRounding = 0.0f;
   style.WindowBorderSize = 0.0f;
   style.WindowPadding = ImVec2(0.0f, 0.0f);
