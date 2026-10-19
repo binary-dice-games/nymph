@@ -284,6 +284,13 @@ class x11_window : public native_window {
     }
     wm_delete_ = a.XInternAtom(display_, "WM_DELETE_WINDOW", 0);
     a.XSetWMProtocols(display_, window_, &wm_delete_, 1);
+    // WM_CLASS (predefined atom 67, type STRING 31): instance and class
+    // names, each NUL-terminated, which window managers use to group and
+    // label the window (WSLg's taskbar entry and app id come from it).
+    static constexpr char kClass[] = "nymph\0nymph";
+    a.XChangeProperty(
+        display_, window_, 67, 31, 8, 0 /* PropModeReplace */, reinterpret_cast<const unsigned char*>(kClass),
+        static_cast<int>(sizeof(kClass)));
     create_context(config);
     ready_ = true;
   }
