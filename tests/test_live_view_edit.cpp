@@ -87,13 +87,14 @@ TEST(live_view_edit, TargetsAtGivesTheSmallestElementFirst) {
   const std::vector<edit_target> list = d.v.targets_at(100, 150);
   ASSERT_FALSE(list.empty());
   // A point in the left half of the lower row: the left plot, then the row,
-  // then the root layout.
+  // then the root layout, then the image options (the whole figure).
   EXPECT_EQ(list.front().type, "Plot");
   EXPECT_EQ(list.front().element, "root/children/1/children/0");
-  ASSERT_GE(list.size(), 3u);
+  ASSERT_GE(list.size(), 4u);
   EXPECT_EQ(list[1].type, "HorizontalLayout");
-  EXPECT_EQ(list.back().type, "VerticalLayout");
-  EXPECT_EQ(list.back().element, "root");
+  EXPECT_EQ(list[list.size() - 2].element, "root");
+  EXPECT_EQ(list.back().type, "Image");
+  EXPECT_EQ(list.back().element, "image");
   // The right half selects the other plot.
   EXPECT_EQ(path_of(d.v.targets_at(300, 150), "Plot"), "root/children/1/children/1");
   // The label sits above the plots.
@@ -103,21 +104,45 @@ TEST(live_view_edit, TargetsAtGivesTheSmallestElementFirst) {
   EXPECT_TRUE(d.v.targets_at(1000, 1000).empty());
 }
 
+TEST(live_view_edit, TheMarginAwayFromEveryElementIsTheImageOptions) {
+  driven_view d(kTwoPlots);
+  d.v.set_edit_mode(true);
+  d.run();
+  // The default padding is 8 px: a point in it belongs to no element.
+  const std::vector<edit_target> margin = d.v.targets_at(3, 3);
+  ASSERT_EQ(margin.size(), 1u);
+  EXPECT_EQ(margin[0].element, "image");
+  EXPECT_EQ(margin[0].type, "Image");
+  EXPECT_EQ(margin[0].field, "");
+  EXPECT_FLOAT_EQ(margin[0].width, 400.0f);
+  EXPECT_FLOAT_EQ(margin[0].height, 300.0f);
+  d.click(3, 3);
+  const std::optional<edit_target> clicked = d.v.take_edit_click();
+  ASSERT_TRUE(clicked);
+  EXPECT_EQ(clicked->element, "image");
+  // It can be selected and outlined like an element, and survives a new source.
+  d.v.set_selection(edit_target_id{"image", ""});
+  d.v.set_source(kTwoPlots);
+  EXPECT_TRUE(d.v.selection());
+}
+
 TEST(live_view_edit, ElementListFollowsTheTreeWithDepth) {
   driven_view d(kTwoPlots);
   const std::vector<edit_element> list = d.v.element_list();
-  ASSERT_EQ(list.size(), 7u);
-  EXPECT_EQ(list[0].path, "root");
-  EXPECT_EQ(list[0].depth, 0);
-  EXPECT_EQ(list[1].path, "root/children/0");
-  EXPECT_EQ(list[1].type, "Label");
-  EXPECT_EQ(list[1].label, "Report");
-  EXPECT_EQ(list[3].path, "root/children/1/children/0");
-  EXPECT_EQ(list[3].label, "Left");
-  EXPECT_EQ(list[3].depth, 2);
-  EXPECT_EQ(list[4].type, "PlotLine");
-  EXPECT_EQ(list[4].label, "a");
-  EXPECT_EQ(list[4].depth, 3);
+  ASSERT_EQ(list.size(), 8u);
+  EXPECT_EQ(list[0].path, "image");
+  EXPECT_EQ(list[0].type, "Image");
+  EXPECT_EQ(list[1].path, "root");
+  EXPECT_EQ(list[1].depth, 0);
+  EXPECT_EQ(list[2].path, "root/children/0");
+  EXPECT_EQ(list[2].type, "Label");
+  EXPECT_EQ(list[2].label, "Report");
+  EXPECT_EQ(list[4].path, "root/children/1/children/0");
+  EXPECT_EQ(list[4].label, "Left");
+  EXPECT_EQ(list[4].depth, 2);
+  EXPECT_EQ(list[5].type, "PlotLine");
+  EXPECT_EQ(list[5].label, "a");
+  EXPECT_EQ(list[5].depth, 3);
 }
 
 TEST(live_view_edit, TargetForFindsAnElementByPath) {
@@ -360,7 +385,7 @@ TEST(live_view_edit, ADiagramTextIsFoundBeforeItsNodeAndTheDiagram) {
   d.run();
   const edit_target text = *d.v.target_for("root/children/0", "text");
   const std::vector<edit_target> hit = d.v.targets_at(text.x + text.width / 2, text.y + text.height / 2);
-  ASSERT_EQ(hit.size(), 2u); // the text, then the diagram (a node is no element-level target)
+  ASSERT_EQ(hit.size(), 3u); // the text, the diagram (a node is no element-level target), the image
   EXPECT_EQ(hit[0].element, "root/children/0");
   EXPECT_EQ(hit[0].field, "text");
   EXPECT_EQ(hit[1].element, "root");
@@ -427,6 +452,9 @@ TEST(live_view_edit, EveryDiagramExampleMapsItsTextsToFields) {
     const std::map<std::string, const node*, std::less<>> paths = element_paths(f.root);
     int mapped = 0;
     for (const edit_element& e : d.v.element_list()) {
+      if (e.path == "image") {
+        continue;
+      }
       const node* n = paths.at(e.path);
       for (const field_desc& fd : n->cls->fields()) {
         const std::optional<edit_target> t = d.v.target_for(e.path, fd.name);

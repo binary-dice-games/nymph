@@ -13,6 +13,7 @@
 #include <utility>
 #include "core/error.hpp"
 #include "document/yaml_doc.hpp"
+#include "edit/image_fields.hpp"
 #include "edit/source_edit.hpp"
 #include "document/bind.hpp"
 #include "elements/register_builtin.hpp"
@@ -400,10 +401,18 @@ struct live_view::impl {
     return ref ? "bound to " + *ref : std::string();
   }
 
-  /// Converts the frame's recorded targets to CSS pixels.
+  /// Converts the frame's recorded targets to CSS pixels. The whole figure
+  /// comes first as the image options' target: the smallest target wins, so
+  /// it is what a click on the margin, away from every element, finds.
   void collect_targets() {
     edit_targets.clear();
     const float s = geom.css_scale;
+    edit_target background;
+    background.element = std::string(kImagePath);
+    background.type = "Image";
+    background.width = geom.layout_width * s;
+    background.height = geom.layout_height * s;
+    edit_targets.push_back(std::move(background));
     for (const edit_record& r : ctx->targets()) {
       const auto it = paths.find(r.element);
       if (it == paths.end()) {
@@ -443,8 +452,9 @@ struct live_view::impl {
     if (selection) {
       if (const edit_target* t = find_target(selection->element, selection->field)) {
         const auto [a, b] = to_logical(*t);
+        const float grow = t->element == kImagePath ? -1.0f : 1.0f; // the figure's own edge stays inside it
         ImGui::GetForegroundDrawList()->AddRect(
-            ImVec2(a.x - 1.0f, a.y - 1.0f), ImVec2(b.x + 1.0f, b.y + 1.0f), select_color, 0.0f, 0, 2.0f);
+            ImVec2(a.x - grow, a.y - grow), ImVec2(b.x + grow, b.y + grow), select_color, 0.0f, 0, 2.0f);
       }
     }
   }
@@ -570,8 +580,8 @@ void live_view::set_source(std::string_view source, bool reset_view) {
   m.edit_targets.clear();
   m.edit_doc.reset();
   if (m.selection) {
-    const auto gone = std::none_of(
-        m.paths.begin(), m.paths.end(), [&](const auto& p) { return p.second == m.selection->element; });
+    const auto gone = m.selection->element != kImagePath &&
+        std::none_of(m.paths.begin(), m.paths.end(), [&](const auto& p) { return p.second == m.selection->element; });
     if (gone) {
       m.selection.reset();
     }
@@ -752,6 +762,7 @@ const std::optional<edit_target_id>& live_view::selection() const {
 std::vector<edit_element> live_view::element_list() const {
   std::vector<edit_element> out;
   if (impl_->fig) {
+    out.push_back({std::string(kImagePath), "Image", "", 0});
     list_elements(impl_->fig->root, "root", 0, out);
   }
   return out;

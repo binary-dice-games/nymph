@@ -6,6 +6,7 @@
 #include <cstddef>
 #include <vector>
 #include "core/error.hpp"
+#include "document/bind.hpp"
 
 namespace bdg::nymph {
 
@@ -148,6 +149,13 @@ const yaml_node& element_at(const yaml_node& doc, std::string_view path) {
   if (!doc.is_mapping()) {
     fail(doc, "a nymph source is a mapping with a 'root' key");
   }
+  if (path == "image") { // the image options: a mapping, not an element
+    const yaml_node* image = doc.find("image");
+    if (image == nullptr || !image->is_mapping()) {
+      fail(doc, "the source has no image options");
+    }
+    return *image;
+  }
   const std::vector<std::string_view> steps = split_path(path);
   const yaml_node* node = steps[0] == "root" ? doc.find("root") : nullptr;
   if (node == nullptr) {
@@ -219,6 +227,10 @@ std::string
 set_field(std::string_view source, std::string_view element_path, std::string_view field, std::string_view yaml_value) {
   check_value(yaml_value);
   const yaml_node doc = parse_yaml(source);
+  if (element_path == "image" && doc.is_mapping() && doc.find("image") == nullptr) {
+    // The first image option: the section is new.
+    return replace_top_level(source, "image", "{" + std::string(field) + ": " + std::string(yaml_value) + "}").source;
+  }
   const yaml_node& element = element_at(doc, element_path);
   const text_index t(source);
   std::string out(source);
@@ -259,6 +271,9 @@ set_field(std::string_view source, std::string_view element_path, std::string_vi
 
 std::string remove_field(std::string_view source, std::string_view element_path, std::string_view field) {
   const yaml_node doc = parse_yaml(source);
+  if (element_path == "image" && doc.is_mapping() && doc.find("image") == nullptr) {
+    return std::string(source); // nothing written, nothing to remove
+  }
   const yaml_node& element = element_at(doc, element_path);
   const int found = key_index(element, field);
   std::string out(source);

@@ -5,6 +5,7 @@
 #include "core/error.hpp"
 #include "document/view.hpp"
 #include "edit/field_value.hpp"
+#include "edit/image_fields.hpp"
 #include "edit/source_edit.hpp"
 #include "elements/register_builtin.hpp"
 #include "schema/element_class.hpp"
@@ -43,7 +44,7 @@ void editor_model::reset(std::string source) {
 }
 
 void editor_model::select(std::optional<edit_target_id> selection) {
-  if (selection && !element_paths(figure_->root).contains(selection->element)) {
+  if (selection && selection->element != kImagePath && !element_paths(figure_->root).contains(selection->element)) {
     selection.reset();
   }
   selection_ = std::move(selection);
@@ -53,6 +54,9 @@ std::string editor_model::selected_type() const {
   if (!selection_) {
     return {};
   }
+  if (selection_->element == kImagePath) {
+    return "Image";
+  }
   const auto paths = element_paths(figure_->root);
   const auto it = paths.find(selection_->element);
   return it == paths.end() ? std::string() : std::string(it->second->cls->name());
@@ -60,6 +64,14 @@ std::string editor_model::selected_type() const {
 
 const field_desc* editor_model::find_field(std::string_view name) const {
   if (!selection_) {
+    return nullptr;
+  }
+  if (selection_->element == kImagePath) {
+    for (const field_desc& f : image_fields()) {
+      if (f.name == name) {
+        return &f;
+      }
+    }
     return nullptr;
   }
   const auto paths = element_paths(figure_->root);
@@ -76,17 +88,28 @@ std::vector<editable_field> editor_model::fields() const {
   if (!selection_) {
     return out;
   }
+  std::optional<yaml_node> doc;
+  try {
+    doc = parse_yaml(source_);
+  } catch (const error&) {
+  }
+  if (selection_->element == kImagePath) {
+    const yaml_node* written = doc ? doc->find("image") : nullptr;
+    for (size_t i = 0; i < image_fields().size(); ++i) {
+      editable_field f;
+      f.desc = &image_fields()[i];
+      f.current = image_field_value(figure_->image, i);
+      f.written = written != nullptr && written->find(f.desc->name) != nullptr;
+      out.push_back(std::move(f));
+    }
+    return out;
+  }
   const auto paths = element_paths(figure_->root);
   const auto it = paths.find(selection_->element);
   if (it == paths.end()) {
     return out;
   }
   const node& n = *it->second;
-  std::optional<yaml_node> doc;
-  try {
-    doc = parse_yaml(source_);
-  } catch (const error&) {
-  }
   const bool figure_element = n.cls->slot() == kFigureSlot;
   for (size_t i = 0; i < n.cls->fields().size(); ++i) {
     editable_field f;
@@ -164,7 +187,18 @@ commit_result editor_model::clear(std::string_view field) {
     return fail("the selected element has no field '" + std::string(field) + "'");
   }
   try {
-    return apply(remove_field(source_, selection_->element, field), selection_->element + "/" + std::string(field) + "/clear", false);
+    std::string next = remove_field(source_, selection_->element, field);
+    if (selection_->element == kImagePath) {
+      // An image section left without options would not be a mapping.
+      const yaml_node doc = parse_yaml(next);
+      const yaml_node* image = doc.find("image");
+      const bool empty = image != nullptr && ((image->is_mapping() && image->keys.empty()) ||
+                                              (image->is_scalar() && image->text.empty() && !image->quoted()));
+      if (empty) {
+        next = replace_top_level(next, "image", "").source;
+      }
+    }
+    return apply(std::move(next), selection_->element + "/" + std::string(field) + "/clear", false);
   } catch (const error& e) {
     return fail(e.what(), e.line(), e.column());
   }

@@ -52,6 +52,8 @@ add_library(nymph STATIC
   edit/field_value.cpp
   edit/editor_model.hpp
   edit/editor_model.cpp
+  edit/image_fields.hpp
+  edit/image_fields.cpp
   edit/inspector.hpp
   edit/inspector.cpp
   elements/plot_style.hpp

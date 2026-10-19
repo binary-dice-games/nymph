@@ -210,6 +210,63 @@ TEST(editor_model, TheSelectionSurvivesTextEditsAndGoesWhenItsElementDoes) {
   EXPECT_FALSE(m.selection());
 }
 
+// ── The image options ────────────────────────────────────────────────────────
+
+TEST(editor_model, TheImageOptionsAreSelectedLikeAnElement) {
+  editor_model m(kSource);
+  m.select(edit_target_id{"image", ""});
+  ASSERT_TRUE(m.selection());
+  EXPECT_EQ(m.selected_type(), "Image");
+  const std::vector<editable_field> fields = m.fields();
+  ASSERT_EQ(fields.size(), 8u);
+  const editable_field* width = find(fields, "width");
+  ASSERT_NE(width, nullptr);
+  EXPECT_TRUE(width->written);
+  EXPECT_EQ(std::get<int64_t>(width->current), 400);
+  EXPECT_FALSE(find(fields, "theme")->written);
+  EXPECT_EQ(std::get<int64_t>(find(fields, "theme")->current), 0); // light
+  EXPECT_EQ(find(fields, "theme")->desc->type, field_type::enumeration);
+  EXPECT_EQ(std::get<double>(find(fields, "font_size")->current), 16.0);
+}
+
+TEST(editor_model, ImageOptionsAreChangedAddedAndRemoved) {
+  editor_model m(kSource);
+  m.select(edit_target_id{"image", ""});
+  ASSERT_TRUE(m.commit("width", encode_int(640)).ok);
+  EXPECT_NE(m.source().find("width: 640"), std::string::npos);
+  EXPECT_EQ(m.image().width, 640);
+  // A new option joins the section; the theme is written by name.
+  const field_desc* theme = m.find_field("theme");
+  ASSERT_NE(theme, nullptr);
+  ASSERT_TRUE(m.commit("theme", encode_enum(*theme, 1)).ok);
+  EXPECT_NE(m.source().find("theme: dark"), std::string::npos);
+  EXPECT_EQ(m.image().theme, "dark");
+  // Out of range, or too big for the scale, is refused.
+  EXPECT_FALSE(m.commit("width", encode_int(5000)).ok);
+  ASSERT_TRUE(m.commit("width", encode_int(4096)).ok);
+  EXPECT_FALSE(m.commit("scale", encode_int(3)).ok); // 4096 x 3 is over 8192
+  ASSERT_TRUE(m.commit("width", encode_int(640)).ok);
+  EXPECT_EQ(m.image().width, 640);
+  ASSERT_TRUE(m.clear("theme").ok);
+  EXPECT_EQ(m.image().theme, "light");
+  ASSERT_TRUE(m.undo());
+  EXPECT_EQ(m.image().theme, "dark");
+}
+
+TEST(editor_model, TheFirstImageOptionCreatesTheSectionAndTheLastRemovalDropsIt) {
+  editor_model m("root: {type: Plot, title: T}\n");
+  m.select(edit_target_id{"image", ""});
+  EXPECT_FALSE(find(m.fields(), "width")->written);
+  ASSERT_TRUE(m.commit("width", encode_int(500)).ok);
+  EXPECT_EQ(m.image().width, 500);
+  EXPECT_NE(m.source().find("image:"), std::string::npos);
+  ASSERT_TRUE(m.clear("width").ok);
+  EXPECT_EQ(m.source().find("image"), std::string::npos) << m.source();
+  EXPECT_EQ(m.image().width, 800);
+  // Clearing what is not written changes nothing.
+  EXPECT_TRUE(m.clear("height").ok);
+}
+
 TEST(editor_model, SavingMakesTheModelUnmodifiedAndKeepsTheHistory) {
   editor_model m(kSource);
   m.select(kPlot);

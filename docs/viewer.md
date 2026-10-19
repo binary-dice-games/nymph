@@ -128,6 +128,11 @@ an editor panel to the right of the figure; `E` hides it again.
   diagram); the **Elements** list reaches everything else (a series, a plot
   without a title yet, `legend_location`). Dragging still pans and the wheel
   still zooms.
+- **The whole figure.** Clicking the background (the margin around the figure,
+  away from every element) or choosing **Image** in the list selects the
+  `image:` options: `width`, `height`, `scale`, `theme`, `padding`, and the
+  text style of the whole figure. A new `width` or `height` resizes the
+  window to that layout; `scale` only changes a saved PNG.
 - **Changes are edits of the YAML.** Each change is written into the source
   (comments and layout of the file stay), checked like any source, and the
   figure redraws at once. A change that would make the source invalid is

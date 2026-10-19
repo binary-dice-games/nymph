@@ -307,6 +307,16 @@ panel.
   elements. The inspector shows the reference and its current text but
   edits only literals. Editing cells (and a "replace by literal" action) is
   a later step because the `data` tables are not yet patchable by position.
+- **The image options are selected like an element.** `image:` is not an
+  element, so the editor gives it the path `image` and the type "Image"
+  (`src/edit/image_fields.*` describes its eight options as fields, so the
+  same widgets, ranges and validation apply). `live_view` records the whole
+  figure as the lowest target (the smallest wins, so only the margin and the
+  gaps of no element reach it) and lists "Image" first in `element_list()`.
+  `source_edit` patches the `image` mapping, creates it for the first option
+  and `editor_model::clear()` drops it with its last. In the window a changed
+  `width` / `height` resizes the window to the new layout (the figure otherwise
+  follows the window, `--fit fill`); `scale` has no effect on the screen.
 - **Pan, zoom and view state are not edit operations.** They stay mouse
   gestures on the figure, saved in the `view` key as today. The editor's
   "View" row offers Reset view and shows the current axis ranges; typing

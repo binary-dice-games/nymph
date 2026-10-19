@@ -119,9 +119,9 @@ TEST(inspector, DrawsEveryElementOfTheExampleWithoutAnOpenGLContext) {
   live_view view;
   view.set_source(kSource);
   const std::vector<edit_element> tree = view.element_list();
-  ASSERT_EQ(tree.size(), 6u);
+  ASSERT_EQ(tree.size(), 7u);
   // Nothing selected, then each element, with and without a focused field.
-  for (const edit_target_id& id : {edit_target_id{"", ""}, edit_target_id{"root", ""},
+  for (const edit_target_id& id : {edit_target_id{"", ""}, edit_target_id{"image", ""}, edit_target_id{"root", ""},
                                    edit_target_id{"root/children/0", "text"}, edit_target_id{"root/children/1", "title"},
                                    edit_target_id{"root/children/1/children/0", ""},
                                    edit_target_id{"root/children/2/children/0", "text"}}) {

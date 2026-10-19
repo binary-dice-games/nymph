@@ -67,7 +67,13 @@ class editor_model {
     return selection_;
   }
 
-  /// @brief The type name of the selected element, or "".
+  /// @brief The image options of the source as it is.
+  const image_options& image() const {
+    return figure_->image;
+  }
+
+  /// @brief The type name of the selected element ("Image" for the image
+  ///        options), or "".
   std::string selected_type() const;
 
   /// @brief The fields of the selected element, in schema order; empty

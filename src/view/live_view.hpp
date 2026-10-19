@@ -253,8 +253,9 @@ class live_view {
   void set_selection(std::optional<edit_target_id> selection);
   const std::optional<edit_target_id>& selection() const;
 
-  /// @brief Every element of the figure in drawing order with its depth,
-  ///        for a tree list.
+  /// @brief The image options ("image", type "Image"), then every element of
+  ///        the figure in drawing order with its depth, for a tree list. A
+  ///        click away from every element targets the image options too.
   std::vector<edit_element> element_list() const;
 
   /// @brief The best target under a primary-button click (press and

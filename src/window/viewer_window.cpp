@@ -292,6 +292,8 @@ class viewer : public window_events {
         return;
       }
       panel_->model().set_original(saved_source_);
+      image_w_ = panel_->model().image().width;
+      image_h_ = panel_->model().image().height;
       view_.set_edit_mode(true);
       int avail_w = 0, avail_h = 0;
       window_->available_client_size(avail_w, avail_h);
@@ -338,6 +340,7 @@ class viewer : public window_events {
       } catch (const std::exception& e) {
         status_ = std::string("cannot show: ") + e.what();
       }
+      fit_window_to_image();
     }
     if (events.select) {
       panel_->model().select(*events.select);
@@ -399,6 +402,25 @@ class viewer : public window_events {
     in.read(head, sizeof(head));
     static constexpr char kSignature[8] = {char(0x89), 'P', 'N', 'G', 0x0d, 0x0a, 0x1a, 0x0a};
     return in.gcount() == 8 && std::memcmp(head, kSignature, 8) == 0;
+  }
+
+  /// A changed `image.width` / `height` sizes the window to the new layout,
+  /// as opening the file would.
+  void fit_window_to_image() {
+    const image_options& image = panel_->model().image();
+    if (image.width == image_w_ && image.height == image_h_) {
+      return;
+    }
+    image_w_ = image.width;
+    image_h_ = image.height;
+    int avail_w = 0, avail_h = 0;
+    window_->available_client_size(avail_w, avail_h);
+    const window_size client = initial_window_size(
+        static_cast<int>(std::lround(static_cast<float>(image.width) * scale_)) + strip_pixels(),
+        static_cast<int>(std::lround(static_cast<float>(image.height) * scale_)),
+        avail_w,
+        avail_h);
+    resize_client(client.width, client.height);
   }
 
   void reset_view() {
@@ -512,6 +534,8 @@ class viewer : public window_events {
   bool panel_drag_ = false; ///< A button went down over the panel and is still held.
   bool pointer_in_panel_ = false;
   std::string status_; ///< What was saved or refused, for the panel.
+  int image_w_ = 0; ///< The image size last shown, to see when the source changes it.
+  int image_h_ = 0;
   std::string saved_source_; ///< The source the input file holds, to tell unsaved changes.
 };
 
