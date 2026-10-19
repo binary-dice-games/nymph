@@ -239,7 +239,7 @@ std::optional<edit_target> take_edit_click();      // best target under a click 
 order, current value, `written`, `bound_to`, `scope_note`), `commit(field,
 yaml_value, merge, replace_binding)`, `clear(field)`, `undo()`, `redo()`,
 `reset()`. `field_value.hpp`: `encode_text / bool / int / number / color /
-enum / flags` and `check_source()`. `inspector` (`src/edit/inspector.hpp`):
+enum / flags` and `find_source_problem()`. `inspector` (`src/edit/inspector.hpp`):
 `widget_for(field_desc)`, `draw()`, `edit_text()`, `flush()`. The panel
 itself is `src/window/editor_panel.*` (its ImGui context and the OpenGL3
 backend), driven by `viewer_window.cpp`.

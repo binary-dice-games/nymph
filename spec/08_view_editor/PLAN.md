@@ -46,7 +46,7 @@ bad colour are rejected with the loader's message; a patch producing an
 invalid source is reported, not applied.
 
 **Result (done):** `src/edit/field_value.*`, `test_field_value` (7 tests). Text is plain when that
-reads back unchanged and double-quoted otherwise; `check_source()` is `bind_source()`.
+reads back unchanged and double-quoted otherwise; `find_source_problem()` is `bind_source()`.
 
 ## 3. Edit mode in live_view: elements
 

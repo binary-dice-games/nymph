@@ -135,7 +135,7 @@ std::string encode_flags(const field_desc& f, int64_t value) {
   return text.find('|') == std::string::npos ? text : "\"" + text + "\"";
 }
 
-std::optional<source_problem> check_source(std::string_view source) {
+std::optional<source_problem> find_source_problem(std::string_view source) {
   try {
     bind_source(source, builtin_registry());
   } catch (const error& e) {

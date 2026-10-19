@@ -3,6 +3,7 @@
 /// @brief spec/08_view_editor plan step 2: typed values become YAML that
 ///        reads back unchanged, and an invalid edited source is detected.
 #include <gtest/gtest.h>
+#include <cmath>
 #include <string>
 #include "document/bind.hpp"
 #include "edit/field_value.hpp"
@@ -69,29 +70,29 @@ TEST(field_value, EnumsAndFlagsUseTheirNames) {
   ASSERT_NE(flags.names, nullptr);
   const std::string two = encode_flags(flags, *flags.names->find("Outside") | *flags.names->find("Horizontal"));
   EXPECT_EQ(two, "\"Outside|Horizontal\"");
-  EXPECT_EQ(check_source("root: {type: Plot, legend_flags: " + two + "}\n"), std::nullopt);
+  EXPECT_EQ(find_source_problem("root: {type: Plot, legend_flags: " + two + "}\n"), std::nullopt);
 }
 
 TEST(field_value, EveryEditedValueIsAcceptedByTheLoader) {
   const std::string base = "root:\n  type: Plot\n  children: []\n";
-  EXPECT_EQ(check_source(set_field(base, "root", "x_label", encode_text("time (s)"))), std::nullopt);
-  EXPECT_EQ(check_source(set_field(base, "root", "text_color", *encode_color("#2471a3"))), std::nullopt);
-  EXPECT_EQ(check_source(set_field(base, "root", "font_size", encode_number(18))), std::nullopt);
+  EXPECT_EQ(find_source_problem(set_field(base, "root", "x_label", encode_text("time (s)"))), std::nullopt);
+  EXPECT_EQ(find_source_problem(set_field(base, "root", "text_color", *encode_color("#2471a3"))), std::nullopt);
+  EXPECT_EQ(find_source_problem(set_field(base, "root", "font_size", encode_number(18))), std::nullopt);
 }
 
 TEST(field_value, AnInvalidSourceIsReportedWithItsPosition) {
   const std::string base = "root:\n  type: Plot\n  children: []\n";
-  const auto too_big = check_source(set_field(base, "root", "font_size", encode_number(500)));
+  const auto too_big = find_source_problem(set_field(base, "root", "font_size", encode_number(500)));
   ASSERT_TRUE(too_big);
   EXPECT_EQ(too_big->line, 4);
   EXPECT_NE(too_big->message.find("font_size"), std::string::npos);
-  const auto bad_color = check_source(set_field(base, "root", "text_color", encode_text("red")));
+  const auto bad_color = find_source_problem(set_field(base, "root", "text_color", encode_text("red")));
   ASSERT_TRUE(bad_color);
-  const auto bad_enum = check_source(set_field(base, "root", "legend_location", encode_text("Middle")));
+  const auto bad_enum = find_source_problem(set_field(base, "root", "legend_location", encode_text("Middle")));
   ASSERT_TRUE(bad_enum);
-  const auto bad_font = check_source(set_field(base, "root", "font", encode_text("NoSuchFont.ttf")));
+  const auto bad_font = find_source_problem(set_field(base, "root", "font", encode_text("NoSuchFont.ttf")));
   ASSERT_TRUE(bad_font);
-  EXPECT_EQ(check_source(base), std::nullopt);
+  EXPECT_EQ(find_source_problem(base), std::nullopt);
 }
 
 } // namespace

@@ -138,7 +138,7 @@ commit_result editor_model::fail(const std::string& message, int line, int colum
 }
 
 commit_result editor_model::apply(std::string next, const std::string& key, bool merge) {
-  if (const std::optional<source_problem> problem = check_source(next)) {
+  if (const std::optional<source_problem> problem = find_source_problem(next)) {
     return fail(problem->message, problem->line, problem->column);
   }
   figure replacement = bind_source(next, builtin_registry());

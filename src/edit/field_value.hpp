@@ -48,6 +48,6 @@ struct source_problem {
 
 /// @brief Reads `source` as nymph does (bind_source() with the built-in
 ///        elements): the problem with it, or nullopt when it is fine.
-std::optional<source_problem> check_source(std::string_view source);
+std::optional<source_problem> find_source_problem(std::string_view source);
 
 } // namespace bdg::nymph
