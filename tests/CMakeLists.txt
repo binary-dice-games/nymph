@@ -69,6 +69,7 @@ target_compile_definitions(test_docs PRIVATE NYMPH_SOURCE_DIR="${PROJECT_SOURCE_
 nymph_add_test(test_fonts test_fonts.cpp)
 target_compile_definitions(test_fonts PRIVATE NYMPH_FONTS_DIR="${NYMPH_FONTS_DIR}")
 nymph_add_test(test_fonts_on_demand test_fonts_on_demand.cpp)
+target_link_libraries(test_fonts_on_demand PRIVATE nymph_stb)
 target_compile_definitions(test_fonts_on_demand PRIVATE
   NYMPH_FONTS_DIR="${NYMPH_FONTS_DIR}" NYMPH_SOURCE_DIR="${PROJECT_SOURCE_DIR}")
 
