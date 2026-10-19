@@ -55,6 +55,22 @@ const std::string k3D =
     "  children:\n"
     "    - {type: Plot3DScatter, label: p, xs: [0, 1, 0, 1], ys: [0, 0, 1, 1], zs: [0, 1, 1, 0]}\n";
 
+const std::string kGantt =
+    "image: {width: 400, height: 300}\n"
+    "root:\n"
+    "  type: GanttChart\n"
+    "  children:\n"
+    "    - type: GanttSection\n"
+    "      name: red\n"
+    "      color: \"#FF0000\"\n"
+    "      children:\n"
+    "        - {type: GanttTask, id: a, name: A, start: 0, duration: 4}\n"
+    "        - {type: GanttTask, id: b, name: B, start: 4, duration: 4}\n"
+    "    - type: GanttSection\n"
+    "      name: other\n"
+    "      children:\n"
+    "        - {type: GanttTask, id: c, name: C, after: [b], duration: 4}\n";
+
 figure bound(const std::string& source) {
   return bind_source(source, builtin_registry());
 }
@@ -153,6 +169,17 @@ TEST(saved_view, APngShowsTheSavedRangesAndHiddenSeries) {
   EXPECT_EQ(red_pixels(hidden), 0u); // the legend swatch of a hidden entry is greyed
   const image zoomed = png_pixels(kTwoPlots + "view:\n  root/children/0: {x: [4, 6], y: [4, 6]}\n");
   EXPECT_FALSE(zoomed.rgba == plain.rgba);
+}
+
+TEST(saved_view, AHiddenGanttSectionDropsItsRows) {
+  EXPECT_GT(red_pixels(png_pixels(kGantt)), 200u);
+  const std::string hidden = kGantt + "view:\n  root: {hidden: [red]}\n";
+  EXPECT_EQ(red_pixels(png_pixels(hidden)), 0u);
+  // The rows of the hidden section close up: one row is left.
+  driven_view d(hidden, 400, 300);
+  EXPECT_NEAR(std::abs(d.plot().y_max - d.plot().y_min), 1.0, 1e-6);
+  EXPECT_EQ(d.v.view_state()[0].hidden, std::vector<std::string>{"red"});
+  EXPECT_EQ(d.v.source_with_view(), hidden); // nothing new
 }
 
 TEST(saved_view, ALiveViewOfASavedViewDrawsLikeItsPng) {

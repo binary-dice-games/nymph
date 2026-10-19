@@ -290,7 +290,7 @@ view:
 | Element | Keys |
 |---|---|
 | `Plot` | `x`, `y`, `y2`: `[min, max]` ranges, which win over `x_min` / `x_max` ...; `hidden`: legend labels switched off. |
-| `GanttChart` | `x`: the time range shown, in the chart's time unit (UNIX seconds for dates). |
+| `GanttChart` | `x`: the time range shown, in the chart's time unit (UNIX seconds for dates); `hidden`: the names of the sections switched off in the legend (their rows close up). |
 | `Plot3D` | `x`, `y`, `z`; `rotation`: a quaternion `[x, y, z, w]`; `hidden`. |
 | UML diagrams, `Flowchart` | `zoom`: 0.25 to 8 times the fit; `center`: the diagram point at the centre, in diagram units at zoom 1. |
 

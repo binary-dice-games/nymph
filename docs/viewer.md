@@ -94,7 +94,7 @@ the axes show them (`{x: "2026-03-02", y: "7.25 kg"}`).
 |---------|---------|---------------|
 | `Plot` | Drag pans, wheel zooms (over an axis: that axis), right-drag box-zooms, double-click fits, legend click hides a series. | Nearest point within 8 px of lines, scatter, stairs, stems, shaded, digital, error bars; the bar, histogram bin, heatmap or 2D-histogram cell, pie slice under the pointer. |
 | `Plot3D` | Drag rotates, wheel zooms, double-click resets. | None yet. |
-| `GanttChart` | Drag and wheel pan and zoom time. | The task or milestone: start, end, section. |
+| `GanttChart` | Drag and wheel pan and zoom time; a legend click hides a section's rows. | The task or milestone: start, end, section. |
 | `SankeyDiagram` | None. | The node (total) or flow (from, to, value). |
 | UML diagrams, `Flowchart` | Drag pans, wheel zooms around the pointer, double-click fits. | The node or edge (not yet in sequence diagrams): id, name, label. |
 

@@ -55,7 +55,7 @@ std::vector<std::string_view> keys_of(view_kind kind) {
     case view_kind::plot2d:
       return {"x", "y", "y2", "hidden"};
     case view_kind::gantt:
-      return {"x"};
+      return {"x", "hidden"};
     case view_kind::plot3d:
       return {"x", "y", "z", "rotation", "hidden"};
     case view_kind::diagram:

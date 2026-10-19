@@ -76,6 +76,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Gantt charts: switching a section off in the legend (live views, `nymph view`) now hides its rows; the `view` key saves hidden sections as `hidden`.
 - `nymph view` on Linux: the X11 window now sets `WM_CLASS` (`nymph`), so window managers and WSLg name and group it.
 - Chrome extension: a chart whose image has `width` / `height` attributes overridden by the page's CSS (claude.ai's file preview) now takes the image's shown size instead of collapsing to zero height.
 - `nymph view` on 32-bit Windows no longer aborts with a stack-pointer (ESP) check failure; OpenGL functions are now called with the `__stdcall` convention.
