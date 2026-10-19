@@ -82,11 +82,15 @@ function decodePng(bytes) {
   return { width, height, rgba: out };
 }
 
-/** The GL DESIGN tolerance (spec/02_opengl_rasterizer/DESIGN.md section 6). */
+/**
+ * The GL DESIGN tolerance (spec/02_opengl_rasterizer/DESIGN.md section 6): a
+ * pixel in 50 000 (at least one) may be beyond 64, a pixel centre exactly on a
+ * line's end cap being a tie that two builds can break differently.
+ */
 function compareImages(a, b) {
   assertEq(a.width, b.width, 'width');
   assertEq(a.height, b.height, 'height');
-  let within = 0, worst = 0, sum = 0;
+  let within = 0, worst = 0, sum = 0, over = 0;
   const pixels = a.width * a.height;
   for (let i = 0; i < pixels; ++i) {
     let diff = 0;
@@ -96,10 +100,11 @@ function compareImages(a, b) {
       sum += d;
     }
     worst = Math.max(worst, diff);
+    over += diff > 64 ? 1 : 0;
     within += diff <= 2 ? 1 : 0;
   }
   const share = within / pixels, mean = sum / (pixels * 4);
-  assert(share >= 0.995 && worst <= 64 && mean < 0.5, `images differ: ${(share * 100).toFixed(3)}% within 2, worst ${worst}, mean ${mean.toFixed(4)}`);
+  assert(share >= 0.995 && over <= Math.max(1, Math.floor(pixels / 50000)) && mean < 0.5, `images differ: ${(share * 100).toFixed(3)}% within 2, worst ${worst}, mean ${mean.toFixed(4)}`);
   return { share, worst, mean };
 }
 
