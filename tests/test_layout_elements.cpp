@@ -36,15 +36,18 @@ struct laid_out {
   figure f;
   std::unordered_map<const node*, rect> rects;
 
+  /// Lays out in place: `rects` is keyed by node address, so the figure must
+  /// never move afterwards (MSVC Debug does not elide a named return).
+  explicit laid_out(const std::string& source)
+      : f(bind_source(source, builtin_registry())), rects(layout_figure(f)) {}
+
   rect of(const node& n) const {
     return rects.at(&n);
   }
 };
 
 laid_out lay_out(const std::string& source) {
-  laid_out out{bind_source(source, builtin_registry()), {}};
-  out.rects = layout_figure(out.f);
-  return out;
+  return laid_out(source);
 }
 
 error source_error(const std::string& source) {

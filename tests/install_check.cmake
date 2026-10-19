@@ -7,7 +7,7 @@
 # NYMPH_NO_MODIFY_PATH=1: the real profile and Path are never changed).
 #
 #   cmake -DBUILD_DIR=<build> -DWORK_DIR=<dir> -DVERSION=<x.y.z>
-#         -DSOURCE=<a .yaml> -DWINDOWS=<bool> [-DRUNNER=<emulator, '|'-separated>]
+#         -DSOURCE=<a .yaml> -DWINDOWS=<bool> [-DCONFIG=<config>] [-DRUNNER=<emulator, '|'-separated>]
 #         -P install_check.cmake
 
 foreach(var BUILD_DIR WORK_DIR VERSION SOURCE)
@@ -19,10 +19,15 @@ string(REPLACE "|" ";" RUNNER "${RUNNER}")
 file(REMOVE_RECURSE "${WORK_DIR}")
 file(MAKE_DIRECTORY "${WORK_DIR}/home")
 set(prefix "${WORK_DIR}/prefix")
+# Multi-config generators (MSVC) install the configuration that was built.
+set(config_args "")
+if(CONFIG)
+  set(config_args --config "${CONFIG}")
+endif()
 
 execute_process(
   COMMAND "${CMAKE_COMMAND}" -E env "HOME=${WORK_DIR}/home" "USERPROFILE=${WORK_DIR}/home" NYMPH_NO_MODIFY_PATH=1
-          "${CMAKE_COMMAND}" --install "${BUILD_DIR}" --prefix "${prefix}" --component nymph
+          "${CMAKE_COMMAND}" --install "${BUILD_DIR}" ${config_args} --prefix "${prefix}" --component nymph
   RESULT_VARIABLE code OUTPUT_VARIABLE output ERROR_VARIABLE errors)
 if(NOT code EQUAL 0)
   message(FATAL_ERROR "cmake --install failed (${code}):\n${output}\n${errors}")

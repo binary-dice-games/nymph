@@ -244,7 +244,7 @@ if(NYMPH_INSTALL AND TARGET nymph-cli)
   add_test(NAME nymph_install
     COMMAND ${CMAKE_COMMAND} -DBUILD_DIR=${PROJECT_BINARY_DIR} -DWORK_DIR=${CMAKE_CURRENT_BINARY_DIR}/install
             -DVERSION=${PROJECT_VERSION} -DSOURCE=${PROJECT_SOURCE_DIR}/examples/dashboard.yaml
-            -DWINDOWS=$<BOOL:${WIN32}> "-DRUNNER=${_nymph_runner}"
+            "-DCONFIG=$<CONFIG>" -DWINDOWS=$<BOOL:${WIN32}> "-DRUNNER=${_nymph_runner}"
             -P ${CMAKE_CURRENT_SOURCE_DIR}/install_check.cmake)
 endif()
 add_test(NAME nymph_install_subproject
