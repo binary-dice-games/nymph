@@ -35,10 +35,15 @@ function Invoke-Installer([hashtable]$Environment, [string[]]$Arguments) {
   }
   [Environment]::SetEnvironmentVariable('NYMPH_PATH_STORE', $store)
   foreach ($key in $Environment.Keys) { [Environment]::SetEnvironmentVariable($key, $Environment[$key]) }
+  # Windows PowerShell 5.1 turns a native command's stderr into a terminating
+  # error under 'Stop'; the installer's failures are expected here.
+  $savedPreference = $ErrorActionPreference
+  $ErrorActionPreference = 'Continue'
   try {
     $output = & $shell -NoProfile -ExecutionPolicy Bypass -File $Script @Arguments 2>&1 | Out-String
     return [pscustomobject]@{ Code = $LASTEXITCODE; Output = $output }
   } finally {
+    $ErrorActionPreference = $savedPreference
     foreach ($name in $saved.Keys) { [Environment]::SetEnvironmentVariable($name, $saved[$name]) }
   }
 }

@@ -73,8 +73,9 @@ jobs:
           set -- cmake "-DTARBALL=$RUNNER_TEMP/source/nymph-$VERSION-src.tar.gz" "-DVERSION=$VERSION" \
             "-DWORK_DIR=$RUNNER_TEMP/check" -DGENERATOR=Ninja -P "$PWD/tests/source_dist_check.cmake"
           if [ "$RUNNER_OS" = Linux ]; then
-            # No network: a new network namespace with only loopback.
-            sudo unshare --net -- sudo -u "$USER" env PATH="$PATH" HOME="$HOME" "$@"
+            # No network: a new network namespace with only loopback (down
+            # at first; the tests talk to local stub servers over it).
+            sudo unshare --net -- sh -c 'ip link set lo up && u=$1 p=$2 h=$3 && shift 3 && exec sudo -u "$u" env PATH="$p" HOME="$h" "$@"' sh "$USER" "$PATH" "$HOME" "$@"
           else
             "$@"
           fi

@@ -4,6 +4,7 @@
 ///        reads back unchanged, and an invalid edited source is detected.
 #include <gtest/gtest.h>
 #include <cmath>
+#include <limits>
 #include <string>
 #include "document/bind.hpp"
 #include "edit/field_value.hpp"
@@ -43,7 +44,7 @@ TEST(field_value, NumbersAndWholeNumbers) {
   EXPECT_EQ(encode_number(1.0 / 3.0), "0.3333333333333333");
   EXPECT_EQ(encode_number(1e20), "1e+20");
   EXPECT_EQ(encode_number(-2.5), "-2.5");
-  EXPECT_EQ(encode_number(std::nan("")), "0");
+  EXPECT_EQ(encode_number(std::numeric_limits<double>::quiet_NaN()), "0");
   EXPECT_EQ(encode_int(-12), "-12");
   EXPECT_EQ(encode_bool(true), "true");
   EXPECT_EQ(encode_bool(false), "false");

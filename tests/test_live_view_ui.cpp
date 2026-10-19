@@ -235,9 +235,19 @@ const char* const kFields =
     "        - {type: InputText, label: Name, value: Sun, width: 200}\n"
     "        - {type: SliderFloat, label: Gain, value: 0.5, width: 200}\n";
 
-/// Presses and releases `key`, with Ctrl held while it is down.
+/// A key event with the platform's shortcut modifier held: Ctrl, or Cmd on
+/// macOS, where ImGui swaps the two.
+key_event shortcut_key(ImGuiKey key, bool down, bool held) {
+#if defined(__APPLE__)
+  return {key, down, false, false, false, held};
+#else
+  return {key, down, held, false, false, false};
+#endif
+}
+
+/// Presses and releases `key`, with the shortcut modifier held while it is down.
 void press(driven_view& d, ImGuiKey key, bool ctrl = false) {
-  d.v.input_key({key, true, ctrl});
+  d.v.input_key(shortcut_key(key, true, ctrl));
   d.run();
   d.v.input_key({key, false, false});
   d.run();
@@ -263,7 +273,7 @@ TEST(live_view_ui, TypingGoesIntoTheActiveField) {
 TEST(live_view_ui, CtrlClickTypesASliderValue) {
   driven_view d(kFields, 600, 400);
   const rect slider = png_target(kFields, "root/children/0/children/1");
-  d.v.input_key({ImGuiKey_None, true, true}); // Ctrl held
+  d.v.input_key(shortcut_key(ImGuiKey_None, true, true)); // shortcut held
   d.click(centre(slider).x, centre(slider).y);
   d.v.input_key({ImGuiKey_None, true, false});
   d.run();

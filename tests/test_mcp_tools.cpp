@@ -366,7 +366,8 @@ TEST_F(mcp_tools, without_the_app_there_is_no_ui) {
     EXPECT_FALSE(t.contains("_meta")) << t["name"];
     EXPECT_NE(t["name"], "viewer_font");
   }
-  for (const json& r : rpc(*session_, "resources/list", json::object())["result"]["resources"]) {
+  const json resources = rpc(*session_, "resources/list", json::object())["result"]["resources"];
+  for (const json& r : resources) {
     EXPECT_NE(r["uri"], "ui://nymph/viewer");
   }
   EXPECT_EQ(rpc(*session_, "resources/read", {{"uri", "ui://nymph/viewer"}})["error"]["code"], -32002);

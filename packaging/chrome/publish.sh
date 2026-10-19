@@ -57,7 +57,7 @@ else
     --data-urlencode "client_id=$CHROME_CLIENT_ID" \
     --data-urlencode "client_secret=$CHROME_CLIENT_SECRET" \
     --data-urlencode "refresh_token=$CHROME_REFRESH_TOKEN" \
-    --data-urlencode "grant_type=refresh_token" 2>&1) || fail "no access token (the OAuth credentials were refused)"
+    --data-urlencode "grant_type=refresh_token" 2>&1) || fail "no access token (the OAuth credentials were refused): $answer"
   token=$(json_field "$answer" access_token)
   [ -n "$token" ] || fail "no access token in the OAuth answer"
 fi
