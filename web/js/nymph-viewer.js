@@ -414,14 +414,41 @@ export class NymphViewer {
         e.preventDefault();
       }
     });
+    // Keys belong to the figure while one of its text fields has the
+    // keyboard (user-interface mockups); otherwise to the page, and the
+    // menu key opens nymph's menu.
+    const mods = (e) => (e.ctrlKey ? 1 : 0) | (e.shiftKey ? 2 : 0) | (e.altKey ? 4 : 0) | (e.metaKey ? 8 : 0);
+    const typing = () => this.handle !== 0 && this.core.m._nymph_viewer_wants_keyboard(this.handle) === 1;
     add('keydown', (e) => {
+      if (typing()) {
+        e.preventDefault();
+        this.key(e.key, true, mods(e));
+        if (e.key.length === 1 && !e.ctrlKey && !e.metaKey) {
+          this.text(e.key);
+        }
+        return;
+      }
       if (e.key === 'ContextMenu' || (e.shiftKey && e.key === 'F10')) {
         e.preventDefault();
         const box = canvas.getBoundingClientRect();
         this.openMenu(box.left + 8, box.top + 8);
       }
     });
-    canvas.tabIndex = 0; // reachable from the keyboard, for the menu key
+    add('keyup', (e) => {
+      // Every release: a key pressed in a field may be released after it.
+      if (this.handle !== 0) {
+        this.key(e.key, false, mods(e));
+      }
+    });
+    add('paste', (e) => {
+      // ImGui reads its clipboard synchronously; the page's text comes in
+      // as typing instead.
+      if (typing() && e.clipboardData) {
+        e.preventDefault();
+        this.text(e.clipboardData.getData('text'));
+      }
+    });
+    canvas.tabIndex = 0; // reachable from the keyboard: the menu key, text fields
   }
 
   /** @private */
@@ -580,8 +607,9 @@ export class NymphViewer {
 
   /** @private What a view event reports, as a comparable string. */
   viewKey(state) {
-    // Everything a view can save, not where it is drawn.
-    return JSON.stringify(state.views.map(({ x, y, width, height, ...view }) => view));
+    // Everything a view can save, not where it is drawn; user-interface
+    // widgets by their revision (spec/09_ui_mockups).
+    return JSON.stringify([state.uiRevision, state.views.map(({ x, y, width, height, ...view }) => view)]);
   }
 
   /** @private Resolves rendered() once nothing is due and no update is pending. */
@@ -923,6 +951,30 @@ export class NymphViewer {
   pointer(type, { x = 0, y = 0, button = 0, wheelX = 0, wheelY = 0, touch = false } = {}) {
     this.checkAlive();
     this.core.m._nymph_viewer_pointer(this.handle, POINTER[type] ?? 0, x, y, button, wheelX, wheelY, touch ? 1 : 0);
+    this.schedule();
+  }
+
+  /**
+   * Feeds a key to the figure (its user-interface text fields).
+   * @param {string} name KeyboardEvent.key
+   * @param {boolean} down
+   * @param {number} [mods] bits: 1 Ctrl, 2 Shift, 4 Alt, 8 Meta
+   * @private
+   */
+  key(name, down, mods = 0) {
+    this.checkAlive();
+    this.core.withCString(name, (ptr) => this.core.m._nymph_viewer_key(this.handle, ptr, down ? 1 : 0, mods));
+    this.schedule();
+  }
+
+  /**
+   * Feeds typed or pasted text to the figure's active text field.
+   * @param {string} text
+   * @private
+   */
+  text(text) {
+    this.checkAlive();
+    this.core.withCString(text, (ptr) => this.core.m._nymph_viewer_text(this.handle, ptr));
     this.schedule();
   }
 

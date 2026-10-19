@@ -145,5 +145,51 @@ TEST(view_edit_flow, ABadColourIsRefusedAndTheFigureStaysAsItWas) {
   EXPECT_EQ(s.model.source(), before);
 }
 
+// ── User-interface mockups (spec/09_ui_mockups PLAN step 13) ─────────────────
+
+const char* const kMockup =
+    "image: {width: 480, height: 320}\n"
+    "root:\n"
+    "  type: Screen\n"
+    "  children:\n"
+    "    - type: Window\n"
+    "      title: Settings\n"
+    "      x: 20\n"
+    "      y: 20\n"
+    "      width: 300\n"
+    "      height: 200\n"
+    "      children:\n"
+    "        - {type: Text, text: Account}\n"
+    "        - {type: Button, label: Save}\n"
+    "        - {type: Checkbox, label: Remember me}\n";
+
+TEST(view_edit_flow, AClickOnAWidgetSelectsItsLabelInsteadOfPressingIt) {
+  session s(kMockup, 480, 320);
+  s.click("root/children/0/children/1", "label");
+  EXPECT_FALSE(s.d.v.take_click()); // the button was not pressed
+  s.show(s.model.commit("label", encode_text("Save changes")));
+  s.plain();
+  const image reference = render_figure(bind_source(s.model.source(), builtin_registry()));
+  EXPECT_TRUE(rasterized(s.d).rgba == reference.rgba);
+}
+
+TEST(view_edit_flow, AWindowTitleAndATextAreEditable) {
+  session s(kMockup, 480, 320);
+  s.click("root/children/0", "title");
+  s.show(s.model.commit("title", encode_text("Preferences")));
+  s.click("root/children/0/children/0", "text");
+  s.show(s.model.commit("text", encode_text("Your account")));
+  EXPECT_NE(s.model.source().find("title: Preferences"), std::string::npos);
+  EXPECT_NE(s.model.source().find("text: Your account"), std::string::npos);
+}
+
+TEST(view_edit_flow, EditModeAloneDrawsTheSameMockup) {
+  driven_view plain(kMockup, 480, 320);
+  driven_view editing(kMockup, 480, 320);
+  editing.v.set_edit_mode(true);
+  editing.run();
+  EXPECT_TRUE(rasterized(plain).rgba == rasterized(editing).rgba);
+}
+
 } // namespace
 } // namespace bdg::nymph

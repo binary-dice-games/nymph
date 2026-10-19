@@ -7,6 +7,7 @@
 
 #include <imgui.h>
 #include <array>
+#include <cstdint>
 #include <functional>
 #include <memory>
 #include <optional>
@@ -70,6 +71,16 @@ struct pointer_event {
   float wheel_x = 0.0f; ///< wheel: notches; positive y zooms in (away from the user).
   float wheel_y = 0.0f;
   bool touch = false; ///< From a touch screen (ImGui tunes hover and drag for it).
+};
+
+/// @brief One key going down or up (input_key()).
+struct key_event {
+  ImGuiKey key = ImGuiKey_None; ///< ImGui's key, so every host maps keys once.
+  bool down = true;
+  bool ctrl = false;
+  bool shift = false;
+  bool alt = false;
+  bool super = false;
 };
 
 /// @brief What is under the pointer: a data point, bar, cell, task, flow
@@ -206,6 +217,30 @@ class live_view {
   /// @brief Feeds one pointer event to the figure (pan, zoom, hover); the
   ///        next frames apply it.
   void input(const pointer_event& event);
+
+  /// @brief Feeds one key to the figure (user-interface widgets: a text
+  ///        field, Ctrl+click on a slider; spec/09_ui_mockups/DESIGN.md
+  ///        section 6). Send keys while wants_keyboard(), and every key-up.
+  void input_key(const key_event& event);
+
+  /// @brief Feeds typed characters to the figure's active text field.
+  void input_text(std::u32string_view text);
+
+  /// @brief Whether a text field of the figure has the keyboard (after the
+  ///        last frame): keys and text then belong to the figure, not to the
+  ///        host's shortcuts.
+  bool wants_keyboard() const;
+
+  /// @brief A number that changes whenever the state the user changed of a
+  ///        user-interface element changes (what source_with_view() would
+  ///        save of it), so a host can report view changes for widgets as it
+  ///        does for plots.
+  uint64_t ui_revision() const;
+
+  /// @brief Lets the figure's text fields use the system clipboard: `set`
+  ///        receives copied text, `get` returns text to paste. Without hooks
+  ///        copy and paste work within the view only.
+  void set_clipboard_hooks(std::function<void(std::string_view)> set, std::function<std::string()> get);
 
   /// @brief Drops every view state (zoom, pan, hidden series): the figure
   ///        is drawn as its source says, as after the first update.

@@ -28,13 +28,21 @@ class registry {
   /// @brief Every class, ordered by name.
   std::vector<const element_class*> classes() const;
 
-  /// @brief Names of the classes whose slot is `slot`, "A, B, C", for
+  /// @brief Names of the classes that fill slot `slot`, "A, B, C", for
   ///        error messages.
   std::string names_in_slot(std::string_view slot) const;
+
+  /// @brief Names of the classes that `parent` takes as children (fill any
+  ///        slot it accepts), "A, B, C", each once.
+  std::string names_taken_by(const element_class& parent) const;
 
   /// @brief Names of the classes that accept children of slot `slot`, "A,
   ///        B", for "X goes in: ..." messages.
   std::string names_accepting(std::string_view slot) const;
+
+  /// @brief Names of the classes that accept `child` in any of its slots,
+  ///        "A, B", for "X goes in: ..." messages.
+  std::string names_accepting(const element_class& child) const;
 
  private:
   std::map<std::string, std::unique_ptr<element_class>, std::less<>> classes_;

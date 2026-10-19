@@ -1,0 +1,563 @@
+// MIT License © 2026 Binary Dice Games
+/// @file svg_shapes.cpp
+/// @brief parse_svg(): the placeholder SVG subset into shapes.
+#include "placeholders/svg_shapes.hpp"
+#include <algorithm>
+#include <cctype>
+#include <cmath>
+#include <map>
+#include <optional>
+#include "core/charconv.hpp"
+
+namespace bdg::nymph {
+
+namespace {
+
+/// Control point distance of a quarter circle drawn as a cubic curve.
+constexpr float kArc = 0.5522847498f;
+
+ImVec2 add(ImVec2 a, ImVec2 b) {
+  return ImVec2(a.x + b.x, a.y + b.y);
+}
+ImVec2 sub(ImVec2 a, ImVec2 b) {
+  return ImVec2(a.x - b.x, a.y - b.y);
+}
+ImVec2 lerp(ImVec2 a, ImVec2 b, float t) {
+  return ImVec2(a.x + (b.x - a.x) * t, a.y + (b.y - a.y) * t);
+}
+
+bool space(char c) {
+  return c == ' ' || c == '\t' || c == '\n' || c == '\r';
+}
+
+std::string lower(std::string_view s) {
+  std::string out(s);
+  for (char& c : out) {
+    c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+  }
+  return out;
+}
+
+// ── Numbers ──────────────────────────────────────────────────────────────────
+
+/// Reads numbers separated by spaces and commas, as SVG writes them
+/// ("10,20 -3.5.5" is 10, 20, -3.5, 0.5).
+class number_reader {
+ public:
+  explicit number_reader(std::string_view text) : text_(text) {}
+
+  void skip_separators() {
+    while (pos_ < text_.size() && (space(text_[pos_]) || text_[pos_] == ',')) {
+      ++pos_;
+    }
+  }
+
+  bool at_end() {
+    skip_separators();
+    return pos_ >= text_.size();
+  }
+
+  /// Whether a number starts here (after separators).
+  bool at_number() {
+    skip_separators();
+    if (pos_ >= text_.size()) {
+      return false;
+    }
+    const char c = text_[pos_];
+    return (c >= '0' && c <= '9') || c == '-' || c == '+' || c == '.';
+  }
+
+  /// The next character, consumed (path commands).
+  char next_char() {
+    skip_separators();
+    return pos_ < text_.size() ? text_[pos_++] : '\0';
+  }
+
+  float number(std::string_view what) {
+    skip_separators();
+    size_t start = pos_;
+    if (start < text_.size() && text_[start] == '+') {
+      ++start; // from_chars takes no '+'
+    }
+    double v = 0.0;
+    const auto r = from_chars_double(text_.data() + start, text_.data() + text_.size(), v);
+    if (r.ec != std::errc() || !std::isfinite(v)) {
+      throw svg_error("a number was expected in " + std::string(what) + " at '" +
+                      std::string(text_.substr(pos_, 12)) + "'");
+    }
+    pos_ = static_cast<size_t>(r.ptr - text_.data());
+    return static_cast<float>(v);
+  }
+
+  ImVec2 point(std::string_view what) {
+    const float x = number(what);
+    const float y = number(what);
+    return ImVec2(x, y);
+  }
+
+ private:
+  std::string_view text_;
+  size_t pos_ = 0;
+};
+
+// ── Shapes ───────────────────────────────────────────────────────────────────
+
+/// Closed subpath of four cubic quarter arcs around an ellipse.
+svg_subpath ellipse(ImVec2 c, float rx, float ry) {
+  svg_subpath p;
+  p.start = ImVec2(c.x + rx, c.y);
+  p.closed = true;
+  const float kx = rx * kArc, ky = ry * kArc;
+  p.segments = {
+      {true, ImVec2(c.x + rx, c.y + ky), ImVec2(c.x + kx, c.y + ry), ImVec2(c.x, c.y + ry)},
+      {true, ImVec2(c.x - kx, c.y + ry), ImVec2(c.x - rx, c.y + ky), ImVec2(c.x - rx, c.y)},
+      {true, ImVec2(c.x - rx, c.y - ky), ImVec2(c.x - kx, c.y - ry), ImVec2(c.x, c.y - ry)},
+      {true, ImVec2(c.x + kx, c.y - ry), ImVec2(c.x + rx, c.y - ky), ImVec2(c.x + rx, c.y)},
+  };
+  return p;
+}
+
+svg_subpath rectangle(float x, float y, float w, float h, float rx, float ry) {
+  svg_subpath p;
+  p.closed = true;
+  const auto line = [&](ImVec2 to) { p.segments.push_back({false, {}, {}, to}); };
+  if (rx <= 0.0f || ry <= 0.0f) {
+    p.start = ImVec2(x, y);
+    line(ImVec2(x + w, y));
+    line(ImVec2(x + w, y + h));
+    line(ImVec2(x, y + h));
+    line(ImVec2(x, y));
+    return p;
+  }
+  const float kx = rx * kArc, ky = ry * kArc;
+  const auto curve = [&](ImVec2 c1, ImVec2 c2, ImVec2 to) { p.segments.push_back({true, c1, c2, to}); };
+  p.start = ImVec2(x + rx, y);
+  line(ImVec2(x + w - rx, y));
+  curve(ImVec2(x + w - rx + kx, y), ImVec2(x + w, y + ry - ky), ImVec2(x + w, y + ry));
+  line(ImVec2(x + w, y + h - ry));
+  curve(ImVec2(x + w, y + h - ry + ky), ImVec2(x + w - rx + kx, y + h), ImVec2(x + w - rx, y + h));
+  line(ImVec2(x + rx, y + h));
+  curve(ImVec2(x + rx - kx, y + h), ImVec2(x, y + h - ry + ky), ImVec2(x, y + h - ry));
+  line(ImVec2(x, y + ry));
+  curve(ImVec2(x, y + ry - ky), ImVec2(x + rx - kx, y), ImVec2(x + rx, y));
+  return p;
+}
+
+/// The subpaths of a path's `d`.
+std::vector<svg_subpath> parse_path(std::string_view d) {
+  std::vector<svg_subpath> out;
+  number_reader in(d);
+  ImVec2 cur(0.0f, 0.0f);
+  ImVec2 last_cubic_c2 = cur, last_quad = cur;
+  char prev = '\0';
+  char cmd = '\0';
+  const auto current = [&]() -> svg_subpath& {
+    if (out.empty()) {
+      throw svg_error("path data must start with M (a move)");
+    }
+    return out.back();
+  };
+  while (!in.at_end()) {
+    if (!in.at_number()) {
+      cmd = in.next_char();
+    } else if (cmd == '\0') {
+      throw svg_error("path data must start with M (a move)");
+    } else if (cmd == 'M') {
+      cmd = 'L'; // pairs after a move are lines
+    } else if (cmd == 'm') {
+      cmd = 'l';
+    } else if (cmd == 'Z' || cmd == 'z') {
+      throw svg_error("numbers after Z in path data");
+    }
+    const bool rel = std::islower(static_cast<unsigned char>(cmd)) != 0;
+    const ImVec2 base = rel ? cur : ImVec2(0.0f, 0.0f);
+    const auto pt = [&]() { return add(base, in.point("path data")); };
+    switch (std::toupper(static_cast<unsigned char>(cmd))) {
+      case 'M': {
+        svg_subpath p;
+        p.start = pt();
+        cur = p.start;
+        out.push_back(std::move(p));
+        break;
+      }
+      case 'L': {
+        const ImVec2 to = pt();
+        current().segments.push_back({false, {}, {}, to});
+        cur = to;
+        break;
+      }
+      case 'H': {
+        const float x = in.number("path data") + (rel ? cur.x : 0.0f);
+        cur = ImVec2(x, cur.y);
+        current().segments.push_back({false, {}, {}, cur});
+        break;
+      }
+      case 'V': {
+        const float y = in.number("path data") + (rel ? cur.y : 0.0f);
+        cur = ImVec2(cur.x, y);
+        current().segments.push_back({false, {}, {}, cur});
+        break;
+      }
+      case 'C': {
+        const ImVec2 c1 = pt(), c2 = pt(), to = pt();
+        current().segments.push_back({true, c1, c2, to});
+        last_cubic_c2 = c2;
+        cur = to;
+        break;
+      }
+      case 'S': {
+        const bool after_cubic = prev == 'C' || prev == 'S';
+        const ImVec2 c1 = after_cubic ? sub(add(cur, cur), last_cubic_c2) : cur;
+        const ImVec2 c2 = pt(), to = pt();
+        current().segments.push_back({true, c1, c2, to});
+        last_cubic_c2 = c2;
+        cur = to;
+        break;
+      }
+      case 'Q':
+      case 'T': {
+        const bool smooth = std::toupper(static_cast<unsigned char>(cmd)) == 'T';
+        const bool after_quad = prev == 'Q' || prev == 'T';
+        const ImVec2 q = smooth ? (after_quad ? sub(add(cur, cur), last_quad) : cur) : pt();
+        const ImVec2 to = pt();
+        // A quadratic curve as the cubic with the same shape.
+        current().segments.push_back({true, lerp(cur, q, 2.0f / 3.0f), lerp(to, q, 2.0f / 3.0f), to});
+        last_quad = q;
+        cur = to;
+        break;
+      }
+      case 'Z':
+        current().closed = true;
+        cur = current().start;
+        break;
+      case 'A':
+        throw svg_error("arcs (A) are not supported in placeholders; draw them with C curves");
+      default:
+        throw svg_error(std::string("unknown path command '") + cmd + "'");
+    }
+    prev = static_cast<char>(std::toupper(static_cast<unsigned char>(cmd)));
+  }
+  return out;
+}
+
+// ── XML ──────────────────────────────────────────────────────────────────────
+
+struct element {
+  std::string name;
+  std::map<std::string, std::string, std::less<>> attributes;
+  bool self_closing = false;
+};
+
+/// Reads `<name a="1" b='2' ...>` or `.../>` starting after '<'.
+element read_tag(std::string_view text, size_t& pos) {
+  element e;
+  const size_t name_start = pos;
+  while (pos < text.size() && !space(text[pos]) && text[pos] != '>' && text[pos] != '/') {
+    ++pos;
+  }
+  e.name = std::string(text.substr(name_start, pos - name_start));
+  for (;;) {
+    while (pos < text.size() && space(text[pos])) {
+      ++pos;
+    }
+    if (pos >= text.size()) {
+      throw svg_error("unterminated <" + e.name + "> tag");
+    }
+    if (text[pos] == '>') {
+      ++pos;
+      return e;
+    }
+    if (text.substr(pos, 2) == "/>") {
+      pos += 2;
+      e.self_closing = true;
+      return e;
+    }
+    const size_t key_start = pos;
+    while (pos < text.size() && text[pos] != '=' && !space(text[pos]) && text[pos] != '>') {
+      ++pos;
+    }
+    const std::string key(text.substr(key_start, pos - key_start));
+    while (pos < text.size() && space(text[pos])) {
+      ++pos;
+    }
+    if (pos >= text.size() || text[pos] != '=') {
+      throw svg_error("attribute '" + key + "' of <" + e.name + "> has no value");
+    }
+    ++pos;
+    while (pos < text.size() && space(text[pos])) {
+      ++pos;
+    }
+    if (pos >= text.size() || (text[pos] != '"' && text[pos] != '\'')) {
+      throw svg_error("attribute '" + key + "' of <" + e.name + "> needs a quoted value");
+    }
+    const char quote = text[pos++];
+    const size_t end = text.find(quote, pos);
+    if (end == std::string_view::npos) {
+      throw svg_error("unterminated value of attribute '" + key + "'");
+    }
+    e.attributes[key] = std::string(text.substr(pos, end - pos));
+    pos = end + 1;
+  }
+}
+
+/// The colour role of a `fill` / `stroke` value; nullopt for "none".
+std::optional<svg_role> role_of(const std::string& value, std::string_view what) {
+  const std::string v = lower(value);
+  if (v == "none") {
+    return std::nullopt;
+  }
+  if (v == "#000" || v == "#000000" || v == "black") {
+    return svg_role::tint;
+  }
+  if (v == "#808080" || v == "gray" || v == "grey") {
+    return svg_role::half;
+  }
+  if (v == "#fff" || v == "#ffffff" || v == "white") {
+    return svg_role::cutout;
+  }
+  throw svg_error(
+      std::string(what) + " '" + value + "' is not one of the placeholder colours: #000000 (tint), #808080 (half tint), "
+      "#FFFFFF (cut-out) or none");
+}
+
+float attribute(const element& e, const char* name, std::optional<float> fallback = std::nullopt) {
+  const auto it = e.attributes.find(name);
+  if (it == e.attributes.end()) {
+    if (fallback) {
+      return *fallback;
+    }
+    throw svg_error("<" + e.name + "> needs the attribute '" + name + "'");
+  }
+  number_reader in(it->second);
+  const float v = in.number(std::string("'") + name + "'");
+  if (!in.at_end()) {
+    throw svg_error("attribute '" + std::string(name) + "' of <" + e.name + "> must be one number");
+  }
+  return v;
+}
+
+/// The attributes each element may have (presentation ones included).
+const std::map<std::string, std::vector<std::string>, std::less<>>& allowed_attributes() {
+  static const std::map<std::string, std::vector<std::string>, std::less<>> t{
+      {"path", {"d"}},
+      {"rect", {"x", "y", "width", "height", "rx", "ry"}},
+      {"circle", {"cx", "cy", "r"}},
+      {"ellipse", {"cx", "cy", "rx", "ry"}},
+      {"polygon", {"points"}},
+      {"line", {"x1", "y1", "x2", "y2"}},
+  };
+  return t;
+}
+
+/// The subpaths of one shape element.
+std::vector<svg_subpath> geometry(const element& e) {
+  if (e.name == "path") {
+    const auto it = e.attributes.find("d");
+    if (it == e.attributes.end()) {
+      throw svg_error("<path> needs the attribute 'd'");
+    }
+    return parse_path(it->second);
+  }
+  if (e.name == "rect") {
+    const float w = attribute(e, "width"), h = attribute(e, "height");
+    const auto rx_set = e.attributes.count("rx") != 0, ry_set = e.attributes.count("ry") != 0;
+    float rx = attribute(e, "rx", 0.0f), ry = attribute(e, "ry", 0.0f);
+    if (rx_set && !ry_set) {
+      ry = rx;
+    } else if (ry_set && !rx_set) {
+      rx = ry;
+    }
+    return {rectangle(
+        attribute(e, "x", 0.0f), attribute(e, "y", 0.0f), w, h, std::min(rx, w * 0.5f), std::min(ry, h * 0.5f))};
+  }
+  if (e.name == "circle") {
+    const float r = attribute(e, "r");
+    return {ellipse(ImVec2(attribute(e, "cx", 0.0f), attribute(e, "cy", 0.0f)), r, r)};
+  }
+  if (e.name == "ellipse") {
+    return {ellipse(ImVec2(attribute(e, "cx", 0.0f), attribute(e, "cy", 0.0f)), attribute(e, "rx"), attribute(e, "ry"))};
+  }
+  if (e.name == "polygon") {
+    const auto it = e.attributes.find("points");
+    if (it == e.attributes.end()) {
+      throw svg_error("<polygon> needs the attribute 'points'");
+    }
+    number_reader in(it->second);
+    svg_subpath p;
+    p.closed = true;
+    p.start = in.point("points");
+    while (!in.at_end()) {
+      p.segments.push_back({false, {}, {}, in.point("points")});
+    }
+    if (p.segments.size() < 2) {
+      throw svg_error("<polygon> needs at least three points");
+    }
+    return {p};
+  }
+  // line
+  svg_subpath p;
+  p.start = ImVec2(attribute(e, "x1", 0.0f), attribute(e, "y1", 0.0f));
+  p.segments.push_back({false, {}, {}, ImVec2(attribute(e, "x2", 0.0f), attribute(e, "y2", 0.0f))});
+  return {p};
+}
+
+void add_shape(svg_image& image, const element& e) {
+  const auto allowed = allowed_attributes().find(e.name);
+  if (allowed == allowed_attributes().end()) {
+    throw svg_error(
+        "<" + e.name + "> is not allowed in a placeholder (only path, rect, circle, ellipse, polygon, line)");
+  }
+  for (const auto& [key, value] : e.attributes) {
+    const bool presentation = key == "fill" || key == "stroke" || key == "stroke-width" ||
+        key == "stroke-linejoin" || key == "stroke-linecap";
+    if (!presentation && std::find(allowed->second.begin(), allowed->second.end(), key) == allowed->second.end()) {
+      throw svg_error("attribute '" + key + "' is not allowed on <" + e.name + "> in a placeholder");
+    }
+  }
+  const auto fill_it = e.attributes.find("fill");
+  const auto stroke_it = e.attributes.find("stroke");
+  // SVG's defaults: filled black, not stroked (a line has nothing to fill).
+  const std::optional<svg_role> fill = e.name == "line" ? std::nullopt
+      : fill_it == e.attributes.end()                   ? std::optional<svg_role>(svg_role::tint)
+                                                        : role_of(fill_it->second, "fill");
+  const std::optional<svg_role> stroke =
+      stroke_it == e.attributes.end() ? std::nullopt : role_of(stroke_it->second, "stroke");
+  if (!fill && !stroke) {
+    throw svg_error("<" + e.name + "> is neither filled nor stroked");
+  }
+  std::vector<svg_subpath> paths = geometry(e);
+  if (fill) {
+    svg_shape s;
+    s.role = *fill;
+    s.subpaths = paths;
+    image.shapes.push_back(std::move(s));
+  }
+  if (stroke) {
+    svg_shape s;
+    s.role = *stroke;
+    s.stroke = true;
+    s.width = attribute(e, "stroke-width", 1.0f);
+    if (!(s.width > 0.0f)) {
+      throw svg_error("stroke-width must be above 0");
+    }
+    s.subpaths = std::move(paths);
+    image.shapes.push_back(std::move(s));
+  }
+}
+
+} // namespace
+
+svg_image parse_svg(std::string_view text) {
+  svg_image image;
+  bool in_svg = false, done = false;
+  size_t pos = 0;
+  while (pos < text.size()) {
+    if (space(text[pos])) {
+      ++pos;
+      continue;
+    }
+    if (text[pos] != '<') {
+      throw svg_error("text outside tags is not allowed in a placeholder");
+    }
+    // The comment markers are built from parts: the web viewer is inlined
+    // into HTML, where the sequences must not appear (NymphClaudeApp.cmake).
+    static const std::string kOpen = std::string("<!") + "--", kClose = std::string("--") + ">";
+    if (text.substr(pos, 4) == kOpen) {
+      const size_t end = text.find(kClose, pos + 4);
+      if (end == std::string_view::npos) {
+        throw svg_error("unterminated comment");
+      }
+      pos = end + 3;
+      continue;
+    }
+    if (text.substr(pos, 2) == "<?") {
+      const size_t end = text.find("?>", pos + 2);
+      if (end == std::string_view::npos || in_svg) {
+        throw svg_error("misplaced XML declaration");
+      }
+      pos = end + 2;
+      continue;
+    }
+    if (text.substr(pos, 6) == "</svg>") {
+      if (!in_svg) {
+        throw svg_error("</svg> without <svg>");
+      }
+      in_svg = false;
+      done = true;
+      pos += 6;
+      continue;
+    }
+    if (text.substr(pos, 2) == "</") {
+      throw svg_error("only <svg> may have children; write shapes as self-closing tags (<path ... />)");
+    }
+    ++pos;
+    const element e = read_tag(text, pos);
+    if (done) {
+      throw svg_error("content after </svg>");
+    }
+    if (!in_svg) {
+      if (e.name != "svg" || e.self_closing) {
+        throw svg_error("a placeholder must be one <svg> element");
+      }
+      for (const auto& [key, value] : e.attributes) {
+        if (key != "xmlns" && key != "viewBox" && key != "width" && key != "height" && key != "version" &&
+            key != "preserveAspectRatio") {
+          throw svg_error("attribute '" + key + "' is not allowed on <svg> in a placeholder");
+        }
+      }
+      const auto view = e.attributes.find("viewBox");
+      if (view == e.attributes.end()) {
+        throw svg_error("<svg> needs a viewBox");
+      }
+      number_reader in(view->second);
+      image.view_min = in.point("viewBox");
+      image.view_size = in.point("viewBox");
+      if (!(image.view_size.x > 0.0f && image.view_size.y > 0.0f)) {
+        throw svg_error("the viewBox must have a positive width and height");
+      }
+      const auto aspect = e.attributes.find("preserveAspectRatio");
+      if (aspect != e.attributes.end()) {
+        if (aspect->second == "none") {
+          image.stretch = true;
+        } else if (aspect->second != "xMidYMid meet" && aspect->second != "xMidYMid") {
+          throw svg_error("preserveAspectRatio must be 'none' or 'xMidYMid meet'");
+        }
+      }
+      in_svg = true;
+      continue;
+    }
+    if (!e.self_closing) {
+      throw svg_error("<" + e.name + "> must be self-closing (<" + e.name + " ... />): groups are not allowed");
+    }
+    add_shape(image, e);
+  }
+  if (!done) {
+    throw svg_error("a placeholder must be one complete <svg> element");
+  }
+  if (image.shapes.empty()) {
+    throw svg_error("the placeholder draws nothing");
+  }
+  return image;
+}
+
+std::vector<ImVec2> flatten(const svg_subpath& subpath, int segments) {
+  std::vector<ImVec2> out{subpath.start};
+  ImVec2 cur = subpath.start;
+  for (const svg_segment& s : subpath.segments) {
+    if (!s.cubic) {
+      out.push_back(s.to);
+    } else {
+      for (int i = 1; i <= segments; ++i) {
+        const float t = static_cast<float>(i) / static_cast<float>(segments);
+        const float u = 1.0f - t;
+        out.emplace_back(
+            u * u * u * cur.x + 3 * u * u * t * s.c1.x + 3 * u * t * t * s.c2.x + t * t * t * s.to.x,
+            u * u * u * cur.y + 3 * u * u * t * s.c1.y + 3 * u * t * t * s.c2.y + t * t * t * s.to.y);
+      }
+    }
+    cur = s.to;
+  }
+  return out;
+}
+
+} // namespace bdg::nymph

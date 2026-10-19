@@ -60,10 +60,120 @@ std::vector<std::string_view> keys_of(view_kind kind) {
       return {"x", "y", "z", "rotation", "hidden"};
     case view_kind::diagram:
       return {"zoom", "center"};
+    case view_kind::ui_window:
+      return {"x", "y", "width", "height", "collapsed", "closed", "scroll"};
+    case view_kind::ui_scroll:
+      return {"scroll"};
+    case view_kind::ui_open:
+      return {"open"};
+    case view_kind::ui_selected:
+      return {"selected", "closed"};
+    case view_kind::ui_index:
+      return {"selected"};
+    case view_kind::ui_flag:
+    case view_kind::ui_number:
+    case view_kind::ui_text:
+    case view_kind::ui_color:
+      return {"value"};
+    case view_kind::ui_active:
+      return {"active"};
+    case view_kind::ui_checked:
+      return {"checked"};
     case view_kind::none:
       break;
   }
   return {};
+}
+
+/// The key a kind's `flag` is written under.
+const char* flag_key(view_kind kind) {
+  switch (kind) {
+    case view_kind::ui_open:
+      return "open";
+    case view_kind::ui_selected:
+      return "selected";
+    case view_kind::ui_active:
+      return "active";
+    case view_kind::ui_checked:
+      return "checked";
+    default:
+      return "value";
+  }
+}
+
+bool boolean(const yaml_node& n, const std::string& what) {
+  if (n.is_scalar() && !n.quoted() && (n.text == "true" || n.text == "false")) {
+    return n.text == "true";
+  }
+  fail(n, what + " must be true or false, not '" + n.text + "'");
+}
+
+/// "#RRGGBB" or "#RRGGBBAA".
+bool is_color(const std::string& text) {
+  if ((text.size() != 7 && text.size() != 9) || text[0] != '#') {
+    return false;
+  }
+  return std::all_of(text.begin() + 1, text.end(), [](char c) {
+    return (c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F');
+  });
+}
+
+/// Reads one key of a user-interface entry into `v`.
+void ui_key(view_kind kind, const yaml_node& key, const yaml_node& value, const std::string& what, element_view& v) {
+  const std::string& k = key.text;
+  if (kind == view_kind::ui_window && (k == "x" || k == "y")) {
+    auto p = v.position.value_or(std::array<double, 2>{0, 0});
+    const double d = number(value, what);
+    if (d < 0 || d > 8192) {
+      fail(value, what + " must be between 0 and 8192");
+    }
+    p[k == "x" ? 0 : 1] = d;
+    v.position = p;
+  } else if (k == "width" || k == "height") {
+    auto sz = v.size.value_or(std::array<double, 2>{0, 0});
+    const double d = number(value, what);
+    if (d < 1 || d > 8192) {
+      fail(value, what + " must be between 1 and 8192");
+    }
+    sz[k == "width" ? 0 : 1] = d;
+    v.size = sz;
+  } else if (k == "scroll") {
+    const std::vector<double> sc = numbers(value, 2, what);
+    v.scroll = std::array<double, 2>{sc[0], sc[1]};
+  } else if (k == "collapsed") {
+    v.collapsed = boolean(value, what);
+  } else if (k == "closed") {
+    v.closed = boolean(value, what);
+  } else if (kind == view_kind::ui_index) {
+    const double d = number(value, what);
+    if (d != std::floor(d) || d < -1 || d > 1e6) {
+      fail(value, what + " must be an item index, from 0 (or -1 for none)");
+    }
+    v.index = static_cast<int64_t>(d);
+  } else if (kind == view_kind::ui_number) {
+    if (value.is_sequence()) {
+      if (value.children.empty() || value.children.size() > 4) {
+        fail(value, what + " must be a number or a list of 1 to 4 numbers");
+      }
+      v.numbers = numbers(value, value.children.size(), what);
+    } else {
+      v.numbers = std::vector<double>{number(value, what)};
+    }
+  } else if (kind == view_kind::ui_text || kind == view_kind::ui_color) {
+    if (!value.is_scalar()) {
+      fail(value, what + " must be text");
+    }
+    if (kind == view_kind::ui_color && !is_color(value.text)) {
+      fail(value, what + " must be a colour, \"#RRGGBB\" or \"#RRGGBBAA\"");
+    }
+    v.text = value.text;
+  } else {
+    v.flag = boolean(value, what);
+  }
+}
+
+bool is_ui(view_kind kind) {
+  return kind >= view_kind::ui_window;
 }
 
 void index(const node& n, const std::string& path, std::map<std::string, const node*, std::less<>>& out) {
@@ -142,7 +252,9 @@ view_map bind_view(const yaml_node& view, const std::map<std::string, const node
             "unknown key '" + key.text + "'" + did_you_mean(key.text, allowed) + " for " +
                 std::string(it->second->cls->name()) + " (keys: " + list + ")");
       }
-      if (key.text == "x") {
+      if (is_ui(kind)) {
+        ui_key(kind, key, value, what, v);
+      } else if (key.text == "x") {
         v.x = range(value, what);
       } else if (key.text == "y") {
         v.y = range(value, what);
@@ -178,6 +290,9 @@ view_map bind_view(const yaml_node& view, const std::map<std::string, const node
         v.rotation = std::array<double, 4>{q[0] / norm, q[1] / norm, q[2] / norm, q[3] / norm};
       }
     }
+    if (kind == view_kind::ui_window && v.size && ((*v.size)[0] == 0 || (*v.size)[1] == 0)) {
+      fail(entry, "the entry of " + view.keys[i].text + " needs both width and height, or neither");
+    }
     if (!v.empty()) {
       out[view.keys[i].text] = std::move(v);
     }
@@ -185,7 +300,7 @@ view_map bind_view(const yaml_node& view, const std::map<std::string, const node
   return out;
 }
 
-std::string write_view(const view_map& views) {
+std::string write_view(const view_map& views, const std::map<std::string, view_kind, std::less<>>& kinds) {
   std::string out;
   for (const auto& [path, v] : views) {
     if (v.empty()) {
@@ -193,6 +308,43 @@ std::string write_view(const view_map& views) {
     }
     std::string fields;
     const auto add = [&](const std::string& field) { fields += (fields.empty() ? "" : ", ") + field; };
+    const auto kind_it = kinds.find(path);
+    const view_kind kind = kind_it == kinds.end() ? view_kind::none : kind_it->second;
+    if (v.position) {
+      add("x: " + num((*v.position)[0]) + ", y: " + num((*v.position)[1]));
+    }
+    if (v.size) {
+      add("width: " + num((*v.size)[0]) + ", height: " + num((*v.size)[1]));
+    }
+    if (v.collapsed) {
+      add(std::string("collapsed: ") + (*v.collapsed ? "true" : "false"));
+    }
+    if (v.scroll) {
+      add("scroll: [" + num((*v.scroll)[0]) + ", " + num((*v.scroll)[1]) + "]");
+    }
+    if (v.flag) {
+      add(std::string(flag_key(kind)) + ": " + (*v.flag ? "true" : "false"));
+    }
+    if (v.closed) {
+      add(std::string("closed: ") + (*v.closed ? "true" : "false"));
+    }
+    if (v.index) {
+      add("selected: " + std::to_string(*v.index));
+    }
+    if (v.numbers) {
+      if (v.numbers->size() == 1) {
+        add("value: " + num(v.numbers->front()));
+      } else {
+        std::string list;
+        for (const double d : *v.numbers) {
+          list += (list.empty() ? "" : ", ") + num(d);
+        }
+        add("value: [" + list + "]");
+      }
+    }
+    if (v.text) {
+      add("value: " + quoted(*v.text));
+    }
     const auto add_range = [&](const char* name, const std::optional<view_range>& r) {
       if (r) {
         add(std::string(name) + ": [" + num(r->min) + ", " + num(r->max) + "]");

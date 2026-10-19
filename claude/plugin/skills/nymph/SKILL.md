@@ -1,6 +1,6 @@
 ---
 name: nymph
-description: Make charts and diagrams as PNG images from a short YAML description with nymph - line, bar, scatter, pie, heatmap, histogram and 3D plots, dashboards of several charts, UML, ER, network and data-flow diagrams, flowcharts, Gantt and Sankey charts. Use whenever a chart or diagram would explain data or structure better than text or a table.
+description: Make charts and diagrams as PNG images from a short YAML description with nymph - line, bar, scatter, pie, heatmap, histogram and 3D plots, dashboards of several charts, UML, ER, network and data-flow diagrams, flowcharts, Gantt and Sankey charts, and user-interface mockups (Dear ImGui windows and widgets, with arrows for the UI flow). Use whenever a chart, diagram or mockup would explain data, structure or a design better than text or a table.
 ---
 
 # nymph: charts from YAML
@@ -74,6 +74,12 @@ data: |
   `PlotInfLines`, `PlotAnnotation`, `PlotText`.
 - `$name` takes a column from `data` (CSV in a `|` block, or
   `{name: [values]}`); `$table:name` from one of several named tables.
+- User-interface mockups: a `Screen` of `Window`s holding Dear ImGui
+  widgets by their ImGui names (`Button`, `SliderFloat`, `TreeNode`,
+  `TabBar`, `Table`, ...), `Image` placeholders (`image: person`) and
+  `WindowTransition` arrows for the flow between windows; see "User
+  interfaces" in the full guide. In the live viewer the user can use
+  the widgets.
 - Names are exact: an unknown type, field or flag is an error. Ask the
   schema when unsure.
 

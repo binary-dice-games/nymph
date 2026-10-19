@@ -1,0 +1,32 @@
+nymph: 1
+description: The built-in placeholder images of Image and ImageButton, by name; the last row shows tint, background and rounding.
+image: {width: 830, height: 424}
+root:
+  type: VerticalLayout
+  spacing: 10
+  children:
+    - type: HorizontalLayout
+      spacing: 10
+      children:
+        - {type: Image, image: person, width: 126, height: 126, label: person}
+        - {type: Image, image: people, width: 126, height: 126, label: people}
+        - {type: Image, image: landscape, width: 126, height: 126, label: landscape}
+        - {type: Image, image: product, width: 126, height: 126, label: product}
+        - {type: Image, image: logo, width: 126, height: 126, label: logo}
+        - {type: Image, image: video, width: 126, height: 126, label: video}
+    - type: HorizontalLayout
+      spacing: 10
+      children:
+        - {type: Image, image: map, width: 126, height: 126, label: map}
+        - {type: Image, image: chart, width: 126, height: 126, label: chart}
+        - {type: Image, image: document, width: 126, height: 126, label: document}
+        - {type: Image, image: icon, width: 126, height: 126, label: icon}
+        - {type: Image, image: building, width: 126, height: 126, label: building}
+        - {type: Image, image: cross, width: 126, height: 126, label: cross}
+    - type: HorizontalLayout
+      spacing: 10
+      children:
+        - {type: Image, image: person, width: 126, height: 126, rounding: 63, label: "rounding: 63"}
+        - {type: Image, image: logo, width: 126, height: 126, tint: "#2F80ED", background: "#00000000", label: tint}
+        - {type: Image, image: landscape, width: 266, height: 126, fit: cover, tint: "#3B8A4A", background: "#E7F3E9", label: "fit: cover"}
+        - {type: Image, image: cross, width: 266, height: 126, label: "cross stretches"}

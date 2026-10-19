@@ -10,10 +10,21 @@
 #include <string>
 #include "core/charconv.hpp"
 #include "core/error.hpp"
+#include "core/suggest.hpp"
 
 namespace bdg::nymph {
 
 namespace {
+
+/// " (did you mean 'X'?)" for the closest name of `names`, or "".
+std::string suggestion(const std::string& word, const name_table& names) {
+  std::vector<std::string> candidates;
+  for (const name_entry& e : names.entries()) {
+    candidates.push_back(e.name);
+  }
+  return did_you_mean(word, candidates);
+}
+
 
 [[noreturn]] void fail(const yaml_node& n, std::string_view what, const std::string& problem) {
   // "PlotLine.color: 'x' is not a colour" / "PlotLine.color must be ..."
@@ -147,7 +158,10 @@ value scalar_value(const yaml_node& n, const field_desc& f, std::string_view wha
       if (const std::optional<int64_t> v = f.names->find(n.text)) {
         return *v;
       }
-      fail(n, what, ": unknown value '" + n.text + "' (one of: " + f.names->names() + ")");
+      fail(
+          n,
+          what,
+          ": unknown value '" + n.text + "'" + suggestion(n.text, *f.names) + " (one of: " + f.names->names() + ")");
     }
     case field_type::flags: {
       if (const std::optional<int64_t> i = is_unquoted(n) ? parse_int(n.text) : std::nullopt) {
@@ -157,7 +171,11 @@ value scalar_value(const yaml_node& n, const field_desc& f, std::string_view wha
       if (const std::optional<int64_t> v = f.names->parse_flags(n.text, unknown)) {
         return *v;
       }
-      fail(n, what, ": unknown value '" + unknown + "' (combine with '|': " + f.names->names() + ")");
+      fail(
+          n,
+          what,
+          ": unknown value '" + unknown + "'" + suggestion(unknown, *f.names) + " (combine with '|': " +
+              f.names->names() + ")");
     }
     case field_type::number_array:
     case field_type::integer_array:

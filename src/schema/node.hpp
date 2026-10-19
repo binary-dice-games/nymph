@@ -32,6 +32,10 @@ struct node {
   /// for a field left at its default. For error messages from
   /// element_class::check().
   std::vector<source_pos> field_pos;
+  /// Index in `cls->slots()` of the slot the element was placed in
+  /// (element_class::placed_as()); 0, the primary slot, unless its parent
+  /// took it as another.
+  unsigned placed_as = 0;
 
   /// @brief Field `index` as `T`; throws std::bad_variant_access if the
   ///        field holds another alternative (a bug, never input-dependent).

@@ -66,6 +66,8 @@ containers, a `children` list of elements:
   `SequenceDiagram`, `StateDiagram`, `ActivityDiagram`, `UseCaseDiagram`,
   `ERDiagram` for database structure, `DataFlowDiagram` and
   `NetworkDiagram` (see [UML diagrams](#uml-diagrams)).
+- `Screen` holds ImGui windows, popups and the arrows between them;
+  `Window` holds ImGui widgets (see [User interfaces](#user-interfaces)).
 
 A series goes directly inside its kind of plot; anything else can be
 `root`. [elements.md](elements.md) lists every type with its fields,
@@ -293,6 +295,13 @@ view:
 | `GanttChart` | `x`: the time range shown, in the chart's time unit (UNIX seconds for dates); `hidden`: the names of the sections switched off in the legend (their rows close up). |
 | `Plot3D` | `x`, `y`, `z`; `rotation`: a quaternion `[x, y, z, w]`; `hidden`. |
 | UML diagrams, `Flowchart` | `zoom`: 0.25 to 8 times the fit; `center`: the diagram point at the centre, in diagram units at zoom 1. |
+| `Window` | `x`, `y` (moved), `width`, `height` (resized), `collapsed`, `closed`, `scroll`: only what the user changed. |
+| `Child` | `scroll`. |
+| `TreeNode`, `CollapsingHeader`, `Menu`, `Popup`, `PopupModal` | `open`. |
+| `Selectable`, `TabItem` | `selected` (true / false); a tab also `closed`. |
+| `Combo`, `ListBox` | `selected`: the item's index. |
+| `Checkbox` / `RadioButton` / `MenuItem` | `value` / `active` / `checked`. |
+| Sliders, drags, numeric and text inputs, colour editors | `value`: a number or a list, text, or a colour. |
 
 An entry whose path names no such element (the source changed since the
 view was saved) is ignored; a malformed entry of an element that has a
@@ -411,6 +420,86 @@ root:
 
 Values must be above 0, no flow may go from a node to itself, and the
 flows may not form a cycle.
+
+## User interfaces
+
+A source can describe a user interface instead of a chart: ImGui windows
+holding ImGui widgets, rendered into the PNG for a mockup, and usable in
+`nymph view` and the web viewer (expand tree nodes, switch tabs, type,
+drag sliders, move windows). Element types are Dear ImGui's function
+names, their parameters are fields, and flags are ImGui's flag names
+without the prefix ([elements.md](elements.md) lists them all):
+
+```yaml
+root:
+  type: Screen
+  children:
+    - type: Window
+      id: props
+      title: Properties
+      x: 16
+      y: 16
+      width: 300
+      children:
+        - {type: InputText, label: Name, value: Sun}
+        - {type: SliderFloat, label: Intensity, value: 0.8, min: 0, max: 2}
+        - {type: Checkbox, label: Cast shadows, value: true}
+        - {type: Button, label: Apply}
+        - {type: SameLine}
+        - {type: Button, label: Cancel}
+```
+
+- **Screen and windows.** `Screen` is the area windows live in (usually
+  `root`). A `Window` is placed at `x`, `y` on it (windows without either
+  are cascaded); `width` / `height` are pixels, 0 fits the content and a
+  negative value reaches the Screen's edge. A window that does not fit
+  its Screen is an error. A `Window` can also be `root` (or sit in a
+  layout) on its own, filling its rectangle. Later windows are on top;
+  the last one is focused. `MainMenuBar` puts a menu bar across the top
+  of the Screen.
+- **Widgets** go in windows: `Text`, `Button`, `Checkbox`, `SliderFloat3`,
+  `InputTextWithHint`, `ColorEdit4`, `Combo` (`items`, or a `$column`),
+  ... Containers take widgets as `children`: `TreeNode` and
+  `CollapsingHeader` (`open`), `TabBar` with `TabItem`s (`selected`),
+  `Child`, `Group`, `Indent`, `Disabled`, `Table` with `TableColumn`s
+  (`cells`, often a `$column`) and `TableRow`s (one widget per cell).
+  `SameLine` puts the next widget beside the previous one. A widget's
+  `value` (or `open`, `selected`, `active`, `checked`) is the state the
+  PNG shows. Every widget also takes `width` (item width), `disabled`,
+  `tooltip` (live views) and `opens`.
+- **Plots and layouts in windows.** Any chart element (`Plot`, a layout,
+  a diagram) can be a child of a window or container: it is drawn at
+  that point of the window, with its `width` / `height` (a negative
+  height fills the rest of the window).
+- **Labels need not be unique.** Two `Button`s labelled `OK` are two
+  buttons: nymph gives every element its own ImGui ID. `##` in a label
+  hides the rest, as in ImGui.
+- **Placeholder images.** `Image` (and `ImageButton`) shows one of
+  nymph's built-in images where a picture goes: `image: person` (a
+  portrait silhouette), `people`, `landscape`, `product`, `logo`,
+  `video`, `map`, `chart`, `document`, `icon`, `building` or `cross`
+  (see [examples.md](examples.md#placeholder-images)). `tint` recolours
+  the shape, `background` the box (`"#00000000"` for none), `rounding`
+  rounds it (half its size: a circle), `fit` is `contain`, `cover` or
+  `stretch`, and `label` writes a caption. `Image` also works in layouts.
+- **Menus and popups.** A `MenuBar` child gives a window a menu bar of
+  `Menu`s holding `MenuItem`s; `Menu.open: true` shows one open. A
+  `Popup` or `PopupModal` is a child of the Screen with an `id`; a widget
+  with `opens: <id>` opens it on a click in a live view, and `open: true`
+  shows it in the PNG (under that widget, at its `x` / `y`, or for a
+  modal in the middle of the Screen, which it dims). One popup or menu
+  can be open at a time. A `Tooltip` placed right after a widget shows on
+  hover, or always with `open: true`.
+- **UI flow.** Give windows an `id`, and a `WindowTransition` child of the
+  Screen draws a labelled arrow from one window to another: `{type:
+  WindowTransition, from: sign_in, to: inbox, label: ok}`. Several
+  transitions between two windows are drawn side by side; `from` equal to
+  `to` is a loop; `dashed: true` for error paths. Arrows follow windows
+  the user moves.
+- **Interaction.** In `nymph view` and the web viewer the widgets work;
+  what the user changed is saved in the [`view`](#view) key, so a PNG
+  saved from the viewer shows it. A click on a widget is reported to the
+  host (the web viewer's `click` event); widgets run nothing.
 
 ## Errors
 

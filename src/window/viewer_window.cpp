@@ -172,11 +172,22 @@ class viewer : public window_events {
     if (!ready_) {
       return;
     }
-    if (panel_ != nullptr && (panel_->wants_keyboard() || panel_->modal_open())) {
-      panel_->key(key, mods, down, repeat);
+    const key_event figure_key{imgui_key(key), down, mods.ctrl, mods.shift, mods.alt, false};
+    switch (route_key(panel_ != nullptr && (panel_->wants_keyboard() || panel_->modal_open()), view_.wants_keyboard())) {
+      case key_route::panel:
+        panel_->key(key, mods, down, repeat);
+        return;
+      case key_route::figure:
+        view_.input_key(figure_key);
+        return;
+      case key_route::viewer:
+        break;
+    }
+    if (!down) {
+      view_.input_key(figure_key); // a key pressed in a field may be released after it
       return;
     }
-    if (!down || repeat) {
+    if (repeat) {
       return;
     }
     if (panel_ != nullptr && mods.ctrl) {
@@ -212,8 +223,18 @@ class viewer : public window_events {
   }
 
   void on_text(char32_t codepoint) override {
-    if (ready_ && panel_ != nullptr && panel_->wants_keyboard()) {
-      panel_->text(codepoint);
+    if (!ready_) {
+      return;
+    }
+    switch (route_key(panel_ != nullptr && panel_->wants_keyboard(), view_.wants_keyboard())) {
+      case key_route::panel:
+        panel_->text(codepoint);
+        break;
+      case key_route::figure:
+        view_.input_text(std::u32string_view(&codepoint, 1));
+        break;
+      case key_route::viewer:
+        break;
     }
   }
 

@@ -1,0 +1,34 @@
+nymph: 1
+description: Mockup of a settings dialog - one window with tabs, controls of every kind and a table - in the dark theme.
+image: {width: 520, height: 420, theme: dark, padding: 0}
+root:
+  type: Window
+  title: Settings
+  children:
+    - type: TabBar
+      children:
+        - {type: TabItem, label: General, children: [{type: Text, text: Not shown}]}
+        - type: TabItem
+          label: Display
+          selected: true
+          children:
+            - {type: SeparatorText, label: Screen}
+            - {type: Combo, label: Resolution, items: [1280 x 720, 1920 x 1080, 2560 x 1440], selected: 1}
+            - {type: SliderInt, label: Refresh rate, value: 120, min: 30, max: 240, format: "%d Hz"}
+            - {type: Checkbox, label: Vertical sync, value: true}
+            - {type: SeparatorText, label: Colour}
+            - {type: RadioButton, label: sRGB, active: true}
+            - {type: SameLine}
+            - {type: RadioButton, label: Display P3}
+            - {type: SameLine}
+            - {type: RadioButton, label: HDR}
+            - {type: SliderFloat, label: Brightness, value: 0.7}
+            - {type: Text, text: "Display modes:"}
+            - type: Table
+              flags: Borders|RowBg|SizingStretchSame
+              children:
+                - {type: TableColumn, label: Mode, cells: [Windowed, Borderless, Fullscreen]}
+                - {type: TableColumn, label: Size, cells: [1280 x 720, 1920 x 1080, 1920 x 1080]}
+            - {type: Button, label: Apply}
+            - {type: Tooltip, open: true, children: [{type: Text, text: Restarts the renderer}]}
+        - {type: TabItem, label: Audio, children: [{type: Text, text: Not shown}]}

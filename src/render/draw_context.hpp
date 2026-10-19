@@ -6,6 +6,7 @@
 #include <imgui.h>
 #include <implot.h>
 #include <array>
+#include <cstdint>
 #include <map>
 #include <optional>
 #include <string>
@@ -14,6 +15,7 @@
 #include <vector>
 #include "document/view.hpp"
 #include "render/image_options.hpp"
+#include "render/ui_state.hpp"
 #include "schema/node.hpp"
 
 namespace bdg::nymph {
@@ -318,6 +320,30 @@ class draw_context {
     return nullptr;
   }
 
+  // ── User interfaces (spec/09_ui_mockups/DESIGN.md section 5) ───────────
+
+  /// @brief The state of UI elements, by element path. Persists as long as
+  ///        the context: three frames for a PNG, the contexts' lifetime in a
+  ///        live view.
+  ui_state& ui() {
+    return ui_;
+  }
+  const ui_state& ui() const {
+    return ui_;
+  }
+
+  /// @brief `n`'s element path ("root/children/1"), or a name unique to the
+  ///        node when no paths were set (frames drawn without a figure).
+  std::string path_of(const node& n) const {
+    if (paths_ != nullptr) {
+      const auto it = paths_->find(&n);
+      if (it != paths_->end()) {
+        return it->second;
+      }
+    }
+    return "#" + std::to_string(reinterpret_cast<std::uintptr_t>(&n));
+  }
+
   /// @brief Output pixels per logical pixel (`image.scale`).
   float scale() const {
     return static_cast<float>(options_.scale);
@@ -404,6 +430,7 @@ class draw_context {
   std::vector<plot_view_record> previous_views_;
   std::unordered_map<const node*, rect> rects_;
   std::map<std::string, ImFont*, std::less<>> fonts_;
+  ui_state ui_;
 };
 
 } // namespace bdg::nymph

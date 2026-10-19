@@ -311,6 +311,103 @@ TEST(bind, PlacementErrors) {
   expect_error_at("root:\n  type: Plot\n  children:\n    - {type: Plot}\n", 4, 14, "'Plot' cannot be placed in Plot");
 }
 
+// ── Several slots per class (spec/09_ui_mockups PLAN step 1) ────────────────
+
+/// A class that also fills a second slot.
+class two_slot_fake : public fake {
+ public:
+  two_slot_fake(std::string name, std::string slot, std::string other)
+      : fake(std::move(name), std::move(slot), std::vector<std::string>{}, std::vector<field_desc>{}, "Rule.") {
+    also_fits(std::move(other));
+  }
+};
+
+/// Column (accepts `figure`), Window (accepts `ui.widget` first, then
+/// `figure`), Menu (accepts `ui.menu`), Rule (`figure` and `ui.widget`),
+/// Button (`ui.widget`).
+const registry& slot_registry() {
+  static const registry r = [] {
+    registry reg;
+    reg.add(std::make_unique<fake>(
+        "Column", "figure", std::vector<std::string>{"figure"}, std::vector<field_desc>{}, "Column."));
+    reg.add(std::make_unique<fake>(
+        "Window", "figure", std::vector<std::string>{"ui.widget", "figure"}, std::vector<field_desc>{}, "Window."));
+    reg.add(std::make_unique<fake>(
+        "Menu", "figure", std::vector<std::string>{"ui.menu"}, std::vector<field_desc>{}, "Menu."));
+    reg.add(std::make_unique<two_slot_fake>("Rule", "figure", "ui.widget"));
+    reg.add(std::make_unique<fake>(
+        "Button", "ui.widget", std::vector<std::string>{}, std::vector<field_desc>{}, "Button."));
+    return reg;
+  }();
+  return r;
+}
+
+TEST(bind_slots, AClassFillsEverySlotItIsGiven) {
+  const element_class* rule = slot_registry().find("Rule");
+  ASSERT_NE(rule, nullptr);
+  ASSERT_EQ(rule->slots().size(), 2u);
+  EXPECT_EQ(rule->slot(), "figure");
+  EXPECT_TRUE(rule->fills_slot("figure"));
+  EXPECT_TRUE(rule->fills_slot("ui.widget"));
+  EXPECT_FALSE(rule->fills_slot("ui.menu"));
+}
+
+TEST(bind_slots, PlacedAsTheSlotTheParentAccepted) {
+  const figure f = bind_source(
+      "root:\n"
+      "  type: Column\n"
+      "  children:\n"
+      "    - {type: Rule}\n"
+      "    - type: Window\n"
+      "      children:\n"
+      "        - {type: Rule}\n"
+      "        - {type: Button}\n"
+      "        - {type: Column}\n",
+      slot_registry());
+  const node& in_column = f.root.children[0];
+  const node& window = f.root.children[1];
+  EXPECT_EQ(f.root.cls->placed_as(f.root), "figure");
+  EXPECT_EQ(in_column.cls->placed_as(in_column), "figure");
+  // The Window accepts ui.widget before figure, so its Rule is a widget.
+  EXPECT_EQ(window.children[0].cls->placed_as(window.children[0]), "ui.widget");
+  EXPECT_EQ(window.children[1].cls->placed_as(window.children[1]), "ui.widget");
+  EXPECT_EQ(window.children[2].cls->placed_as(window.children[2]), "figure");
+}
+
+TEST(bind_slots, RootMayBeAClassWhoseSecondSlotIsFigure) {
+  registry reg;
+  reg.add(std::make_unique<two_slot_fake>("Panel", "ui.window", "figure"));
+  const figure f = bind_source("root: {type: Panel}\n", reg);
+  EXPECT_EQ(f.root.placed_as, 1u);
+  EXPECT_EQ(f.root.cls->placed_as(f.root), "figure");
+}
+
+TEST(bind_slots, ErrorsNameTheParentsOfEverySlot) {
+  try {
+    bind_source("root:\n  type: Menu\n  children:\n    - {type: Rule}\n", slot_registry());
+    FAIL() << "no error";
+  } catch (const error& e) {
+    EXPECT_EQ(e.line(), 4);
+    EXPECT_NE(std::string(e.what()).find("'Rule' cannot be placed in Menu; it goes inside: Column, Window"),
+              std::string::npos)
+        << e.what();
+  }
+  try {
+    bind_source("root:\n  type: Menu\n  children:\n    - {type: Button}\n", slot_registry());
+    FAIL() << "no error";
+  } catch (const error& e) {
+    EXPECT_NE(std::string(e.what()).find("it goes inside: Window"), std::string::npos) << e.what();
+  }
+}
+
+TEST(bind_slots, ChildrenAreListedOnceInSlotOrder) {
+  const element_class* window = slot_registry().find("Window");
+  // ui.widget first (Button, Rule), then figure (Column, Menu, Window); Rule once.
+  EXPECT_EQ(slot_registry().names_taken_by(*window), "Button, Rule, Column, Menu, Window");
+  EXPECT_EQ(slot_registry().names_accepting(*slot_registry().find("Rule")), "Column, Window");
+  EXPECT_EQ(slot_registry().names_in_slot("ui.widget"), "Button, Rule");
+}
+
 TEST(bind, ReferenceErrors) {
   expect_error_at(
       example_with("ys: $revenue", "ys: $revenu"),
