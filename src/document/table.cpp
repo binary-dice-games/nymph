@@ -6,6 +6,7 @@
 #include <algorithm>
 #include <charconv>
 #include <limits>
+#include "core/charconv.hpp"
 #include "core/error.hpp"
 #include "core/limits.hpp"
 
@@ -158,7 +159,7 @@ bool parse_number(const std::string& text, double& out) {
   if (first != last && *first == '+') {
     ++first;
   }
-  const auto result = std::from_chars(first, last, out);
+  const auto result = from_chars_double(first, last, out);
   return result.ec == std::errc{} && result.ptr == last;
 }
 

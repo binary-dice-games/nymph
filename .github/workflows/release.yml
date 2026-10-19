@@ -1,0 +1,381 @@
+# MIT License © 2026 Binary Dice Games
+#
+# A release from one tag push (spec/07_release_pipeline/DESIGN.md, and
+# docs/releasing.md for maintainers):
+#
+#   git tag v0.2.0 && git push origin v0.2.0
+#
+# check -> web -> native (5 platforms) + source -> macos-universal ->
+# release (draft, every file, then published) -> plugin, homebrew, chrome
+# -> verify. A tag v<X.Y.Z>-<pre> makes a GitHub prerelease and updates no
+# channel; workflow_dispatch is a dry run: the files are workflow artifacts
+# and nothing is published. A channel whose secret is missing is skipped
+# with a warning.
+
+name: release
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  check:
+    runs-on: ubuntu-24.04
+    outputs:
+      version: ${{ steps.check.outputs.version }}
+      tag: ${{ steps.check.outputs.tag }}
+      prerelease: ${{ steps.check.outputs.prerelease }}
+      publish: ${{ steps.check.outputs.publish }}
+      channels: ${{ steps.check.outputs.channels }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Tag, version and changelog
+        id: check
+        env:
+          TAG: ${{ github.ref_type == 'tag' && github.ref_name || '' }}
+        run: |
+          sh .github/scripts/release-check.sh "$TAG" "$RUNNER_TEMP/notes.md" | tee -a "$GITHUB_OUTPUT"
+          prerelease=$(sed -n 's/^prerelease=//p' "$GITHUB_OUTPUT" | tail -n 1)
+          if [ -n "$TAG" ]; then publish=true; else publish=false; fi
+          echo "publish=$publish" >> "$GITHUB_OUTPUT"
+          if [ "$publish" = true ] && [ "$prerelease" = false ]; then
+            echo "channels=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "channels=false" >> "$GITHUB_OUTPUT"
+          fi
+          cp "$RUNNER_TEMP/notes.md" notes.md
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: release-notes
+          path: notes.md
+
+  web:
+    needs: check
+    uses: ./.github/workflows/build.yml
+    with:
+      target: web
+      runner: ubuntu-24.04
+
+  native:
+    needs: web
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { target: linux-x86_64, runner: ubuntu-24.04 }
+          - { target: linux-arm64, runner: ubuntu-24.04-arm }
+          - { target: windows-msys2, runner: windows-latest }
+          - { target: macos-arm64, runner: macos-15 }
+          - { target: macos-x86_64, runner: macos-15-intel }
+    uses: ./.github/workflows/build.yml
+    with:
+      target: ${{ matrix.target }}
+      runner: ${{ matrix.runner }}
+      release: true
+    secrets: inherit
+
+  source:
+    needs: check
+    uses: ./.github/workflows/source.yml
+
+  # One executable for both Macs inside the Claude Desktop bundle (an MCPB
+  # manifest cannot name a CPU). lipo keeps each slice's signature.
+  macos-universal:
+    needs: [check, native]
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          pattern: build-macos-*
+          path: ${{ runner.temp }}/artifacts
+      - name: Universal bundle
+        env:
+          V: ${{ needs.check.outputs.version }}
+        run: |
+          a="$RUNNER_TEMP/artifacts"
+          mkdir -p out
+          lipo -create -output "$RUNNER_TEMP/nymph" \
+            "$a/build-macos-arm64/nymph-$V-macos-arm64" "$a/build-macos-x86_64/nymph-$V-macos-x86_64"
+          lipo -verify_arch "$RUNNER_TEMP/nymph" arm64 x86_64
+          codesign --verify --verbose "$RUNNER_TEMP/nymph"
+          cmake -DTEMPLATE=claude/mcpb/manifest.json.in -DEXE="$RUNNER_TEMP/nymph" -DICON=claude/mcpb/icon.png \
+            -DVERSION="$V" -DPLATFORM=darwin -DSTAGE="$RUNNER_TEMP/mcpb" \
+            -DOUTPUT="$PWD/out/nymph-$V-macos-universal.mcpb" -P cmake/NymphMcpb.cmake
+          cmake -DMCPB="$PWD/out/nymph-$V-macos-universal.mcpb" -DVERSION="$V" -DPLATFORM=darwin \
+            -DWORK_DIR="$RUNNER_TEMP/mcpb-check" -P tests/mcpb_check.cmake
+          arch -x86_64 "$RUNNER_TEMP/nymph" --version || echo "::notice::no Rosetta 2 here: x86_64 slice not run"
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: build-macos-universal
+          path: out/
+          if-no-files-found: error
+
+  release:
+    needs: [check, native, source, macos-universal]
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          path: ${{ runner.temp }}/artifacts
+      - name: Assemble the release files
+        run: sh .github/scripts/release-assemble.sh "$RUNNER_TEMP/artifacts" "${{ needs.check.outputs.version }}" "$PWD/release"
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: release-files
+          path: release/
+          if-no-files-found: error
+      - name: Publish the GitHub release
+        if: needs.check.outputs.publish == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ needs.check.outputs.tag }}
+          VERSION: ${{ needs.check.outputs.version }}
+          PRERELEASE: ${{ needs.check.outputs.prerelease }}
+        run: |
+          notes="$RUNNER_TEMP/artifacts/release-notes/notes.md"
+          # A published release's files are never replaced: the plugin and
+          # the formula pin their SHA-256 (DESIGN.md section 7).
+          if draft=$(gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json isDraft --jq .isDraft 2>/dev/null); then
+            [ "$draft" = true ] || { echo "release $TAG is already published; its files stay as they are" >&2; exit 1; }
+          else
+            flags=""
+            [ "$PRERELEASE" = true ] && flags="--prerelease"
+            gh release create "$TAG" --repo "$GITHUB_REPOSITORY" --draft --verify-tag $flags \
+              --title "nymph $VERSION" --notes-file "$notes"
+          fi
+          gh release upload "$TAG" --repo "$GITHUB_REPOSITORY" --clobber release/*
+          gh release edit "$TAG" --repo "$GITHUB_REPOSITORY" --draft=false
+          echo "Published https://github.com/$GITHUB_REPOSITORY/releases/tag/$TAG" >> "$GITHUB_STEP_SUMMARY"
+
+  # ── Channels (published, non-prerelease releases only) ───────────────────────
+
+  plugin:
+    needs: [check, release]
+    if: needs.check.outputs.channels == 'true'
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Token
+        id: gate
+        env:
+          TOKEN: ${{ secrets.NYMPH_RELEASE_TOKEN }}
+        run: |
+          if [ -z "$TOKEN" ]; then
+            echo "::warning::NYMPH_RELEASE_TOKEN not set: the plugin is not pinned to this release (docs/releasing.md)"
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+          fi
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        if: steps.gate.outputs.ready == 'true'
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          token: ${{ secrets.NYMPH_RELEASE_TOKEN }}
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        if: steps.gate.outputs.ready == 'true'
+        with:
+          name: release-files
+          path: ${{ runner.temp }}/release
+      - name: Pin the release in a pull request
+        if: steps.gate.outputs.ready == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.NYMPH_RELEASE_TOKEN }}
+          VERSION: ${{ needs.check.outputs.version }}
+        run: |
+          branch="release/plugin-v$VERSION"
+          if gh pr list --repo "$GITHUB_REPOSITORY" --head "$branch" --state all --json number --jq '.[0].number' | grep -q .; then
+            echo "the pull request for $branch exists already"
+            exit 0
+          fi
+          cmake -DSOURCE_DIR="$PWD" -DVERSION="$VERSION" -DSUMS="$RUNNER_TEMP/release/SHA256SUMS" \
+            -P cmake/NymphPluginSync.cmake
+          if git diff --quiet; then
+            echo "the plugin already pins $VERSION"
+            exit 0
+          fi
+          git config user.name "nymph release"
+          git config user.email "nymph-release@users.noreply.github.com"
+          git checkout -b "$branch"
+          git add claude/plugin/.claude-plugin/plugin.json claude/plugin/bin/checksums.txt
+          git commit -m "Claude Code plugin: pin nymph $VERSION"
+          git push origin "$branch"
+          gh pr create --repo "$GITHUB_REPOSITORY" --head "$branch" \
+            --title "Claude Code plugin: pin nymph $VERSION" \
+            --body "Pins the executables of the nymph $VERSION release in the Claude Code plugin and sets its version (spec/07_release_pipeline/DESIGN.md section 4.5). Opened by the release workflow."
+          gh pr merge "$branch" --repo "$GITHUB_REPOSITORY" --auto --squash ||
+            echo "::warning::auto-merge is off for this repository: merge the pull request by hand"
+
+  homebrew-test:
+    needs: [check, release]
+    if: needs.check.outputs.channels == 'true'
+    strategy:
+      fail-fast: false
+      matrix:
+        runner: [macos-15, ubuntu-24.04]
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: release-files
+          path: ${{ runner.temp }}/release
+      - name: Build and test the formula from the release files
+        env:
+          VERSION: ${{ needs.check.outputs.version }}
+        run: |
+          if [ "$RUNNER_OS" = Linux ]; then eval "$(/home/linuxbrew/.linuxbrew/bin/brew shellenv)"; fi
+          export HOMEBREW_NO_AUTO_UPDATE=1 HOMEBREW_NO_INSTALL_FROM_API=1
+          sh .github/scripts/homebrew-formula.sh "$VERSION" "$RUNNER_TEMP/release/SHA256SUMS" \
+            "file://$RUNNER_TEMP/release" "$RUNNER_TEMP/nymph.rb"
+          brew tap-new --no-git local/nymph
+          cp "$RUNNER_TEMP/nymph.rb" "$(brew --repository local/nymph)/Formula/nymph.rb"
+          brew install --build-from-source local/nymph/nymph
+          brew test local/nymph/nymph
+          brew audit --strict local/nymph/nymph
+          # Homebrew wrote no shell profile, and its bin is on PATH.
+          [ "$(command -v nymph)" = "$(brew --prefix)/bin/nymph" ]
+          nymph --version
+
+  homebrew:
+    needs: [check, homebrew-test]
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Token
+        id: gate
+        env:
+          TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+        run: |
+          if [ -z "$TOKEN" ]; then
+            echo "::warning::HOMEBREW_TAP_TOKEN not set: the tap is not updated (docs/releasing.md)"
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+          fi
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        if: steps.gate.outputs.ready == 'true'
+        with:
+          persist-credentials: false
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        if: steps.gate.outputs.ready == 'true'
+        with:
+          repository: ${{ github.repository_owner }}/homebrew-nymph
+          token: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+          path: tap
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        if: steps.gate.outputs.ready == 'true'
+        with:
+          name: release-files
+          path: ${{ runner.temp }}/release
+      - name: Push the formula to the tap
+        if: steps.gate.outputs.ready == 'true'
+        env:
+          VERSION: ${{ needs.check.outputs.version }}
+          TAG: ${{ needs.check.outputs.tag }}
+        run: |
+          mkdir -p tap/Formula
+          sh .github/scripts/homebrew-formula.sh "$VERSION" "$RUNNER_TEMP/release/SHA256SUMS" \
+            "https://github.com/$GITHUB_REPOSITORY/releases/download/$TAG" tap/Formula/nymph.rb
+          cd tap
+          if git diff --quiet -- Formula/nymph.rb && git ls-files --error-unmatch Formula/nymph.rb > /dev/null 2>&1; then
+            echo "the tap already has nymph $VERSION"
+            exit 0
+          fi
+          git config user.name "nymph release"
+          git config user.email "nymph-release@users.noreply.github.com"
+          git add Formula/nymph.rb
+          git commit -m "nymph $VERSION"
+          git push
+
+  chrome:
+    needs: [check, release]
+    if: needs.check.outputs.channels == 'true'
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Credentials
+        id: gate
+        env:
+          ITEM: ${{ vars.CHROME_EXTENSION_ID }}
+          PUBLISHER: ${{ vars.CHROME_PUBLISHER_ID }}
+          REFRESH: ${{ secrets.CHROME_REFRESH_TOKEN }}
+        run: |
+          if [ -z "$ITEM" ] || [ -z "$PUBLISHER" ] || [ -z "$REFRESH" ]; then
+            echo "::warning::Chrome Web Store not configured (CHROME_EXTENSION_ID, CHROME_PUBLISHER_ID, CHROME_* secrets): the extension is not published (docs/releasing.md)"
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+          fi
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        if: steps.gate.outputs.ready == 'true'
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        if: steps.gate.outputs.ready == 'true'
+        with:
+          name: release-files
+          path: ${{ runner.temp }}/release
+      - name: Upload and submit for review
+        if: steps.gate.outputs.ready == 'true'
+        env:
+          CHROME_EXTENSION_ID: ${{ vars.CHROME_EXTENSION_ID }}
+          CHROME_PUBLISHER_ID: ${{ vars.CHROME_PUBLISHER_ID }}
+          CHROME_CLIENT_ID: ${{ secrets.CHROME_CLIENT_ID }}
+          CHROME_CLIENT_SECRET: ${{ secrets.CHROME_CLIENT_SECRET }}
+          CHROME_REFRESH_TOKEN: ${{ secrets.CHROME_REFRESH_TOKEN }}
+        run: sh packaging/chrome/publish.sh "$RUNNER_TEMP/release/nymph-extension-${{ needs.check.outputs.version }}.zip"
+
+  # ── The release files work on every platform ────────────────────────────────
+
+  verify:
+    needs: [check, release]
+    strategy:
+      fail-fast: false
+      matrix:
+        runner: [ubuntu-24.04, macos-15, windows-latest]
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: release-files
+          path: ${{ runner.temp }}/release
+      - name: install.sh, a new login shell and the plugin launcher
+        shell: bash
+        run: sh .github/scripts/release-verify.sh "$RUNNER_TEMP/release" "${{ needs.check.outputs.version }}"
+      - name: install.ps1 and the user Path
+        if: runner.os == 'Windows'
+        shell: pwsh
+        env:
+          VERSION: ${{ needs.check.outputs.version }}
+        run: |
+          $env:NYMPH_RELEASE_URL = Join-Path $env:RUNNER_TEMP 'release'
+          $bin = Join-Path $env:RUNNER_TEMP 'nymph-ps1\bin'
+          & (Join-Path $env:RUNNER_TEMP 'release\install.ps1') -Version $env:VERSION -BinDir $bin
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          $user = [Environment]::GetEnvironmentVariable('Path', 'User')
+          if (-not (($user -split ';') -contains $bin)) { throw "$bin is not on the user Path: $user" }
+          # A new console would find it: this session's Path was updated too.
+          $found = (Get-Command nymph).Source
+          if ($found -ne (Join-Path $bin 'nymph.exe')) { throw "nymph is $found" }
+          $out = & nymph --version
+          if ($out -ne "nymph $env:VERSION") { throw "nymph --version says $out" }

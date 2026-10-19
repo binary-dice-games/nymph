@@ -10,7 +10,7 @@ zoom, hover for values, and Claude follows the view you leave. Design:
 | Claude | Install | What you get |
 |---|---|---|
 | Claude Code | `/plugin install nymph --marketplace binary-dice-games/nymph` | The nymph tools, the `nymph` command and the nymph skill. In the terminal, charts are files in your project; in the desktop app's Code tab they are also live in the conversation. |
-| Claude Desktop (Windows) | Double-click `nymph-<version>-windows-x86_64.mcpb` | The nymph tools; charts live in the conversation. |
+| Claude Desktop (macOS, Windows) | Double-click `nymph-<version>-macos-universal.mcpb` or `nymph-<version>-windows-x86_64.mcpb` | The nymph tools; charts live in the conversation. |
 | claude.ai (web, mobile) | Upload `nymph-skill-<version>.zip` as a skill | Claude runs nymph in its code sandbox and gives you the PNG. No live chart. |
 | Any MCP client | Run `nymph mcp` (below) | The tools; live charts where the client shows MCP Apps. |
 
@@ -30,9 +30,12 @@ The plugin needs nothing else installed. The first time it starts, it
 downloads the nymph executable for your system from the release its
 version names, checks it against the SHA-256 the plugin pins, and keeps
 it in `~/.cache/nymph/<version>/`; a file that does not match is never
-run. To use a nymph you built or downloaded yourself, set `NYMPH_BIN` to
-its path before starting Claude Code. While no release is published, or
-when GitHub is out of reach, `NYMPH_BIN` is required.
+run. The plugin runs on Linux and macOS (x86-64 and arm64) and Windows
+(x86-64). Each nymph release updates the plugin's pin and version
+(`/plugin marketplace update nymph` fetches it). To use a nymph you built
+or installed yourself, set `NYMPH_BIN` to its path before starting Claude
+Code. While no release is published, or when GitHub is out of reach,
+`NYMPH_BIN` is required.
 
 Then ask for a chart ("plot the error rate of the last week from
 logs.csv"). Claude calls `render_chart`, sees the image, and writes the
@@ -42,12 +45,12 @@ source a nymph PNG carries).
 
 ## Claude Desktop
 
-Download `nymph-<version>-windows-x86_64.mcpb` and open it: Claude
+Download `nymph-<version>-macos-universal.mcpb` (any Mac: Apple silicon
+or Intel) or `nymph-<version>-windows-x86_64.mcpb` and open it: Claude
 Desktop shows what it installs and asks to confirm. The executable is
 inside: nothing else is downloaded or installed. It is listed, and
-removed, in Claude Desktop's extension settings. macOS
-builds do not exist yet; the Linux bundles are for unofficial Linux
-builds of Claude Desktop.
+removed, in Claude Desktop's extension settings. The Linux bundles are
+for unofficial Linux builds of Claude Desktop.
 
 ## claude.ai
 

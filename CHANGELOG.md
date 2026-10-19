@@ -9,6 +9,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- macOS (Apple silicon and Intel, macOS 13.3 or later) is a supported platform: release executables `nymph-<version>-macos-arm64` / `-macos-x86_64`, and `nymph-<version>-macos-universal.mcpb` for Claude Desktop on any Mac. macOS builds have no OpenGL rasterizer (`NYMPH_OPENGL` defaults to `OFF` there).
+- `cmake --install` installs `nymph`, its documentation and licences, and puts `<prefix>/bin` on the user's `PATH` (a marked block in the shell start-up files; the user `Path` on Windows); `NYMPH_INSTALL` and `NYMPH_INSTALL_UPDATE_PATH` CMake options. On Windows the default prefix is `%LOCALAPPDATA%\Programs\nymph`.
+- Install scripts in every release, `install.sh` (Linux, macOS) and `install.ps1` (Windows): download the executable for the system, check its SHA-256, install it and put it on `PATH`; `--uninstall` / `-Uninstall` undoes both.
+- Release source tarball `nymph-<version>-src.tar.gz` with every submodule: builds, tests and installs with no network (`nymph-source-dist` target). Configuring a tree without the submodules and without git now fails with a message saying how to get them.
+- Homebrew: `brew install binary-dice-games/nymph/nymph` (macOS, Linux), updated by each release.
+- Releases are published by GitHub Actions from a `v<version>` tag: GitHub release with every file and one `SHA256SUMS`, the Chrome extension submitted to the Chrome Web Store, the Claude Code plugin pinned to the release.
+- `NYMPH_CODESIGN_IDENTITY` CMake option: the macOS release executable's signing identity (ad hoc by default).
 - `nymph view <in>`: opens a YAML file or nymph PNG in a window with the web viewer's pan, zoom and hover values; `--theme`, `--fit`, keys to reset the view and save the image or YAML on screen. Windows (Win32) and Linux (X11, also under Wayland through XWayland); the window libraries and the system's OpenGL 3.3 are loaded at run time, so `nymph` gains no imports and needs no extra files or development packages. `NYMPH_VIEW` CMake option (default `ON`; macOS has no window yet).
 
 - `nymph mcp`: an MCP server on stdin / stdout for AI agents, with tools to render a chart (returning the PNG, optionally writing it), check it, extract a PNG's source, show the element schema and list fonts; source errors come back with their line and column. It gives clients usage instructions, and the agent guide and element reference as resources (`nymph://docs/agent-guide`, `nymph://docs/elements`). Built with `NYMPH_MCP_VIEWER` (the web build's `claude/viewer.html`), it also serves an MCP App that shows the chart live in the conversation: pan, zoom and hover, the chat's light or dark theme, full screen; what the user zooms to and clicks is passed to Claude, so the next render keeps their view. `NYMPH_MCP` CMake option (default `ON`); new submodule `extern/json`.
@@ -60,6 +67,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- The Claude Code plugin's version is now the version of the nymph release it pins (`0.0.0` until a release is pinned), so Claude Code offers an update exactly when the pin changes.
 - `nymph schema <Type>` suggests the closest type name for an unknown one.
 - `nymph fonts` marks fonts whose bytes the build does not embed `(not embedded)`.
 - The command line moved out of the `nymph` library into a `nymph_cli` library; programs using only the library no longer link it.

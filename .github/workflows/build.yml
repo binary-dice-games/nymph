@@ -1,0 +1,198 @@
+# MIT License © 2026 Binary Dice Games
+#
+# Builds and tests one target; called by ci.yml and release.yml, so a
+# release builds exactly what CI tests (spec/07_release_pipeline/DESIGN.md
+# section 4.2). The work is in .github/scripts/ci-build.sh; this file sets
+# up the runner and uploads the outputs as the artifact `build-<target>`.
+
+name: build
+
+on:
+  workflow_call:
+    inputs:
+      target:
+        description: linux-x86_64, linux-arm64, macos-arm64, macos-x86_64, windows-msvc, windows-msys2 or web
+        type: string
+        required: true
+      runner:
+        type: string
+        required: true
+      release:
+        description: NYMPH_RELEASE build (needs the web target's artifact for the MCP App page)
+        type: boolean
+        default: false
+      build_type:
+        type: string
+        default: Release
+      path_check:
+        description: install for real into a scratch prefix and check that a new console finds nymph
+        type: boolean
+        default: false
+    secrets:
+      APPLE_CERTIFICATE_P12:
+        required: false
+      APPLE_CERTIFICATE_PASSWORD:
+        required: false
+      APPLE_API_KEY:
+        required: false
+      APPLE_API_KEY_ID:
+        required: false
+      APPLE_API_ISSUER:
+        required: false
+
+permissions:
+  contents: read
+
+env:
+  EMSDK_VERSION: 6.0.12
+
+jobs:
+  build:
+    name: ${{ inputs.target }}${{ inputs.release && ' (release)' || '' }}
+    runs-on: ${{ inputs.runner }}
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          submodules: recursive
+          persist-credentials: false
+
+      # ── Toolchains ──────────────────────────────────────────────────────────
+      - name: Linux tools
+        if: startsWith(inputs.target, 'linux-') || inputs.target == 'web'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ninja-build
+          # Mesa EGL: the OpenGL tests run on llvmpipe (docs/building.md).
+          if [ "${{ inputs.release }}" != true ]; then
+            sudo apt-get install -y libegl1 libegl-mesa0 libgl1-mesa-dri
+          fi
+      - name: macOS tools
+        if: startsWith(inputs.target, 'macos-')
+        run: command -v ninja || brew install ninja
+      - name: MSVC environment
+        if: inputs.target == 'windows-msvc'
+        uses: ilammy/msvc-dev-cmd@0b201ec74fa43914dc39ae48a89fd1d8cb592756 # v1.13.0
+      - name: MSYS2
+        if: inputs.target == 'windows-msys2'
+        uses: msys2/setup-msys2@ec48f7c5447b3140e2b088413ae3a55687bccb6e # v2.33.0
+        with:
+          msystem: MINGW64
+          update: true
+          install: >-
+            git
+            mingw-w64-x86_64-gcc
+            mingw-w64-x86_64-cmake
+            mingw-w64-x86_64-ninja
+      - name: Node
+        if: inputs.target == 'web'
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 22
+      - name: Emscripten and Playwright
+        if: inputs.target == 'web'
+        run: |
+          git clone --depth 1 https://github.com/emscripten-core/emsdk.git "$RUNNER_TEMP/emsdk"
+          "$RUNNER_TEMP/emsdk/emsdk" install "$EMSDK_VERSION"
+          "$RUNNER_TEMP/emsdk/emsdk" activate "$EMSDK_VERSION"
+          echo "EMSDK_ENV=$RUNNER_TEMP/emsdk/emsdk_env.sh" >> "$GITHUB_ENV"
+          # The browser tests skip without Playwright (web/tests/browser).
+          npm install --no-save --prefix "$GITHUB_WORKSPACE" playwright@1.56
+          npx --prefix "$GITHUB_WORKSPACE" playwright install --with-deps chromium
+
+      # ── The MCP App page of a release build ────────────────────────────────
+      - name: MCP App page
+        if: inputs.release && inputs.target != 'web'
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: build-web
+          path: ${{ runner.temp }}/web
+
+      # ── macOS Developer ID (only when the secrets exist) ───────────────────
+      - name: macOS signing keychain
+        id: keychain
+        if: inputs.release && startsWith(inputs.target, 'macos-')
+        env:
+          APPLE_CERTIFICATE_P12: ${{ secrets.APPLE_CERTIFICATE_P12 }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+        run: |
+          if [ -z "$APPLE_CERTIFICATE_P12" ]; then
+            echo "::notice::APPLE_CERTIFICATE_P12 not set: the macOS executable is signed ad hoc (docs/releasing.md)"
+            echo "identity=-" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          keychain="$RUNNER_TEMP/nymph.keychain-db"
+          password=$(openssl rand -hex 16)
+          echo "$APPLE_CERTIFICATE_P12" | base64 --decode > "$RUNNER_TEMP/cert.p12"
+          security create-keychain -p "$password" "$keychain"
+          security set-keychain-settings -lut 3600 "$keychain"
+          security unlock-keychain -p "$password" "$keychain"
+          security import "$RUNNER_TEMP/cert.p12" -k "$keychain" -P "$APPLE_CERTIFICATE_PASSWORD" -T /usr/bin/codesign
+          security set-key-partition-list -S apple-tool:,apple: -s -k "$password" "$keychain" > /dev/null
+          security list-keychains -d user -s "$keychain" "$HOME/Library/Keychains/login.keychain-db"
+          rm -f "$RUNNER_TEMP/cert.p12"
+          identity=$(security find-identity -v -p codesigning "$keychain" | sed -n 's/.*"\(Developer ID Application:.*\)"/\1/p' | head -n 1)
+          [ -n "$identity" ] || { echo "no Developer ID Application identity in the certificate" >&2; exit 1; }
+          echo "identity=$identity" >> "$GITHUB_OUTPUT"
+
+      # ── Build and test ──────────────────────────────────────────────────────
+      - name: Build and test
+        if: inputs.target != 'windows-msys2'
+        shell: bash
+        env:
+          TARGET: ${{ inputs.target }}
+          RELEASE: ${{ inputs.release }}
+          BUILD_TYPE: ${{ inputs.build_type }}
+          PATH_CHECK: ${{ inputs.path_check }}
+          VIEWER: ${{ runner.temp }}/web/claude/viewer.html
+          CODESIGN_IDENTITY: ${{ steps.keychain.outputs.identity }}
+        run: |
+          # shellcheck source=/dev/null
+          if [ -n "${EMSDK_ENV:-}" ]; then . "$EMSDK_ENV"; fi
+          JOBS=$(getconf _NPROCESSORS_ONLN 2>/dev/null || echo 4) sh .github/scripts/ci-build.sh
+      - name: Build and test (MSYS2)
+        if: inputs.target == 'windows-msys2'
+        shell: msys2 {0}
+        env:
+          TARGET: ${{ inputs.target }}
+          RELEASE: ${{ inputs.release }}
+          BUILD_TYPE: ${{ inputs.build_type }}
+          PATH_CHECK: ${{ inputs.path_check }}
+          VIEWER: ${{ runner.temp }}/web/claude/viewer.html
+        run: JOBS=$(nproc) sh .github/scripts/ci-build.sh
+
+      # ── Notarization (Developer ID only) ────────────────────────────────────
+      - name: Notarize the macOS executable
+        if: inputs.release && startsWith(inputs.target, 'macos-') && steps.keychain.outputs.identity != '-'
+        env:
+          APPLE_API_KEY: ${{ secrets.APPLE_API_KEY }}
+          APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
+          APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
+        run: |
+          echo "$APPLE_API_KEY" > "$RUNNER_TEMP/api_key.p8"
+          for exe in build/dist/nymph-*-macos-*; do
+            case $exe in *.mcpb) continue ;; esac
+            break
+          done
+          ditto -c -k --keepParent "$exe" "$RUNNER_TEMP/notarize.zip"
+          xcrun notarytool submit "$RUNNER_TEMP/notarize.zip" --key "$RUNNER_TEMP/api_key.p8" \
+            --key-id "$APPLE_API_KEY_ID" --issuer "$APPLE_API_ISSUER" --wait
+          rm -f "$RUNNER_TEMP/api_key.p8"
+
+      # ── Outputs ─────────────────────────────────────────────────────────────
+      - name: Upload the release files
+        if: inputs.release && inputs.target != 'web'
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: build-${{ inputs.target }}
+          path: build/dist/
+          if-no-files-found: error
+      - name: Upload the web outputs
+        if: inputs.target == 'web'
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: build-web
+          path: |
+            build-web/claude/viewer.html
+            build-web/extension/*.zip
+          if-no-files-found: error

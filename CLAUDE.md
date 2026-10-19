@@ -159,7 +159,11 @@ Use this guide when generating or editing code in this repository.
 
 ## Platform Support
 
-nymph targets **Linux, MSYS2, and native Windows (MSVC)**. MSYS2 provides the
+nymph targets **Linux, macOS, MSYS2, and native Windows (MSVC)**; CI builds
+and tests each on every pull request (`.github/workflows/ci.yml`). macOS
+shares the POSIX code paths (AppleClang, Apple's libc++: some C++ library
+features arrive later there, e.g. `std::from_chars` for `double`; see
+`src/core/charconv.hpp`). MSYS2 provides the
 same POSIX layer as Linux and still defines `_WIN32`/`WIN32` (it uses the
 mingw-w64 toolchain). Do not add a separate platform-suffixed file (e.g.
 `foo_win.cpp`) for a small platform difference; avoid conditional

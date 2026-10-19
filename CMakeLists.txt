@@ -8,6 +8,12 @@ option(NYMPH_RELEASE "Build the static, stripped executables published for the C
 if(NYMPH_RELEASE)
   set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded")
 endif()
+# macOS 13.3: the first with std::to_chars for double in the system libc++
+# (spec/07_release_pipeline/DESIGN.md section 4.8). Ignored elsewhere; must
+# be set before project().
+if(NOT DEFINED ENV{MACOSX_DEPLOYMENT_TARGET})
+  set(CMAKE_OSX_DEPLOYMENT_TARGET "13.3" CACHE STRING "Minimum macOS version")
+endif()
 
 project(
   Nymph
@@ -17,7 +23,14 @@ project(
 option(NYMPH_BUILD_TESTS "Build the nymph tests" ${PROJECT_IS_TOP_LEVEL})
 # The OpenGL rasterizer loads OpenGL at run time; nothing is linked and no
 # GL headers are needed (spec/02_opengl_rasterizer/DESIGN.md section 5).
-option(NYMPH_OPENGL "Build the optional OpenGL rasterizer" ON)
+# Off on macOS, which has no EGL (spec/07_release_pipeline/DESIGN.md
+# section 8, decision 4).
+if(APPLE)
+  set(_nymph_opengl_default OFF)
+else()
+  set(_nymph_opengl_default ON)
+endif()
+option(NYMPH_OPENGL "Build the optional OpenGL rasterizer" ${_nymph_opengl_default})
 # The interactive web viewer: the library compiled to WebAssembly with a
 # JavaScript API (spec/04_web_viewer/DESIGN.md section 6). Emscripten only.
 option(NYMPH_WEB "Build the WebAssembly web viewer (with emcmake)" OFF)
@@ -85,6 +98,16 @@ function(nymph_ensure_submodules)
   endif()
 endfunction()
 
+# A tree without the submodules and without git (GitHub's "Source code"
+# archives) cannot fetch them: say how to get a complete one.
+if(NOT EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/extern/imgui/imgui.h"
+   AND NOT EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/.git")
+  message(FATAL_ERROR
+    "nymph: extern/ is empty and this is not a git checkout, so the dependencies "
+    "cannot be fetched. Use the release source tarball nymph-<version>-src.tar.gz "
+    "(it includes them), or: git clone --recursive https://github.com/binary-dice-games/nymph.git")
+endif()
+
 include(cmake/NymphRelease.cmake)
 
 # ── third-party dependencies ──────────────────────────────────────────────────
@@ -111,7 +134,21 @@ if(PROJECT_IS_TOP_LEVEL AND NOT NYMPH_WEB)
   if(NYMPH_RELEASE)
     nymph_add_dist_target()
   endif()
+  # The release source tarball (cmake/NymphSourceDist.cmake), from a git
+  # checkout with its submodules.
+  if(EXISTS "${PROJECT_SOURCE_DIR}/.git")
+    add_custom_target(nymph-source-dist
+      COMMAND "${CMAKE_COMMAND}" "-DSOURCE_DIR=${PROJECT_SOURCE_DIR}" "-DVERSION=${PROJECT_VERSION}"
+              "-DOUTPUT=${PROJECT_BINARY_DIR}/dist/nymph-${PROJECT_VERSION}-src.tar.gz"
+              -P "${PROJECT_SOURCE_DIR}/cmake/NymphSourceDist.cmake"
+      COMMENT "Writing dist/nymph-${PROJECT_VERSION}-src.tar.gz"
+      VERBATIM)
+  endif()
 endif()
+
+# ── install ───────────────────────────────────────────────────────────────────
+
+include(cmake/NymphInstall.cmake)
 
 # ── web viewer ────────────────────────────────────────────────────────────────
 

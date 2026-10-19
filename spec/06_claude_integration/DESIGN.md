@@ -557,11 +557,9 @@ fails, 2 for bad arguments (`docs/cli.md` gains the row).
 
 ## 10. Open Questions and Extension Points
 
-- **macOS.** Most Claude Desktop users are on macOS, which nymph does
-  not build for (CLAUDE.md, Platform Support). The code is portable and
-  a software-only build is likely small work, but adding a platform is
-  the owner's decision. Until then the plugin and `.mcpb` cover Linux
-  and Windows.
+- **macOS.** Answered by [spec/07_release_pipeline](../07_release_pipeline/DESIGN.md):
+  macOS is a target, with release executables for arm64 and x86-64
+  (which the plugin launcher already names) and a universal `.mcpb`.
 - **Private repository.** Plugin installation from a private repository
   works for users with access; release downloads by the launcher do not
   without a token. Either the repository (or a releases-only mirror)

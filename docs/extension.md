@@ -10,7 +10,13 @@ scroll). Other images are left alone. Design:
 
 ## Install
 
-Build it with the web viewer ([building.md](building.md#web-viewer)):
+From the Chrome Web Store: search for "nymph charts" and click **Add to
+Chrome**. Each nymph release publishes the new version there, after the
+store's review ([releasing.md](releasing.md)).
+
+Or load it unpacked: take `nymph-extension-<version>.zip` from a GitHub
+release and unzip it, or build it with the web viewer
+([building.md](building.md#web-viewer)):
 
 ```sh
 emcmake cmake -S . -B build-web -DNYMPH_WEB=ON -DCMAKE_BUILD_TYPE=MinSizeRel
@@ -20,7 +26,8 @@ cmake --build build-web
 `build-web/extension/nymph/` is the unpacked extension and
 `build-web/extension/nymph-extension-<version>.zip` the same files zipped.
 In Chrome (116 or later), open `chrome://extensions`, turn on
-**Developer mode**, click **Load unpacked** and pick the `nymph` folder.
+**Developer mode**, click **Load unpacked** and pick the `nymph` folder
+(or the unzipped release folder).
 
 Then pin its button: open the puzzle-piece menu in the toolbar and click
 the pin next to "nymph charts". A tab with this hint opens once on

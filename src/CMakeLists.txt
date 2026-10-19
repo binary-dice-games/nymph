@@ -29,6 +29,8 @@ add_library(nymph STATIC
   core/suggest.hpp
   core/sha256.hpp
   core/sha256.cpp
+  core/charconv.hpp
+  core/charconv.cpp
   render/gl/shared_library.hpp
   render/gl/shared_library.cpp
   fonts/embedded_fonts.hpp
@@ -98,6 +100,23 @@ target_link_libraries(nymph PUBLIC nymph_imgui imuml PRIVATE yaml nymph_stb)
 # The run-time loader (shared_library): OpenGL, and the window of `nymph view`.
 if(NOT WIN32)
   target_link_libraries(nymph PRIVATE ${CMAKE_DL_LIBS})
+endif()
+
+# std::from_chars for double: missing from Apple's libc++, where
+# core/charconv.cpp uses its own parser (spec/07_release_pipeline/DESIGN.md
+# section 4.8).
+include(CheckCXXSourceCompiles)
+set(CMAKE_REQUIRED_FLAGS "${CMAKE_CXX_FLAGS}")
+check_cxx_source_compiles("
+#include <charconv>
+int main() {
+  const char text[] = \"1.5\";
+  double value = 0.0;
+  return std::from_chars(text, text + 3, value).ec == std::errc{} ? 0 : 1;
+}" NYMPH_HAS_FLOAT_FROM_CHARS)
+unset(CMAKE_REQUIRED_FLAGS)
+if(NYMPH_HAS_FLOAT_FROM_CHARS)
+  set_property(SOURCE core/charconv.cpp APPEND PROPERTY COMPILE_DEFINITIONS NYMPH_HAS_FLOAT_FROM_CHARS=1)
 endif()
 
 # ── nymph_cli — the command line over the library ───────────────────────────
