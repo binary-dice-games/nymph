@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.0] - 2026-10-19
+
 ### Added
 
 - User-interface mockups: a `Screen` of Dear ImGui `Window`s holding ImGui widgets by their ImGui names (`Text`, `Button`, `Checkbox`, `SliderFloat`..`SliderInt4`, drags, inputs, colour editors, `Combo`, `ListBox`, `Selectable`, `TreeNode`, `CollapsingHeader`, `TabBar` / `TabItem`, `Child`, `Group`, `Table`, `MainMenuBar`, `MenuBar`, `Menu`, `MenuItem`, `Popup`, `PopupModal`, `Tooltip`, `SameLine`, ...), drawn into the PNG in the state the source gives; plots and layouts can go inside windows; labels need not be unique. In `nymph view` and the web viewer the widgets work (pointer, keyboard, text); what the user changed is saved in the `view` key, and widget clicks are reported. See `docs/format.md`, "User interfaces".
