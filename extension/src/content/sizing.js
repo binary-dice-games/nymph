@@ -16,13 +16,22 @@ export const COPIED = [
   'borderRadius', 'boxSizing', 'verticalAlign', 'cssFloat', 'maxWidth', 'maxHeight',
 ];
 
-/** A width or height attribute as CSS: "400" is 400px, "50%" stays. */
-function attrLength(value) {
+/**
+ * A width or height attribute as CSS: "400" is 400px, "50%" stays. A
+ * length in px that the image is not shown at (a stylesheet rule
+ * overrides it, as `width="0"` with `width: auto`) is ignored.
+ * @param {string|null} value the attribute
+ * @param {number|undefined} rendered the image's content size in CSS px
+ */
+function attrLength(value, rendered) {
   if (value == null || value.trim() === '') {
     return '';
   }
   const v = value.trim();
-  return /^\d+(\.\d+)?$/.test(v) ? `${v}px` : /^\d+(\.\d+)?%$/.test(v) ? v : '';
+  if (/^\d+(\.\d+)?$/.test(v)) {
+    return rendered > 0 && Math.abs(rendered - parseFloat(v)) > 1 ? '' : `${v}px`;
+  }
+  return /^\d+(\.\d+)?%$/.test(v) ? v : '';
 }
 
 /**
@@ -34,6 +43,9 @@ function attrLength(value) {
  * @param {string} img.inlineHeight its inline `style.height`
  * @param {number} img.naturalWidth
  * @param {number} img.naturalHeight
+ * @param {number} [img.renderedWidth] its content box as shown, in CSS px
+ *   (attributes it disagrees with are ignored)
+ * @param {number} [img.renderedHeight]
  * @param {Record<string, string>} img.computed its computed style (COPIED and `display`)
  * @return {Record<string, string>} CSS properties (camelCase) for the host
  */
@@ -46,8 +58,8 @@ export function hostStyle(img) {
   }
   const display = img.computed.display ?? 'inline';
   style.display = display === 'block' || display === 'flex' || display === 'grid' ? 'block' : 'inline-block';
-  const width = img.inlineWidth || attrLength(img.attrWidth);
-  const height = img.inlineHeight || attrLength(img.attrHeight);
+  const width = img.inlineWidth || attrLength(img.attrWidth, img.renderedWidth);
+  const height = img.inlineHeight || attrLength(img.attrHeight, img.renderedHeight);
   if (width) {
     style.width = width;
     style.height = height || 'auto';

@@ -16,6 +16,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Homebrew: `brew install binary-dice-games/nymph/nymph` (macOS, Linux), updated by each release.
 - Releases are published by GitHub Actions from a `v<version>` tag: GitHub release with every file and one `SHA256SUMS`, the Chrome extension submitted to the Chrome Web Store, the Claude Code plugin pinned to the release.
 - `NYMPH_CODESIGN_IDENTITY` CMake option: the macOS release executable's signing identity (ad hoc by default).
+- `nymph view <in>`: opens a YAML file or nymph PNG in a window with the web viewer's pan, zoom and hover values; `--theme`, `--fit`, keys to reset the view and save the image or YAML on screen. Windows (Win32) and Linux (X11, also under Wayland through XWayland); the window libraries and the system's OpenGL 3.3 are loaded at run time, so `nymph` gains no imports and needs no extra files or development packages. `NYMPH_VIEW` CMake option (default `ON`; macOS has no window yet).
 
 - `nymph mcp`: an MCP server on stdin / stdout for AI agents, with tools to render a chart (returning the PNG, optionally writing it), check it, extract a PNG's source, show the element schema and list fonts; source errors come back with their line and column. It gives clients usage instructions, and the agent guide and element reference as resources (`nymph://docs/agent-guide`, `nymph://docs/elements`). Built with `NYMPH_MCP_VIEWER` (the web build's `claude/viewer.html`), it also serves an MCP App that shows the chart live in the conversation: pan, zoom and hover, the chat's light or dark theme, full screen; what the user zooms to and clicks is passed to Claude, so the next render keeps their view. `NYMPH_MCP` CMake option (default `ON`); new submodule `extern/json`.
 - `NYMPH_RELEASE` CMake option: static, stripped executables (`dist/nymph-<version>-<os>-<arch>`) with `SHA256SUMS`; toolchain files for Windows (MinGW-w64) and Linux arm64 cross builds in `cmake/toolchains/`.
@@ -73,5 +74,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Chrome extension: a chart whose image has `width` / `height` attributes overridden by the page's CSS (claude.ai's file preview) now takes the image's shown size instead of collapsing to zero height.
+- `nymph view` on 32-bit Windows no longer aborts with a stack-pointer (ESP) check failure; OpenGL functions are now called with the `__stdcall` convention.
 - Web viewer: the `click` event (and `nymph-click`) now fires when a data point is clicked; it never did.
 - Web viewer: a viewer given `fetchFont` in a page without a base URL (an inline `srcdoc` frame) no longer fails to start; the default font folder is resolved only when a font is first fetched.

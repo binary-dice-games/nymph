@@ -104,6 +104,8 @@ function snapshot(img) {
   const px = (v) => parseFloat(v) || 0;
   const contentWidth =
     rect.width - px(cs.paddingLeft) - px(cs.paddingRight) - px(cs.borderLeftWidth) - px(cs.borderRightWidth);
+  const contentHeight =
+    rect.height - px(cs.paddingTop) - px(cs.paddingBottom) - px(cs.borderTopWidth) - px(cs.borderBottomWidth);
   return {
     sizing: {
       attrWidth: img.getAttribute('width'),
@@ -112,6 +114,8 @@ function snapshot(img) {
       inlineHeight: img.style.height,
       naturalWidth: img.naturalWidth,
       naturalHeight: img.naturalHeight,
+      renderedWidth: contentWidth,
+      renderedHeight: contentHeight,
       computed,
     },
     contentWidth,

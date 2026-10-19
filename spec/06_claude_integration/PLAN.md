@@ -35,27 +35,50 @@ answers are in). Each page ran in a fake host iframe (`sandbox=
    redraw 50 ms; Emscripten warns `WASM=0` is deprecated. Anthropic has
    said nested frames stay refused on claude.ai. Also found: the viewer
    throws `Invalid URL` in an `about:srcdoc` page (default `fontBaseUrl`
-   resolved against `import.meta.url`); step 5 fixes it. **Open**: a
-   run in Claude Desktop (chat and Code tab), on macOS and Windows.
-2. **Partly.** A 2.4 MB inline page loads in the fake host; the size
-   Claude accepts and whether its sandbox saves downloads are **open**
-   (a real client).
+   resolved against `import.meta.url`); step 5 fixes it. **Confirmed in
+   Claude Desktop 2.42304.0 on Windows 11 (Electron 44, Chrome 152, MSIX
+   build), 2026-10-18**: the App widget appears; the page runs on a
+   `claudemcpcontent.com` origin; `WebAssembly.compile`, `eval`, WebGL2
+   (ANGLE, Direct3D11) and a blob worker running WebAssembly all work, with
+   no CSP violation. The single-file viewer (WASM, 1.73 MB page) drew
+   the dashboard with the WebGL rasterizer: first frame 96 ms, redraw
+   21 ms; the chart pans and zooms on drag. The `-sWASM=0` fallback is not
+   needed there. **The same worked in both the chat and the Code tab**
+   (the log shows the two connections, `claude-ai` and
+   `local-agent-mode-nymph-probe`, both advertising the App extension).
+   **Open**: macOS. claude.ai cannot run the App with a local server
+   (see answer 5).
+2. **Partly.** Claude Desktop accepted a 1.73 MB `ui://` resource. Larger
+   sizes were not tried. `download_anchor` clicked without error, but
+   whether a file was saved is **not confirmed**.
 3. **Partly.** In Claude Code the model receives the tool's image
-   content (`claude -p` described the dashboard correctly). Whether
-   Claude Desktop shows that image to the user beside the App is
-   **open**.
+   content (`claude -p` described the dashboard correctly). In Claude
+   Desktop the user did not see the PNG beside the App (not certain);
+   the App is what is shown.
 4. **Claude Code 2.1.302** sends `server/discover` with
    `io.modelcontextprotocol/protocolVersion: 2026-07-28` first; on
    `-32601` it sends `initialize` with `2025-11-25`, capabilities
    `roots` and `elicitation`, and **no** `io.modelcontextprotocol/ui`
    extension (the terminal shows no App). It hides app-only tools
-   (`visibility: ["app"]`) from the model. Claude Desktop: **open**.
-5. **Partly.** The code execution sandbox is Linux x86-64, without
-   network, 5 GiB memory; Skill uploads are limited to 30 MB (the API
-   docs; the claude.ai docs do not say whether compressed). The static
-   x86-64 executable is 10.8 MB (3.7 MB zipped). Whether it runs on
-   claude.ai and how the PNG reaches the user is **open**: the test
-   Skill in `probe/skill/` answers it once uploaded.
+   (`visibility: ["app"]`) from the model. **Claude Desktop 2.42304.0**
+   sends `initialize` with `2025-11-25` and capabilities
+   `extensions: {"io.modelcontextprotocol/ui": {"mimeTypes":
+   ["text/html;profile=mcp-app"]}}` (also `roots` on one connection); the
+   host reports `protocolVersion 2026-01-26`, `serverTools`,
+   `serverResources`, `updateModelContext`, `message`, `openLinks`, and
+   `availableDisplayModes: ["inline"]` only (no full screen).
+5. **Yes (tested on claude.ai, 2026-10-18).** The code execution
+   sandbox is Linux x86-64, without network, 5 GiB memory; Skill uploads
+   are limited to 30 MB (the API docs; the claude.ai docs do not say
+   whether compressed). The static x86-64 executable is 10.8 MB (4.1 MB
+   zipped, from the `NYMPH_RELEASE` build); the probe Skill zip uploaded
+   without complaint. In a chat, the test Skill ran: `uname -m` gave
+   `x86_64`, `bin/nymph --version` printed `nymph 0.1.0`, `nymph render
+   chart.yaml -o chart.png --rasterizer software` exited 0 and wrote an
+   800x500 PNG (25.9 KB), and Claude shared `chart.png` as an output
+   file the user can download. As designed, claude.ai shows only the
+   PNG, no live chart: it runs no local MCP server, so the App would need
+   the hosted server of DESIGN.md section 10.
 6. **`${CLAUDE_PLUGIN_DATA}`**: Claude Code 2.1.302 expands it for
    plugins (a persistent data folder), besides `${CLAUDE_PLUGIN_ROOT}`.
 

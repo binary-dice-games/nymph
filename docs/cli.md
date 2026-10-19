@@ -8,7 +8,7 @@ nymph schema PlotLine         # what PlotLine accepts
 nymph rasterizers             # can this machine draw with the GPU?
 ```
 
-`nymph` needs no display, window or GPU. It draws with OpenGL when a GPU
+`nymph` needs no display, window or GPU (only `nymph view` opens a window). It draws with OpenGL when a GPU
 is available and on the CPU otherwise ([Rasterizers](#rasterizers)).
 
 ## Commands
@@ -24,6 +24,7 @@ is available and on the CPU otherwise ([Rasterizers](#rasterizers)).
 | `nymph schema --markdown` | The reference as Markdown ([elements.md](elements.md) is generated from it). |
 | `nymph fonts` | The font names `font:` accepts, one per line: `default` and every font file of the catalog; fonts whose bytes this build does not embed (`NYMPH_EMBED_FONTS`) are marked `(not embedded)`. |
 | `nymph fonts --licenses` | The licence texts of the embedded fonts. |
+| `nymph view <in> [--theme <t>] [--fit <f>]` | Opens a YAML file or nymph PNG in a window with the [web viewer](viewer.md)'s interaction: drag to pan, wheel to zoom, hover for values, double-click to fit. Keys: `R` resets the view, `S` saves the image on screen as `<in>.view.png`, `Y` its YAML as `<in>.view.yaml` (the zoom and pan go in the `view` key; never over `<in>`), `Esc` / `Q` closes. `--theme light\|dark\|classic` overrides the theme; `--fit source\|width\|fill` (default `fill`) says how the layout follows the window. Source errors are reported before any window opens. Needs OpenGL 3.3 and, on Linux, an X display (XWayland is enough); both are the system's, loaded at run time. Windows and Linux; built with `NYMPH_VIEW` (on by default, off on macOS). |
 | `nymph mcp [--rasterizer <r>]` | Runs an MCP server for AI agents: JSON-RPC 2.0 messages, one per line, on standard input and output, until standard input closes (exit 0; 1 if standard output fails). Tools: `render_chart` (returns the PNG; `output_path` also writes it), `check_chart`, `extract_chart`, `chart_schema`, `list_fonts`; source errors read as on the command line. Resources: `nymph://docs/agent-guide` and `nymph://docs/elements`. Logs go to standard error. Built with `NYMPH_MCP` (see [spec/06_claude_integration](../spec/06_claude_integration/DESIGN.md)). |
 | `nymph rasterizers` | Whether each rasterizer can be used here: `software: available`, then `opengl: available (<device>)` or `opengl: unavailable (<reason>)`. Exit 0 either way. |
 | `nymph --version`, `nymph --help` | Version, usage. |

@@ -100,7 +100,9 @@ which mirrors the image's sizing rules rather than a snapshot of its
 pixels, so it reflows as the image would:
 
 - `display` as the image (`inline-block` for inline images), the image's
-  `width` / `height` attributes and computed `width`, `max-width`,
+  `width` / `height` attributes (a px value the image is not shown at is
+  ignored: a stylesheet overrides it, as claude.ai's `width="0"` with
+  `width: auto`) and computed `width`, `max-width`,
   `max-height`, `margin`, `vertical-align` and `float`, and
   `aspect-ratio` = natural width / natural height;
 - when the image has no width rule, `width` = its natural width in CSS

@@ -517,6 +517,60 @@ with 1e-4 wrote `1.4400000000000002`, so values are rounded by exact
 powers of ten. 426 native tests, 10 Node and 20 browser tests pass. The
 module is 650 KB gzip.
 
+### 14. Follow-up: `nymph view`, the viewer in a native window
+
+*Requested after step 13.* **Goal:** `nymph view chart.yaml` (or a nymph
+PNG) opens a window with the same live viewer as the web one: pan, zoom,
+hover tooltips, resize, reset and save keys. DESIGN.md section 10.
+
+**Deliverables:**
+- `NYMPH_VIEW` option in the root `CMakeLists.txt` (default ON on Windows
+  and Linux, a configure error on macOS; OFF with `NYMPH_WEB` and
+  `NYMPH_RELEASE`). No new dependency: the system's window and OpenGL
+  libraries are opened at run time. `shared_library` moves out of the OpenGL-only sources.
+- `src/window/view_command.hpp/.cpp`: `view_args`, `parse_view_args()`,
+  `prepare_view()` (reads and checks the input with a throwaway
+  `live_view`, returns the source and the initial size),
+  `initial_window_size()`, `view_save_path()`, `run_view_cli()`.
+- `src/window/window_host.hpp`: the `native_window` / `window_events`
+  interface; `window_win32.cpp` (Win32 + WGL) and `window_x11.cpp` (X11 +
+  GLX, own declarations of the X types): every function looked up at run
+  time.
+- `src/window/viewer_window.hpp/.cpp`: `show_window()`: the platform-neutral
+  viewer: `imgui_impl_opengl3` through `set_context_hooks()`, event
+  mapping, idle-friendly loop, keys.
+- `src/CMakeLists.txt`: library `nymph_window`; `app/main.cpp` and
+  `app/CMakeLists.txt`: dispatch `nymph view`; `src/cli/cli.cpp`: usage text
+  and the error when built without the window.
+- `docs/cli.md`, `docs/building.md`, `docs/viewer.md`, `README.md`,
+  `CHANGELOG.md`, `spec/INDEX.md`.
+
+**Tests** (`tests/test_view_command.cpp`, `NYMPH_VIEW` builds):
+- Arguments: `--theme`, `--fit`, the input; no input, two inputs, an
+  unknown option or value are usage errors (exit 2).
+- A missing file, a PNG without a nymph source and a source with an
+  unknown column fail with exit 1 and the positioned message, before any
+  window.
+- `prepare_view()` of an example gives its `image` size; the window size
+  is that size, clamped to a smaller screen; the save paths sit next to the
+  input and differ from it.
+- All existing tests pass unmodified.
+
+*Result: done on Windows (MSVC 19.42) and Linux (GCC, X11).* 11 tests in
+`test_view_command.cpp`. `dumpbin /dependents nymph.exe` lists only
+`KERNEL32` and the C runtime; `nymph view` of a bad source gives a one-line
+error, exit 1. Checked by hand with a real window on `examples/dashboard.yaml`:
+the chart draws as the PNG does, wheel zoom and drag pan work, the window
+idles at no CPU and closes cleanly. Linux: built and run in WSL2 (Ubuntu, GCC, WSLg's X server): the
+11 tests pass, `readelf` lists only libstdc++, libm, libgcc and libc, and
+the window's pixels (read back through `XGetImage`) are the dashboard at
+its layout size. Input on X11 (wheel, drag, keys) was not exercised, nor a
+native X server or a Wayland-only session. Not available: macOS (no
+window implementation yet). Not yet verified: a high-DPI display, the save keys. The `docs`
+tests and `live_view_data.SetPngShowsTheSourceItCarries` fail in this
+Windows checkout because `core.autocrlf` gives the docs `\r\n`; they are not
+affected by this step.
+
 ## Completion Criteria
 
 - [x] All native tests pass under `ctest -j`, and every committed example

@@ -204,6 +204,14 @@ test('width and height attributes and inline styles are kept', () => {
   assertEq([tall.width, tall.height], ['auto', '150px'], 'height only');
   const both = hostStyle(image({ attrWidth: '300', attrHeight: '100' }));
   assertEq([both.width, both.height], ['300px', '100px'], 'both');
+  const shown = hostStyle(image({ attrWidth: '300', attrHeight: '100', renderedWidth: 300.4, renderedHeight: 100 }));
+  assertEq([shown.width, shown.height], ['300px', '100px'], 'attributes the image is shown at');
+});
+
+test('size attributes a stylesheet overrides are ignored', () => {
+  // claude.ai: width="0" height="0" with `width: auto; height: auto`.
+  const s = hostStyle(image({ attrWidth: '0', attrHeight: '0', renderedWidth: 800, renderedHeight: 600 }));
+  assertEq([s.width, s.height, s.aspectRatio], ['800px', 'auto', '800 / 600'], 'natural size');
 });
 
 test('block images stay blocks and spacing is copied', () => {

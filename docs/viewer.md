@@ -105,6 +105,15 @@ Source limits (`x_min`, ...) are where a plot starts; double-click or
 `resetView()` goes back. New data outside the visible range is not
 followed unless the axis has the `AutoFit` flag.
 
+## In a window
+
+`nymph view chart.yaml` (or a nymph PNG) shows the same viewer, the same
+`live_view` code, in a native window: the interaction above, tooltips, and
+a resizable window the chart follows. Keys: `R` resets the view, `S` / `Y`
+save the image / YAML on screen next to the input as `*.view.png` /
+`*.view.yaml` (with the [`view` key](format.md#view)), `Esc` or `Q`
+closes. See [cli.md](cli.md).
+
 ## Saving and iterating
 
 A right click (without dragging: a right-drag zooms to a box) opens a

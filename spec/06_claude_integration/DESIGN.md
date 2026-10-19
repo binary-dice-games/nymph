@@ -3,9 +3,12 @@
 **Status: done in this repository (plan steps 1-10; see [PLAN.md](PLAN.md)
 for each step's result). Verified on Linux with Claude Code 2.1.302,
 Chromium 141 through Playwright (a stand-in MCP Apps host), Wine 9 and
-QEMU. Not yet verified: Claude Desktop and claude.ai themselves, the
-plugin's launcher on Windows, native MSVC, and installing from GitHub,
-which needs a published release (the repository is private).** [PLAN.md](PLAN.md) is the
+QEMU, and with the probe in Claude Desktop 2.42304.0 on Windows (chat
+and Code tab) and with the probe Skill on claude.ai (the binary runs, the
+PNG is delivered). Not yet verified: the full Skill on claude.ai, Claude
+Desktop on macOS, the plugin's launcher on Windows, native MSVC, and installing
+from GitHub, which needs a published release (the repository is
+private).** [PLAN.md](PLAN.md) is the
 ordered implementation plan. This document describes only what this
 project adds or changes; the rest of the architecture is
 [spec/01_core_features/DESIGN.md](../01_core_features/DESIGN.md)
@@ -89,8 +92,16 @@ New and changed files:
   blob: data:`, and under that policy, in Chromium, the single-file
   viewer draws `dashboard.yaml` (first frame 218 ms, no violation).
   Nested frames are refused (`frame-src 'self' blob: data:`, by
-  Anthropic's choice). PLAN step 1 records the details; confirmation in
-  a real Claude client is still open there.
+  Anthropic's choice). **Confirmed in Claude Desktop 2.42304.0 on
+  Windows, chat and Code tab**: WebAssembly, `eval`, WebGL2 and a blob
+  worker run with no CSP violation, and the single-file viewer draws
+  `dashboard.yaml` with the WebGL rasterizer (first frame 96 ms, redraw
+  21 ms; a 1.73 MB page was accepted). The host advertises
+  `availableDisplayModes: ["inline"]` only, so the full-screen button
+  stays hidden there. On claude.ai the Skill was tested: the static
+  executable runs in its sandbox and the PNG reaches the user as a file
+  (no live chart, as designed). PLAN step 1 records the details; macOS is
+  still open.
 
 ## 2. Design Goals
 
@@ -516,6 +527,7 @@ fails, 2 for bad arguments (`docs/cli.md` gains the row).
      if that ever matters;
   2. a nested iframe (`frameDomains`) to a hosted viewer: claude.ai
      refuses nested frames (anthropics/claude-ai-mcp issue 40).
+  Claude Desktop on Windows does not block it (PLAN step 1).
   If a real client still blocks WebAssembly, the App falls back to the
   PNG of the result (section 4.2) and the decision is reopened.
 
@@ -554,7 +566,8 @@ fails, 2 for bad arguments (`docs/cli.md` gains the row).
   becomes public, or the launcher documents `$NYMPH_BIN`.
 - **The `2026-07-28` protocol revision** (stateless, `server/discover`).
   Claude Code already tries it first; supporting it is a new front end
-  on the same tools, worth doing when Claude Desktop sends it too.
+  on the same tools, worth doing when Claude Desktop sends it too
+  (Claude Desktop 2.42304.0 still starts with `initialize` `2025-11-25`).
 - **Hosted server.** For an App on claude.ai and mobile, `nymph mcp
   --http <port>` (streamable HTTP) behind a public URL, added as a
   custom connector. Needs hosting, authentication and abuse limits; a
