@@ -163,9 +163,11 @@ endif()
 # ── Release executables (spec/06_claude_integration step 7) ─────────────────
 
 if(NYMPH_RELEASE AND TARGET nymph-cli)
-  # Exact on x86-64, the architecture the committed PNGs were drawn on.
+  # Exact on MSVC x86-64, the toolchain the committed PNGs were drawn with:
+  # another libm (glibc, mingw) rounds sin/cos/exp differently, which moves
+  # a few pixels of the curved examples.
   string(TOLOWER "${CMAKE_SYSTEM_PROCESSOR}" _nymph_cpu)
-  if(_nymph_cpu MATCHES "^(x86_64|amd64)$")
+  if(MSVC AND _nymph_cpu MATCHES "^(x86_64|amd64)$")
     set(_nymph_exact ON)
   else()
     set(_nymph_exact OFF)

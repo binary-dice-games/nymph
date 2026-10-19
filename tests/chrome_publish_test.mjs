@@ -80,13 +80,18 @@ function run() {
 }
 
 let failures = 0;
+let last = { code: null, output: '' };
 function check(description, ok) {
   console.log(`${ok ? 'ok  ' : 'FAIL'} ${description}`);
-  if (!ok) failures++;
+  if (!ok) {
+    failures++;
+    console.log(`     exit ${last.code}; requests ${JSON.stringify(requests)}; output:
+${last.output.replace(/^/gm, '     ')}`);
+  }
 }
 const noSecret = (text) => !Object.values(secrets).some((s) => text.includes(s));
 
-let r = await run();
+let r = (last = await run());
 check('publishes: exit 0', r.code === 0);
 check('requests in order: token, upload, status until done, publish', JSON.stringify(requests) === JSON.stringify([
   'POST /token',
@@ -99,14 +104,14 @@ check('says it was submitted for review', r.output.includes('PENDING_REVIEW'));
 check('no credential in the output', noSecret(r.output));
 
 scenario = 'refused';
-r = await run();
+r = (last = await run());
 check('a refused upload exits 1', r.code === 1);
 check('with the store answer', r.output.includes('manifest missing'));
 check('and never publishes', !requests.some((q) => q.endsWith(':publish')));
 check('no credential in the output (refused)', noSecret(r.output));
 
 scenario = 'same-version';
-r = await run();
+r = (last = await run());
 check('the same version again is not an error', r.code === 0 && r.output.includes('already has this version'));
 
 server.close();

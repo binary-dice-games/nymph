@@ -2,10 +2,11 @@
 #
 # spec/06_claude_integration/PLAN.md step 7: the release executable, run as
 # a process, draws every example with the software rasterizer. With EXACT
-# (x86-64, where the committed PNGs were drawn) each must match its PNG byte
-# for byte; on other architectures floating-point results differ slightly
-# (arm64: one colour level, or a one-pixel layout shift), so the examples
-# that differ are listed but do not fail the test.
+# (MSVC x86-64, where the committed PNGs were drawn) each must match its PNG
+# byte for byte; with another toolchain or architecture floating-point
+# results differ slightly (a different libm; arm64: one colour level, or a
+# one-pixel layout shift), so the examples that differ are listed but do not
+# fail the test.
 #
 #   cmake -DNYMPH=<executable> -DEXAMPLES=<examples dir> -DWORK_DIR=<dir>
 #         [-DEXACT=ON] [-DRUNNER=<emulator, '|'-separated>] -P release_examples.cmake
