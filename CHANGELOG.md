@@ -84,6 +84,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- The Claude Code plugin launcher and `install.sh` no longer reject a correct download on Windows (Git Bash, MSYS2): the SHA-256 check failed when the file path contained a backslash.
 - Building with MSYS2 (mingw-w64 GCC) no longer fails on a missing `<cstdint>` include.
 - Gantt charts: switching a section off in the legend (live views, `nymph view`) now hides its rows; the `view` key saves hidden sections as `hidden`.
 - `nymph view` on Linux: the X11 window now sets `WM_CLASS` (`nymph`), so window managers and WSLg name and group it.

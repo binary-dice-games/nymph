@@ -59,6 +59,13 @@ check "NYMPH_BIN downloads nothing" [ ! -e "$target" ]
 check "downloads and runs the release" [ "$(run)" = "fake nymph mcp --check" ]
 check "caches it, executable" [ -x "$target" ]
 
+# 2b. A backslash in the cache path (as in a Windows path): GNU sha256sum then
+# starts its line with a backslash, which must not end up in the hash.
+bs_home="$work/home\\back"
+mkdir -p "$bs_home"
+bs_out=$(env -i PATH="$PATH" HOME="$bs_home" NYMPH_RELEASE_URL="file://$work/release" sh "$work/plugin/bin/nymph" mcp --check)
+check "a backslash in the cache path does not break the check" [ "$bs_out" = "fake nymph mcp --check" ]
+
 # 3. The cache is used without the release.
 mv "$work/release" "$work/release.away"
 check "runs from the cache" [ "$(run)" = "fake nymph mcp --check" ]
