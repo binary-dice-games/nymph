@@ -152,6 +152,13 @@ check "install: and on PATH" '[ "$(count_blocks "$home/.profile")" = 1 ]'
 check "install: names the release file" 'has "$out" "nymph-9.8.7-"'
 rm -rf "$bin"
 fresh_home
+# A backslash in the download folder (as in a Windows path): GNU sha256sum
+# then starts its line with a backslash, which must not end up in the hash.
+mkdir -p "$work/tmp\\back"
+run SHELL=/bin/bash TMPDIR="$work/tmp\\back" NYMPH_RELEASE_URL="file://$release" -- --bin-dir "$bin" > /dev/null
+check "install: a backslash in the download path does not break the check" '[ -x "$bin/nymph" ]'
+rm -rf "$bin"
+fresh_home
 run SHELL=/bin/bash NYMPH_RELEASE_URL="file://$release" -- --version 9.8.7 > /dev/null
 check "install: default folder ~/.local/bin" '[ -x "$home/.local/bin/nymph" ]'
 run SHELL=/bin/bash NYMPH_RELEASE_URL="file://$release" -- --version 1.0.0 > /dev/null 2>&1

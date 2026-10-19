@@ -206,13 +206,15 @@ remove_from_path() {
 
 # ── Release download ──────────────────────────────────────────────────────────
 
+# GNU sha256sum starts the line with a backslash when the file name has one
+# (a Windows path), which would be taken for part of the hash: strip it.
 sha256_of() {
   if command -v sha256sum >/dev/null 2>&1; then
-    sha256sum "$1" | cut -d ' ' -f 1
+    sha256sum "$1" | cut -d ' ' -f 1 | tr -d '\134'
   elif command -v shasum >/dev/null 2>&1; then
-    shasum -a 256 "$1" | cut -d ' ' -f 1
+    shasum -a 256 "$1" | cut -d ' ' -f 1 | tr -d '\134'
   elif command -v openssl >/dev/null 2>&1; then
-    openssl dgst -sha256 -r "$1" | cut -d ' ' -f 1
+    openssl dgst -sha256 -r "$1" | cut -d ' ' -f 1 | tr -d '\134'
   else
     fail "no sha256sum, shasum or openssl to check the download"
   fi
