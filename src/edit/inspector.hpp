@@ -1,0 +1,100 @@
+// MIT License © 2026 Binary Dice Games
+/// @file inspector.hpp
+/// @brief The editor's contents drawn with Dear ImGui: toolbar, element
+///        list, the fields of the selection with a widget per field type
+///        (spec/08_view_editor/DESIGN.md section 3). Pure ImGui, no OpenGL,
+///        so it runs against any ImGui context.
+#pragma once
+
+#include <optional>
+#include <string>
+#include <vector>
+#include "edit/editor_model.hpp"
+#include "schema/field_desc.hpp"
+#include "view/live_view.hpp"
+
+namespace bdg::nymph {
+
+/// @brief The widget the inspector uses for a field.
+enum class widget_kind {
+  checkbox, ///< boolean
+  integer, ///< integer
+  number, ///< number
+  text, ///< single-line text
+  multiline_text, ///< a text that has line breaks, or takes them
+  font, ///< a font file name: a combo of the embedded fonts
+  color, ///< colour picker with an "automatic" state
+  choice, ///< enumeration: a combo of its names
+  flags, ///< a checkbox per flag
+  read_only, ///< lists and anything else: shown as text
+};
+
+/// @brief The widget for `f`; independent of any value.
+widget_kind widget_for(const field_desc& f);
+
+/// @brief What the user did in one frame of the inspector.
+struct inspector_events {
+  /// A changed source, to show (the model already holds it).
+  std::optional<std::string> source;
+  /// A tree item was chosen.
+  std::optional<edit_target_id> select;
+  bool undo = false; ///< The undo or redo button; `source` has the result.
+  bool save = false; ///< The Save button: overwrite the input (after the viewer asks).
+  bool reset_view = false;
+};
+
+/// @brief Draws the editor's panel and applies its changes to a model.
+class inspector {
+ public:
+  /// @brief Draws into the current ImGui window.
+  /// @param tree The figure's elements, from live_view::element_list().
+  /// @param status A line shown under the toolbar (what was saved, say).
+  inspector_events draw(editor_model& model, const std::vector<edit_element>& tree, const std::string& status);
+
+  /// @brief What typing `text` into the text widget of `field` does, at
+  ///        once (the widget does it after a short pause). Returns the
+  ///        events as draw() would.
+  inspector_events edit_text(editor_model& model, const std::string& field, const std::string& text);
+
+  /// @brief Commits a text typed a moment ago, if any (also done by draw()
+  ///        when the pause is over or the widget loses focus).
+  inspector_events flush(editor_model& model);
+
+  /// @brief The last change refused, with its position; "" when the last
+  ///        change was accepted.
+  const std::string& error() const {
+    return error_;
+  }
+
+  /// @brief Whether a typed text waits for its pause: frames must keep
+  ///        coming until it is committed.
+  bool pending() const {
+    return pending_.has_value();
+  }
+
+  /// @brief Pause after the last keystroke before a text is committed.
+  static constexpr double kTypingPause = 0.15;
+
+ private:
+  struct pending_text {
+    std::string element;
+    std::string field;
+    std::string text;
+    double changed_at = 0.0;
+    bool merge = false;
+  };
+
+  void note(const commit_result& r, inspector_events& events);
+  void draw_field(editor_model& model, const editable_field& f, bool focused, inspector_events& events);
+  commit_result commit_pending(editor_model& model);
+
+  std::string error_;
+  std::optional<pending_text> pending_;
+  pending_text last_attempt_; ///< The text commit_pending() tried last.
+  std::optional<pending_text> rejected_; ///< A refused text, still shown in its widget.
+  std::string last_selection_;
+  std::string typing_key_; ///< Element and field being typed into, "" when none.
+  std::string drag_key_; ///< Widget being dragged, "" when none.
+};
+
+} // namespace bdg::nymph

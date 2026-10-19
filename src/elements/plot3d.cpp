@@ -179,6 +179,9 @@ class plot3d_class : public element_class {
       apply_view(n, dc);
       draw_series(n, dc);
       record_view(n, dc);
+      if (dc.edit_mode()) {
+        record_title(n, dc);
+      }
       ImPlot3D::EndPlot();
     }
     if (colormap_value != kColormapDefault) {
@@ -187,6 +190,18 @@ class plot3d_class : public element_class {
   }
 
  private:
+  /// Records the title as an edit target: centred at the top of the plot.
+  static void record_title(const node& n, draw_context& dc) {
+    const std::string& t = n.get<std::string>(plot3d_field::title);
+    if (t.empty() || t.compare(0, 2, "##") == 0) {
+      return;
+    }
+    const ImPlot3DPlot& plot = *ImPlot3D::GetCurrentPlot();
+    const ImVec2 size = ImGui::CalcTextSize(t.c_str(), ImGui::FindRenderedTextEnd(t.c_str()), true);
+    const float x = plot.PlotRect.GetCenter().x - size.x * 0.5f;
+    dc.record_target(n, "title", {ImVec2(x, plot.CanvasRect.Min.y), ImVec2(x + size.x, plot.CanvasRect.Min.y + size.y)}, t);
+  }
+
   /// The saved view (the `view` key): axis ranges and rotation.
   static void apply_view(const node& n, draw_context& dc) {
     const element_view* v = dc.view_of(n);

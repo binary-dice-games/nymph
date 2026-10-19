@@ -6,6 +6,7 @@
 #include <implot.h>
 #include <implot_internal.h> // ImPlot::GetStyleColorVec4
 #include <implot3d.h>
+#include <imuml.h>
 #include "elements/plot_style.hpp"
 #include "fonts/embedded_fonts.hpp"
 #include "schema/element_class.hpp"
@@ -94,10 +95,17 @@ text_style_scope::text_style_scope(const text_style& style, const draw_context& 
     }
     ImGui::PushStyleColor(ImGuiCol_Text, color);
     imgui_colors_ = 1;
+    if (ImUml::GetCurrentContext() != nullptr) {
+      ImUml::PushStyleColor(ImUmlCol_Text, color);
+      imuml_colors_ = 1;
+    }
   }
 }
 
 text_style_scope::~text_style_scope() {
+  if (imuml_colors_ > 0) {
+    ImUml::PopStyleColor(imuml_colors_);
+  }
   if (imgui_colors_ > 0) {
     ImGui::PopStyleColor(imgui_colors_);
   }

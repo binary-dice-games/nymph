@@ -48,7 +48,7 @@ text_style text_style_of(const node& n);
 
 /// @brief Applies a style to everything drawn or measured while it lives:
 ///        pushes the font (ImGui 1.92 PushFont with a size) and the text
-///        colour of ImGui, ImPlot (title, axis, inlay and legend text) and
+///        colour of ImGui, ImUml, ImPlot (title, axis, inlay and legend text) and
 ///        ImPlot3D, and pops them on destruction. Grid and tick colours,
 ///        which ImPlot derives from the text colour by default, are kept as
 ///        they were. Does nothing without an ImGui context or for an empty
@@ -65,6 +65,7 @@ class text_style_scope {
   int imgui_colors_ = 0;
   int implot_colors_ = 0;
   int implot3d_colors_ = 0;
+  int imuml_colors_ = 0;
 };
 
 } // namespace bdg::nymph

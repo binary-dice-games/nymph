@@ -470,7 +470,12 @@ class plot_class : public element_class {
       finish_plot_picks(dc);
       dc.record_current_plot(n, y2);
       dc.set_current_plot(nullptr);
+      const ImPlotPlot* open_plot = dc.edit_mode() ? ImPlot::GetCurrentPlot() : nullptr;
       ImPlot::EndPlot();
+      if (open_plot != nullptr) {
+        record_plot_texts(
+            dc, {&n, n.get<std::string>(title), xl, yl, n.get<std::string>(y2_label), y2}, open_plot);
+      }
     }
     if (colormap_value != kColormapDefault) {
       ImPlot::PopColormap();

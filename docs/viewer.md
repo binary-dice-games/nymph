@@ -114,6 +114,40 @@ save the image / YAML on screen next to the input as `*.view.png` /
 `*.view.yaml` (with the [`view` key](format.md#view)), `Esc` or `Q`
 closes. See [cli.md](cli.md).
 
+### Editing in the window
+
+`nymph view --edit chart.yaml` (or the `E` key in any `nymph view`) docks
+an editor panel to the right of the figure; `E` hides it again.
+
+- **Click to select.** Click a title, an axis label or the legend of a plot, a
+  `Label`, a node, group or link text of a diagram: the thing is outlined and
+  the panel shows its field (a diagram node's `text`, a plot's `title`, ...)
+  first, then **All fields** of its element, each with a widget for its type:
+  text boxes, colour pickers (empty means automatic), choices, flags,
+  numbers. A click on an empty part selects the element (the plot, the
+  diagram); the **Elements** list reaches everything else (a series, a plot
+  without a title yet, `legend_location`). Dragging still pans and the wheel
+  still zooms.
+- **Changes are edits of the YAML.** Each change is written into the source
+  (comments and layout of the file stay), checked like any source, and the
+  figure redraws at once. A change that would make the source invalid is
+  refused with the error in red, and nothing changes. **reset** next to a
+  field removes it from the source (back to its default).
+- **Undo / Redo** (buttons, or `Ctrl+Z` / `Ctrl+Y` when no text box has the
+  keyboard). **Save** overwrites the file the view was opened on, after a
+  confirmation: a PNG input is redrawn and replaced as a PNG (with the edited
+  YAML inside), a YAML input is replaced as YAML; the zoom and pan on screen
+  go in its `view` key. Closing the window with unsaved changes asks whether
+  to save them, discard them or stay. (The `S` / `Y` keys still write copies,
+  `*.view.png` / `*.view.yaml`, and never touch the input.)
+- **Text style.** `font`, `font_size` and `text_color` of a plot, layout or
+  diagram apply to all its text; every diagram item (node, link, note, ...)
+  has its own, which falls back to the diagram's. A text that comes from the
+  data (`text: $names`) is shown but not edited; **replace by this text**
+  writes it into the field instead.
+- **Limits.** Elements cannot be added, removed or moved, and the `data`
+  tables are not edited. Copy and paste work inside the panel only.
+
 ## Saving and iterating
 
 A right click (without dragging: a right-drag zooms to a box) opens a

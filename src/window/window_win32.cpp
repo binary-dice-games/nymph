@@ -60,6 +60,7 @@ struct win32_api {
   HCURSOR(WINAPI* LoadCursorW)(HINSTANCE, LPCWSTR) = nullptr;
   HWND(WINAPI* SetCapture)(HWND) = nullptr;
   BOOL(WINAPI* ReleaseCapture)() = nullptr;
+  SHORT(WINAPI* GetKeyState)(int) = nullptr;
   BOOL(WINAPI* TrackMouseEvent)(LPTRACKMOUSEEVENT) = nullptr;
   BOOL(WINAPI* SystemParametersInfoW)(UINT, UINT, PVOID, UINT) = nullptr;
   LONG_PTR(WINAPI* SetWindowLongPtrW)(HWND, int, LONG_PTR) = nullptr;
@@ -122,6 +123,7 @@ struct win32_api {
     need(user32, "ReleaseDC", ReleaseDC);
     need(user32, "LoadCursorW", LoadCursorW);
     need(user32, "SetCapture", SetCapture);
+    need(user32, "GetKeyState", GetKeyState);
     need(user32, "ReleaseCapture", ReleaseCapture);
     need(user32, "TrackMouseEvent", TrackMouseEvent);
     need(user32, "SystemParametersInfoW", SystemParametersInfoW);
@@ -393,6 +395,35 @@ class win32_window : public native_window {
     events_.on_pointer(down ? pointer_event::kind::down : pointer_event::kind::up, x, y, index, 0.0f, 0.0f);
   }
 
+  static window_key key_of(WPARAM vk) {
+    switch (vk) {
+      case VK_ESCAPE: return window_key::escape;
+      case VK_RETURN: return window_key::enter;
+      case VK_TAB: return window_key::tab;
+      case VK_BACK: return window_key::backspace;
+      case VK_DELETE: return window_key::del;
+      case VK_LEFT: return window_key::left;
+      case VK_RIGHT: return window_key::right;
+      case VK_UP: return window_key::up;
+      case VK_DOWN: return window_key::down;
+      case VK_HOME: return window_key::home;
+      case VK_END: return window_key::end;
+      case VK_PRIOR: return window_key::page_up;
+      case VK_NEXT: return window_key::page_down;
+      case 'A': return window_key::a;
+      case 'C': return window_key::c;
+      case 'E': return window_key::e;
+      case 'Q': return window_key::q;
+      case 'R': return window_key::r;
+      case 'S': return window_key::s;
+      case 'V': return window_key::v;
+      case 'X': return window_key::x;
+      case 'Y': return window_key::y;
+      case 'Z': return window_key::z;
+      default: return window_key::other;
+    }
+  }
+
   /// Handles one message; false leaves it to Windows.
   bool on_message(UINT message, WPARAM wparam, LPARAM lparam, LRESULT& result) {
     result = 0;
@@ -452,18 +483,35 @@ class win32_window : public native_window {
         return true;
       }
       case WM_KEYDOWN:
-        if ((lparam & (1 << 30)) == 0) { // not an auto-repeat
-          events_.on_key(
-              wparam == VK_ESCAPE ? window_key::escape
-                  : wparam == 'Q' ? window_key::q
-                  : wparam == 'R' ? window_key::r
-                  : wparam == 'S' ? window_key::s
-                  : wparam == 'Y' ? window_key::y
-                                  : window_key::other);
+      case WM_KEYUP: {
+        const bool down = message == WM_KEYDOWN;
+        key_mods mods;
+        mods.ctrl = (api().GetKeyState(VK_CONTROL) & 0x8000) != 0;
+        mods.shift = (api().GetKeyState(VK_SHIFT) & 0x8000) != 0;
+        mods.alt = (api().GetKeyState(VK_MENU) & 0x8000) != 0;
+        events_.on_key(key_of(wparam), mods, down, down && (lparam & (1 << 30)) != 0);
+        return true;
+      }
+      case WM_CHAR: {
+        // UTF-16 code units: a surrogate pair is two messages. Control codes
+        // (Ctrl+letter, Enter, Tab, Backspace) are keys, not text.
+        const auto unit = static_cast<char32_t>(wparam);
+        if (unit >= 0xD800 && unit <= 0xDBFF) {
+          high_surrogate_ = unit;
+        } else if (unit >= 0xDC00 && unit <= 0xDFFF) {
+          if (high_surrogate_ != 0) {
+            events_.on_text(0x10000 + ((high_surrogate_ - 0xD800) << 10) + (unit - 0xDC00));
+          }
+          high_surrogate_ = 0;
+        } else if (unit >= 0x20 && unit != 0x7f) {
+          events_.on_text(unit);
         }
         return true;
+      }
       case WM_CLOSE:
-        api().DestroyWindow(hwnd_);
+        if (events_.on_close_request()) {
+          api().DestroyWindow(hwnd_);
+        }
         return true;
       case WM_DESTROY:
         api().PostQuitMessage(0);
@@ -509,6 +557,7 @@ class win32_window : public native_window {
   bool ready_ = false;
   bool tracking_ = false; ///< A WM_MOUSELEAVE is pending.
   int buttons_down_ = 0;
+  char32_t high_surrogate_ = 0; ///< First half of a surrogate pair typed, waiting for its second.
   float last_x_ = 0.0f; ///< Last pointer position, client pixels.
   float last_y_ = 0.0f;
   std::exception_ptr error_;

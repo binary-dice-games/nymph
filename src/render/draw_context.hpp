@@ -62,6 +62,25 @@ struct pick {
   std::vector<std::pair<std::string, std::string>> values;
 };
 
+/// @brief One clickable thing a frame drew in edit mode: an element, or one
+///        text field of an element (spec/08_view_editor/DESIGN.md section 4).
+struct edit_record {
+  const node* element = nullptr;
+  std::string field; ///< The text field shown there; empty for the element as a whole.
+  std::string text; ///< The text shown, for display.
+  std::string read_only_reason; ///< Non-empty when the field cannot be edited.
+  rect area; ///< Logical pixels.
+};
+
+/// @brief The ImUml nodes, edges and events one element submitted while it
+///        was drawn, as index ranges `[first, last)` in submission order
+///        (edit mode only; spec/08_view_editor/DESIGN.md section 4).
+struct item_range {
+  const node* element = nullptr;
+  int first[3] = {0, 0, 0}; ///< Nodes, edges, events.
+  int last[3] = {0, 0, 0};
+};
+
 /// @brief A pick offered while a plot is drawn; the plot keeps the closest.
 struct pick_candidate {
   float distance = 0.0f; ///< From the pointer, logical pixels; 0 inside a shape.
@@ -184,6 +203,7 @@ class draw_context {
     views_.clear();
     candidate_.reset();
     hovered_.reset();
+    targets_.clear();
   }
 
   // ── Picks (live views only) ───────────────────────────────────────────
@@ -219,6 +239,49 @@ class draw_context {
   }
   void set_tooltips(bool on) {
     tooltips_ = on;
+  }
+
+  // ── Edit targets (live views in edit mode only) ───────────────────────
+
+  /// @brief Whether elements record what they draw for the editor
+  ///        (spec/08_view_editor/DESIGN.md section 4). False for PNG
+  ///        rendering and plain live views, where record_target() does
+  ///        nothing.
+  bool edit_mode() const {
+    return edit_mode_;
+  }
+  void set_edit_mode(bool on) {
+    edit_mode_ = on;
+  }
+
+  /// @brief Notes that `area` (logical pixels) shows `n`'s text field
+  ///        `field`, or `n` as a whole when `field` is empty; the editor
+  ///        can click it. Later records are drawn on top of earlier ones.
+  /// @param text The text shown there, for the editor's label.
+  /// @param read_only_reason Why the field cannot be edited ("" if it can).
+  void record_target(
+      const node& n,
+      std::string_view field,
+      const rect& area,
+      std::string text = {},
+      std::string read_only_reason = {}) {
+    if (edit_mode_) {
+      targets_.push_back({&n, std::string(field), std::move(text), std::move(read_only_reason), area});
+    }
+  }
+
+  /// @brief The targets recorded in this frame, in drawing order.
+  const std::vector<edit_record>& targets() const {
+    return targets_;
+  }
+
+  /// @brief The ImUml items each element submitted since the last
+  ///        clear_item_ranges(), in the order the elements finished.
+  const std::vector<item_range>& item_ranges() const {
+    return item_ranges_;
+  }
+  void clear_item_ranges() {
+    item_ranges_.clear();
   }
 
   /// @brief In a live view, records the current ImPlot plot's area and
@@ -331,6 +394,9 @@ class draw_context {
   const node* current_plot_ = nullptr;
   std::vector<std::string> pending_hidden_;
   bool tooltips_ = true;
+  bool edit_mode_ = false;
+  std::vector<edit_record> targets_;
+  std::vector<item_range> item_ranges_;
   std::optional<pick_candidate> candidate_;
   std::optional<pick> hovered_;
   std::vector<plot_view_record> views_;

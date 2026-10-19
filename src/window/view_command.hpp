@@ -21,6 +21,7 @@ struct view_usage_error {
 struct view_args {
   std::string input; ///< A YAML file or a nymph PNG.
   std::string theme; ///< "light", "dark", "classic", or "" for the source's own.
+  bool edit = false; ///< `--edit`: open with the editor panel (the E key shows it too).
   view_fit fit = view_fit::fill; ///< How the layout follows the window.
 };
 

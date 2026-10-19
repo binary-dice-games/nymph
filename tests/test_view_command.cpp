@@ -78,6 +78,13 @@ TEST_F(view_command, ParsesTheInputAndTheOptions) {
   EXPECT_EQ(parse_view_args(views({"c.yaml", "--fit", "width"})).fit, view_fit::width);
 }
 
+TEST_F(view_command, EditOpensTheEditorPanelAndIsOffByDefault) {
+  EXPECT_FALSE(parse_view_args(views({"chart.yaml"})).edit);
+  EXPECT_TRUE(parse_view_args(views({"--edit", "chart.yaml"})).edit);
+  EXPECT_TRUE(parse_view_args(views({"chart.yaml", "--theme", "dark", "--edit"})).edit);
+  EXPECT_NE(std::string(view_usage()).find("--edit"), std::string::npos);
+}
+
 TEST_F(view_command, RejectsBadArguments) {
   EXPECT_THROW(parse_view_args(views({})), view_usage_error);
   EXPECT_THROW(parse_view_args(views({"a.yaml", "b.yaml"})), view_usage_error);

@@ -353,7 +353,9 @@ class sankey_diagram_class : public element_class {
     float top = r.min.y;
     if (const std::string& t = n.get<std::string>(title); !t.empty()) {
       const ImVec2 ts = ImGui::CalcTextSize(t.c_str());
-      dl->AddText(ImVec2(std::floor((r.min.x + r.max.x - ts.x) * 0.5f), r.min.y + 2.0f), text_col, t.c_str());
+      const ImVec2 at(std::floor((r.min.x + r.max.x - ts.x) * 0.5f), r.min.y + 2.0f);
+      dl->AddText(at, text_col, t.c_str());
+      dc.record_target(n, "title", {at, ImVec2(at.x + ts.x, at.y + ts.y)}, t);
       top += line + 6.0f;
     }
     // Half a line of room above and below, so labels of the outer nodes fit.

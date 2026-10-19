@@ -3,6 +3,7 @@
 /// @brief draw_context: element drawing helpers.
 #include "render/draw_context.hpp"
 #include <implot.h>
+#include <imuml.h>
 #include "render/text_style.hpp"
 #include "schema/element_class.hpp"
 
@@ -50,7 +51,17 @@ void draw_context::record_current_plot(const node& n, bool with_y2, view_kind ki
 
 void draw_context::draw_node(const node& n) {
   const text_style_scope style(text_style_of(n), *this);
+  if (edit_mode_ && n.cls->slot() == kFigureSlot) {
+    record_target(n, {}, rect_of(n)); // before its children, so they are on top
+  }
+  item_range range;
+  const bool in_diagram = edit_mode_ && ImUml::GetCurrentContext() != nullptr &&
+      ImUml::GetItemCounts(&range.first[0], &range.first[1], &range.first[2]);
   n.cls->draw(n, *this);
+  if (in_diagram && ImUml::GetItemCounts(&range.last[0], &range.last[1], &range.last[2])) {
+    range.element = &n;
+    item_ranges_.push_back(range);
+  }
 }
 
 ImVec2 draw_context::measure_node(const node& n, float width) {

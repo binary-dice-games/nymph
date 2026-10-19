@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `nymph view --edit` (and the `E` key): an editor panel docked to the view window. Click a plot title, axis label or legend, a label, or a diagram node, group or link text to select it, then change its text, font, size, colour or any other field; every change edits the YAML and redraws, with undo and redo. Texts that come from data are shown read-only. **Save** asks for confirmation and overwrites the input (a PNG stays a PNG, a YAML stays YAML); closing the window with unsaved changes asks first.
+- Every UML diagram and flowchart item (nodes, groups, links, notes, messages, transitions, ...) takes optional `font`, `font_size` and `text_color`; unset, it follows the diagram's.
 - macOS (Apple silicon and Intel, macOS 13.3 or later) is a supported platform: release executables `nymph-<version>-macos-arm64` / `-macos-x86_64`, and `nymph-<version>-macos-universal.mcpb` for Claude Desktop on any Mac. macOS builds have no OpenGL rasterizer (`NYMPH_OPENGL` defaults to `OFF` there).
 - `cmake --install` installs `nymph`, its documentation and licences, and puts `<prefix>/bin` on the user's `PATH` (a marked block in the shell start-up files; the user `Path` on Windows); `NYMPH_INSTALL` and `NYMPH_INSTALL_UPDATE_PATH` CMake options. On Windows the default prefix is `%LOCALAPPDATA%\Programs\nymph`.
 - Install scripts in every release, `install.sh` (Linux, macOS) and `install.ps1` (Windows): download the executable for the system, check its SHA-256, install it and put it on `PATH`; `--uninstall` / `-Uninstall` undoes both.

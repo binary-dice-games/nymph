@@ -274,6 +274,17 @@ ImU32 ImUml::GetColorU32(ImUmlCol idx) {
   return ImGui::ColorConvertFloat4ToU32(IsAuto(c) ? AutoColor(idx, ImGui::GetStyle()) : c);
 }
 
+bool ImUml::GetItemCounts(int* nodes, int* edges, int* events) {
+  const ImUmlDiagram* d = GImUml != nullptr ? GImUml->Current : nullptr;
+  if (d == nullptr) {
+    return false;
+  }
+  *nodes = d->Nodes.Size;
+  *edges = d->Edges.Size;
+  *events = d->Events.Size;
+  return true;
+}
+
 // ── Next item ────────────────────────────────────────────────────────────────
 
 void ImUml::SetNextItemColors(ImU32 line, ImU32 fill) {
@@ -329,7 +340,10 @@ ImUmlTextStyle CurrentTextStyle(const ImUmlDiagram* d) {
   ImUmlTextStyle ts;
   ts.Font = ImGui::GetFont();
   ts.Size = ImGui::GetFontSize();
-  ts.Col = d->TextColorAuto ? ImGui::GetColorU32(ImGuiCol_Text) : d->Colors[ImUmlCol_Text];
+  // The live style colour, not the one the diagram began with, so a colour
+  // pushed around one item (ImUml::PushStyleColor) styles that item's text.
+  const ImVec4& text = Ctx().Style.Colors[ImUmlCol_Text];
+  ts.Col = d->TextColorAuto ? ImGui::GetColorU32(ImGuiCol_Text) : ImGui::ColorConvertFloat4ToU32(text);
   return ts;
 }
 

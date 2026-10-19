@@ -1,0 +1,247 @@
+// MIT License © 2026 Binary Dice Games
+/// @file test_editor_model.cpp
+/// @brief spec/08_view_editor plan step 9: selection, the fields of the
+///        selection, validated changes, undo and redo.
+#include <gtest/gtest.h>
+#include <string>
+#include "core/error.hpp"
+#include "edit/editor_model.hpp"
+#include "edit/field_value.hpp"
+#include "elements/register_builtin.hpp"
+
+namespace bdg::nymph {
+namespace {
+
+const char* const kSource =
+    "# a chart\n"
+    "image: {width: 400, height: 300}\n"
+    "root:\n"
+    "  type: VerticalLayout\n"
+    "  children:\n"
+    "    - {type: Label, text: Report}\n"
+    "    - type: Plot\n"
+    "      title: Revenue\n"
+    "      x_label: month\n"
+    "      children:\n"
+    "        - {type: PlotLine, label: a, ys: [1, 3, 2]}\n";
+
+const edit_target_id kPlot{"root/children/1", ""};
+const edit_target_id kLabel{"root/children/0", "text"};
+
+const editable_field* find(const std::vector<editable_field>& fields, const std::string& name) {
+  for (const editable_field& f : fields) {
+    if (f.desc->name == name) {
+      return &f;
+    }
+  }
+  return nullptr;
+}
+
+TEST(editor_model, ABadSourceThrowsAtConstruction) {
+  EXPECT_THROW(editor_model("root: {type: Nope}\n"), error);
+}
+
+TEST(editor_model, NothingIsSelectedAtFirstAndAPathOutsideTheSourceSelectsNothing) {
+  editor_model m(kSource);
+  EXPECT_FALSE(m.selection());
+  EXPECT_TRUE(m.fields().empty());
+  m.select(edit_target_id{"root/children/9", ""});
+  EXPECT_FALSE(m.selection());
+  m.select(kPlot);
+  ASSERT_TRUE(m.selection());
+  EXPECT_EQ(m.selected_type(), "Plot");
+}
+
+TEST(editor_model, FieldsAreTheSchemaWithTheCurrentValues) {
+  editor_model m(kSource);
+  m.select(kPlot);
+  const std::vector<editable_field> fields = m.fields();
+  const editable_field* title = find(fields, "title");
+  ASSERT_NE(title, nullptr);
+  EXPECT_TRUE(title->written);
+  EXPECT_EQ(std::get<std::string>(title->current), "Revenue");
+  EXPECT_EQ(title->desc->type, field_type::text);
+  const editable_field* y_label = find(fields, "y_label");
+  ASSERT_NE(y_label, nullptr);
+  EXPECT_FALSE(y_label->written);
+  EXPECT_EQ(std::get<std::string>(y_label->current), "");
+  // The schema's order and its text style fields, with what they cover.
+  ASSERT_NE(find(fields, "font_size"), nullptr);
+  EXPECT_EQ(find(fields, "font_size")->scope_note, "applies to all text of this Plot");
+  EXPECT_EQ(find(fields, "title")->scope_note, "");
+  m.select(kLabel);
+  EXPECT_EQ(find(m.fields(), "text_color")->scope_note, "");
+}
+
+TEST(editor_model, ACommitPatchesTheSourceAndKeepsEverythingElse) {
+  editor_model m(kSource);
+  m.select(kPlot);
+  const commit_result r = m.commit("title", encode_text("Sales: 2026"));
+  ASSERT_TRUE(r.ok) << r.error;
+  EXPECT_EQ(r.source, m.source());
+  EXPECT_NE(r.source.find("title: \"Sales: 2026\""), std::string::npos);
+  EXPECT_NE(r.source.find("# a chart\n"), std::string::npos);
+  EXPECT_TRUE(m.modified());
+  EXPECT_EQ(std::get<std::string>(find(m.fields(), "title")->current), "Sales: 2026");
+}
+
+TEST(editor_model, ACommitCanAddAFieldAndClearTakesItAwayAgain) {
+  editor_model m(kSource);
+  m.select(kPlot);
+  ASSERT_TRUE(m.commit("text_color", *encode_color("#2471a3")).ok);
+  EXPECT_NE(m.source().find("text_color: \"#2471a3\""), std::string::npos);
+  EXPECT_TRUE(find(m.fields(), "text_color")->written);
+  ASSERT_TRUE(m.clear("text_color").ok);
+  EXPECT_EQ(m.source().find("text_color"), std::string::npos);
+  EXPECT_FALSE(find(m.fields(), "text_color")->written);
+}
+
+TEST(editor_model, AnInvalidChangeIsRefusedAndChangesNothing) {
+  editor_model m(kSource);
+  m.select(kPlot);
+  const std::string before = m.source();
+  const commit_result r = m.commit("font_size", encode_number(500));
+  EXPECT_FALSE(r.ok);
+  EXPECT_NE(r.error.find("font_size"), std::string::npos);
+  EXPECT_GT(r.line, 0);
+  EXPECT_EQ(m.source(), before);
+  EXPECT_FALSE(m.can_undo());
+  EXPECT_FALSE(m.modified());
+  EXPECT_FALSE(m.commit("no_such_field", "1").ok);
+  EXPECT_FALSE(m.commit("title", "a\nb").ok);
+  EXPECT_EQ(m.source(), before);
+}
+
+TEST(editor_model, WithoutASelectionNothingCanBeCommitted) {
+  editor_model m(kSource);
+  EXPECT_FALSE(m.commit("title", "x").ok);
+  EXPECT_FALSE(m.clear("title").ok);
+}
+
+TEST(editor_model, UndoAndRedoRestoreTheSource) {
+  editor_model m(kSource);
+  m.select(kPlot);
+  ASSERT_TRUE(m.commit("title", "One").ok);
+  ASSERT_TRUE(m.commit("x_label", "t").ok);
+  const std::string two = m.source();
+  EXPECT_TRUE(m.can_undo());
+  EXPECT_FALSE(m.can_redo());
+  ASSERT_TRUE(m.undo());
+  EXPECT_EQ(m.source().find("x_label: t"), std::string::npos);
+  EXPECT_NE(m.source().find("title: One"), std::string::npos);
+  ASSERT_TRUE(m.undo());
+  EXPECT_EQ(m.source(), kSource);
+  EXPECT_FALSE(m.can_undo());
+  EXPECT_FALSE(m.undo());
+  ASSERT_TRUE(m.redo());
+  ASSERT_TRUE(m.redo());
+  EXPECT_EQ(m.source(), two);
+  EXPECT_FALSE(m.redo());
+  // A new change drops what could be redone.
+  ASSERT_TRUE(m.undo());
+  ASSERT_TRUE(m.commit("title", "Other").ok);
+  EXPECT_FALSE(m.can_redo());
+}
+
+TEST(editor_model, ChangesOfOneGestureAreOneUndoStep) {
+  editor_model m(kSource);
+  m.select(kPlot);
+  ASSERT_TRUE(m.commit("font_size", "10").ok);
+  for (const char* size : {"11", "12", "13", "14"}) {
+    ASSERT_TRUE(m.commit("font_size", size, /*merge=*/true).ok);
+  }
+  EXPECT_NE(m.source().find("font_size: 14"), std::string::npos);
+  ASSERT_TRUE(m.undo());
+  EXPECT_EQ(m.source(), kSource);
+  EXPECT_FALSE(m.can_undo());
+  // Another field in between starts a new step.
+  ASSERT_TRUE(m.commit("font_size", "10").ok);
+  ASSERT_TRUE(m.commit("title", "x").ok);
+  ASSERT_TRUE(m.commit("font_size", "12", /*merge=*/true).ok);
+  ASSERT_TRUE(m.undo());
+  EXPECT_NE(m.source().find("font_size: 10"), std::string::npos);
+}
+
+TEST(editor_model, UndoIsCapped) {
+  editor_model m(kSource);
+  m.select(kPlot);
+  for (size_t i = 0; i < editor_model::kMaxUndo + 20; ++i) {
+    ASSERT_TRUE(m.commit("title", "T" + std::to_string(i)).ok);
+  }
+  size_t steps = 0;
+  while (m.undo()) {
+    ++steps;
+  }
+  EXPECT_EQ(steps, editor_model::kMaxUndo);
+}
+
+TEST(editor_model, ATextBoundToTheDataIsReadOnlyUntilReplaced) {
+  editor_model m(
+      "root: {type: VerticalLayout, children: [{type: Label, text: $names}]}\n"
+      "data: |\n"
+      "  names\n"
+      "  Ada\n");
+  m.select(edit_target_id{"root/children/0", "text"});
+  const std::vector<editable_field> fields = m.fields();
+  const editable_field* text = find(fields, "text");
+  ASSERT_NE(text, nullptr);
+  EXPECT_EQ(text->bound_to, "$names");
+  EXPECT_EQ(std::get<std::string>(text->current), "Ada");
+  const commit_result refused = m.commit("text", "Grace");
+  EXPECT_FALSE(refused.ok);
+  EXPECT_NE(refused.error.find("data"), std::string::npos);
+  EXPECT_FALSE(m.modified());
+  const commit_result replaced = m.commit("text", "Grace", false, /*replace_binding=*/true);
+  ASSERT_TRUE(replaced.ok) << replaced.error;
+  EXPECT_EQ(find(m.fields(), "text")->bound_to, "");
+}
+
+TEST(editor_model, TheSelectionSurvivesTextEditsAndGoesWhenItsElementDoes) {
+  editor_model m(kSource);
+  m.select(kLabel);
+  ASSERT_TRUE(m.commit("text", "New").ok);
+  ASSERT_TRUE(m.selection());
+  EXPECT_EQ(m.selection()->element, "root/children/0");
+  // Undoing it to the start keeps the selection too; a source without the
+  // element drops it.
+  ASSERT_TRUE(m.undo());
+  EXPECT_TRUE(m.selection());
+  m.reset("root: {type: Plot}\n");
+  EXPECT_FALSE(m.selection());
+}
+
+TEST(editor_model, SavingMakesTheModelUnmodifiedAndKeepsTheHistory) {
+  editor_model m(kSource);
+  m.select(kPlot);
+  ASSERT_TRUE(m.commit("title", "Saved").ok);
+  EXPECT_TRUE(m.modified());
+  m.mark_saved();
+  EXPECT_FALSE(m.modified());
+  EXPECT_TRUE(m.can_undo());
+  ASSERT_TRUE(m.commit("title", "After").ok);
+  EXPECT_TRUE(m.modified());
+  ASSERT_TRUE(m.undo()); // back to what the file holds
+  EXPECT_FALSE(m.modified());
+}
+
+TEST(editor_model, ASourceTheFileDoesNotHoldIsModified) {
+  editor_model m("root: {type: Plot, title: Edited}\n");
+  EXPECT_FALSE(m.modified());
+  m.set_original("root: {type: Plot, title: OnDisk}\n");
+  EXPECT_TRUE(m.modified());
+}
+
+TEST(editor_model, ResetReplacesTheSourceAndForgetsTheHistory) {
+  editor_model m(kSource);
+  m.select(kPlot);
+  ASSERT_TRUE(m.commit("title", "x").ok);
+  m.reset("root: {type: Plot, title: Fresh}\n");
+  EXPECT_FALSE(m.can_undo());
+  EXPECT_FALSE(m.modified());
+  EXPECT_FALSE(m.selection()); // root/children/1 is gone
+  EXPECT_THROW(m.reset("root: {type: Nope}\n"), error);
+  EXPECT_EQ(m.source(), "root: {type: Plot, title: Fresh}\n"); // unchanged by the failed reset
+}
+
+} // namespace
+} // namespace bdg::nymph

@@ -13,8 +13,21 @@
 
 namespace bdg::nymph {
 
-/// @brief The keys `nymph view` reacts to.
-enum class window_key { escape, q, r, s, y, other };
+/// @brief The keys `nymph view` reacts to: its own shortcuts, and what a
+///        text field of the editor panel needs.
+enum class window_key {
+  escape, q, r, s, y, e,
+  enter, tab, backspace, del, left, right, up, down, home, end, page_up, page_down,
+  a, c, v, x, z,
+  other
+};
+
+/// @brief The modifier keys held with a key.
+struct key_mods {
+  bool ctrl = false;
+  bool shift = false;
+  bool alt = false;
+};
 
 /// @brief What a native_window reports; implemented by the viewer. Called
 ///        from native_window::pump() (and, on Windows, while the window is
@@ -26,10 +39,16 @@ class window_events {
   virtual void on_resized() = 0;
   /// Part of the window was uncovered: show the last frame again.
   virtual void on_expose() = 0;
+  /// The user asked to close the window (its close button, Alt+F4, the
+  /// window manager). Return false to keep it open (the viewer asks first
+  /// when there are unsaved changes); close() always closes.
+  virtual bool on_close_request() = 0;
   /// A pointer event; `x`, `y` in client pixels.
   virtual void on_pointer(pointer_event::kind type, float x, float y, int button, float wheel_x, float wheel_y) = 0;
-  /// A key was pressed (no auto-repeat).
-  virtual void on_key(window_key key) = 0;
+  /// A key went down or up. `repeat`: a held key's auto-repeat (down only).
+  virtual void on_key(window_key key, key_mods mods, bool down, bool repeat) = 0;
+  /// A character was typed (a Unicode code point; never a control code).
+  virtual void on_text(char32_t codepoint) = 0;
 };
 
 /// @brief A window with an OpenGL 3.3 core context, current on the creating

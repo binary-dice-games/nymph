@@ -103,6 +103,38 @@ struct plot_view {
   std::vector<std::string> hidden; ///< Legend entries switched off.
 };
 
+/// @brief One thing the editor can select, as the last frame drew it
+///        (spec/08_view_editor/DESIGN.md section 4): an element, or one
+///        text field of an element.
+struct edit_target {
+  std::string element; ///< Element path, e.g. "root/children/1".
+  std::string type; ///< Its type name, e.g. "Plot".
+  std::string field; ///< The text field shown there ("title"); empty for the element as a whole.
+  std::string text; ///< The text shown there.
+  std::string read_only_reason; ///< Non-empty when the field cannot be edited (e.g. "bound to $names").
+  float x = 0.0f, y = 0.0f; ///< Where it is, CSS pixels from the view's top-left corner.
+  float width = 0.0f, height = 0.0f;
+
+  bool operator==(const edit_target&) const = default;
+};
+
+/// @brief What the editor has selected: an element, and optionally one of
+///        its text fields.
+struct edit_target_id {
+  std::string element;
+  std::string field;
+
+  bool operator==(const edit_target_id&) const = default;
+};
+
+/// @brief One element of the figure for the editor's tree.
+struct edit_element {
+  std::string path; ///< "root/children/1".
+  std::string type; ///< "Plot".
+  std::string label; ///< Its title, text, label or id, whichever it has; may be empty.
+  int depth = 0; ///< 0 for the root.
+};
+
 /// @brief Thrown by an update whose figure names fonts without bytes. The
 ///        previous figure stays; register the fonts (register_font()) and
 ///        repeat the update.
@@ -163,6 +195,11 @@ class live_view {
   /// @throws std::invalid_argument for an unknown theme.
   void set_theme(std::string theme);
 
+  /// @brief The theme the figure is drawn with: the override of
+  ///        set_theme(), else the source's `image.theme`; "light" without a
+  ///        figure.
+  std::string theme() const;
+
   /// @brief Sets the box the view is shown in.
   void resize(view_size size);
 
@@ -190,6 +227,40 @@ class live_view {
   ///        without dragging), once: later calls return nothing until the
   ///        next click.
   std::optional<view_pick> take_click();
+
+  // ── Edit mode (spec/08_view_editor/DESIGN.md sections 4 and 6) ────────
+
+  /// @brief Turns edit mode on or off. On, elements record what they draw,
+  ///        the target under the pointer and the selection are outlined, and
+  ///        a primary click without a drag is reported by take_edit_click().
+  ///        Off (the default), nothing differs from a plain view: draw data
+  ///        and picks are the same.
+  void set_edit_mode(bool on);
+  bool edit_mode() const;
+
+  /// @brief The targets under (`x`, `y`), CSS pixels, best first: the
+  ///        smallest, and of equal size the one drawn last. Text targets
+  ///        are padded by 3 px. Empty outside edit mode.
+  std::vector<edit_target> targets_at(float x, float y) const;
+
+  /// @brief The target of `element` (path) and `field` in the last frame;
+  ///        with an empty `field`, the element's own. nullopt when it was
+  ///        not drawn (a series, an element out of view) or not in edit mode.
+  std::optional<edit_target> target_for(std::string_view element, std::string_view field) const;
+
+  /// @brief Outlines the selection (or none). A selection whose element is
+  ///        gone after set_source() is dropped.
+  void set_selection(std::optional<edit_target_id> selection);
+  const std::optional<edit_target_id>& selection() const;
+
+  /// @brief Every element of the figure in drawing order with its depth,
+  ///        for a tree list.
+  std::vector<edit_element> element_list() const;
+
+  /// @brief The best target under a primary-button click (press and
+  ///        release without dragging), once: later calls return nothing
+  ///        until the next click. Only in edit mode.
+  std::optional<edit_target> take_edit_click();
 
   /// @brief Runs one frame if one is due (wants_frame()).
   /// @param now_seconds A monotonic clock; the step since the last frame is

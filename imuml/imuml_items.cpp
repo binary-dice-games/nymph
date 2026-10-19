@@ -42,11 +42,69 @@ float LineHeight(const ImUmlTextStyle& ts, float zoom) {
   return ts.Size * zoom;
 }
 
+/// Notes a text drawn, when the diagram captures them and an item is being
+/// drawn (ImUmlDiagramFlags_CaptureText).
+void CaptureRun(const ImVec2& min, const ImVec2& max, const char* b, const char* e) {
+  ImUmlContext* g = GImUml;
+  if (g == nullptr || !g->CaptureText || g->RunKind == ImUmlTextRunKind_None || b >= e) {
+    return;
+  }
+  ImUmlTextRun run;
+  run.Kind = g->RunKind;
+  run.Item = g->RunItem;
+  run.Min = min;
+  run.Max = max;
+  run.Text = nullptr; // set when the diagram ends, once the text buffer stops growing
+  g->RunTextOffsets.push_back(g->RunText.Size);
+  const int old = g->RunText.Size;
+  g->RunText.resize(old + (int)(e - b) + 1);
+  memcpy(g->RunText.Data + old, b, (size_t)(e - b));
+  g->RunText[old + (int)(e - b)] = 0;
+  g->Runs.push_back(run);
+}
+
+/// The texts drawn from here on belong to item `item` of `kind`.
+void BeginRuns(int kind, int item) {
+  if (GImUml != nullptr && GImUml->CaptureText) {
+    GImUml->RunKind = kind;
+    GImUml->RunItem = item;
+  }
+}
+
+/// Stops capturing and publishes the runs in `info`.
+void EndRuns(ImUmlDiagramInfo* info) {
+  ImUmlContext& g = *GImUml;
+  g.RunKind = ImUmlTextRunKind_None;
+  if (!g.CaptureText) {
+    info->TextRunCount = 0;
+    info->TextRuns = nullptr;
+    return;
+  }
+  g.CaptureText = false;
+  for (int i = 0; i < g.Runs.Size; ++i) {
+    g.Runs[i].Text = g.RunText.Data + g.RunTextOffsets[i];
+  }
+  info->TextRunCount = g.Runs.Size;
+  info->TextRuns = g.Runs.Data;
+}
+
 /// Draws each line of [b, e) centred on `cx`, the first line's top at `y`.
 void TextCentered(ImDrawList* dl, const ImUmlTextStyle& ts, float zoom, float cx, float y, const char* b, const char* e,
                   ImU32 col, ImFont* font = nullptr) {
   ImFont* f = font != nullptr ? font : ts.Font;
   const float size = ts.Size * zoom;
+  if (GImUml != nullptr && GImUml->CaptureText && b < e) {
+    float width = 0.0f;
+    int lines = 0;
+    for (const char* p = b; p < e; ++lines) {
+      const char* nl = (const char*)memchr(p, '\n', (size_t)(e - p));
+      const char* line_end = nl != nullptr ? nl : e;
+      width = ImMax(width, f->CalcTextSizeA(size, FLT_MAX, 0.0f, p, line_end).x);
+      p = nl != nullptr ? nl + 1 : e;
+    }
+    CaptureRun(ImVec2(ImFloor(cx - width * 0.5f + 0.5f), ImFloor(y + 0.5f)),
+               ImVec2(ImFloor(cx + width * 0.5f + 0.5f), ImFloor(y + 0.5f) + size * (float)lines), b, e);
+  }
   while (b < e) {
     const char* nl = (const char*)memchr(b, '\n', (size_t)(e - b));
     const char* line_end = nl != nullptr ? nl : e;
@@ -61,6 +119,11 @@ void TextAt(ImDrawList* dl, const ImUmlTextStyle& ts, float zoom, const ImVec2& 
             ImU32 col, ImFont* font = nullptr) {
   if (b == e) {
     return;
+  }
+  if (GImUml != nullptr && GImUml->CaptureText) {
+    const ImVec2 at(ImFloor(p.x + 0.5f), ImFloor(p.y + 0.5f));
+    const ImVec2 s = (font != nullptr ? font : ts.Font)->CalcTextSizeA(ts.Size * zoom, FLT_MAX, 0.0f, b, e);
+    CaptureRun(at, ImVec2(at.x + s.x, at.y + s.y), b, e);
   }
   dl->AddText(font != nullptr ? font : ts.Font, ts.Size * zoom, ImVec2(ImFloor(p.x + 0.5f), ImFloor(p.y + 0.5f)), col,
               b, e);
@@ -1163,6 +1226,7 @@ void DrawFlowNode(const Painter& pt, const ImUmlNodeRec& n, ImU32 fill, ImU32 bo
 
 void DrawNode(const Painter& pt, const ImUmlNodeRec& n) {
   const ImUmlDiagram* d = pt.D;
+  BeginRuns(ImUmlTextRunKind_Node, (int)(&n - d->Nodes.Data));
   const ImU32 fill = n.FillCol != 0 ? n.FillCol : pt.Col(ImUmlCol_NodeFill);
   const ImU32 border = n.LineCol != 0 ? n.LineCol : pt.Col(ImUmlCol_NodeBorder);
   const ImU32 line = n.LineCol != 0 ? n.LineCol : pt.Col(ImUmlCol_Line);
@@ -1486,6 +1550,7 @@ void DrawEdgeLabel(const Painter& pt, const ImUmlTextStyle& ts, const ImVec2& ce
 
 void DrawEdge(const Painter& pt, const ImUmlEdgeRec& e, const ImUmlGraphEdgeOut& eo, ImVector<ImVec2>* scratch) {
   const ImUmlDiagram* d = pt.D;
+  BeginRuns(ImUmlTextRunKind_Edge, (int)(&e - d->Edges.Data));
   if (eo.PointCount < 2) {
     return;
   }
@@ -1640,6 +1705,7 @@ void DrawSequenceDiagram(const Painter& pt) {
     const ImUmlSeqEventRec& ev = d->Events[i];
     const ImUmlSeqEventOut& eo = s.Events[i];
     const ImUmlTextStyle& ts = ev.TextStyle;
+    BeginRuns(ImUmlTextRunKind_Event, i);
     switch (ev.Type) {
       case ImUmlSeqEventType_Message: {
         if (eo.Number == 0) {
@@ -1730,6 +1796,7 @@ void DrawSequenceDiagram(const Painter& pt) {
   for (int k = 0; k < d->SeqParticipants.Size; ++k) {
     const ImUmlNodeRec& n = d->Nodes[d->SeqParticipants[k]];
     const ImUmlSeqParticipantOut& p = s.Participants[k];
+    BeginRuns(ImUmlTextRunKind_Node, d->SeqParticipants[k]);
     DrawParticipantBox(pt, n, p.X, p.TopY);
     if (p.BottomY >= 0.0f) {
       DrawParticipantBox(pt, n, p.X, p.BottomY);
@@ -1967,7 +2034,12 @@ void EndDiagram(int kind) {
   info.Zoom = zoom;
   ImDrawList* dl = ImGui::GetWindowDrawList();
   dl->PushClipRect(bb.Min, bb.Max, true);
+  GImUml->CaptureText = (d->Flags & ImUmlDiagramFlags_CaptureText) != 0;
+  GImUml->Runs.resize(0);
+  GImUml->RunTextOffsets.resize(0);
+  GImUml->RunText.resize(0);
   if (!d->Title.Empty()) {
+    BeginRuns(ImUmlTextRunKind_Title, 0);
     TextCentered(dl, tts, 1.0f, (bb.Min.x + bb.Max.x) * 0.5f, bb.Min.y + 2.0f, StrBegin(d, d->Title),
                  StrEnd(d, d->Title), tts.Col);
   }
@@ -1988,6 +2060,7 @@ void EndDiagram(int kind) {
   }
   dl->PopClipRect();
   d->Edges.resize(edge_count);
+  EndRuns(&info);
 }
 
 } // namespace

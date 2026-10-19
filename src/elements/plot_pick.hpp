@@ -15,6 +15,8 @@
 #include "render/draw_context.hpp"
 #include "schema/node.hpp"
 
+struct ImPlotPlot;
+
 namespace bdg::nymph {
 
 /// @brief The pointer in the open plot's pixel space, when the figure is
@@ -101,5 +103,23 @@ void sync_hidden(draw_context& dc, const char* label);
 ///        its highlight ring and (when enabled) the tooltip, and makes it
 ///        the frame's hovered pick. Call before EndPlot().
 void finish_plot_picks(draw_context& dc);
+
+/// @brief The texts of a plot as ImPlot placed them.
+struct plot_texts {
+  const node* element = nullptr;
+  std::string title; ///< "" for none
+  std::string x_label;
+  std::string y_label;
+  std::string y2_label;
+  bool has_y2 = false;
+  std::string legend_field = "legend_location"; ///< The field of the legend's location; "" for none.
+};
+
+/// @brief In edit mode, records the plot's title, axis labels and legend
+///        as edit targets (fields `title`, `x_label`, `y_label`,
+///        `y2_label`, `legend_location`; spec/08_view_editor/DESIGN.md
+///        section 4). Call right after EndPlot(), with the pointer
+///        ImPlot::GetCurrentPlot() returned before it.
+void record_plot_texts(draw_context& dc, const plot_texts& texts, const ImPlotPlot* plot);
 
 } // namespace bdg::nymph
