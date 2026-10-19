@@ -9,6 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- User-interface mockups: a `Screen` of Dear ImGui `Window`s holding ImGui widgets by their ImGui names (`Text`, `Button`, `Checkbox`, `SliderFloat`..`SliderInt4`, drags, inputs, colour editors, `Combo`, `ListBox`, `Selectable`, `TreeNode`, `CollapsingHeader`, `TabBar` / `TabItem`, `Child`, `Group`, `Table`, `MainMenuBar`, `MenuBar`, `Menu`, `MenuItem`, `Popup`, `PopupModal`, `Tooltip`, `SameLine`, ...), drawn into the PNG in the state the source gives; plots and layouts can go inside windows; labels need not be unique. In `nymph view` and the web viewer the widgets work (pointer, keyboard, text); what the user changed is saved in the `view` key, and widget clicks are reported. See `docs/format.md`, "User interfaces".
+- `WindowTransition`: labelled arrows between the windows of a `Screen`, for the flow between interfaces ("ok", "cancel", "finished loading").
+- `Image` and `ImageButton` show built-in placeholder images by name (`person`, `people`, `landscape`, `product`, `logo`, `video`, `map`, `chart`, `document`, `icon`, `building`, `cross`), with `tint`, `background`, `rounding`, `fit` and a caption; `Image` also works in layouts.
+- Library: `live_view::input_key()`, `input_text()`, `wants_keyboard()`, `set_clipboard_hooks()` and `ui_revision()`.
+
 - `nymph view --edit` (and the `E` key): an editor panel docked to the view window. Click a plot title, axis label or legend, a label, or a diagram node, group or link text to select it, then change its text, font, size, colour or any other field; every change edits the YAML and redraws, with undo and redo. Texts that come from data are shown read-only. **Save** asks for confirmation and overwrites the input (a PNG stays a PNG, a YAML stays YAML); closing the window with unsaved changes asks first. Clicking the figure's background (or **Image** in the panel's list) edits the `image:` options: width, height, scale, theme, padding and the figure's text style.
 - Every UML diagram and flowchart item (nodes, groups, links, notes, messages, transitions, ...) takes optional `font`, `font_size` and `text_color`; unset, it follows the diagram's.
 - macOS (Apple silicon and Intel, macOS 13.3 or later) is a supported platform: release executables `nymph-<version>-macos-arm64` / `-macos-x86_64`, and `nymph-<version>-macos-universal.mcpb` for Claude Desktop on any Mac. macOS builds have no OpenGL rasterizer (`NYMPH_OPENGL` defaults to `OFF` there).
@@ -69,6 +74,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- An unknown name in an enumeration or flags field now suggests the closest one.
+- `Separator` and `SeparatorText` also go in user-interface windows, as ImGui's own.
 - The Claude Code plugin's version is now the version of the nymph release it pins (`0.0.0` until a release is pinned), so Claude Code offers an update exactly when the pin changes.
 - `nymph schema <Type>` suggests the closest type name for an unknown one.
 - `nymph fonts` marks fonts whose bytes the build does not embed `(not embedded)`.

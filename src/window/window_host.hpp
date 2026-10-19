@@ -7,6 +7,7 @@
 ///        library is opened at run time.
 #pragma once
 
+#include <imgui.h>
 #include <memory>
 #include <string>
 #include "view/live_view.hpp"
@@ -21,6 +22,10 @@ enum class window_key {
   a, c, v, x, z,
   other
 };
+
+/// @brief ImGui's key for `key` (ImGuiKey_None for keys ImGui does not
+///        need: the viewer's own letters).
+ImGuiKey imgui_key(window_key key);
 
 /// @brief The modifier keys held with a key.
 struct key_mods {

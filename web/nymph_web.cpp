@@ -118,6 +118,75 @@ std::string& last_error() {
   return json;
 }
 
+// ── Keyboard (spec/09_ui_mockups/DESIGN.md section 6) ────────────────────────
+
+/// ImGui's key for a DOM KeyboardEvent.key: the editing keys a text field
+/// needs and the letters and digits of Ctrl shortcuts; ImGuiKey_None for the
+/// others (their characters arrive as text).
+ImGuiKey dom_key(std::string_view name) {
+  static const std::map<std::string_view, ImGuiKey> named{
+      {"Tab", ImGuiKey_Tab},
+      {"ArrowLeft", ImGuiKey_LeftArrow},
+      {"ArrowRight", ImGuiKey_RightArrow},
+      {"ArrowUp", ImGuiKey_UpArrow},
+      {"ArrowDown", ImGuiKey_DownArrow},
+      {"PageUp", ImGuiKey_PageUp},
+      {"PageDown", ImGuiKey_PageDown},
+      {"Home", ImGuiKey_Home},
+      {"End", ImGuiKey_End},
+      {"Insert", ImGuiKey_Insert},
+      {"Delete", ImGuiKey_Delete},
+      {"Backspace", ImGuiKey_Backspace},
+      {"Enter", ImGuiKey_Enter},
+      {"Escape", ImGuiKey_Escape},
+      {" ", ImGuiKey_Space},
+  };
+  if (const auto it = named.find(name); it != named.end()) {
+    return it->second;
+  }
+  if (name.size() == 1) {
+    const char c = name[0];
+    if (c >= 'a' && c <= 'z') {
+      return static_cast<ImGuiKey>(ImGuiKey_A + (c - 'a'));
+    }
+    if (c >= 'A' && c <= 'Z') {
+      return static_cast<ImGuiKey>(ImGuiKey_A + (c - 'A'));
+    }
+    if (c >= '0' && c <= '9') {
+      return static_cast<ImGuiKey>(ImGuiKey_0 + (c - '0'));
+    }
+  }
+  return ImGuiKey_None;
+}
+
+/// The code points of UTF-8 `text` (invalid bytes are skipped).
+std::u32string utf32(std::string_view text) {
+  std::u32string out;
+  for (size_t i = 0; i < text.size();) {
+    const auto b = static_cast<unsigned char>(text[i]);
+    const int extra = b < 0x80 ? 0 : (b >> 5) == 0x6 ? 1 : (b >> 4) == 0xE ? 2 : (b >> 3) == 0x1E ? 3 : -1;
+    if (extra < 0 || i + static_cast<size_t>(extra) >= text.size() + (extra == 0 ? 1 : 0)) {
+      ++i;
+      continue;
+    }
+    char32_t c = extra == 0 ? b : b & (0x3F >> extra);
+    for (int k = 1; k <= extra; ++k) {
+      c = (c << 6) | (static_cast<unsigned char>(text[i + static_cast<size_t>(k)]) & 0x3F);
+    }
+    out += c;
+    i += static_cast<size_t>(extra) + 1;
+  }
+  return out;
+}
+
+/// What the figure's text fields last copied: ImGui reads the clipboard
+/// synchronously, the browser's is asynchronous, so pasting from outside
+/// comes in as typed text (the page's paste event).
+std::string& copied() {
+  static std::string text;
+  return text;
+}
+
 std::string& scratch() {
   static std::string text;
   return text;
@@ -226,6 +295,20 @@ EMSCRIPTEN_KEEPALIVE int nymph_viewer_create(int fit, int tooltips, int webgl) {
     o.cpu_textures = !gl;
     auto v = std::make_unique<viewer>(o);
     v->webgl = gl;
+    v->view.set_clipboard_hooks(
+        [](std::string_view text) {
+          copied() = std::string(text);
+          // The page's clipboard too, where the browser allows it.
+          EM_ASM(
+              {
+                if (typeof navigator !== 'undefined' && navigator.clipboard) {
+                  navigator.clipboard.writeText(UTF8ToString($0, $1)).catch(() => {});
+                }
+              },
+              copied().data(),
+              copied().size());
+        },
+        [] { return copied(); });
     if (gl) {
       web::gl_attach(v->view);
     }
@@ -302,6 +385,36 @@ nymph_viewer_pointer(int handle, int type, float x, float y, int button, float w
     get(handle).view.input(e);
     return kOk;
   });
+}
+
+/// @brief One key going down (`down` 1) or up; `name` is the DOM
+///        KeyboardEvent.key, `mods` bits 1 Ctrl, 2 Shift, 4 Alt, 8 Meta.
+EMSCRIPTEN_KEEPALIVE int nymph_viewer_key(int handle, const char* name, int down, int mods) {
+  return guarded([&] {
+    key_event e;
+    e.key = dom_key(name);
+    e.down = down != 0;
+    e.ctrl = (mods & 1) != 0;
+    e.shift = (mods & 2) != 0;
+    e.alt = (mods & 4) != 0;
+    e.super = (mods & 8) != 0;
+    get(handle).view.input_key(e);
+    return kOk;
+  });
+}
+
+/// @brief Typed or pasted text (UTF-8) for the figure's active text field.
+EMSCRIPTEN_KEEPALIVE int nymph_viewer_text(int handle, const char* utf8) {
+  return guarded([&] {
+    get(handle).view.input_text(utf32(utf8));
+    return kOk;
+  });
+}
+
+/// @brief 1 while a text field of the figure has the keyboard.
+EMSCRIPTEN_KEEPALIVE int nymph_viewer_wants_keyboard(int handle) {
+  const auto it = viewers().find(handle);
+  return it != viewers().end() && it->second->view.wants_keyboard() ? 1 : 0;
 }
 
 /// @brief 1 when the wheel at (x, y), CSS pixels, would pan or zoom
@@ -398,6 +511,8 @@ EMSCRIPTEN_KEEPALIVE const char* nymph_viewer_state(int handle) {
         ",\"fitFallback\":" + (g.fit_fallback ? "true" : "false") + "}";
     j += std::string(",\"hasFigure\":") + (v.has_figure() ? "true" : "false");
     j += std::string(",\"wantsFrame\":") + (v.wants_frame() ? "true" : "false");
+    j += std::string(",\"wantsKeyboard\":") + (v.wants_keyboard() ? "true" : "false");
+    j += ",\"uiRevision\":" + std::to_string(v.ui_revision());
     j += ",\"description\":";
     json_string(j, v.description());
     j += ",\"hovered\":";

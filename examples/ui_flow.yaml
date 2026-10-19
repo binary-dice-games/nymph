@@ -1,0 +1,62 @@
+nymph: 1
+description: Mockup of a mail app's sign-in flow - sign in, loading, inbox - with the events that lead from one screen to the next.
+image: {width: 960, height: 420}
+root:
+  type: Screen
+  window_rounding: 6
+  frame_rounding: 4
+  children:
+    - type: Window
+      id: sign_in
+      title: Sign in
+      x: 16
+      y: 150
+      width: 260
+      height: 230
+      flags: NoResize|NoCollapse
+      children:
+        - {type: Image, image: logo, width: -1, height: 56, background: "#00000000", tint: "#2F80ED"}
+        - {type: InputTextWithHint, label: "##user", hint: Email, value: ada@example.com, width: -1}
+        - {type: InputText, label: "##password", value: secret, flags: Password, width: -1}
+        - {type: Checkbox, label: Remember me, value: true}
+        - {type: Button, label: Sign in, size: [118, 0]}
+        - {type: SameLine}
+        - {type: Button, label: Cancel, size: [118, 0]}
+    - type: Window
+      id: loading
+      title: Loading
+      x: 370
+      y: 16
+      width: 220
+      height: 96
+      flags: NoResize|NoCollapse
+      children:
+        - {type: Text, text: Fetching your mail...}
+        - {type: ProgressBar, fraction: 0.6}
+    - type: Window
+      id: inbox
+      title: Inbox
+      x: 680
+      y: 90
+      width: 264
+      height: 300
+      children:
+        - type: Group
+          children:
+            - {type: Image, image: person, width: 40, height: 40, rounding: 20}
+        - {type: SameLine}
+        - type: Group
+          children:
+            - {type: Text, text: Ada Lovelace}
+            - {type: TextDisabled, text: 3 new messages}
+        - {type: Separator}
+        - {type: Selectable, label: "Charles - Engine notes", selected: true}
+        - {type: Selectable, label: "Mary - Tea on Sunday?"}
+        - {type: Selectable, label: "Royal Society - Invitation"}
+        - {type: Spacing}
+        - {type: Button, label: Sign out}
+    - {type: WindowTransition, from: sign_in, to: loading, label: sign in}
+    - {type: WindowTransition, from: loading, to: inbox, label: finished loading}
+    - {type: WindowTransition, from: loading, to: sign_in, label: error, dashed: true}
+    - {type: WindowTransition, from: inbox, to: sign_in, label: sign out}
+    - {type: WindowTransition, from: inbox, to: inbox, label: refresh}

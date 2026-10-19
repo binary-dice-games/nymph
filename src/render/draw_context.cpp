@@ -51,7 +51,7 @@ void draw_context::record_current_plot(const node& n, bool with_y2, view_kind ki
 
 void draw_context::draw_node(const node& n) {
   const text_style_scope style(text_style_of(n), *this);
-  if (edit_mode_ && n.cls->slot() == kFigureSlot) {
+  if (edit_mode_ && n.cls->placed_as(n) == kFigureSlot) {
     record_target(n, {}, rect_of(n)); // before its children, so they are on top
   }
   item_range range;

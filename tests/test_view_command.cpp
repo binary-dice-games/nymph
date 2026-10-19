@@ -178,5 +178,13 @@ TEST_F(view_command, SavesGoNextToTheInputAndNeverOverIt) {
   EXPECT_EQ(fs::path(view_save_path("chart.png", "png")).filename(), "chart.view.png");
 }
 
+TEST(view_keys, GoToThePanelThenTheFigureThenTheViewer) {
+  // spec/09_ui_mockups PLAN step 10: "q" typed in a field never closes the window.
+  EXPECT_EQ(route_key(true, true), key_route::panel);
+  EXPECT_EQ(route_key(true, false), key_route::panel);
+  EXPECT_EQ(route_key(false, true), key_route::figure);
+  EXPECT_EQ(route_key(false, false), key_route::viewer);
+}
+
 } // namespace
 } // namespace bdg::nymph

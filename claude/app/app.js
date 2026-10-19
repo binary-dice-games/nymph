@@ -129,7 +129,7 @@ function contextText() {
   const title = viewer.info().description || 'chart';
   const view = viewBlock(viewer.toYaml());
   const lines = [`nymph chart "${title}": the user changed the view.`];
-  lines.push(view || 'The view is the chart as written (no zoom, pan or hidden series).');
+  lines.push(view || 'The view is the chart as written (no zoom, pan, hidden series or widget the user changed).');
   if (lastClicked) {
     lines.push(describeClick(lastClicked));
   }

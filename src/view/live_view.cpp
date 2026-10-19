@@ -3,15 +3,20 @@
 /// @brief live_view: persistent contexts, sizing, and frames on demand
 ///        (spec/04_web_viewer/DESIGN.md section 4).
 #include "view/live_view.hpp"
+#include <imgui_internal.h>
 #include <algorithm>
 #include <cfloat>
 #include <cmath>
+#include <cstdio>
+#include <cstdlib>
+#include <map>
 #include <optional>
 #include <set>
 #include <unordered_map>
 #include <variant>
 #include <utility>
 #include "core/error.hpp"
+#include "document/view.hpp"
 #include "document/yaml_doc.hpp"
 #include "edit/image_fields.hpp"
 #include "edit/source_edit.hpp"
@@ -90,6 +95,77 @@ void dashed_rect(ImDrawList* dl, const ImVec2& a, const ImVec2& b, ImU32 color) 
   line(ImVec2(a.x, b.y), a);
 }
 
+/// `v` to six significant digits, as the saved view keeps numbers readable.
+double six_digits(double v) {
+  char buf[32];
+  std::snprintf(buf, sizeof(buf), "%.6g", v);
+  return std::strtod(buf, nullptr);
+}
+
+/// The `view` entry of a user-interface element the user changed
+/// (spec/09_ui_mockups/DESIGN.md section 4, "Saved view"): only what the
+/// user changed of a window; a widget's current state.
+element_view ui_view(view_kind kind, const ui_entry& e) {
+  element_view v;
+  switch (kind) {
+    case view_kind::ui_window:
+      if (e.moved) {
+        v.position = std::array<double, 2>{std::round(e.pos.x), std::round(e.pos.y)};
+      }
+      if (e.resized) {
+        v.size = std::array<double, 2>{std::round(e.size_full.x), std::round(e.size_full.y)};
+      }
+      if (e.collapse_changed) {
+        v.collapsed = e.collapsed;
+      }
+      if (e.closed) {
+        v.closed = true;
+      }
+      if (e.scrolled) {
+        v.scroll = std::array<double, 2>{std::round(e.scroll.x), std::round(e.scroll.y)};
+      }
+      break;
+    case view_kind::ui_scroll:
+      if (e.scrolled) {
+        v.scroll = std::array<double, 2>{std::round(e.scroll.x), std::round(e.scroll.y)};
+      }
+      break;
+    case view_kind::ui_open:
+    case view_kind::ui_flag:
+    case view_kind::ui_active:
+    case view_kind::ui_checked:
+      v.flag = e.flag;
+      break;
+    case view_kind::ui_selected:
+      if (e.closed) {
+        v.closed = true;
+      } else {
+        v.flag = e.flag;
+      }
+      break;
+    case view_kind::ui_index:
+      v.index = e.index;
+      break;
+    case view_kind::ui_number: {
+      std::vector<double> numbers;
+      for (const double d : e.numbers) {
+        numbers.push_back(six_digits(d));
+      }
+      if (!numbers.empty()) {
+        v.numbers = std::move(numbers);
+      }
+      break;
+    }
+    case view_kind::ui_text:
+    case view_kind::ui_color:
+      v.text = e.text;
+      break;
+    default:
+      break;
+  }
+  return v;
+}
+
 std::string join(const std::vector<std::string>& names) {
   std::string out;
   for (const std::string& n : names) {
@@ -140,6 +216,12 @@ struct live_view::impl {
 
   std::function<void()> on_create; ///< set_context_hooks()
   std::function<void()> on_destroy;
+  std::function<void(std::string_view)> clipboard_set; ///< set_clipboard_hooks()
+  std::function<std::string()> clipboard_get;
+  std::string clipboard_text; ///< What clipboard_get() returned, for ImGui's pointer.
+  bool wants_keyboard = false; ///< A text field had the keyboard in the last frame.
+  uint64_t ui_revision = 0; ///< ui_revision()
+  std::string ui_signature; ///< The touched UI state after the last frame, written as the view key.
 
   view_geometry geom;
   bool overflowed = false; ///< The fit overflowed at the current size; laid out at the source size.
@@ -193,11 +275,31 @@ struct live_view::impl {
     configure_style(*find_theme(applied_theme));
     load_fonts(*ctx);
     update_clear_color();
+    install_clipboard();
+    wants_keyboard = false;
     if (on_create) {
       on_create();
     }
     last_time.reset();
     fresh_frames = 0;
+  }
+
+  /// Routes ImGui's clipboard to the host's hooks, if any; call with the
+  /// contexts current. Without hooks ImGui keeps its own, in this context.
+  void install_clipboard() {
+    if (!clipboard_set || !clipboard_get) {
+      return;
+    }
+    ImGuiPlatformIO& pio = ImGui::GetPlatformIO();
+    pio.Platform_ClipboardUserData = this;
+    pio.Platform_SetClipboardTextFn = [](ImGuiContext*, const char* text) {
+      static_cast<impl*>(ImGui::GetPlatformIO().Platform_ClipboardUserData)->clipboard_set(text);
+    };
+    pio.Platform_GetClipboardTextFn = [](ImGuiContext*) -> const char* {
+      impl* m = static_cast<impl*>(ImGui::GetPlatformIO().Platform_ClipboardUserData);
+      m->clipboard_text = m->clipboard_get();
+      return m->clipboard_text.c_str();
+    };
   }
 
   /// Re-applies the theme's styles if it changed; call with the contexts
@@ -346,6 +448,40 @@ struct live_view::impl {
     last_states = std::move(now);
   }
 
+  /// The `view` entries of the UI elements the user changed, by path.
+  view_map ui_changes(const std::map<std::string, const node*, std::less<>>& nodes) const {
+    view_map out;
+    for (const auto& [path, e] : ctx->ui().entries()) {
+      const auto it = nodes.find(path);
+      if (!e.touched || it == nodes.end() || it->second->cls->name() != e.type) {
+        continue;
+      }
+      const element_view v = ui_view(it->second->cls->viewable(), e);
+      if (!v.empty()) {
+        out[path] = v;
+      }
+    }
+    return out;
+  }
+
+  /// Bumps ui_revision when the UI state the user changed differs from the
+  /// last frame's.
+  void track_ui_changes() {
+    if (ctx->ui().entries().empty()) {
+      return;
+    }
+    const auto nodes = element_paths(fig->root);
+    std::map<std::string, view_kind, std::less<>> kinds;
+    for (const auto& [path, n] : nodes) {
+      kinds[path] = n->cls->viewable();
+    }
+    std::string signature = write_view(ui_changes(nodes), kinds);
+    if (signature != ui_signature) {
+      ui_signature = std::move(signature);
+      ++ui_revision;
+    }
+  }
+
   /// The targets at (`x`, `y`) CSS pixels among `edit_targets`, best first.
   std::vector<edit_target> targets_at_css(float x, float y) const {
     std::vector<size_t> found;
@@ -475,6 +611,10 @@ struct live_view::impl {
     ctx->set_edit_mode(edit_mode);
     ++fresh_frames;
     const node& root = fig->root;
+    // In edit mode a click selects; it must not move ImGui's focus away from
+    // a mockup's window onto the figure's own (its title bar would turn
+    // inactive, unlike the PNG of the edited source).
+    ImGuiWindow* const focused_before = ImGui::GetCurrentContext()->NavWindow;
     run_figure_frame(frame_options, *ctx, [&](draw_context& dc) {
       layout_root(root, dc);
       dc.draw_node(root);
@@ -486,6 +626,13 @@ struct live_view::impl {
     if (options.cpu_textures) {
       textures.apply_all(*ImGui::GetDrawData());
     }
+    ImGuiWindow* const focused = ImGui::GetCurrentContext()->NavWindow;
+    if (edit_mode && focused_before != nullptr && focused != focused_before && focused != nullptr &&
+        std::string_view(focused->Name) == kFigureWindowName) {
+      ImGui::FocusWindow(focused_before);
+    }
+    wants_keyboard = io.WantTextInput;
+    track_ui_changes();
     hovered.reset();
     if (const std::optional<pick>& p = ctx->hovered()) {
       view_pick v;
@@ -684,6 +831,49 @@ void live_view::input(const pointer_event& e) {
   m.input_frames_left = kInputFrames + 1; // ImPlot applies some changes a frame late
 }
 
+void live_view::input_key(const key_event& e) {
+  impl& m = *impl_;
+  const context_switch on(*m.contexts);
+  ImGuiIO& io = ImGui::GetIO();
+  io.AddKeyEvent(ImGuiMod_Ctrl, e.ctrl);
+  io.AddKeyEvent(ImGuiMod_Shift, e.shift);
+  io.AddKeyEvent(ImGuiMod_Alt, e.alt);
+  io.AddKeyEvent(ImGuiMod_Super, e.super);
+  if (e.key != ImGuiKey_None) {
+    io.AddKeyEvent(e.key, e.down);
+  }
+  m.pending_frames = std::max(m.pending_frames, kInputFrames);
+  m.input_frames_left = kInputFrames + 1;
+}
+
+void live_view::input_text(std::u32string_view text) {
+  impl& m = *impl_;
+  const context_switch on(*m.contexts);
+  for (const char32_t c : text) {
+    ImGui::GetIO().AddInputCharacter(static_cast<unsigned int>(c));
+  }
+  m.pending_frames = std::max(m.pending_frames, kInputFrames);
+  m.input_frames_left = kInputFrames + 1;
+}
+
+uint64_t live_view::ui_revision() const {
+  return impl_->ui_revision;
+}
+
+bool live_view::wants_keyboard() const {
+  return impl_->wants_keyboard;
+}
+
+void live_view::set_clipboard_hooks(
+    std::function<void(std::string_view)> set,
+    std::function<std::string()> get) {
+  impl& m = *impl_;
+  m.clipboard_set = std::move(set);
+  m.clipboard_get = std::move(get);
+  const context_switch on(*m.contexts);
+  m.install_clipboard();
+}
+
 void live_view::reset_view() {
   impl& m = *impl_;
   m.touched.clear();
@@ -853,8 +1043,46 @@ std::string live_view::source_with_view() const {
       saved[path] = it->second;
     }
   }
-  const std::string text = write_view(saved);
-  if (text == write_view(m.fig->views)) {
+  // User-interface elements keep what the user changed in their state.
+  const auto nodes = element_paths(m.fig->root);
+  std::map<std::string, view_kind, std::less<>> kinds;
+  for (const auto& [path, n] : nodes) {
+    kinds[path] = n->cls->viewable();
+  }
+  for (const auto& [path, v] : m.ui_changes(nodes)) {
+    element_view& entry = saved[path];
+    // Merged over the source's own entry: a window moved now keeps a size
+    // saved before.
+    if (v.position) {
+      entry.position = v.position;
+    }
+    if (v.size) {
+      entry.size = v.size;
+    }
+    if (v.scroll) {
+      entry.scroll = v.scroll;
+    }
+    if (v.collapsed) {
+      entry.collapsed = v.collapsed;
+    }
+    if (v.closed) {
+      entry.closed = v.closed;
+    }
+    if (v.flag) {
+      entry.flag = v.flag;
+    }
+    if (v.index) {
+      entry.index = v.index;
+    }
+    if (v.numbers) {
+      entry.numbers = v.numbers;
+    }
+    if (v.text) {
+      entry.text = v.text;
+    }
+  }
+  const std::string text = write_view(saved, kinds);
+  if (text == write_view(m.fig->views, kinds)) {
     return m.source; // nothing changed: the source as written
   }
   return replace_top_level(m.source, "view", text).source;

@@ -130,6 +130,9 @@ void load_fonts(draw_context& ctx);
 ///        inherit.
 text_style image_text_style(const image_options& o);
 
+/// @brief The ImGui name of the full-display window every figure is drawn in.
+inline constexpr const char* kFigureWindowName = "##nymph_figure";
+
 /// @brief Runs one frame in the current (configured) contexts, inputs
 ///        already set: NewFrame(), a borderless window covering the
 ///        display with the `image` text style, `draw`, Render(). If `draw`

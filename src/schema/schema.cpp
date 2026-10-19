@@ -1,6 +1,7 @@
 // MIT License © 2026 Binary Dice Games
 /// @file schema.cpp
 /// @brief element_class, registry and field-type helpers.
+#include <algorithm>
 #include <stdexcept>
 #include "core/error.hpp"
 #include "schema/element_class.hpp"
@@ -45,7 +46,7 @@ element_class::element_class(
     std::vector<field_desc> fields,
     std::string description)
     : name_(std::move(name)),
-      slot_(std::move(slot)),
+      slots_{std::move(slot)},
       accepts_(std::move(accepts)),
       fields_(std::move(fields)),
       description_(std::move(description)) {}
@@ -57,6 +58,27 @@ bool element_class::accepts_slot(std::string_view slot) const {
     }
   }
   return false;
+}
+
+bool element_class::fills_slot(std::string_view slot) const {
+  for (const std::string& s : slots_) {
+    if (s == slot) {
+      return true;
+    }
+  }
+  return false;
+}
+
+int element_class::placement_of(const element_class& child) const {
+  for (const std::string& accepted : accepts_) {
+    const auto slots = child.slots();
+    for (size_t i = 0; i < slots.size(); ++i) {
+      if (slots[i] == accepted) {
+        return static_cast<int>(i);
+      }
+    }
+  }
+  return -1;
 }
 
 int element_class::field_index(std::string_view name) const {
@@ -178,7 +200,7 @@ std::vector<const element_class*> registry::classes() const {
 std::string registry::names_in_slot(std::string_view slot) const {
   std::string out;
   for (const auto& [name, cls] : classes_) {
-    if (cls->slot() == slot) {
+    if (cls->fills_slot(slot)) {
       out += (out.empty() ? "" : ", ") + name;
     }
   }
@@ -189,6 +211,31 @@ std::string registry::names_accepting(std::string_view slot) const {
   std::string out;
   for (const auto& [name, cls] : classes_) {
     if (cls->accepts_slot(slot)) {
+      out += (out.empty() ? "" : ", ") + name;
+    }
+  }
+  return out;
+}
+
+std::string registry::names_taken_by(const element_class& parent) const {
+  // In the order of the parent's slots, then by name, each class once.
+  std::string out;
+  std::vector<const element_class*> listed;
+  for (const std::string& slot : parent.accepts()) {
+    for (const auto& [name, cls] : classes_) {
+      if (cls->fills_slot(slot) && std::find(listed.begin(), listed.end(), cls.get()) == listed.end()) {
+        listed.push_back(cls.get());
+        out += (out.empty() ? "" : ", ") + name;
+      }
+    }
+  }
+  return out;
+}
+
+std::string registry::names_accepting(const element_class& child) const {
+  std::string out;
+  for (const auto& [name, cls] : classes_) {
+    if (cls->placement_of(child) >= 0) {
       out += (out.empty() ? "" : ", ") + name;
     }
   }

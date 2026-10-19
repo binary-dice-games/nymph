@@ -33,6 +33,9 @@ class panel_context_scope {
   ImGuiContext* previous_;
 };
 
+
+} // namespace
+
 ImGuiKey imgui_key(window_key key) {
   switch (key) {
     case window_key::escape: return ImGuiKey_Escape;
@@ -57,8 +60,6 @@ ImGuiKey imgui_key(window_key key) {
     default: return ImGuiKey_None;
   }
 }
-
-} // namespace
 
 editor_panel::editor_panel(std::string source, std::string file_name, const char* glsl_version)
     : model_(std::move(source)), file_name_(std::move(file_name)) {

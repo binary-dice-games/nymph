@@ -133,6 +133,9 @@ void configure_backend(const char* renderer_name, ImGuiBackendFlags backend_flag
   io.IniFilename = nullptr;
   io.LogFilename = nullptr;
   io.BackendPlatformName = "nymph";
+  // A focused text field (UI mockups, spec/09_ui_mockups) needs no timer:
+  // live views stay idle, and the screen matches a saved PNG.
+  io.ConfigInputTextCursorBlink = false;
   if (!own_textures) {
     io.Fonts->TexDesiredFormat = ImTextureFormat_RGBA32;
     return;
@@ -191,9 +194,10 @@ void run_figure_frame(const image_options& options, draw_context& ctx, const std
       ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoNav | ImGuiWindowFlags_NoScrollWithMouse |
       ImGuiWindowFlags_NoBringToFrontOnFocus;
   ImGui::NewFrame();
+  ctx.ui().begin_frame();
   ImGui::SetNextWindowPos(ImVec2(0.0f, 0.0f), ImGuiCond_Always);
   ImGui::SetNextWindowSize(ImGui::GetIO().DisplaySize, ImGuiCond_Always);
-  ImGui::Begin("##nymph_figure", nullptr, kFlags);
+  ImGui::Begin(kFigureWindowName, nullptr, kFlags);
   {
     const text_style_scope style(image_text_style(options), ctx);
     draw(ctx);

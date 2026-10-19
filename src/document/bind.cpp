@@ -50,6 +50,7 @@ class binder {
     }
     const element_class& cls = element_type(n, parent);
     node out = cls.make_node();
+    out.placed_as = placement(cls, parent);
     out.line = n.line;
     out.column = n.column;
     std::vector<bool> set(cls.fields().size(), false);
@@ -106,10 +107,10 @@ class binder {
           "unknown element type '" + type->text + "'" + did_you_mean(type->text, names) +
               "; types allowed here: " + allowed_here(parent));
     }
-    if (parent == nullptr && cls->slot() != kFigureSlot) {
+    if (parent == nullptr && !cls->fills_slot(kFigureSlot)) {
       fail(*type, "'" + type->text + "' cannot be the root; it goes inside: " + goes_in(*cls));
     }
-    if (parent != nullptr && !parent->accepts_slot(cls->slot())) {
+    if (parent != nullptr && parent->placement_of(*cls) < 0) {
       fail(
           *type,
           "'" + type->text + "' cannot be placed in " + std::string(parent->name()) +
@@ -122,17 +123,21 @@ class binder {
     if (parent == nullptr) {
       return reg_.names_in_slot(kFigureSlot);
     }
-    std::string out;
-    for (const std::string& slot : parent->accepts()) {
-      const std::string names = reg_.names_in_slot(slot);
-      out += (out.empty() || names.empty() ? "" : ", ") + names;
-    }
-    return out;
+    return reg_.names_taken_by(*parent);
   }
 
   std::string goes_in(const element_class& cls) const {
-    const std::string names = reg_.names_accepting(cls.slot());
+    const std::string names = reg_.names_accepting(cls);
     return names.empty() ? "nothing accepts it" : names;
+  }
+
+  /// The index of the slot `cls` takes under `parent` (the root is a figure).
+  static unsigned placement(const element_class& cls, const element_class* parent) {
+    if (parent != nullptr) {
+      return static_cast<unsigned>(parent->placement_of(cls));
+    }
+    const auto slots = cls.slots();
+    return static_cast<unsigned>(std::find(slots.begin(), slots.end(), kFigureSlot) - slots.begin());
   }
 
   void children(const element_class& cls, const yaml_node& key, const yaml_node& val, node& out) {

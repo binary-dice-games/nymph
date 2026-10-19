@@ -303,6 +303,45 @@ test('toYaml saves the view the user left, and reopening it shows the same', asy
   again.destroy();
 });
 
+test('user-interface widgets take the pointer and the keyboard', async () => {
+  // spec/09_ui_mockups PLAN step 12.
+  const source =
+    'image: {width: 400, height: 200, padding: 0}\nroot:\n  type: Screen\n  children:\n' +
+    '    - type: Window\n      title: Form\n      x: 20\n      y: 20\n      width: 300\n      height: 150\n' +
+    '      children:\n        - {type: InputText, label: Name, value: Sun, width: 200}\n';
+  const v = await viewer(source);
+  v.resize(400, 200, 1);
+  const clock = { t: 0 };
+  settle(v, clock);
+  const field = { x: 100, y: 20 + 22 + 8 + 9 }; // under the title bar, in the field
+  v.pointer('move', field);
+  settle(v, clock);
+  assertEq(v.state().hovered?.type, 'InputText', 'the field is under the pointer');
+  assertEq(v.state().wantsKeyboard, false, 'no field has the keyboard yet');
+  const revision = v.state().uiRevision;
+  v.pointer('down', field);
+  settle(v, clock);
+  v.pointer('up', field);
+  settle(v, clock);
+  assertEq(v.state().wantsKeyboard, true, 'the clicked field has the keyboard');
+  v.key('a', true, 1); // Ctrl+A
+  settle(v, clock);
+  v.key('a', false, 0);
+  v.text('Moon');
+  settle(v, clock);
+  v.pointer('move', { x: field.x + 1, y: field.y });
+  settle(v, clock);
+  assertEq(v.state().hovered?.values.value, 'Moon', 'typed text');
+  assert(v.state().uiRevision !== revision, 'the UI revision changes');
+  assert(v.toYaml().includes('root/children/0/children/0: {value: "Moon"}'), v.toYaml());
+  v.key('Escape', true, 0);
+  settle(v, clock);
+  v.key('Escape', false, 0);
+  settle(v, clock);
+  assertEq(v.state().wantsKeyboard, false, 'Escape leaves the field');
+  v.destroy();
+});
+
 // ── Run ──────────────────────────────────────────────────────────────────────
 
 let failed = 0;

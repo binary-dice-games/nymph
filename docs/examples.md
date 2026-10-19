@@ -1128,3 +1128,259 @@ data: |
   Heating, Homes, 45
   Heating, Losses, 15
 ```
+
+## User interface mockup
+
+A tool's user interface as ImGui windows on a `Screen`: a main menu bar, a tree, a placeholder image and a small plot in a window, and a properties panel of headers, sliders, a colour editor, a combo and a table. In `nymph view` and the web viewer every widget works.
+
+![User interface mockup](../examples/ui_editor.png)
+
+[`examples/ui_editor.yaml`](../examples/ui_editor.yaml):
+
+```yaml
+nymph: 1
+description: Mockup of a 3D scene editor - a menu bar, a scene tree, a viewport and a properties panel - drawn with Dear ImGui widgets.
+image: {width: 1000, height: 560, padding: 0}
+data:
+  frames:
+    frame: [1, 2, 3, 4, 5, 6, 7, 8]
+    ms: [16.4, 16.9, 15.8, 22.1, 16.2, 16.6, 17.3, 16.1]
+root:
+  type: Screen
+  children:
+    - type: MainMenuBar
+      children:
+        - {type: Menu, label: File, children: [{type: MenuItem, label: Open..., shortcut: Ctrl+O}]}
+        - {type: Menu, label: Edit, children: [{type: MenuItem, label: Undo, shortcut: Ctrl+Z}]}
+        - {type: Menu, label: View, children: [{type: MenuItem, label: Statistics, checked: true}]}
+    - type: Window
+      title: Scene
+      x: 8
+      y: 30
+      width: 230
+      height: 522
+      flags: NoCollapse
+      children:
+        - type: TreeNode
+          label: World
+          open: true
+          flags: DefaultOpen
+          children:
+            - {type: TreeNode, label: Camera, flags: Leaf}
+            - {type: TreeNode, label: Sun, flags: Leaf|Selected}
+            - type: TreeNode
+              label: Props
+              open: true
+              children:
+                - {type: TreeNode, label: Table, flags: Leaf}
+                - {type: TreeNode, label: Chair, flags: Leaf}
+        - {type: Separator}
+        - {type: Button, label: Add object, size: [-1, 0]}
+    - type: Window
+      title: Viewport
+      x: 246
+      y: 30
+      width: 440
+      height: 522
+      children:
+        - {type: Image, image: landscape, width: -1, height: -60, fit: cover, label: "Rendered view"}
+        - type: Plot
+          title: Frame time
+          height: 50
+          flags: NoTitle|NoLegend|NoMenus
+          x_flags: NoDecorations
+          children:
+            - {type: PlotShaded, label: ms, xs: $frames:frame, ys: $frames:ms}
+    - type: Window
+      title: Properties
+      x: 694
+      y: 30
+      width: 298
+      height: 522
+      children:
+        - {type: InputText, label: Name, value: Sun}
+        - type: CollapsingHeader
+          label: Transform
+          open: true
+          children:
+            - {type: DragFloat3, label: Position, value: [12, 40, -3], speed: 0.1}
+            - {type: SliderAngle, label: Angle, value: 35}
+        - type: CollapsingHeader
+          label: Light
+          open: true
+          children:
+            - {type: ColorEdit3, label: Color, value: "#FFE4B0"}
+            - {type: SliderFloat, label: Intensity, value: 1.2, min: 0, max: 4}
+            - {type: Checkbox, label: Cast shadows, value: true}
+            - {type: Combo, label: Shadows, items: [Hard, Soft, Off], selected: 1}
+        - type: CollapsingHeader
+          label: Statistics
+          open: true
+          children:
+            - type: Table
+              flags: Borders|RowBg
+              children:
+                - {type: TableColumn, label: Pass, cells: [Shadows, Opaque, Post]}
+                - {type: TableColumn, label: ms, cells: ["2.1", "9.8", "1.4"]}
+```
+
+## A settings dialog
+
+One `Window` as `root`, in the dark theme: tabs (the second selected), separators with text, a combo, sliders with formats, radio buttons on one line, a data table and an open tooltip.
+
+![A settings dialog](../examples/ui_settings.png)
+
+[`examples/ui_settings.yaml`](../examples/ui_settings.yaml):
+
+```yaml
+nymph: 1
+description: Mockup of a settings dialog - one window with tabs, controls of every kind and a table - in the dark theme.
+image: {width: 520, height: 420, theme: dark, padding: 0}
+root:
+  type: Window
+  title: Settings
+  children:
+    - type: TabBar
+      children:
+        - {type: TabItem, label: General, children: [{type: Text, text: Not shown}]}
+        - type: TabItem
+          label: Display
+          selected: true
+          children:
+            - {type: SeparatorText, label: Screen}
+            - {type: Combo, label: Resolution, items: [1280 x 720, 1920 x 1080, 2560 x 1440], selected: 1}
+            - {type: SliderInt, label: Refresh rate, value: 120, min: 30, max: 240, format: "%d Hz"}
+            - {type: Checkbox, label: Vertical sync, value: true}
+            - {type: SeparatorText, label: Colour}
+            - {type: RadioButton, label: sRGB, active: true}
+            - {type: SameLine}
+            - {type: RadioButton, label: Display P3}
+            - {type: SameLine}
+            - {type: RadioButton, label: HDR}
+            - {type: SliderFloat, label: Brightness, value: 0.7}
+            - {type: Text, text: "Display modes:"}
+            - type: Table
+              flags: Borders|RowBg|SizingStretchSame
+              children:
+                - {type: TableColumn, label: Mode, cells: [Windowed, Borderless, Fullscreen]}
+                - {type: TableColumn, label: Size, cells: [1280 x 720, 1920 x 1080, 1920 x 1080]}
+            - {type: Button, label: Apply}
+            - {type: Tooltip, open: true, children: [{type: Text, text: Restarts the renderer}]}
+        - {type: TabItem, label: Audio, children: [{type: Text, text: Not shown}]}
+```
+
+## A UI flow
+
+Three screens of an app and the events that lead from one to the next: `WindowTransition` arrows between windows with an `id`, side by side when two windows are linked both ways, a dashed error path and a loop.
+
+![A UI flow](../examples/ui_flow.png)
+
+[`examples/ui_flow.yaml`](../examples/ui_flow.yaml):
+
+```yaml
+nymph: 1
+description: Mockup of a mail app's sign-in flow - sign in, loading, inbox - with the events that lead from one screen to the next.
+image: {width: 960, height: 420}
+root:
+  type: Screen
+  window_rounding: 6
+  frame_rounding: 4
+  children:
+    - type: Window
+      id: sign_in
+      title: Sign in
+      x: 16
+      y: 150
+      width: 260
+      height: 230
+      flags: NoResize|NoCollapse
+      children:
+        - {type: Image, image: logo, width: -1, height: 56, background: "#00000000", tint: "#2F80ED"}
+        - {type: InputTextWithHint, label: "##user", hint: Email, value: ada@example.com, width: -1}
+        - {type: InputText, label: "##password", value: secret, flags: Password, width: -1}
+        - {type: Checkbox, label: Remember me, value: true}
+        - {type: Button, label: Sign in, size: [118, 0]}
+        - {type: SameLine}
+        - {type: Button, label: Cancel, size: [118, 0]}
+    - type: Window
+      id: loading
+      title: Loading
+      x: 370
+      y: 16
+      width: 220
+      height: 96
+      flags: NoResize|NoCollapse
+      children:
+        - {type: Text, text: Fetching your mail...}
+        - {type: ProgressBar, fraction: 0.6}
+    - type: Window
+      id: inbox
+      title: Inbox
+      x: 680
+      y: 90
+      width: 264
+      height: 300
+      children:
+        - type: Group
+          children:
+            - {type: Image, image: person, width: 40, height: 40, rounding: 20}
+        - {type: SameLine}
+        - type: Group
+          children:
+            - {type: Text, text: Ada Lovelace}
+            - {type: TextDisabled, text: 3 new messages}
+        - {type: Separator}
+        - {type: Selectable, label: "Charles - Engine notes", selected: true}
+        - {type: Selectable, label: "Mary - Tea on Sunday?"}
+        - {type: Selectable, label: "Royal Society - Invitation"}
+        - {type: Spacing}
+        - {type: Button, label: Sign out}
+    - {type: WindowTransition, from: sign_in, to: loading, label: sign in}
+    - {type: WindowTransition, from: loading, to: inbox, label: finished loading}
+    - {type: WindowTransition, from: loading, to: sign_in, label: error, dashed: true}
+    - {type: WindowTransition, from: inbox, to: sign_in, label: sign out}
+    - {type: WindowTransition, from: inbox, to: inbox, label: refresh}
+```
+
+## Placeholder images
+
+Every built-in image `Image` and `ImageButton` can show, by name, and below them `rounding`, `tint` (with a transparent `background`), `fit: cover` and the stretching `cross`.
+
+![Placeholder images](../examples/ui_placeholders.png)
+
+[`examples/ui_placeholders.yaml`](../examples/ui_placeholders.yaml):
+
+```yaml
+nymph: 1
+description: The built-in placeholder images of Image and ImageButton, by name; the last row shows tint, background and rounding.
+image: {width: 830, height: 424}
+root:
+  type: VerticalLayout
+  spacing: 10
+  children:
+    - type: HorizontalLayout
+      spacing: 10
+      children:
+        - {type: Image, image: person, width: 126, height: 126, label: person}
+        - {type: Image, image: people, width: 126, height: 126, label: people}
+        - {type: Image, image: landscape, width: 126, height: 126, label: landscape}
+        - {type: Image, image: product, width: 126, height: 126, label: product}
+        - {type: Image, image: logo, width: 126, height: 126, label: logo}
+        - {type: Image, image: video, width: 126, height: 126, label: video}
+    - type: HorizontalLayout
+      spacing: 10
+      children:
+        - {type: Image, image: map, width: 126, height: 126, label: map}
+        - {type: Image, image: chart, width: 126, height: 126, label: chart}
+        - {type: Image, image: document, width: 126, height: 126, label: document}
+        - {type: Image, image: icon, width: 126, height: 126, label: icon}
+        - {type: Image, image: building, width: 126, height: 126, label: building}
+        - {type: Image, image: cross, width: 126, height: 126, label: cross}
+    - type: HorizontalLayout
+      spacing: 10
+      children:
+        - {type: Image, image: person, width: 126, height: 126, rounding: 63, label: "rounding: 63"}
+        - {type: Image, image: logo, width: 126, height: 126, tint: "#2F80ED", background: "#00000000", label: tint}
+        - {type: Image, image: landscape, width: 266, height: 126, fit: cover, tint: "#3B8A4A", background: "#E7F3E9", label: "fit: cover"}
+        - {type: Image, image: cross, width: 266, height: 126, label: "cross stretches"}
+```

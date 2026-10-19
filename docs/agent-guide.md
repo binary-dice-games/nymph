@@ -444,6 +444,37 @@ columns automatically, from sources on the left to sinks on the right.
 - Each label shows the node's total (the larger of what enters and what
   leaves) unless `show_values: false`.
 
+### User interfaces (mockups)
+
+To design or mock a user interface, draw it with Dear ImGui's widgets: a
+`Screen` (as `root`) holds `Window`s, each holding widgets. Types are
+ImGui's function names (`Button`, `Checkbox`, `SliderFloat3`,
+`InputTextWithHint`, `ColorEdit4`, `TreeNode`, `TabBar` / `TabItem`,
+`Table`, `Menu`, `PopupModal`, ...), fields are their parameters and
+flags are ImGui's names without the prefix (`flags: NoResize|NoCollapse`).
+`nymph schema Window` and `nymph schema SliderFloat` list the fields.
+
+| Type | Key fields | Draws |
+|---|---|---|
+| `Screen` | `window_rounding`, `frame_rounding`, `background` | The area the windows sit on. Children: `Window`, `MainMenuBar`, `Popup`, `PopupModal`, `WindowTransition`. |
+| `Window` | `title`, `x`, `y`, `width`, `height` (0 fits the content, -1 reaches the edge), `id`, `flags`, `collapsed` | An ImGui window. Can also be `root` alone. |
+| Widgets | `label`, `value` (the state shown), `width`, `disabled`, `tooltip`, `opens` | `Text`, `Button`, `Checkbox`, `RadioButton`, sliders, drags, inputs, colours, `Combo` / `ListBox` (`items`, `selected`), `Selectable`, `ProgressBar`, `Image`. |
+| Containers | `open`, `selected`, `children` | `TreeNode`, `CollapsingHeader`, `TabBar` > `TabItem`, `Child`, `Group`, `Indent`, `Disabled`, `Table` > `TableColumn` (`cells`) / `TableRow`. |
+| Layout | | `SameLine` (next widget on the same line), `Separator`, `SeparatorText`, `Spacing`, `NewLine`, `Dummy`. |
+| `Image` | `image` (`person`, `people`, `landscape`, `product`, `logo`, `video`, `map`, `chart`, `document`, `icon`, `building`, `cross`), `width`, `height`, `tint`, `background`, `rounding`, `label` | A built-in placeholder picture: a portrait silhouette, a photo, a logo. `rounding` at half the size makes a round avatar. |
+| `WindowTransition` | `from`, `to` (window `id`s), `label`, `dashed` | A labelled arrow between windows: the UI flow ("ok", "cancel", "finished loading"). |
+
+- Windows need room: place them with gaps (arrows and labels go in the
+  gaps) and inside the image; one that does not fit is an error.
+- Labels may repeat (`OK` in two dialogs); `##` hides the rest of a label.
+- A plot or layout can go inside a window, with its own `height`.
+- A `Popup` / `PopupModal` (child of the Screen, with an `id`) shows with
+  `open: true`, or when a widget with `opens: <id>` is clicked in a live
+  view. Only one popup or menu can be open at a time.
+- In the live viewer the user can use the widgets; you get a note with
+  the `view:` block (what they changed, by element path) and the last
+  widget clicked.
+
 ### Fonts and text style
 
 Fonts are built into nymph; name one by its file name (`nymph fonts`
@@ -1011,6 +1042,51 @@ root:
 State, activity, use case and data flow diagrams follow the same pattern: see
 [examples.md](examples.md).
 
+### A user interface mockup
+
+```yaml
+description: Sign-in and inbox screens of a mail app, and how one leads to the other.
+image: {width: 760, height: 360}
+root:
+  type: Screen
+  window_rounding: 6
+  frame_rounding: 4
+  children:
+    - type: Window
+      id: sign_in
+      title: Sign in
+      x: 16
+      y: 60
+      width: 260
+      height: 210
+      flags: NoResize|NoCollapse
+      children:
+        - {type: Image, image: logo, width: -1, height: 48, tint: "#2F80ED", background: "#00000000"}
+        - {type: InputTextWithHint, label: "##email", hint: Email, width: -1}
+        - {type: InputText, label: "##password", value: secret, flags: Password, width: -1}
+        - {type: Checkbox, label: Remember me, value: true}
+        - {type: Button, label: Sign in, size: [118, 0]}
+        - {type: SameLine}
+        - {type: Button, label: Cancel, size: [118, 0]}
+    - type: Window
+      id: inbox
+      title: Inbox
+      x: 470
+      y: 30
+      width: 270
+      height: 300
+      children:
+        - {type: Image, image: person, width: 40, height: 40, rounding: 20}
+        - {type: SameLine}
+        - {type: Text, text: Ada Lovelace}
+        - {type: Separator}
+        - {type: Selectable, label: Engine notes, selected: true}
+        - {type: Selectable, label: Tea on Sunday?}
+        - {type: Button, label: Sign out}
+    - {type: WindowTransition, from: sign_in, to: inbox, label: sign in}
+    - {type: WindowTransition, from: inbox, to: sign_in, label: sign out}
+```
+
 ## Making a good chart
 
 - Give every chart a `title` and axis labels with units.
@@ -1093,6 +1169,10 @@ State, activity, use case and data flow diagrams follow the same pattern: see
 | `CSV row has N cells, the header has M` | A row is too short or too long, or a value with a comma is not quoted. |
 | `'>' joins the CSV lines` | Write `data: |`, not `data: >`. |
 | `needs 620 px of height, has 484` | The fixed sizes in a layout do not fit. Use `height: -1` on plots, reduce sizes, or enlarge the image. |
+| `puts the window's right edge at x = 940, the Screen is 900 wide` | A `Window` does not fit its Screen: move it, shrink it, or enlarge the image. |
+| `names no Window id` / `names no Popup or PopupModal id` | A `WindowTransition`'s `from` / `to`, or a widget's `opens`, does not match an `id` on the Screen. |
+| `ImGui shows one open popup or menu at a time` | Two popups or menus have `open: true`; keep one. |
+| `cannot be placed in Window; it goes inside: TabBar` | A `TabItem` goes in a `TabBar`; `TableColumn` / `TableRow` in a `Table`; `MenuItem` in a `Menu`. |
 | `tab character in indentation` | Indent with spaces. |
 | `mapping values are not allowed`, `could not find expected ':'` | A YAML syntax error at that line: check indentation, colons and quotes. |
 | `missing 'root'` | Every source needs a `root`. |

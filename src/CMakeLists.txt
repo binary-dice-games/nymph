@@ -12,6 +12,7 @@ add_library(nymph STATIC
   render/renderer_options.hpp
   render/image_options.hpp
   render/draw_context.hpp
+  render/ui_state.hpp
   render/draw_context.cpp
   render/text_style.hpp
   render/text_style.cpp
@@ -70,6 +71,23 @@ add_library(nymph STATIC
   elements/sankey.cpp
   elements/layout_elements.hpp
   elements/layout_elements.cpp
+  elements/ui/ui_common.hpp
+  elements/ui/ui_common.cpp
+  elements/ui/screen.cpp
+  elements/ui/flow.cpp
+  elements/ui/ui_flags.hpp
+  elements/ui/ui_flags.cpp
+  elements/ui/value_widgets.cpp
+  elements/ui/image_widgets.cpp
+  elements/ui/containers.cpp
+  elements/ui/tables.cpp
+  elements/ui/menus.cpp
+  placeholders/placeholders.hpp
+  placeholders/placeholders.cpp
+  placeholders/svg_shapes.hpp
+  placeholders/svg_shapes.cpp
+  elements/ui/widgets.cpp
+  elements/ui/register_ui.cpp
   elements/uml/uml.hpp
   elements/uml/uml_common.hpp
   elements/uml/uml_common.cpp
@@ -102,6 +120,8 @@ add_library(nymph STATIC
 add_library(nymph::nymph ALIAS nymph)
 include("${PROJECT_SOURCE_DIR}/cmake/NymphFonts.cmake")
 nymph_embed_fonts(nymph)
+include("${PROJECT_SOURCE_DIR}/cmake/NymphPlaceholders.cmake")
+nymph_embed_placeholders(nymph)
 target_include_directories(nymph PUBLIC
   ${CMAKE_CURRENT_SOURCE_DIR}
   ${CMAKE_CURRENT_BINARY_DIR}/generated

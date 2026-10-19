@@ -151,4 +151,11 @@ int run_view_cli(std::span<const std::string_view> args, std::ostream& err) {
   return 1;
 }
 
+key_route route_key(bool panel_has_keyboard, bool figure_has_keyboard) {
+  if (panel_has_keyboard) {
+    return key_route::panel;
+  }
+  return figure_has_keyboard ? key_route::figure : key_route::viewer;
+}
+
 } // namespace bdg::nymph

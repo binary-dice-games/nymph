@@ -53,8 +53,25 @@ class element_class {
   std::string_view name() const {
     return name_;
   }
+  /// @brief The primary slot: what the element mainly is.
   std::string_view slot() const {
-    return slot_;
+    return slots_.front();
+  }
+
+  /// @brief Every slot the element fills, the primary first
+  ///        (spec/09_ui_mockups/DESIGN.md section 5): `Separator` is a
+  ///        `figure` and a `ui.widget`.
+  std::span<const std::string> slots() const {
+    return slots_;
+  }
+
+  /// @brief Whether the element fills slot `slot`.
+  bool fills_slot(std::string_view slot) const;
+
+  /// @brief The slot `n` (a node of this class) was placed in: the slot of
+  ///        its parent's that accepted it, or `figure` for the root.
+  std::string_view placed_as(const node& n) const {
+    return slots_.at(n.placed_as);
   }
   std::span<const std::string> accepts() const {
     return accepts_;
@@ -68,6 +85,11 @@ class element_class {
 
   /// @brief Whether a child of slot `slot` may be placed in this element.
   bool accepts_slot(std::string_view slot) const;
+
+  /// @brief Index in `child.slots()` of the slot `child` is placed in when
+  ///        it is a child of this element: the first of this element's
+  ///        accepted slots that `child` fills, or -1 if it fills none.
+  int placement_of(const element_class& child) const;
 
   /// @brief Index of field `name`, or -1.
   int field_index(std::string_view name) const;
@@ -144,9 +166,22 @@ class element_class {
   /// @brief Draws `n` (a node of this class) into the open figure frame.
   virtual void draw(const node& n, draw_context& dc) const = 0;
 
+ protected:
+  /// @brief Adds a further slot the element fills (call from a subclass
+  ///        constructor).
+  void also_fits(std::string slot) {
+    slots_.push_back(std::move(slot));
+  }
+
+  /// @brief Replaces the primary slot (for a base class that sets the
+  ///        usual one, like the widgets' `ui.widget`).
+  void set_primary_slot(std::string slot) {
+    slots_.front() = std::move(slot);
+  }
+
  private:
   std::string name_;
-  std::string slot_;
+  std::vector<std::string> slots_;
   std::vector<std::string> accepts_;
   std::vector<field_desc> fields_;
   std::string description_;

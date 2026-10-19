@@ -97,6 +97,13 @@ the axes show them (`{x: "2026-03-02", y: "7.25 kg"}`).
 | `GanttChart` | Drag and wheel pan and zoom time; a legend click hides a section's rows. | The task or milestone: start, end, section. |
 | `SankeyDiagram` | None. | The node (total) or flow (from, to, value). |
 | UML diagrams, `Flowchart` | Drag pans, wheel zooms around the pointer, double-click fits. | The node or edge (not yet in sequence diagrams): id, name, label. |
+| User interfaces ([format](format.md#user-interfaces)) | The widgets work: click a tree node or header to open it, a tab to show it, drag sliders, tick boxes, choose in combos, type in text fields (Ctrl+click a slider to type a value), open menus and popups; drag a window by its title, resize it by its edges, collapse or close it. Windows stay on their Screen. | The widget: type, label and its current value; a click on a button, menu item or link is a `click`. A `WindowTransition`'s label too. |
+
+What the user changes of a user interface is view state, like a zoom:
+`toYaml()` saves it in the `view` key and `view` events fire for it. While
+a text field of the chart has the keyboard, keys go to it (the canvas
+takes focus with the click; `preventDefault()` keeps them from the page),
+and a paste is typed into the field; otherwise keys stay with the page.
 
 A plot with `flags: NoInputs` does not move. The wheel scrolls the page
 except over a plot or diagram that takes input; on touch screens a
@@ -112,7 +119,8 @@ followed unless the axis has the `AutoFit` flag.
 a resizable window the chart follows. Keys: `R` resets the view, `S` / `Y`
 save the image / YAML on screen next to the input as `*.view.png` /
 `*.view.yaml` (with the [`view` key](format.md#view)), `Esc` or `Q`
-closes. See [cli.md](cli.md).
+closes; while a text field of a user interface has the keyboard, keys go
+to the field instead (`Esc` leaves it). See [cli.md](cli.md).
 
 ### Editing in the window
 

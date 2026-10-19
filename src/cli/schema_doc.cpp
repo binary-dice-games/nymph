@@ -19,8 +19,8 @@ std::string number(double v) {
 
 /// "Plot" / "Plot, Plot3D" / "root, VerticalLayout" for where `cls` goes.
 std::string goes_in(const element_class& cls, const registry& reg) {
-  std::string out = cls.slot() == kFigureSlot ? "root" : "";
-  const std::string parents = reg.names_accepting(cls.slot());
+  std::string out = cls.fills_slot(kFigureSlot) ? "root" : "";
+  const std::string parents = reg.names_accepting(cls);
   if (!parents.empty()) {
     out += (out.empty() ? "" : ", ") + parents;
   }
@@ -29,12 +29,7 @@ std::string goes_in(const element_class& cls, const registry& reg) {
 
 /// Names of the classes `cls` takes as children, or "".
 std::string takes(const element_class& cls, const registry& reg) {
-  std::string out;
-  for (const std::string& slot : cls.accepts()) {
-    const std::string names = reg.names_in_slot(slot);
-    out += (out.empty() || names.empty() ? "" : ", ") + names;
-  }
-  return out;
+  return reg.names_taken_by(cls);
 }
 
 /// "one of: A, B" / "combine with '|': A, B" / "16 to 4096" / "".

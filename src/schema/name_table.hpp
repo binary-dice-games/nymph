@@ -25,6 +25,8 @@ struct name_entry {
 class name_table {
  public:
   name_table(std::initializer_list<name_entry> entries) : entries_(entries) {}
+  /// @brief A table built at run time (names from a catalog).
+  explicit name_table(std::vector<name_entry> entries) : entries_(std::move(entries)) {}
 
   const std::vector<name_entry>& entries() const {
     return entries_;

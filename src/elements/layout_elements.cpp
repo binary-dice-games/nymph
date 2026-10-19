@@ -29,6 +29,9 @@ ImU32 to_u32(const std::string& hex) {
   return ImGui::ColorConvertFloat4ToU32(parse_hex_color(hex));
 }
 
+/// The slot of widgets in user-interface windows (spec/09_ui_mockups).
+constexpr std::string_view kUiWidgetSlot = "ui.widget";
+
 // ── VerticalLayout / HorizontalLayout ────────────────────────────────────────
 
 const name_table& align_names() {
@@ -238,13 +241,19 @@ void rule(const rect& r, float x0, float x1) {
 
 class separator_class : public element_class {
  public:
-  separator_class() : element_class("Separator", kFigure, {}, {}, "A horizontal rule between elements.") {}
+  separator_class() : element_class("Separator", kFigure, {}, {}, "A horizontal rule between elements.") {
+    also_fits(std::string(kUiWidgetSlot)); // ImGui::Separator() in a window
+  }
 
   ImVec2 measure(const node&, draw_context&, float) const override {
     return ImVec2(0.0f, 1.0f + 2.0f * ImGui::GetStyle().ItemSpacing.y);
   }
 
   void draw(const node& n, draw_context& dc) const override {
+    if (placed_as(n) == kUiWidgetSlot) {
+      ImGui::Separator();
+      return;
+    }
     const rect r = dc.rect_of(n);
     rule(r, r.min.x, r.max.x);
   }
@@ -258,7 +267,9 @@ class separator_text_class : public element_class {
             kFigure,
             {},
             with_text_style({text_field("label", "", "Text shown inline with the separator line.")}),
-            "A horizontal rule with a text label embedded in the line.") {}
+            "A horizontal rule with a text label embedded in the line.") {
+    also_fits(std::string(kUiWidgetSlot)); // ImGui::SeparatorText() in a window
+  }
 
   ImVec2 measure(const node& n, draw_context&, float) const override {
     const ImGuiStyle& style = ImGui::GetStyle();
@@ -267,6 +278,11 @@ class separator_text_class : public element_class {
   }
 
   void draw(const node& n, draw_context& dc) const override {
+    if (placed_as(n) == kUiWidgetSlot) {
+      ImGui::SeparatorText(n.get<std::string>(0).c_str());
+      dc.record_target(n, "label", {ImGui::GetItemRectMin(), ImGui::GetItemRectMax()}, n.get<std::string>(0));
+      return;
+    }
     const rect r = dc.rect_of(n);
     const ImGuiStyle& style = ImGui::GetStyle();
     const std::string& label = n.get<std::string>(0);

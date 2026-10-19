@@ -1,0 +1,84 @@
+nymph: 1
+description: Mockup of a 3D scene editor - a menu bar, a scene tree, a viewport and a properties panel - drawn with Dear ImGui widgets.
+image: {width: 1000, height: 560, padding: 0}
+data:
+  frames:
+    frame: [1, 2, 3, 4, 5, 6, 7, 8]
+    ms: [16.4, 16.9, 15.8, 22.1, 16.2, 16.6, 17.3, 16.1]
+root:
+  type: Screen
+  children:
+    - type: MainMenuBar
+      children:
+        - {type: Menu, label: File, children: [{type: MenuItem, label: Open..., shortcut: Ctrl+O}]}
+        - {type: Menu, label: Edit, children: [{type: MenuItem, label: Undo, shortcut: Ctrl+Z}]}
+        - {type: Menu, label: View, children: [{type: MenuItem, label: Statistics, checked: true}]}
+    - type: Window
+      title: Scene
+      x: 8
+      y: 30
+      width: 230
+      height: 522
+      flags: NoCollapse
+      children:
+        - type: TreeNode
+          label: World
+          open: true
+          flags: DefaultOpen
+          children:
+            - {type: TreeNode, label: Camera, flags: Leaf}
+            - {type: TreeNode, label: Sun, flags: Leaf|Selected}
+            - type: TreeNode
+              label: Props
+              open: true
+              children:
+                - {type: TreeNode, label: Table, flags: Leaf}
+                - {type: TreeNode, label: Chair, flags: Leaf}
+        - {type: Separator}
+        - {type: Button, label: Add object, size: [-1, 0]}
+    - type: Window
+      title: Viewport
+      x: 246
+      y: 30
+      width: 440
+      height: 522
+      children:
+        - {type: Image, image: landscape, width: -1, height: -60, fit: cover, label: "Rendered view"}
+        - type: Plot
+          title: Frame time
+          height: 50
+          flags: NoTitle|NoLegend|NoMenus
+          x_flags: NoDecorations
+          children:
+            - {type: PlotShaded, label: ms, xs: $frames:frame, ys: $frames:ms}
+    - type: Window
+      title: Properties
+      x: 694
+      y: 30
+      width: 298
+      height: 522
+      children:
+        - {type: InputText, label: Name, value: Sun}
+        - type: CollapsingHeader
+          label: Transform
+          open: true
+          children:
+            - {type: DragFloat3, label: Position, value: [12, 40, -3], speed: 0.1}
+            - {type: SliderAngle, label: Angle, value: 35}
+        - type: CollapsingHeader
+          label: Light
+          open: true
+          children:
+            - {type: ColorEdit3, label: Color, value: "#FFE4B0"}
+            - {type: SliderFloat, label: Intensity, value: 1.2, min: 0, max: 4}
+            - {type: Checkbox, label: Cast shadows, value: true}
+            - {type: Combo, label: Shadows, items: [Hard, Soft, Off], selected: 1}
+        - type: CollapsingHeader
+          label: Statistics
+          open: true
+          children:
+            - type: Table
+              flags: Borders|RowBg
+              children:
+                - {type: TableColumn, label: Pass, cells: [Shadows, Opaque, Post]}
+                - {type: TableColumn, label: ms, cells: ["2.1", "9.8", "1.4"]}
