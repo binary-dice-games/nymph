@@ -114,13 +114,16 @@ union XEvent {
   long pad[24];
 };
 
-constexpr int KeyPress = 2, ButtonPress = 4, ButtonRelease = 5, MotionNotify = 6, LeaveNotify = 8, Expose = 12,
+constexpr int KeyPress = 2, KeyRelease = 3, ButtonPress = 4, ButtonRelease = 5, MotionNotify = 6, LeaveNotify = 8, Expose = 12,
               DestroyNotify = 17, ConfigureNotify = 22, ClientMessage = 33;
-constexpr long KeyPressMask = 1L << 0, ButtonPressMask = 1L << 2, ButtonReleaseMask = 1L << 3,
+constexpr long KeyPressMask = 1L << 0, KeyReleaseMask = 1L << 1, ButtonPressMask = 1L << 2, ButtonReleaseMask = 1L << 3,
                LeaveWindowMask = 1L << 5, PointerMotionMask = 1L << 6, ExposureMask = 1L << 15,
                StructureNotifyMask = 1L << 17;
 constexpr unsigned long CWBorderPixel = 1UL << 3, CWEventMask = 1UL << 11, CWColormap = 1UL << 13;
-constexpr unsigned long kKeysymEscape = 0xff1b;
+constexpr unsigned long kKeysymEscape = 0xff1b, kKeysymBackSpace = 0xff08, kKeysymTab = 0xff09,
+                        kKeysymReturn = 0xff0d, kKeysymHome = 0xff50, kKeysymLeft = 0xff51, kKeysymUp = 0xff52,
+                        kKeysymRight = 0xff53, kKeysymDown = 0xff54, kKeysymPageUp = 0xff55, kKeysymPageDown = 0xff56,
+                        kKeysymEnd = 0xff57, kKeysymKpEnter = 0xff8d, kKeysymDelete = 0xffff;
 
 // GLX_ARB_create_context and the FBConfig attributes
 constexpr int GLX_DOUBLEBUFFER = 5, GLX_RED_SIZE = 8, GLX_GREEN_SIZE = 9, GLX_BLUE_SIZE = 10, GLX_ALPHA_SIZE = 11,
@@ -268,7 +271,7 @@ class x11_window : public native_window {
     colormap_ = a.XCreateColormap(display_, a.XRootWindow(display_, screen), visual->visual, 0);
     XSetWindowAttributes attrs{};
     attrs.colormap = colormap_;
-    attrs.event_mask = KeyPressMask | ButtonPressMask | ButtonReleaseMask | LeaveWindowMask | PointerMotionMask |
+    attrs.event_mask = KeyPressMask | KeyReleaseMask | ButtonPressMask | ButtonReleaseMask | LeaveWindowMask | PointerMotionMask |
         ExposureMask | StructureNotifyMask;
     width_ = 640;
     height_ = 480;
@@ -426,6 +429,49 @@ class x11_window : public native_window {
       case 'y':
       case 'Y':
         return window_key::y;
+      case 'e':
+      case 'E':
+        return window_key::e;
+      case 'a':
+      case 'A':
+        return window_key::a;
+      case 'c':
+      case 'C':
+        return window_key::c;
+      case 'v':
+      case 'V':
+        return window_key::v;
+      case 'x':
+      case 'X':
+        return window_key::x;
+      case 'z':
+      case 'Z':
+        return window_key::z;
+      case kKeysymReturn:
+      case kKeysymKpEnter:
+        return window_key::enter;
+      case kKeysymTab:
+        return window_key::tab;
+      case kKeysymBackSpace:
+        return window_key::backspace;
+      case kKeysymDelete:
+        return window_key::del;
+      case kKeysymLeft:
+        return window_key::left;
+      case kKeysymRight:
+        return window_key::right;
+      case kKeysymUp:
+        return window_key::up;
+      case kKeysymDown:
+        return window_key::down;
+      case kKeysymHome:
+        return window_key::home;
+      case kKeysymEnd:
+        return window_key::end;
+      case kKeysymPageUp:
+        return window_key::page_up;
+      case kKeysymPageDown:
+        return window_key::page_down;
       default:
         return window_key::other;
     }
@@ -487,10 +533,27 @@ class x11_window : public native_window {
         break;
       }
       case KeyPress:
-        events_.on_key(key_of(api().XLookupKeysym(&e.key, 0)));
+      case KeyRelease: {
+        const bool down = e.type == KeyPress;
+        key_mods mods;
+        mods.shift = (e.key.state & 1u) != 0;
+        mods.ctrl = (e.key.state & 4u) != 0;
+        mods.alt = (e.key.state & 8u) != 0;
+        events_.on_key(key_of(api().XLookupKeysym(&e.key, 0)), mods, down, false);
+        if (down && !mods.ctrl && !mods.alt) {
+          // The typed character: the keysym of the shift level in use. Latin-1
+          // keysyms are their code points, 0x01000000 + c are Unicode ones.
+          const unsigned long ks = api().XLookupKeysym(&e.key, mods.shift ? 1 : 0);
+          if ((ks >= 0x20 && ks <= 0x7e) || (ks >= 0xa0 && ks <= 0xff)) {
+            events_.on_text(static_cast<char32_t>(ks));
+          } else if (ks >= 0x01000100 && ks <= 0x0110ffff) {
+            events_.on_text(static_cast<char32_t>(ks - 0x01000000));
+          }
+        }
         break;
+      }
       case ClientMessage:
-        if (static_cast<XAtom>(e.client.data[0]) == wm_delete_) {
+        if (static_cast<XAtom>(e.client.data[0]) == wm_delete_ && events_.on_close_request()) {
           closed_ = true;
         }
         break;

@@ -109,6 +109,27 @@ enum ImUmlDiagramFlags_ {
   /// dragging pans, a double-click fits again; the view is kept per diagram
   /// ID. ImUmlDiagramInfo reports the hovered node or edge (graph diagrams).
   ImUmlDiagramFlags_Interactive = 1 << 3,
+  /// Records every text the diagram draws (ImUmlDiagramInfo::TextRuns), with
+  /// the item it belongs to, so a host can tell what is under the pointer.
+  /// Drawing is unchanged.
+  ImUmlDiagramFlags_CaptureText = 1 << 4,
+};
+
+/// What an ImUmlTextRun belongs to.
+enum ImUmlTextRunKind_ {
+  ImUmlTextRunKind_None,
+  ImUmlTextRunKind_Node, ///< Item: index of the node in submission order.
+  ImUmlTextRunKind_Edge, ///< Item: index of the edge in submission order.
+  ImUmlTextRunKind_Event, ///< Sequence diagrams: message, note, fragment; item: index of the event.
+  ImUmlTextRunKind_Title, ///< The diagram's title; item 0.
+};
+
+/// @brief One text a diagram drew, in screen coordinates.
+struct ImUmlTextRun {
+  int Kind; ///< ImUmlTextRunKind_
+  int Item;
+  ImVec2 Min, Max; ///< Screen rectangle of the text (all its lines).
+  const char* Text; ///< The text as drawn, zero-terminated; valid until the next diagram is drawn.
 };
 
 enum ImUmlDirection_ {
@@ -330,6 +351,9 @@ struct ImUmlDiagramInfo {
   int NodeCount;
   int EdgeCount;
   int SkippedItems; ///< Edges or messages naming an unknown id.
+  /// ImUmlDiagramFlags_CaptureText only: the texts drawn, in drawing order.
+  int TextRunCount;
+  const ImUmlTextRun* TextRuns;
   // ImUmlDiagramFlags_Interactive only:
   float ViewZoom; ///< The user's zoom on top of the fit (1 = fitted).
   ImVec2 ViewCenter; ///< Content point (zoom-1 units) at the centre of the view; also with SetNextDiagramView().
@@ -343,6 +367,8 @@ struct ImUmlDiagramInfo {
     TitleHeight = 0.0f;
     Zoom = 1.0f;
     NodeCount = EdgeCount = SkippedItems = 0;
+    TextRunCount = 0;
+    TextRuns = nullptr;
     ViewZoom = 1.0f;
     ViewCenter = ImVec2(0, 0);
     HoveredNode = HoveredEdge = -1;
@@ -605,6 +631,12 @@ IMGUI_API void Link(
 // ── Queries ──────────────────────────────────────────────────────────────────
 
 IMGUI_API const ImUmlDiagramInfo& GetLastDiagramInfo();
+
+/// How many nodes, edges and sequence events the open diagram has had
+/// submitted so far; false (and nothing set) outside a diagram. A host
+/// compares the counts before and after drawing one of its items to learn
+/// which nodes, edges and events the item made.
+IMGUI_API bool GetItemCounts(int* nodes, int* edges, int* events);
 /// Sets the view of the next diagram drawn (not measured): `zoom` on top of
 /// the fit (0.25 to 8) and the content point (zoom-1 units, as
 /// ImUmlDiagramInfo::ViewCenter) at the centre; a NaN component centres the

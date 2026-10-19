@@ -5,11 +5,16 @@
 #include "elements/uml/uml_common.hpp"
 #include <imgui.h>
 #include <imgui_internal.h> // ImHashStr: ImUml hashes item ids with it
+#include <algorithm>
+#include <cctype>
 #include <cmath>
 #include <limits>
 #include <memory>
+#include <span>
 #include <stdexcept>
 #include <string>
+#include <string_view>
+#include <variant>
 #include "core/error.hpp"
 #include "core/limits.hpp"
 #include "core/suggest.hpp"
@@ -202,7 +207,12 @@ item_class::item_class(
     std::vector<field_desc> fields,
     std::string description,
     std::vector<std::string> ref_fields)
-    : element_class(std::move(name), std::move(slot), std::move(accepts), std::move(fields), std::move(description)) {
+    : element_class(
+          std::move(name),
+          std::move(slot),
+          std::move(accepts),
+          with_text_style(std::move(fields)),
+          std::move(description)) {
   id_field_ = field_index("id");
   for (const std::string& r : ref_fields) {
     ref_fields_.push_back(field(r));
@@ -396,6 +406,10 @@ ImUmlDiagramInfo diagram_class::submit(const node& n, draw_context& dc, const re
     size = ImVec2(r->width(), r->height());
     // A live view pans and zooms the diagram (spec/04_web_viewer).
     flags = dc.interactive() ? ImUmlDiagramFlags_Interactive : ImUmlDiagramFlags_None;
+    if (dc.edit_mode()) {
+      flags |= ImUmlDiagramFlags_CaptureText;
+      dc.clear_item_ranges(); // what the measuring passes recorded no longer applies
+    }
     // The saved view (the `view` key).
     if (const element_view* v = dc.view_of(n); v != nullptr && dc.apply_view() && (v->zoom || v->center)) {
       const float nan = std::numeric_limits<float>::quiet_NaN();
@@ -464,6 +478,9 @@ void diagram_class::draw(const node& n, draw_context& dc) const {
   const rect r = dc.rect_of(n);
   dc.add_input_area(r);
   const ImUmlDiagramInfo info = submit(n, dc, &r);
+  if (dc.edit_mode()) {
+    record_texts(n, dc, info);
+  }
   if (dc.interactive()) {
     offer_hovered(n, dc, info);
     finish_picks(dc, ImGui::GetWindowDrawList());
@@ -474,6 +491,80 @@ void diagram_class::draw(const node& n, draw_context& dc) const {
     view.zoom = info.ViewZoom;
     view.center = {info.ViewCenter.x, info.ViewCenter.y};
     dc.record_view(std::move(view));
+  }
+}
+
+namespace {
+
+/// The text field of `item` that shows `shown`, or "". Fields that name
+/// other nodes or hold no display text are not considered; `id` is what a
+/// node shows when its own text is empty, which then belongs to the first of
+/// text / label / name / title that is empty.
+std::string field_showing(const node& item, const std::string& shown) {
+  static constexpr std::string_view kNotText[] = {"id", "from", "to", "font", "rank", "over", "color", "fill_color"};
+  const std::span<const field_desc> fields = item.cls->fields();
+  for (size_t i = 0; i < fields.size(); ++i) {
+    if (fields[i].type != field_type::text || !std::holds_alternative<std::string>(item.values[i])) {
+      continue;
+    }
+    if (std::find(std::begin(kNotText), std::end(kNotText), fields[i].name) != std::end(kNotText)) {
+      continue;
+    }
+    if (item.get<std::string>(i) == shown) {
+      return fields[i].name;
+    }
+  }
+  if (!id_of(item).empty() && id_of(item) == shown) {
+    for (const char* name : {"text", "label", "name", "title"}) {
+      const int i = item.cls->field_index(name);
+      if (i >= 0 && item.get<std::string>(static_cast<size_t>(i)).empty()) {
+        return name;
+      }
+    }
+  }
+  return {};
+}
+
+} // namespace
+
+void diagram_class::record_texts(const node& n, draw_context& dc, const ImUmlDiagramInfo& info) const {
+  static constexpr int kind_slot[] = {-1, 0, 1, 2, -1}; // ImUmlTextRunKind_ -> node / edge / event range
+  for (int i = 0; i < info.TextRunCount; ++i) {
+    const ImUmlTextRun& run = info.TextRuns[i];
+    const rect area{run.Min, run.Max};
+    const std::string shown = run.Text;
+    if (run.Kind == ImUmlTextRunKind_Title) {
+      dc.record_target(n, "title", area, shown);
+      continue;
+    }
+    if (run.Kind <= ImUmlTextRunKind_None || run.Kind > ImUmlTextRunKind_Event) {
+      continue;
+    }
+    // The element that made the item, the narrowest if groups nest.
+    const int slot = kind_slot[run.Kind];
+    const item_range* best = nullptr;
+    for (const item_range& r : dc.item_ranges()) {
+      if (r.first[slot] <= run.Item && run.Item < r.last[slot] &&
+          (best == nullptr || r.last[slot] - r.first[slot] < best->last[slot] - best->first[slot])) {
+        best = &r;
+      }
+    }
+    if (best == nullptr) {
+      continue;
+    }
+    std::string field = field_showing(*best->element, shown);
+    std::string text = shown;
+    if (field.empty() && shown.size() > 3 && std::isdigit(static_cast<unsigned char>(shown[0]))) {
+      // An autonumbered message: "3. text".
+      const size_t dot = shown.find(". ");
+      if (dot != std::string::npos && dot <= 4) {
+        text = shown.substr(dot + 2);
+        field = field_showing(*best->element, text);
+      }
+    }
+    if (!field.empty()) {
+      dc.record_target(*best->element, field, area, text);
+    }
   }
 }
 

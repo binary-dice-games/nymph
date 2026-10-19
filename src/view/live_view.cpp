@@ -9,8 +9,12 @@
 #include <optional>
 #include <set>
 #include <unordered_map>
+#include <variant>
 #include <utility>
 #include "core/error.hpp"
+#include "document/yaml_doc.hpp"
+#include "edit/image_fields.hpp"
+#include "edit/source_edit.hpp"
 #include "document/bind.hpp"
 #include "elements/register_builtin.hpp"
 #include "fonts/fonts_used.hpp"
@@ -39,6 +43,51 @@ void index_paths(const node& n, const std::string& path, std::unordered_map<cons
   for (size_t i = 0; i < n.children.size(); ++i) {
     index_paths(n.children[i], path + "/children/" + std::to_string(i), out);
   }
+}
+
+/// Pixels added around a text target when hit-testing.
+constexpr float kTextSlop = 3.0f;
+
+/// The first non-empty text among the `title`, `text`, `label` and `id`
+/// fields of `n`, for the editor's tree.
+std::string node_label(const node& n) {
+  for (const char* name : {"title", "text", "label", "id"}) {
+    const int index = n.cls->field_index(name);
+    if (index >= 0 && std::holds_alternative<std::string>(n.values[static_cast<size_t>(index)])) {
+      const std::string& text = n.get<std::string>(static_cast<size_t>(index));
+      if (!text.empty()) {
+        return text;
+      }
+    }
+  }
+  return {};
+}
+
+void list_elements(const node& n, const std::string& path, int depth, std::vector<edit_element>& out) {
+  out.push_back({path, std::string(n.cls->name()), node_label(n), depth});
+  for (size_t i = 0; i < n.children.size(); ++i) {
+    list_elements(n.children[i], path + "/children/" + std::to_string(i), depth + 1, out);
+  }
+}
+
+/// A dashed rectangle outline.
+void dashed_rect(ImDrawList* dl, const ImVec2& a, const ImVec2& b, ImU32 color) {
+  constexpr float kDash = 4.0f, kGap = 3.0f;
+  const auto line = [&](ImVec2 p, ImVec2 q) {
+    const float len = std::hypot(q.x - p.x, q.y - p.y);
+    if (len <= 0.0f) {
+      return;
+    }
+    const ImVec2 d((q.x - p.x) / len, (q.y - p.y) / len);
+    for (float t = 0.0f; t < len; t += kDash + kGap) {
+      const float e = std::min(t + kDash, len);
+      dl->AddLine(ImVec2(p.x + d.x * t, p.y + d.y * t), ImVec2(p.x + d.x * e, p.y + d.y * e), color, 1.0f);
+    }
+  };
+  line(a, ImVec2(b.x, a.y));
+  line(ImVec2(b.x, a.y), b);
+  line(b, ImVec2(a.x, b.y));
+  line(ImVec2(a.x, b.y), a);
 }
 
 std::string join(const std::vector<std::string>& names) {
@@ -73,6 +122,13 @@ struct live_view::impl {
   view_map last_states;
   std::set<std::string> touched;
   int input_frames_left = 0;
+
+  // Edit mode (spec/08_view_editor/DESIGN.md section 4).
+  bool edit_mode = false;
+  std::vector<edit_target> edit_targets; ///< Of the last frame, in drawing order.
+  std::optional<edit_target_id> selection;
+  std::optional<edit_target> edit_click;
+  std::optional<yaml_node> edit_doc; ///< The source parsed, to see which fields are `$column` references.
 
   // The ImGui side; recreated by reset_contexts().
   std::unique_ptr<imgui_contexts> contexts;
@@ -290,6 +346,119 @@ struct live_view::impl {
     last_states = std::move(now);
   }
 
+  /// The targets at (`x`, `y`) CSS pixels among `edit_targets`, best first.
+  std::vector<edit_target> targets_at_css(float x, float y) const {
+    std::vector<size_t> found;
+    for (size_t i = 0; i < edit_targets.size(); ++i) {
+      const edit_target& t = edit_targets[i];
+      const float slop = t.field.empty() ? 0.0f : kTextSlop;
+      if (x >= t.x - slop && x <= t.x + t.width + slop && y >= t.y - slop && y <= t.y + t.height + slop) {
+        found.push_back(i);
+      }
+    }
+    std::sort(found.begin(), found.end(), [&](size_t a, size_t b) {
+      const float area_a = edit_targets[a].width * edit_targets[a].height;
+      const float area_b = edit_targets[b].width * edit_targets[b].height;
+      return area_a != area_b ? area_a < area_b : a > b;
+    });
+    std::vector<edit_target> out;
+    for (const size_t i : found) {
+      out.push_back(edit_targets[i]);
+    }
+    return out;
+  }
+
+  const edit_target* find_target(std::string_view element, std::string_view field) const {
+    const edit_target* whole = nullptr;
+    for (const edit_target& t : edit_targets) {
+      if (t.element != element) {
+        continue;
+      }
+      if (t.field == field) {
+        return &t;
+      }
+      if (t.field.empty()) {
+        whole = &t;
+      }
+    }
+    return field.empty() ? whole : nullptr;
+  }
+
+  /// "bound to $col" when the source writes field `field` of `element` as a
+  /// column reference (its text comes from the data, not from the field).
+  std::string bound_reason(const std::string& element, const std::string& field) {
+    if (field.empty()) {
+      return {};
+    }
+    if (!edit_doc) {
+      try {
+        edit_doc = parse_yaml(source);
+      } catch (const error&) {
+        return {};
+      }
+    }
+    const std::optional<std::string> ref = field_reference(*edit_doc, element, field);
+    return ref ? "bound to " + *ref : std::string();
+  }
+
+  /// Converts the frame's recorded targets to CSS pixels. The whole figure
+  /// comes first as the image options' target: the smallest target wins, so
+  /// it is what a click on the margin, away from every element, finds.
+  void collect_targets() {
+    edit_targets.clear();
+    const float s = geom.css_scale;
+    edit_target background;
+    background.element = std::string(kImagePath);
+    background.type = "Image";
+    background.width = geom.layout_width * s;
+    background.height = geom.layout_height * s;
+    edit_targets.push_back(std::move(background));
+    for (const edit_record& r : ctx->targets()) {
+      const auto it = paths.find(r.element);
+      if (it == paths.end()) {
+        continue;
+      }
+      edit_target t;
+      t.element = it->second;
+      t.type = std::string(r.element->cls->name());
+      t.field = r.field;
+      t.text = r.text;
+      t.read_only_reason = r.read_only_reason.empty() ? bound_reason(t.element, t.field) : r.read_only_reason;
+      t.x = r.area.min.x * s;
+      t.y = r.area.min.y * s;
+      t.width = r.area.width() * s;
+      t.height = r.area.height() * s;
+      edit_targets.push_back(std::move(t));
+    }
+  }
+
+  /// Outlines the target under the pointer (dashed) and the selection
+  /// (solid) on the foreground draw list; inside the figure's frame.
+  void draw_edit_overlay() {
+    const ImGuiIO& io = ImGui::GetIO();
+    const float s = geom.css_scale > 0.0f ? geom.css_scale : 1.0f;
+    const auto to_logical = [&](const edit_target& t) {
+      return std::pair<ImVec2, ImVec2>{ImVec2(t.x / s, t.y / s), ImVec2((t.x + t.width) / s, (t.y + t.height) / s)};
+    };
+    const ImU32 hover_color = IM_COL32(40, 140, 255, 200);
+    const ImU32 select_color = IM_COL32(40, 140, 255, 255);
+    if (io.MousePos.x > -FLT_MAX / 2) {
+      const std::vector<edit_target> under = targets_at_css(io.MousePos.x * s, io.MousePos.y * s);
+      if (!under.empty()) {
+        const auto [a, b] = to_logical(under.front());
+        dashed_rect(ImGui::GetForegroundDrawList(), a, b, hover_color);
+      }
+    }
+    if (selection) {
+      if (const edit_target* t = find_target(selection->element, selection->field)) {
+        const auto [a, b] = to_logical(*t);
+        const float grow = t->element == kImagePath ? -1.0f : 1.0f; // the figure's own edge stays inside it
+        ImGui::GetForegroundDrawList()->AddRect(
+            ImVec2(a.x - grow, a.y - grow), ImVec2(b.x + grow, b.y + grow), select_color, 0.0f, 0, 2.0f);
+      }
+    }
+  }
+
   /// One frame in the current contexts.
   void run_frame(double now) {
     ImGuiIO& io = ImGui::GetIO();
@@ -303,11 +472,16 @@ struct live_view::impl {
     // Source limits stay fixed while fresh contexts settle (static parity
     // with render_figure()); then they let go for pan and zoom.
     ctx->set_lock_limits(fresh_frames < kFigureFrames);
+    ctx->set_edit_mode(edit_mode);
     ++fresh_frames;
     const node& root = fig->root;
     run_figure_frame(frame_options, *ctx, [&](draw_context& dc) {
       layout_root(root, dc);
       dc.draw_node(root);
+      if (edit_mode) {
+        collect_targets();
+        draw_edit_overlay();
+      }
     });
     if (options.cpu_textures) {
       textures.apply_all(*ImGui::GetDrawData());
@@ -328,6 +502,17 @@ struct live_view::impl {
     if (ImGui::IsMouseReleased(ImGuiMouseButton_Left) &&
         io.MouseDragMaxDistanceSqr[ImGuiMouseButton_Left] <= slop * slop && hovered) {
       click = hovered;
+    }
+    if (!edit_mode) {
+      edit_targets.clear();
+    } else if (
+        ImGui::IsMouseReleased(ImGuiMouseButton_Left) && io.MouseDragMaxDistanceSqr[ImGuiMouseButton_Left] <= slop * slop &&
+        io.MousePos.x > -FLT_MAX / 2) {
+      const float s = geom.css_scale > 0.0f ? geom.css_scale : 1.0f;
+      const std::vector<edit_target> under = targets_at_css(io.MousePos.x * s, io.MousePos.y * s);
+      if (!under.empty()) {
+        edit_click = under.front();
+      }
     }
     input_areas = ctx->input_areas();
     track_changes();
@@ -391,6 +576,16 @@ void live_view::set_source(std::string_view source, bool reset_view) {
   m.views.clear();
   m.hovered.reset();
   m.click.reset();
+  m.edit_click.reset();
+  m.edit_targets.clear();
+  m.edit_doc.reset();
+  if (m.selection) {
+    const auto gone = m.selection->element != kImagePath &&
+        std::none_of(m.paths.begin(), m.paths.end(), [&](const auto& p) { return p.second == m.selection->element; });
+    if (gone) {
+      m.selection.reset();
+    }
+  }
   m.last_states.clear();
   if (reset_view) {
     m.touched.clear();
@@ -453,6 +648,10 @@ void live_view::set_theme(std::string theme) {
   }
   m.update_geometry();
   m.pending_frames = kFigureFrames;
+}
+
+std::string live_view::theme() const {
+  return impl_->effective_theme();
 }
 
 void live_view::resize(view_size size) {
@@ -518,6 +717,60 @@ const std::optional<view_pick>& live_view::hovered() const {
 std::optional<view_pick> live_view::take_click() {
   std::optional<view_pick> out = std::move(impl_->click);
   impl_->click.reset();
+  return out;
+}
+
+void live_view::set_edit_mode(bool on) {
+  impl& m = *impl_;
+  if (m.edit_mode == on) {
+    return;
+  }
+  m.edit_mode = on;
+  m.edit_click.reset();
+  if (!on) {
+    m.edit_targets.clear();
+  }
+  m.pending_frames = std::max(m.pending_frames, kInputFrames);
+}
+
+bool live_view::edit_mode() const {
+  return impl_->edit_mode;
+}
+
+std::vector<edit_target> live_view::targets_at(float x, float y) const {
+  return impl_->edit_mode ? impl_->targets_at_css(x, y) : std::vector<edit_target>();
+}
+
+std::optional<edit_target> live_view::target_for(std::string_view element, std::string_view field) const {
+  const edit_target* t = impl_->edit_mode ? impl_->find_target(element, field) : nullptr;
+  return t != nullptr ? std::optional<edit_target>(*t) : std::nullopt;
+}
+
+void live_view::set_selection(std::optional<edit_target_id> selection) {
+  impl& m = *impl_;
+  if (m.selection == selection) {
+    return;
+  }
+  m.selection = std::move(selection);
+  m.pending_frames = std::max(m.pending_frames, 1);
+}
+
+const std::optional<edit_target_id>& live_view::selection() const {
+  return impl_->selection;
+}
+
+std::vector<edit_element> live_view::element_list() const {
+  std::vector<edit_element> out;
+  if (impl_->fig) {
+    out.push_back({std::string(kImagePath), "Image", "", 0});
+    list_elements(impl_->fig->root, "root", 0, out);
+  }
+  return out;
+}
+
+std::optional<edit_target> live_view::take_edit_click() {
+  std::optional<edit_target> out = std::move(impl_->edit_click);
+  impl_->edit_click.reset();
   return out;
 }
 

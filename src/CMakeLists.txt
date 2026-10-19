@@ -46,6 +46,16 @@ add_library(nymph STATIC
   document/table.cpp
   document/bind.hpp
   document/bind.cpp
+  edit/source_edit.hpp
+  edit/source_edit.cpp
+  edit/field_value.hpp
+  edit/field_value.cpp
+  edit/editor_model.hpp
+  edit/editor_model.cpp
+  edit/image_fields.hpp
+  edit/image_fields.cpp
+  edit/inspector.hpp
+  edit/inspector.cpp
   elements/plot_style.hpp
   elements/plot_style.cpp
   elements/plot2d.hpp
@@ -207,6 +217,8 @@ if(NYMPH_VIEW)
     window/view_command.cpp
     window/viewer_window.hpp
     window/viewer_window.cpp
+  window/editor_panel.hpp
+  window/editor_panel.cpp
     window/window_host.hpp
     "${NYMPH_EXTERN_DIR}/imgui/backends/imgui_impl_opengl3.cpp"
   )

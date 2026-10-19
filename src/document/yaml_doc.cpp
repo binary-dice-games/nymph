@@ -175,6 +175,8 @@ class converter {
     yaml_node out;
     out.line = to_line(in.start_mark);
     out.column = to_column(in.start_mark);
+    out.end_line = to_line(in.end_mark);
+    out.end_column = to_column(in.end_mark);
     switch (in.type) {
       case YAML_SCALAR_NODE:
         out.kind = yaml_node::kind_t::scalar;

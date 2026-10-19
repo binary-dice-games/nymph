@@ -421,6 +421,13 @@ struct ImUmlContext {
   ImGuiStorage DiagramMap; ///< ID -> index + 1.
   ImUmlDiagram* Current;
   ImUmlDiagramInfo LastInfo;
+  // Text capture (ImUmlDiagramFlags_CaptureText), while drawing.
+  bool CaptureText = false;
+  int RunKind = 0; ///< ImUmlTextRunKind_ of the item being drawn.
+  int RunItem = 0;
+  ImVector<ImUmlTextRun> Runs;
+  ImVector<int> RunTextOffsets;
+  ImVector<char> RunText;
   bool HasNextView; ///< SetNextDiagramView(), taken by the next Begin.
   float NextZoom;
   ImVec2 NextCenter;

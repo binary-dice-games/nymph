@@ -490,7 +490,11 @@ class chart_class : public element_class {
       plot(n, s, dc);
       finish_plot_picks(dc);
       dc.record_current_plot(n, false, view_kind::gantt);
+      const ImPlotPlot* open_plot = dc.edit_mode() ? ImPlot::GetCurrentPlot() : nullptr;
       ImPlot::EndPlot();
+      if (open_plot != nullptr) {
+        record_plot_texts(dc, {&n, title_text, n.get<std::string>(x_label), {}, {}, false, {}}, open_plot);
+      }
     }
     if (cmap != kColormapDefault) {
       ImPlot::PopColormap();

@@ -127,6 +127,14 @@ On a plot, the style covers its title, axis and tick labels, legend and
 text inside it. `text_color` leaves grid lines alone. `font: default`
 switches back to the built-in font inside a subtree that set another.
 
+Every diagram item that draws text (`FlowNode`, `FlowGroup`, `FlowLink`,
+a class, a state, a message, a `Note`, ...) takes the three fields too and
+styles its own text; unset, it follows the diagram's.
+
+```yaml
+- {type: FlowNode, id: warn, text: Careful, text_color: "#C0392B", font_size: 22}
+```
+
 ## Layout
 
 A layout places its children one after another: `VerticalLayout` top to

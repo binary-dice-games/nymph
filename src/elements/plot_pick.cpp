@@ -253,4 +253,50 @@ void finish_plot_picks(draw_context& dc) {
   dc.set_hovered(std::move(c->hit));
 }
 
+void record_plot_texts(draw_context& dc, const plot_texts& texts, const ImPlotPlot* plot) {
+  if (!dc.edit_mode() || plot == nullptr || texts.element == nullptr) {
+    return;
+  }
+  const node& n = *texts.element;
+  // The axes' hover areas reach out over the plot padding; labels sit inside it.
+  const ImVec2 pad = ImPlot::GetStyle().PlotPadding;
+  const auto text_size = [](const std::string& t) {
+    return ImGui::CalcTextSize(t.c_str(), ImGui::FindRenderedTextEnd(t.c_str()), true);
+  };
+  // The title is centred over the plot area at the top of the canvas.
+  if (!texts.title.empty() && texts.title.compare(0, 2, "##") != 0) {
+    const ImVec2 size = text_size(texts.title);
+    const float x = plot->PlotRect.GetCenter().x - size.x * 0.5f;
+    dc.record_target(
+        n, "title", {ImVec2(x, plot->CanvasRect.Min.y), ImVec2(x + size.x, plot->CanvasRect.Min.y + size.y)}, texts.title);
+  }
+  // X label: centred under the plot area, at the bottom of the axis.
+  if (!texts.x_label.empty()) {
+    const ImPlotAxis& axis = plot->Axes[ImAxis_X1];
+    const ImVec2 size = text_size(texts.x_label);
+    const float x = plot->PlotRect.GetCenter().x - size.x * 0.5f;
+    dc.record_target(
+        n, "x_label", {ImVec2(x, axis.HoverRect.Max.y - pad.y - size.y), ImVec2(x + size.x, axis.HoverRect.Max.y - pad.y)}, texts.x_label);
+  }
+  // Y labels are turned a quarter round: as wide as the text is high.
+  const auto y_label = [&](ImAxis id, const std::string& label, const char* field, bool left) {
+    const ImPlotAxis& axis = plot->Axes[id];
+    const ImVec2 size = text_size(label);
+    const float cy = plot->PlotRect.GetCenter().y;
+    const float x = left ? axis.HoverRect.Min.x + pad.x : axis.HoverRect.Max.x - pad.x - size.y;
+    dc.record_target(n, field, {ImVec2(x, cy - size.x * 0.5f), ImVec2(x + size.y, cy + size.x * 0.5f)}, label);
+  };
+  if (!texts.y_label.empty()) {
+    y_label(ImAxis_Y1, texts.y_label, "y_label", true);
+  }
+  if (texts.has_y2 && !texts.y2_label.empty()) {
+    y_label(ImAxis_Y2, texts.y2_label, "y2_label", false);
+  }
+  // The legend, when it is drawn.
+  const ImRect& legend = plot->Items.Legend.Rect;
+  if (!texts.legend_field.empty() && plot->Items.GetLegendCount() > 0 && (plot->Flags & ImPlotFlags_NoLegend) == 0 && legend.GetWidth() > 0.0f) {
+    dc.record_target(n, texts.legend_field, {legend.Min, legend.Max}, "legend");
+  }
+}
+
 } // namespace bdg::nymph

@@ -204,6 +204,10 @@ class label_class : public element_class {
     if (n.get<bool>(label_field::wrap)) {
       ImGui::PopTextWrapPos();
     }
+    if (dc.edit_mode()) {
+      const ImVec2 size = measure(n, dc, r.width());
+      dc.record_target(n, "text", {r.min, ImVec2(r.min.x + size.x, r.min.y + size.y)}, n.get<std::string>(label_field::text));
+    }
     if (!color.empty()) {
       ImGui::PopStyleColor();
     }
@@ -274,6 +278,7 @@ class separator_text_class : public element_class {
     rule(r, r.min.x, text_x - style.ItemSpacing.x);
     ImGui::GetWindowDrawList()->AddText(ImVec2(text_x, text_y), ImGui::GetColorU32(ImGuiCol_Text), label.c_str());
     rule(r, text_x + size.x + style.ItemSpacing.x, r.max.x);
+    dc.record_target(n, "label", {ImVec2(text_x, text_y), ImVec2(text_x + size.x, text_y + size.y)}, label);
   }
 };
 

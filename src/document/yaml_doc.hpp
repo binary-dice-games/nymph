@@ -28,6 +28,11 @@ struct yaml_node {
   scalar_style style = scalar_style::plain; ///< Scalars only.
   int line = 0; ///< 1-based start of the node.
   int column = 0; ///< 1-based, in characters.
+  /// 1-based position just after the node as libyaml marks it: after the
+  /// last character of a scalar (quotes included) and of a flow collection;
+  /// for a block collection or block scalar, where the next token starts.
+  int end_line = 0;
+  int end_column = 0;
   /// For a literal (`|`) or folded (`>`) block scalar: the 1-based source
   /// line of the first line of its text, and the 1-based column where its
   /// text starts (its indentation + 1; 0 if the scalar is empty). Line `k`
