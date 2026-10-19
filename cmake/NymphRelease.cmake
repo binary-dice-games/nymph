@@ -30,6 +30,13 @@ if(NOT CMAKE_CONFIGURATION_TYPES AND NOT CMAKE_BUILD_TYPE)
   set(CMAKE_BUILD_TYPE MinSizeRel CACHE STRING "Build type" FORCE)
 endif()
 
+# MinGW GCC 16.1+ at -Os (and -O2) leaves calls to std::string's move
+# constructor unresolved with its libstdc++.a (msys2/MINGW-packages#31015),
+# so a static link fails. -O3 inlines them; the executable is a little larger.
+if(MINGW AND CMAKE_CXX_COMPILER_ID STREQUAL "GNU" AND CMAKE_CXX_COMPILER_VERSION VERSION_GREATER_EQUAL 16)
+  set(CMAKE_CXX_FLAGS_MINSIZEREL "-O3 -DNDEBUG")
+endif()
+
 if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
   set(NYMPH_OPENGL OFF CACHE BOOL "" FORCE)
   add_link_options(-static)
