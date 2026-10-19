@@ -485,9 +485,11 @@ class chart_class : public element_class {
     const ImPlotFlags flags = ImPlotFlags_NoMenus | ImPlotFlags_NoBoxSelect | ImPlotFlags_NoMouseText |
         (s.sections.empty() ? ImPlotFlags_NoLegend : 0);
     dc.add_input_area(r);
+    dc.set_current_plot(&n);
     if (ImPlot::BeginPlot(id.c_str(), ImVec2(r.width(), r.height()), flags)) {
-      setup(n, s, r.width(), dc);
-      plot(n, s, dc);
+      const schedule shown = shown_rows(s);
+      setup(n, shown, r.width(), dc);
+      plot(n, shown, dc);
       finish_plot_picks(dc);
       dc.record_current_plot(n, false, view_kind::gantt);
       const ImPlotPlot* open_plot = dc.edit_mode() ? ImPlot::GetCurrentPlot() : nullptr;
@@ -496,12 +498,46 @@ class chart_class : public element_class {
         record_plot_texts(dc, {&n, title_text, n.get<std::string>(x_label), {}, {}, false, {}}, open_plot);
       }
     }
+    dc.set_current_plot(nullptr);
     if (cmap != kColormapDefault) {
       ImPlot::PopColormap();
     }
   }
 
  private:
+  /// `s` without the tasks of the sections switched off in the legend
+  /// (their rows close up) nor the dependencies on them. Call inside the
+  /// open plot, before its setup; ImPlot keeps each legend entry's state
+  /// across frames.
+  static schedule shown_rows(const schedule& s) {
+    // Items are keyed under their group ID, pushed only once setup ends.
+    ImGui::PushOverrideID(ImPlot::GetCurrentPlot()->Items.ID);
+    schedule out = s;
+    out.tasks.clear();
+    constexpr size_t kHidden = static_cast<size_t>(-1);
+    std::vector<size_t> row(s.tasks.size(), kHidden);
+    for (size_t i = 0; i < s.tasks.size(); ++i) {
+      const int k = s.tasks[i].section;
+      const ImPlotItem* item =
+          k < 0 ? nullptr : ImPlot::GetItem(s.sections[static_cast<size_t>(k)]->get<std::string>(0).c_str());
+      if (item == nullptr || item->Show) {
+        row[i] = out.tasks.size();
+        out.tasks.push_back(s.tasks[i]);
+      }
+    }
+    for (scheduled_task& t : out.tasks) {
+      std::vector<size_t> after;
+      for (size_t p : t.after) {
+        if (row[p] != kHidden) {
+          after.push_back(row[p]);
+        }
+      }
+      t.after = std::move(after);
+    }
+    ImGui::PopID();
+    return out;
+  }
+
   /// The `today` time, in the chart's kind of time.
   double today_of(const node& n, const schedule& s) const {
     const std::string& text = n.get<std::string>(chart_field::today);
@@ -554,13 +590,18 @@ class chart_class : public element_class {
         ImPlot::SetupAxisTicks(ImAxis_X1, at.data(), static_cast<int>(at.size()), texts.data());
       }
     }
-    const double rows = static_cast<double>(s.tasks.size());
+    // With every section switched off, one empty row.
+    const double rows = static_cast<double>(std::max<size_t>(s.tasks.size(), 1));
     ImPlot::SetupAxisLimits(ImAxis_Y1, -0.5, rows - 0.5, ImPlotCond_Always);
     std::vector<double> positions;
     std::vector<const char*> names;
     for (size_t i = 0; i < s.tasks.size(); ++i) {
       positions.push_back(static_cast<double>(i));
       names.push_back(task_name(*s.tasks[i].n).c_str());
+    }
+    if (positions.empty()) {
+      positions.push_back(0.0);
+      names.push_back("");
     }
     ImPlot::SetupAxisTicks(ImAxis_Y1, positions.data(), static_cast<int>(positions.size()), names.data());
     if (!s.sections.empty()) {
@@ -587,6 +628,9 @@ class chart_class : public element_class {
         ImPlot::EndItem();
       }
       colors[k] = ImPlot::GetLastItemColor();
+      if (!loose) {
+        sync_hidden(dc, label); // the saved view's hidden sections
+      }
     }
     ImDrawList* dl = ImPlot::GetPlotDrawList();
     ImPlot::PushPlotClipRect();

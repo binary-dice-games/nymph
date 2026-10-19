@@ -123,7 +123,7 @@ including the dynamic font atlas (`ImGuiBackendFlags_RendererHasTextures`).
 | `PlotHeatmap`, `PlotHistogram2D` | | The cell: row, column, value. |
 | `PlotPieChart` | | The slice: label, value, share. |
 | `Plot3D` | ImPlot3D's own: drag rotates, wheel zooms, double-click resets. | None in this project (section 9). |
-| `GanttChart` | Drag / wheel pans and zooms the time axis only. | The task: name, start, end, section. |
+| `GanttChart` | Drag / wheel pans and zooms the time axis only; a legend click hides a section's rows. | The task: name, start, end, section. |
 | `SankeyDiagram` | None. | The node (name, total) or flow (from, to, value). |
 | UML diagrams, `Flowchart` | Drag pans, wheel zooms around the pointer, double-click fits (new in ImUml). | The node or edge: its `id`, kind, label. |
 | Layouts, `Label`, separators, `ColorScale` | None. | None. |
@@ -265,7 +265,7 @@ view:
   in one place (`replace_top_level()`, as `setData`), and elements with no
   such fields (diagrams, 3D rotation) fit the same scheme.
 - **What a kind saves** (`element_class::viewable()`): `Plot` `x`, `y`,
-  `y2`, `hidden`; `GanttChart` `x`; `Plot3D` `x`, `y`, `z`, `rotation`,
+  `y2`, `hidden`; `GanttChart` `x`, `hidden` (sections); `Plot3D` `x`, `y`, `z`, `rotation`,
   `hidden`; diagrams `zoom` (on top of the fit) and `center` (content
   point at the centre, at zoom 1, so it does not depend on the box size).
 - **Applied like source limits**: always for PNGs, in a live view while

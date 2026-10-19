@@ -22,7 +22,7 @@ struct node;
 enum class view_kind {
   none, ///< Nothing to save (layouts, labels, series).
   plot2d, ///< `x`, `y`, `y2`, `hidden`.
-  gantt, ///< `x`.
+  gantt, ///< `x`, `hidden` (sections).
   plot3d, ///< `x`, `y`, `z`, `rotation`, `hidden`.
   diagram, ///< `zoom`, `center`.
 };
