@@ -19,6 +19,16 @@
 #include "fonts/font_testing.hpp"
 #include "fonts/fonts_used.hpp"
 #include "nymph.hpp"
+#include "png/png_meta.hpp"
+#include "raster_compare.hpp"
+
+// Decodes pixels with its own copy of stb_image (nymph keeps its copy
+// internal).
+#define STB_IMAGE_IMPLEMENTATION
+#define STB_IMAGE_STATIC
+#define STBI_ONLY_PNG
+#define STBI_NO_STDIO
+#include <stb_image.h>
 
 namespace bdg::nymph {
 namespace {
@@ -37,6 +47,32 @@ const fs::path kFontsDir(NYMPH_FONTS_DIR);
 std::vector<uint8_t> read_bytes(const fs::path& p) {
   std::ifstream in(p, std::ios::binary);
   return {std::istreambuf_iterator<char>(in), std::istreambuf_iterator<char>()};
+}
+
+/// Decodes a PNG's pixels as RGBA.
+image decode(const std::vector<uint8_t>& png) {
+  int w = 0;
+  int h = 0;
+  int n = 0;
+  stbi_uc* data = stbi_load_from_memory(png.data(), static_cast<int>(png.size()), &w, &h, &n, 4);
+  image img;
+  if (data != nullptr) {
+    img.width = w;
+    img.height = h;
+    img.rgba.assign(data, data + static_cast<size_t>(w) * h * 4);
+    stbi_image_free(data);
+  }
+  return img;
+}
+
+/// `png` shows the committed example picture: the same embedded source and
+/// the same pixels within the rasterizer tolerance. The committed PNGs are
+/// drawn with one toolchain; another's floating point rounds a texel
+/// differently, so the bytes are not compared.
+void expect_committed_picture(const std::vector<uint8_t>& mine, const fs::path& committed, const std::string& label) {
+  const std::vector<uint8_t> theirs = read_bytes(committed);
+  EXPECT_EQ(extract_source(mine).value_or("a"), extract_source(theirs).value_or("b")) << label;
+  expect_close(decode(theirs), decode(mine), label);
 }
 
 std::string read_text(const fs::path& p) {
@@ -191,7 +227,7 @@ TEST_F(no_embedded_fonts, ANotEmbeddedFontBindsButDoesNotRenderUntilRegistered) 
   }
   EXPECT_TRUE(fonts_missing(f).empty());
   // Registered fonts draw exactly as embedded ones.
-  EXPECT_EQ(render_png(source), read_bytes(kSourceDir / "examples/fonts.png"));
+  expect_committed_picture(render_png(source), kSourceDir / "examples/fonts.png", "fonts");
 }
 
 TEST_F(no_embedded_fonts, AnElementFontErrorPointsAtItsField) {
@@ -207,7 +243,7 @@ TEST_F(no_embedded_fonts, AnElementFontErrorPointsAtItsField) {
 
 TEST_F(no_embedded_fonts, TheBuiltInFontNeedsNothing) {
   const std::string source = read_text(kSourceDir / "examples/line.yaml");
-  EXPECT_EQ(render_png(source), read_bytes(kSourceDir / "examples/line.png"));
+  expect_committed_picture(render_png(source), kSourceDir / "examples/line.png", "line");
 }
 
 TEST_F(no_embedded_fonts, AMissingImpliedFontIsNotAnError) {
