@@ -258,6 +258,69 @@ test('sites are on unless turned off, and browser pages are never runnable', () 
   assertEq(runnableOrigin(undefined), null, 'no URL');
 });
 
+// ── Chat source detection (spec/10_gemini_extension plan step 2) ─────────────
+
+const { looksLikeNymph, fixButtonWanted, claimsBlock, hashText, sourceSize } = await src('content/source-detect.js');
+const exampleSources = (await readdir(exampleDir)).filter((f) => f.endsWith('.yaml')).sort();
+
+test('every example source is accepted with each allowed label', async () => {
+  assert(exampleSources.length > 0, 'no example sources');
+  for (const name of exampleSources) {
+    const text = await readFile(join(exampleDir, name), 'utf8');
+    for (const label of ['', 'nymph', 'yaml', 'yml', 'YAML']) {
+      assert(looksLikeNymph(text, label), `${name} rejected with label '${label}'`);
+    }
+    assert(looksLikeNymph(text.replace(/\n/g, '\r\n')), `${name} rejected with CRLF`);
+    assert(looksLikeNymph(`# a chart\n---\n${text}`), `${name} rejected after comment and ---`);
+  }
+});
+
+test('other YAML, other languages and oversized text are rejected', () => {
+  const compose = 'services:\n  web:\n    image: nginx\n';
+  const workflow = 'name: CI\non: push\njobs:\n  root: {}\n';
+  assert(!looksLikeNymph(compose, 'yaml'), 'compose');
+  assert(!looksLikeNymph(workflow, 'yaml'), 'workflow');
+  assert(!looksLikeNymph('{"root": {"type": "Plot"}}', 'json'), 'json');
+  assert(!looksLikeNymph('', 'nymph'), 'empty');
+  assert(!looksLikeNymph('root:\n  type: Plot\n', 'python'), 'python label');
+  assert(!looksLikeNymph('description: no root here\n', 'nymph'), 'no root key');
+  assert(!looksLikeNymph(`root:\n  title: ${'x'.repeat(300 * 1024)}\n`), 'over 256 KiB');
+});
+
+test('the fix button is for nymph-looking sources only', () => {
+  assert(fixButtonWanted('anything', 'nymph'), 'nymph label');
+  assert(fixButtonWanted('root:\n  type: Plot\n', 'yaml'), 'root first');
+  assert(fixButtonWanted('nymph: 1\nroot:\n', ''), 'nymph first');
+  assert(!fixButtonWanted('description: x\nroot:\n', 'yaml'), 'description first, plain yaml');
+  assert(!fixButtonWanted('services:\n  web: {}\n', 'yaml'), 'compose');
+});
+
+test('a block that starts like a nymph source is claimed, even a broken one', () => {
+  assert(claimsBlock('nymph: 1\ndescription: x\nroot:\n  type: Plot\n', ''), 'nymph: 1, no label');
+  assert(claimsBlock('nymph: 1\ndescription: x\n', 'yaml'), 'nymph: 1 without a root');
+  assert(claimsBlock('anything at all', 'nymph'), 'nymph label');
+  assert(!claimsBlock('services:\n  web: {}\n', 'yaml'), 'compose');
+  assert(!claimsBlock('description: x\nroot:\n', 'yaml'), 'plain yaml with a description first is only looked at');
+  assert(!claimsBlock('', 'nymph'), 'empty');
+  assert(!claimsBlock(`nymph: 1\n# ${'x'.repeat(300 * 1024)}\n`, ''), 'over 256 KiB');
+});
+
+test('hashText is stable and notices one changed character', () => {
+  assertEq(hashText('root:'), hashText('root:'), 'same text');
+  assert(hashText('root:') !== hashText('roof:'), 'one character');
+  assertEq(hashText('').length, 8, 'width');
+});
+
+test('the image size a source asks for is read without parsing it', () => {
+  const size = (text) => sourceSize(text.join('\n'));
+  assertEq(size(['image: {width: 640, height: 400}', 'root:']), { width: 640, height: 400 }, 'flow form');
+  assertEq(size(['image:', '  width: 1024', '  height: 300', 'root:']), { width: 1024, height: 300 }, 'block form');
+  assertEq(size(['image: {theme: dark}', 'root:']), { width: 800, height: 500 }, 'no size: the default');
+  assertEq(size(['root:', '  type: Plot']), { width: 800, height: 500 }, 'no image key');
+  assertEq(size(['image: {width: 99999, height: 4}', 'root:']), { width: 800, height: 500 }, 'out of range: the default');
+  assertEq(size(['image: {width: 700}', 'root:']), { width: 700, height: 500 }, 'one of the two');
+});
+
 // ── Run ──────────────────────────────────────────────────────────────────────
 
 let failed = 0;

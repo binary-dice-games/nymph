@@ -172,6 +172,8 @@ carries its source: `bdg::nymph::extract_source(png)` returns it.
 | [spec/08_view_editor/PLAN.md](spec/08_view_editor/PLAN.md) | Its implementation steps and tests |
 | [spec/09_ui_mockups/DESIGN.md](spec/09_ui_mockups/DESIGN.md) | User interface mockups: ImGui windows and widgets in the source, rendered and interactive |
 | [spec/09_ui_mockups/PLAN.md](spec/09_ui_mockups/PLAN.md) | Its implementation steps and tests |
+| [spec/10_gemini_extension/DESIGN.md](spec/10_gemini_extension/DESIGN.md) | Gemini web chatbot (planned): Chrome extension draws nymph sources from Gemini's code blocks as live charts, primer for a Gem, error and view loops |
+| [spec/10_gemini_extension/PLAN.md](spec/10_gemini_extension/PLAN.md) | Its implementation steps and tests |
 | [CHANGELOG.md](CHANGELOG.md) | User-facing changes between releases |
 | [CLAUDE.md](CLAUDE.md) | Coding style and project rules for AI agents and contributors |
 

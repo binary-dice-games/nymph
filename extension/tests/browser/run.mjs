@@ -199,7 +199,46 @@ const page = (body, script = '') => `<!doctype html><html><head><meta charset="u
 <style>body { margin: 8px; font: 14px sans-serif; } .narrow { width: 400px; } .md img { max-width: 100%; }</style>
 </head><body>${body}<script>${script}</script></body></html>`;
 
+// Sources for the chat-mode fixtures (spec/10_gemini_extension).
+const lineYaml = await readFile(join(exampleDir, 'line.yaml'), 'utf8');
+
 const FIXTURES = {
+  // A chat answer: a nymph block, plain YAML and Python in <pre><code>.
+  chat: () => page(`<div id="msgs"></div>`, `
+    const yaml = ${JSON.stringify(lineYaml)};
+    const pre = (id, lang, text) => '<pre id="' + id + '"><code class="language-' + lang + '">' + text + '</code></pre>';
+    window.render = () => {
+      msgs.innerHTML = '<p>Here you go</p>' + pre('chart', 'nymph', '') + pre('compose', 'yaml', '') + pre('py', 'python', 'print(1)');
+      chart.firstChild.textContent = yaml;
+      compose.firstChild.textContent = 'services:\\n  web:\\n    image: nginx\\n';
+    };
+    render();
+    window.revise = () => { chart.firstChild.textContent = yaml.replace('Load test', 'Revised title'); };`),
+  // A chat with a prompt box that already holds text, and a send button.
+  chatbox: () => page(`<div id="msgs"></div><div id="box" contenteditable="true" style="border: 1px solid #888; min-height: 40px">first</div>
+    <button id="send" type="button">Send</button>`, `window.sent = 0; send.onclick = () => window.sent++;`),
+  // Blocks that start like a nymph source but the viewer rejects, and one it does not claim.
+  chatbad: () => page(`<div id="msgs"></div>`, `
+    const block = (id, label, text) => '<pre id="' + id + '"><code' + (label ? ' class="language-' + label + '"' : '') + '>' + text + '</code></pre>';
+    msgs.innerHTML =
+      block('unknown', 'nymph', 'root:\\n  type: NoSuchElement\\n') +
+      block('broken', 'nymph', 'nymph: 1\\nroot: [broken: ') +
+      block('months', '', 'nymph: 1\\nimage: {width: 400, height: 300}\\nroot:\\n  type: Plot\\n  children:\\n    - {type: PlotBars, xs: $month, ys: $revenue}\\ndata: |\\n  month, revenue\\n  Jan, 35\\n  Feb, 42\\n') +
+      block('other', 'yaml', 'description: not claimed\\nroot:\\n  type: NoSuchElement\\n');`),
+  // An invalid nymph block, with a prompt box and a send button.
+  chatfix: () => page(`<div id="msgs"></div><div id="box" contenteditable="true" style="border: 1px solid #888; min-height: 40px"></div>
+    <button id="send" type="button">Send</button>`, `
+    window.sent = 0; send.onclick = () => window.sent++;
+    msgs.innerHTML = '<pre id="bad"><code class="language-nymph">nymph: 1\\nroot:\\n  type: NoSuchElement\\n</code></pre>';`),
+  // An answer written token by token, a line every 40 ms.
+  chatstream: () => page(`<div id="msgs"><pre id="chart"><code class="language-nymph" id="c"></code></pre></div>`, `
+    const lines = ${JSON.stringify(lineYaml)}.split('\\n');
+    let i = 0;
+    window.finished = false;
+    const timer = setInterval(() => {
+      c.textContent += lines[i++] + '\\n';
+      if (i >= lines.length) { clearInterval(timer); window.finished = true; }
+    }, 40);`),
   // Nymph and plain PNGs as markdown renders them, in links.
   markdown: (q) => page(`<div class="md">
     <p>Intro</p>
@@ -693,6 +732,248 @@ test('theme "auto" follows the browser colour scheme', async () => {
   await p.close();
 });
 
+// ── Chat mode (spec/10_gemini_extension plan steps 3 and 4) ─────────────────
+
+/** Charts of chat mode that are drawn (not starting). */
+const chatLive = (p) => p.evaluate(() => document.querySelectorAll('nymph-ext-chart:not(.nymph-ext-starting)').length);
+
+/** Clicks a badge button of the first chat chart (the badge shows on hover only). */
+const badge = (p, act) =>
+  p.evaluate((a) => document.querySelector('nymph-ext-chart').shadowRoot.querySelector(`[data-act="${a}"]`).click(), act);
+
+for (const mode of ['inline', 'frame']) {
+  const csp = mode === 'frame' ? '?csp=github' : '';
+
+  test(`${mode}: chat mode draws a finished nymph block and leaves other code`, async () => {
+    await setSettings({ chatSites: [SITE] });
+    const p = await openPage('chat', csp);
+    await waitFor(async () => (await chatLive(p)) === 1, 'one chart');
+    const state = await p.evaluate(() => {
+      const host = document.querySelector('nymph-ext-chart');
+      return {
+        hosts: document.querySelectorAll('nymph-ext-chart').length,
+        next: host.nextElementSibling?.id,
+        hidden: [...document.querySelectorAll('[data-nymph-ext="source"]')].map((e) => e.id),
+        hostWidth: host.getBoundingClientRect().width,
+        hostHeight: host.getBoundingClientRect().height,
+        column: document.getElementById('msgs').getBoundingClientRect().width,
+      };
+    });
+    assertEq(state.hosts, 1, 'one host');
+    assertEq(state.next, 'chart', 'the host stands before the block');
+    assertEq(state.hidden, ['chart'], 'only the nymph block is collapsed');
+    assert(state.hostWidth > 100 && state.hostWidth <= state.column + 1, `width ${state.hostWidth} in column ${state.column}`);
+    assert(Math.abs(state.hostHeight / state.hostWidth - 420 / 800) < 0.02, `shape ${state.hostWidth} x ${state.hostHeight}`);
+    await p.close();
+  });
+
+  test(`${mode}: the badge switches a chat chart to its code and back, and copies its YAML`, async () => {
+    await setSettings({ chatSites: [SITE] });
+    await context.grantPermissions(['clipboard-read', 'clipboard-write'], { origin: SITE });
+    const p = await openPage('chat', csp);
+    await waitFor(async () => (await chatLive(p)) === 1, 'one chart');
+    const code = () => p.evaluate(() => ({
+      attr: document.getElementById('chart').getAttribute('data-nymph-ext'),
+      display: getComputedStyle(document.getElementById('chart')).display,
+      label: document.querySelector('nymph-ext-chart').shadowRoot.querySelector('[data-act="toggle"]').textContent,
+    }));
+    const hostHeight = () => p.evaluate(() => Math.round(document.querySelector('nymph-ext-chart').getBoundingClientRect().height));
+    const chartHeight = await hostHeight();
+    await badge(p, 'toggle');
+    assertEq(await code(), { attr: 'source-shown', display: 'block', label: 'Chart' }, 'code shown');
+    assert((await hostHeight()) < 60, `no empty gap above the code (host ${await hostHeight()} px)`);
+    await badge(p, 'toggle');
+    assertEq(await code(), { attr: 'source', display: 'none', label: 'Code' }, 'chart shown');
+    assertEq(await hostHeight(), chartHeight, 'the chart has its height back');
+    await p.bringToFront();
+    await badge(p, 'copy');
+    const copied = await waitFor(async () => {
+      const text = await p.evaluate(() => navigator.clipboard.readText().catch(() => ''));
+      return text.includes('root:') ? text : '';
+    }, 'the YAML on the clipboard');
+    assert(copied.includes('Load test'), "the chart's own YAML");
+    await p.close();
+  });
+
+  test(`${mode}: a block that starts like nymph is replaced, with the error when it is invalid`, async () => {
+    await setSettings({ chatSites: [SITE] });
+    const p = await openPage('chatbad', csp);
+    await waitFor(() => p.evaluate(() => document.querySelectorAll('nymph-ext-chart.nymph-ext-error').length === 3), 'three error panels', 15000);
+    const state = await p.evaluate(() => {
+      const panel = (id) => {
+        const host = document.getElementById(id).previousElementSibling;
+        return host?.localName === 'nymph-ext-chart'
+          ? { detail: host.shadowRoot.querySelector('.detail').textContent, shown: getComputedStyle(host.shadowRoot.querySelector('.error')).display }
+          : null;
+      };
+      return {
+        unknown: panel('unknown'), broken: panel('broken'), months: panel('months'),
+        otherHost: document.getElementById('other').previousElementSibling?.localName === 'nymph-ext-chart',
+        otherDisplay: getComputedStyle(document.getElementById('other')).display,
+        collapsed: [...document.querySelectorAll('[data-nymph-ext="source"]')].map((e) => e.id),
+      };
+    });
+    for (const id of ['unknown', 'broken', 'months']) {
+      assertEq(state[id]?.shown, 'block', `${id}: the error is shown`);
+      assert(state[id].detail.length > 10, `${id}: has a message (${JSON.stringify(state[id].detail)})`);
+    }
+    assert(state.months.detail.includes("'Jan' is not a number"), `the detail says what is wrong: ${state.months.detail}`);
+    assert(/\d/.test(state.months.detail), `the detail says where: ${state.months.detail}`);
+    assertEq(state.otherHost, false, 'a block that does not start like nymph gets no host');
+    assertEq(state.otherDisplay, 'block', 'and stays visible');
+    assertEq(state.collapsed.sort(), ['broken', 'months', 'unknown'], 'the claimed blocks are collapsed');
+    // The code is one click away, and the error comes back.
+    await p.evaluate(() => document.getElementById('months').previousElementSibling.shadowRoot.querySelector('[data-act="toggle"]').click());
+    assertEq(await p.evaluate(() => getComputedStyle(document.getElementById('months')).display), 'block', 'code shown');
+    assertEq(await p.evaluate(() => getComputedStyle(document.getElementById('months').previousElementSibling.shadowRoot.querySelector('.error')).display), 'none', 'error hidden meanwhile');
+    await p.close();
+  });
+
+  test(`${mode}: the error's button puts the fix request in the prompt box and does not send it`, async () => {
+    await setSettings({ chatSites: [SITE] });
+    const p = await openPage('chatfix', csp);
+    await waitFor(() => p.evaluate(() => document.querySelectorAll('nymph-ext-chart.nymph-ext-error').length === 1), 'the error panel', 15000);
+    await p.evaluate(() => document.querySelector('nymph-ext-chart').shadowRoot.querySelector('[data-act="fix"]').click());
+    await waitFor(() => p.evaluate(() => document.getElementById('box').innerText.includes('failed to draw')), 'the request in the box');
+    const box = await p.evaluate(() => ({ text: document.getElementById('box').innerText, sent: window.sent }));
+    assert(box.text.includes('Fix the YAML and send the whole chart again.'), 'asks for the whole chart');
+    assert(box.text.length > 80, 'with the error in it');
+    assertEq(box.sent, 0, 'nothing was sent');
+    await p.close();
+  });
+
+  test(`${mode}: a streaming answer is drawn only once it is finished`, async () => {
+    await setSettings({ chatSites: [SITE] });
+    const p = await openPage('chatstream', csp);
+    let samples = 0;
+    while (!(await p.evaluate(() => window.finished))) {
+      assertEq(await hostCount(p), 0, 'no chart while streaming');
+      samples++;
+      await new Promise((resolve) => setTimeout(resolve, 100));
+    }
+    assert(samples >= 3, `streaming was observed (${samples} samples)`);
+    await waitFor(async () => (await chatLive(p)) === 1, 'the chart after the last token', 8000);
+    await p.close();
+  });
+}
+
+test('a revised block updates its chart in place', async () => {
+  await setSettings({ chatSites: [SITE] });
+  const p = await openPage('chat');
+  await waitFor(async () => (await chatLive(p)) === 1, 'one chart');
+  await new Promise((resolve) => setTimeout(resolve, 300));
+  await p.evaluate(() => document.querySelector('nymph-ext-chart').setAttribute('data-test', 'same'));
+  const box = await p.evaluate(() => {
+    const r = document.querySelector('nymph-ext-chart').getBoundingClientRect();
+    return [r.x + scrollX, r.y + scrollY, r.width, r.height].map(Math.round);
+  });
+  const before = await shot(p, box);
+  await p.evaluate(() => window.revise());
+  await new Promise((resolve) => setTimeout(resolve, 1500)); // settle, then redraw
+  const after = await shot(p, box);
+  assertEq(await p.evaluate(() => document.querySelector('nymph-ext-chart')?.getAttribute('data-test')), 'same', 'same host');
+  assertEq(await hostCount(p), 1, 'still one chart');
+  let differing = 0;
+  for (let i = 0; i < before.rgba.length; i += 4) {
+    differing += before.rgba[i] !== after.rgba[i] ? 1 : 0;
+  }
+  assert(differing > 50, `the title changed on screen (${differing} pixels differ)`);
+  await p.close();
+});
+
+test('a message the page re-renders gets its chart again, without a leftover', async () => {
+  await setSettings({ chatSites: [SITE] });
+  const p = await openPage('chat');
+  await waitFor(async () => (await chatLive(p)) === 1, 'one chart');
+  await p.evaluate(() => window.render());
+  await waitFor(async () => (await chatLive(p)) === 1 && (await hostCount(p)) === 1, 'one chart again');
+  assertEq(await p.evaluate(() => document.querySelector('nymph-ext-chart').nextElementSibling.id), 'chart', 'before the new block');
+  await p.close();
+});
+
+test('chat mode runs only on the listed sites, and turns off with the site', async () => {
+  await setSettings({ chatSites: [OTHER] }); // not this site
+  const p = await openPage('chat');
+  await new Promise((resolve) => setTimeout(resolve, 2500));
+  assertEq(await hostCount(p), 0, 'unlisted site untouched');
+  assertEq(await p.evaluate(() => document.querySelectorAll('[data-nymph-ext]').length), 0, 'nothing collapsed');
+  await setSettings({ chatSites: [SITE] }); // listed, without a reload
+  await waitFor(async () => (await chatLive(p)) === 1, 'the chart appears');
+  await setSettings({ off: [SITE] }); // the toolbar button
+  await waitFor(async () => (await hostCount(p)) === 0, 'the chart goes');
+  assertEq(await p.evaluate(() => getComputedStyle(document.getElementById('chart')).display), 'block', 'code shown again');
+  assertEq(await p.evaluate(() => document.querySelectorAll('[data-nymph-ext], #nymph-ext-style').length), 0, 'no marks left');
+  await p.close();
+});
+
+// ── Teaching a chat nymph (spec/10_gemini_extension plan step 8) ────────────
+
+/** What the toolbar menu does for the tab showing `url`. */
+const teach = (url) =>
+  worker.evaluate(async (u) => {
+    const [tab] = (await chrome.tabs.query({})).filter((t) => t.url === u);
+    return globalThis.nymphTeachTab(tab);
+  }, url);
+
+const PRIMER_START = 'You can draw charts and diagrams with nymph.';
+
+test('the toolbar menu puts the instructions in the prompt box and never sends them', async () => {
+  await setSettings({ chatSites: [SITE] });
+  const p = await openPage('chatbox');
+  await waitFor(() => p.evaluate(() => (document.documentElement.dataset.nymphStatus ?? '').includes('chat on')), 'chat mode on');
+  assertEq(await teach(p.url()), 'inserted', 'result');
+  const box = await p.evaluate(() => ({ text: document.getElementById('box').innerText, sent: window.sent }));
+  assert(box.text.startsWith('first'), 'what was in the box stays');
+  assert(box.text.includes(PRIMER_START), 'the instructions are in the box');
+  assert(box.text.includes('nymph: 1'), 'with its examples');
+  assertEq(box.sent, 0, 'nothing was sent');
+  assert(await p.evaluate(() => !!document.querySelector('nymph-ext-toast')), 'the page says what happened');
+  await p.close();
+});
+
+test('with no prompt box the instructions go to the clipboard', async () => {
+  await setSettings({ chatSites: [SITE] });
+  await context.grantPermissions(['clipboard-read', 'clipboard-write'], { origin: SITE });
+  const p = await openPage('chat');
+  await waitFor(() => p.evaluate(() => (document.documentElement.dataset.nymphStatus ?? '').includes('chat on')), 'chat mode on');
+  await p.bringToFront();
+  const result = await teach(p.url());
+  assert(result === 'copied' || result === 'failed', `result ${result}`);
+  if (result === 'copied') {
+    assert((await p.evaluate(() => navigator.clipboard.readText())).startsWith(PRIMER_START), 'the instructions are on the clipboard');
+  }
+  await p.close();
+});
+
+test('a site that is not listed has no instructions to give', async () => {
+  await setSettings({ chatSites: [OTHER] });
+  const p = await openPage('chatbox');
+  await new Promise((resolve) => setTimeout(resolve, 800));
+  assertEq(await teach(p.url()), 'unavailable', 'result');
+  assertEq(await p.evaluate(() => document.getElementById('box').innerText), 'first', 'the box is untouched');
+  await p.close();
+});
+
+test('the options page lists chat sites, adds and removes them, and shows the instructions', async () => {
+  await setSettings({ chatSites: ['https://gemini.google.com'], chatTheme: 'auto' });
+  const p = await context.newPage();
+  await p.goto(`chrome-extension://${new URL(worker.url()).host}/src/options/options.html`);
+  await p.getByText('https://gemini.google.com').first().waitFor();
+  await p.fill('#chat-site', 'chat.example.com');
+  await p.getByRole('button', { name: 'Add site' }).click();
+  await waitFor(() => worker.evaluate(async () => (await chrome.storage.sync.get('chatSites')).chatSites.includes('https://chat.example.com')), 'site added');
+  await p.waitForFunction(() => document.getElementById('chat-site').value === ''); // the page has finished with the add
+  await p.fill('#chat-site', 'not a site at all');
+  await p.getByRole('button', { name: 'Add site' }).click();
+  const noteText = await p.textContent('#chat-site-note'); assert(noteText.includes('not a web address'), 'a bad address is refused: note is ' + JSON.stringify(noteText) + ', field ' + JSON.stringify(await p.inputValue('#chat-site')) + ', stored ' + JSON.stringify(await worker.evaluate(async () => (await chrome.storage.sync.get('chatSites')).chatSites)));
+  await p.getByRole('listitem').filter({ hasText: 'https://chat.example.com' }).getByRole('button', { name: 'Remove' }).click();
+  await waitFor(() => worker.evaluate(async () => (await chrome.storage.sync.get('chatSites')).chatSites.length === 1), 'site removed');
+  await p.check('input[name="chatTheme"][value="source"]');
+  await waitFor(() => worker.evaluate(async () => (await chrome.storage.sync.get('chatTheme')).chatTheme === 'source'), 'theme saved');
+  await waitFor(() => p.evaluate(() => document.getElementById('primer').textContent.startsWith('You can draw')), 'the instructions are shown');
+  await p.close();
+});
+
 // ── Run ──────────────────────────────────────────────────────────────────────
 
 let failed = 0, ran = 0;
@@ -701,7 +982,7 @@ for (const { name, fn } of tests) {
     continue;
   }
   ran++;
-  await setSettings({ off: [], theme: 'source' });
+  await setSettings({ off: [], theme: 'source', chatSites: ['https://gemini.google.com'], chatTheme: 'auto' });
   const start = Date.now();
   try {
     await fn();

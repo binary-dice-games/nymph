@@ -24,23 +24,31 @@ export const HIDDEN_ATTR = 'data-nymph-ext';
 export const HOST_TAG = 'nymph-ext-chart';
 const STYLE_ID = 'nymph-ext-style';
 
-/** The page-level rule that hides replaced images. */
+/** Modes (images, chat) that need the page-level rule; it goes with the last. */
+let styleUsers = 0;
+
+/** The page-level rule that hides replaced images and collapsed code. */
 export function injectPageStyle() {
+  styleUsers++;
   if (document.getElementById(STYLE_ID)) {
     return;
   }
   const style = document.createElement('style');
   style.id = STYLE_ID;
-  style.textContent = `img[${HIDDEN_ATTR}="hidden"] { display: none !important; }`;
+  style.textContent =
+    `img[${HIDDEN_ATTR}="hidden"], [${HIDDEN_ATTR}="source"] { display: none !important; }`;
   (document.head ?? document.documentElement).appendChild(style);
 }
 
-/** Removes the rule (turning the extension off). */
+/** Releases the rule (turning a mode off); removed when no mode needs it. */
 export function removePageStyle() {
-  document.getElementById(STYLE_ID)?.remove();
+  styleUsers = Math.max(0, styleUsers - 1);
+  if (styleUsers === 0) {
+    document.getElementById(STYLE_ID)?.remove();
+  }
 }
 
-const SHADOW_CSS = `
+export const SHADOW_CSS = `
 :host { position: relative; line-height: 0; }
 .box { width: 100%; }
 .box > canvas { max-width: 100%; }
@@ -134,24 +142,140 @@ function fileNameOf(url) {
 }
 
 /**
+ * What every chart has in common: a host element, and a viewer running
+ * inline or in a frame (section 3.9). `Replacement` puts one in the place
+ * of an image, `CodeReplacement` before a chat's code block
+ * (spec/10_gemini_extension/DESIGN.md section 4.2).
+ */
+export class ChartHost {
+  /** @param {string} title the frame's title in frame mode */
+  constructor(title) {
+    this.title = title;
+    /** @type {HTMLElement|null} */
+    this.host = null;
+    this.viewer = null;
+    /** Frame mode: the port to the frame, and the chart's latest source with its view. */
+    this.port = null;
+    this.lastYaml = null;
+    /** The chart's layout size in px once drawn: `{width, height}`. */
+    this.layout = null;
+    /** Frame mode: the update waiting for the frame's answer. */
+    this.pending = null;
+  }
+
+  /** @protected The viewer in this content script. */
+  async startInline(box, content, settings) {
+    const nymph = await loadViewer();
+    const viewer = await nymph.createViewer(box, { ...content, fit: 'scale', ...settings });
+    this.viewer = viewer;
+    if (!viewer.info().hasFigure) {
+      throw new Error('not a nymph source');
+    }
+    await viewer.rendered();
+    const g = viewer.state().geometry;
+    this.layout = { width: g.layoutWidth, height: g.layoutHeight };
+  }
+
+  /** @protected The viewer in an extension frame. */
+  async startFrame(box, content, settings) {
+    const frame = document.createElement('iframe');
+    frame.title = this.title;
+    frame.setAttribute('scrolling', 'no');
+    const url = chrome.runtime.getURL('src/frame/frame.html');
+    const loaded = new Promise((resolve, reject) => {
+      const timer = setTimeout(() => reject(new Error('the frame did not load')), FRAME_LOAD_TIMEOUT_MS);
+      frame.addEventListener('load', () => (clearTimeout(timer), resolve()), { once: true });
+    });
+    frame.src = url;
+    box.appendChild(frame);
+    await loaded;
+    const channel = new MessageChannel();
+    this.port = channel.port1;
+    const shown = new Promise((resolve, reject) => {
+      this.port.onmessage = (m) => {
+        const msg = m.data ?? {};
+        if (msg.type === 'yaml' && typeof msg.yaml === 'string') {
+          this.lastYaml = msg.yaml;
+        } else if (msg.type === 'rendered') {
+          this.layout = msg.layout ?? null;
+          resolve();
+        } else if (msg.type === 'updated') {
+          this.pending?.resolve();
+          this.pending = null;
+        } else if (msg.type === 'error') {
+          reject(new Error(msg.message));
+          this.pending?.reject(new Error(msg.message));
+          this.pending = null;
+        }
+      };
+    });
+    frame.contentWindow.postMessage({ type: 'nymph-frame-init' }, new URL(url).origin, [channel.port2]);
+    this.port.postMessage({ type: 'show', ...content, ...settings });
+    await shown;
+  }
+
+  /**
+   * Shows another source in the same viewer, keeping the user's view where the
+   * chart allows.
+   * @param {string} source
+   * @return {Promise<void>} rejects with the viewer's error; the old chart stays
+   */
+  async update(source) {
+    if (this.port) {
+      const done = new Promise((resolve, reject) => {
+        this.pending = { resolve, reject };
+      });
+      this.port.postMessage({ type: 'set', source });
+      await done;
+    } else {
+      await this.viewer.setSource(source);
+    }
+  }
+
+  /**
+   * The viewer's source with the user's view, for parking.
+   * @return {string|null}
+   */
+  yaml() {
+    if (this.port) {
+      return this.lastYaml;
+    }
+    try {
+      return this.viewer?.toYaml() ?? null;
+    } catch {
+      return null;
+    }
+  }
+
+  /** @protected Frees the viewer and removes the host. Safe to call twice. */
+  release() {
+    try {
+      this.viewer?.destroy();
+    } catch {
+      // already gone
+    }
+    this.viewer = null;
+    this.port?.close();
+    this.port = null;
+    this.host?.remove();
+    this.host = null;
+  }
+}
+
+/**
  * A chart in place of one image.
  */
-export class Replacement {
+export class Replacement extends ChartHost {
   /**
    * @param {HTMLImageElement} img the image replaced
    * @param {string} url the image's URL when it was read
    */
   constructor(img, url) {
+    super(img.alt || 'nymph chart');
     this.img = img;
     this.url = url;
-    /** @type {HTMLElement|null} */
-    this.host = null;
-    this.viewer = null;
     /** Whether the user switched this chart back to its image. */
     this.showingImage = false;
-    /** Frame mode: the port to the frame, and the chart's latest source with its view. */
-    this.port = null;
-    this.lastYaml = null;
   }
 
   /**
@@ -222,49 +346,6 @@ export class Replacement {
     }
   }
 
-  /** @private The viewer in this content script. */
-  async startInline(box, content, settings) {
-    const nymph = await loadViewer();
-    const viewer = await nymph.createViewer(box, { ...content, fit: 'scale', ...settings });
-    this.viewer = viewer;
-    if (!viewer.info().hasFigure) {
-      throw new Error('not a nymph source');
-    }
-    await viewer.rendered();
-  }
-
-  /** @private The viewer in an extension frame. */
-  async startFrame(box, content, settings) {
-    const frame = document.createElement('iframe');
-    frame.title = this.img.alt || 'nymph chart';
-    frame.setAttribute('scrolling', 'no');
-    const url = chrome.runtime.getURL('src/frame/frame.html');
-    const loaded = new Promise((resolve, reject) => {
-      const timer = setTimeout(() => reject(new Error('the frame did not load')), FRAME_LOAD_TIMEOUT_MS);
-      frame.addEventListener('load', () => (clearTimeout(timer), resolve()), { once: true });
-    });
-    frame.src = url;
-    box.appendChild(frame);
-    await loaded;
-    const channel = new MessageChannel();
-    this.port = channel.port1;
-    const shown = new Promise((resolve, reject) => {
-      this.port.onmessage = (m) => {
-        const msg = m.data ?? {};
-        if (msg.type === 'yaml' && typeof msg.yaml === 'string') {
-          this.lastYaml = msg.yaml;
-        } else if (msg.type === 'rendered') {
-          resolve();
-        } else if (msg.type === 'error') {
-          reject(new Error(msg.message));
-        }
-      };
-    });
-    frame.contentWindow.postMessage({ type: 'nymph-frame-init' }, new URL(url).origin, [channel.port2]);
-    this.port.postMessage({ type: 'show', ...content, ...settings });
-    await shown;
-  }
-
   /** @private Badge buttons and link handling. */
   wire(shadow) {
     const host = this.host;
@@ -290,33 +371,9 @@ export class Replacement {
     }
   }
 
-  /**
-   * The viewer's source with the user's view, for parking.
-   * @return {string|null}
-   */
-  yaml() {
-    if (this.port) {
-      return this.lastYaml;
-    }
-    try {
-      return this.viewer?.toYaml() ?? null;
-    } catch {
-      return null;
-    }
-  }
-
   /** Shows the image again and frees the viewer. Safe to call twice. */
   unmount() {
     this.img.removeAttribute(HIDDEN_ATTR);
-    try {
-      this.viewer?.destroy();
-    } catch {
-      // already gone
-    }
-    this.viewer = null;
-    this.port?.close();
-    this.port = null;
-    this.host?.remove();
-    this.host = null;
+    this.release();
   }
 }

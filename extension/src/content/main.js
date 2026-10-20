@@ -15,6 +15,7 @@
  */
 
 import { LruCache } from './cache.js';
+import { setCount } from './count.js';
 import { readImage } from './fetcher.js';
 import { MAX_LIVE_FRAMES, MAX_LIVE_VIEWERS, distanceToViewport, pickToPark } from './pool.js';
 import { HIDDEN_ATTR, HOST_TAG, Replacement, canRunInline, injectPageStyle, removePageStyle } from './replacer.js';
@@ -53,7 +54,6 @@ let mutations = null;
 let intersections = null;
 const queue = { images: new Set(), sweep: false };
 let idleHandle = 0;
-let lastCount = -1;
 
 // ── Scheduling ───────────────────────────────────────────────────────────────
 
@@ -353,15 +353,7 @@ function onLoad(e) {
 }
 
 function reportCount() {
-  const count = [...entries.values()].filter((e) => e.state === 'live' || e.state === 'parked').length;
-  if (count !== lastCount) {
-    lastCount = count;
-    try {
-      chrome.runtime.sendMessage({ type: 'nymph-count', count }).catch(() => {});
-    } catch {
-      // the extension was reloaded: this script is orphaned
-    }
-  }
+  setCount('images', [...entries.values()].filter((e) => e.state === 'live' || e.state === 'parked').length);
 }
 
 // ── Public ───────────────────────────────────────────────────────────────────
@@ -393,7 +385,6 @@ export function start(next = {}) {
   for (const img of document.images) {
     queue.images.add(img);
   }
-  lastCount = -1;
   schedule();
   reportCount();
 }
@@ -418,6 +409,5 @@ export function stop() {
   entries.clear();
   queue.images.clear();
   removePageStyle();
-  lastCount = -1;
   reportCount();
 }
