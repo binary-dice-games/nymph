@@ -32,8 +32,12 @@
   <img src="/icons/on-128.png" alt="">
   <h1>nymph charts</h1>
 </header>
+<section class="welcome" id="access" hidden>
+  <p><strong>nymph needs access to the sites you read.</strong> Your browser has not granted it yet.</p>
+  <p><button type="button" id="allow-access">Allow access to all sites</button> <span class="note" id="access-note"></span></p>
+</section>
 <section class="welcome" id="welcome" hidden>
-  <p><strong>Pin the button next to the address bar.</strong> Open the puzzle-piece menu in Chrome's toolbar and click the pin beside "nymph charts".</p>
+  <p><strong>Pin the button next to the address bar.</strong> <span id="pin-hint">Open the puzzle-piece menu in the browser's toolbar and click the pin beside "nymph charts".</span></p>
   <p>The button shows whether nymph is on for the site you are reading and how many charts it found. Click it to turn nymph off or on for that site.</p>
 </section>
 
@@ -63,7 +67,7 @@
   <li>Save it, then ask that Gem for a chart.</li>
 </ol>
 <p><button type="button" id="copy-primer">Copy the instructions</button> <span class="note" id="copy-note"></span></p>
-<p>Or, in a chat already open, right-click nymph's toolbar button and choose "Give this chat the nymph instructions": they go into the prompt box and you send them yourself.</p>
+<p id="menu-hint">Or, in a chat already open, right-click nymph's toolbar button and choose "Give this chat the nymph instructions": they go into the prompt box and you send them yourself.</p>
 <details><summary>Show the instructions</summary><pre id="primer"></pre></details>
 
 <h2>Sites turned off</h2>

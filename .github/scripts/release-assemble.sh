@@ -46,6 +46,7 @@ take "$artifacts/build-macos-x86_64/nymph-$v-macos-x86_64"
 take "$artifacts/build-macos-universal/nymph-$v-macos-universal.mcpb"
 take "$artifacts/build-linux-x86_64/nymph-skill-$v.zip"
 take "$artifacts/build-web/extension/nymph-extension-$v.zip"
+take "$artifacts/build-web/extension/nymph-extension-firefox-$v.zip"
 take "$artifacts/build-web/claude/viewer.html" "nymph-mcp-app-$v.html"
 take "$artifacts/source/nymph-$v-src.tar.gz"
 take "$root/packaging/install/install.sh"
@@ -68,6 +69,7 @@ nymph-$v-src.tar.gz
 nymph-$v-windows-x86_64.exe
 nymph-$v-windows-x86_64.mcpb
 nymph-extension-$v.zip
+nymph-extension-firefox-$v.zip
 nymph-mcp-app-$v.html
 nymph-skill-$v.zip"
 actual=$(cd "$out" && LC_ALL=C ls -1)

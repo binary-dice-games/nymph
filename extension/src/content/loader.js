@@ -11,6 +11,7 @@
   // Written at once, so "did the script run on this page?" can be answered:
   // document.documentElement.dataset.nymphLoader
   document.documentElement.dataset.nymphLoader = 'running';
+  const ext = globalThis.browser ?? globalThis.chrome; // as shared/api.js (a classic script cannot import)
   const origin = location.protocol === 'file:' ? 'file://' : location.origin;
   let main = null;
   let loading = null;
@@ -23,7 +24,7 @@
     let chatSites = ['https://gemini.google.com'];
     let chatTheme = 'auto';
     try {
-      const stored = await chrome.storage.sync.get(['off', 'theme', 'chatSites', 'chatTheme']);
+      const stored = await ext.storage.sync.get(['off', 'theme', 'chatSites', 'chatTheme']);
       off = Array.isArray(stored.off) ? stored.off : [];
       theme = stored.theme === 'auto' ? 'auto' : 'source';
       chatSites = Array.isArray(stored.chatSites) ? stored.chatSites : chatSites;
@@ -38,7 +39,7 @@
     // The two modes are independent: one failing to load must not stop the other.
     try {
       if (on && !main) {
-        loading ??= import(chrome.runtime.getURL('src/content/main.js'));
+        loading ??= import(ext.runtime.getURL('src/content/main.js'));
         main = await loading;
       }
       if (main) {
@@ -57,7 +58,7 @@
     status.chat = !on ? 'site off' : chatOn ? 'starting' : 'not listed';
     try {
       if (chatOn && !chat) {
-        loadingChat ??= import(chrome.runtime.getURL('src/content/chat.js'));
+        loadingChat ??= import(ext.runtime.getURL('src/content/chat.js'));
         chat = await loadingChat;
       }
       if (chat) {
@@ -75,7 +76,7 @@
     document.documentElement.dataset.nymphStatus = `images ${status.images}; chat ${status.chat}`;
   }
 
-  chrome.storage.onChanged.addListener((changes, area) => {
+  ext.storage.onChanged.addListener((changes, area) => {
     if (area === 'sync' && (changes.off || changes.theme || changes.chatSites || changes.chatTheme)) {
       apply();
     }

@@ -1,6 +1,7 @@
 # The browser extension
 
-The nymph extension for Chrome turns nymph PNGs on any page into live
+The nymph extension for Chrome and Edge (and, as a first build, Firefox; see
+[Other browsers](#other-browsers)) turns nymph PNGs on any page into live
 charts: pan, zoom, values on hover, and save as PNG or YAML from the
 right-click menu. It finds the PNGs that carry their YAML source, puts a
 [web viewer](viewer.md) of the same size in their place, and keeps doing
@@ -32,6 +33,19 @@ In Chrome (116 or later), open `chrome://extensions`, turn on
 Then pin its button: open the puzzle-piece menu in the toolbar and click
 the pin next to "nymph charts". A tab with this hint opens once on
 install.
+
+## Other browsers
+
+| Browser | Package | Status |
+|---|---|---|
+| Edge | The Chrome package (`nymph-extension-<version>.zip`) | Loads unpacked in `edge://extensions` (Developer mode, **Load unpacked**). Not yet on Edge Add-ons; not yet checked in Edge. |
+| Firefox 140 or later | `nymph-extension-firefox-<version>.zip` (`build-web/extension/nymph-firefox/` in a build) | In `about:debugging`, **This Firefox**, **Load Temporary Add-on**, pick the zip (or `manifest.json` of the folder). Temporary until the extension is signed and on addons.mozilla.org. Not yet checked in Firefox. |
+| Safari | `build-web/extension/nymph-safari/`, for Apple's converter (`xcrun safari-web-extension-converter`) | A folder only; the app, signing and checks are future work. |
+
+Firefox and Safari let you withhold access to sites. Until you allow it,
+the button is grey and says "nymph needs access to sites. Click to
+allow."; the options page has an **Allow access** button. Design:
+[spec/11_cross_browser_extension/DESIGN.md](../spec/11_cross_browser_extension/DESIGN.md).
 
 ## The button
 

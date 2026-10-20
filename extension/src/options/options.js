@@ -7,6 +7,7 @@
  * (spec/10_gemini_extension/DESIGN.md sections 4.5 and 5.2).
  */
 
+import { canRequestAccess, ext, hasHostAccess } from '../shared/api.js';
 import { readSettings, setSite } from '../shared/settings.js';
 
 const list = document.getElementById('off');
@@ -57,16 +58,16 @@ async function render() {
   none.hidden = settings.off.length > 0;
   chatList.replaceChildren(
     ...settings.chatSites.map((origin) =>
-      row(origin, 'Remove', () => chrome.storage.sync.set({ chatSites: settings.chatSites.filter((o) => o !== origin) }))),
+      row(origin, 'Remove', () => ext.storage.sync.set({ chatSites: settings.chatSites.filter((o) => o !== origin) }))),
   );
   noChatSites.hidden = settings.chatSites.length > 0;
 }
 
 for (const input of document.querySelectorAll('input[name="theme"]')) {
-  input.addEventListener('change', () => chrome.storage.sync.set({ theme: input.value }));
+  input.addEventListener('change', () => ext.storage.sync.set({ theme: input.value }));
 }
 for (const input of document.querySelectorAll('input[name="chatTheme"]')) {
-  input.addEventListener('change', () => chrome.storage.sync.set({ chatTheme: input.value }));
+  input.addEventListener('change', () => ext.storage.sync.set({ chatTheme: input.value }));
 }
 
 document.getElementById('add-chat-site').addEventListener('submit', async (e) => {
@@ -80,7 +81,7 @@ document.getElementById('add-chat-site').addEventListener('submit', async (e) =>
   }
   const { chatSites } = await readSettings();
   if (!chatSites.includes(origin)) {
-    await chrome.storage.sync.set({ chatSites: [...chatSites, origin] });
+    await ext.storage.sync.set({ chatSites: [...chatSites, origin] });
   }
   note.textContent = '';
   field.value = '';
@@ -89,7 +90,7 @@ document.getElementById('add-chat-site').addEventListener('submit', async (e) =>
 // The instructions for Gemini (generated from the template and the examples).
 const primerBox = document.getElementById('primer');
 let primerText = '';
-fetch(chrome.runtime.getURL('src/gemini/primer.txt'))
+fetch(ext.runtime.getURL('src/gemini/primer.txt'))
   .then((r) => r.text())
   .then((text) => {
     primerText = text.replace(/\r\n/g, '\n');
@@ -105,6 +106,34 @@ document.getElementById('copy-primer').addEventListener('click', async () => {
   }
 });
 
-chrome.storage.onChanged.addListener((_, area) => area === 'sync' && render());
+// Site access (Firefox and Safari let the user withhold it).
+const accessBox = document.getElementById('access');
+async function showAccess() {
+  accessBox.hidden = await hasHostAccess();
+  document.getElementById('allow-access').hidden = !canRequestAccess();
+}
+document.getElementById('allow-access').addEventListener('click', async () => {
+  const note = document.getElementById('access-note');
+  try {
+    note.textContent = (await ext.permissions.request({ origins: ['<all_urls>'] })) ? '' : 'Access was not granted.';
+  } catch (e) {
+    note.textContent = `Could not ask: ${e?.message ?? e}`;
+  }
+  showAccess();
+});
+ext.permissions?.onAdded?.addListener(showAccess);
+ext.permissions?.onRemoved?.addListener(showAccess);
+showAccess();
+
+// Wording that depends on what the browser offers (feature tests, never the browser's name).
+if (typeof ext.runtime.getBrowserInfo === 'function') {
+  document.getElementById('pin-hint').textContent =
+    'Open the Extensions menu in the toolbar and choose "Pin to Toolbar" beside "nymph charts".';
+}
+if (!ext.contextMenus) {
+  document.getElementById('menu-hint').hidden = true;
+}
+
+ext.storage.onChanged.addListener((_, area) => area === 'sync' && render());
 document.getElementById('welcome').hidden = new URLSearchParams(location.search).get('welcome') !== '1';
 render();

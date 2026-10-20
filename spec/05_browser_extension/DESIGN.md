@@ -42,8 +42,8 @@ packaging into an unpacked folder and a
 zip from the `NYMPH_WEB` build; one viewer change, `fit: 'scale'`
 (section 5.3); tests with fixture pages in Chromium.
 
-Out of scope: Firefox and Safari (the code avoids Chrome-only APIs where
-an equivalent exists, so a port stays small); images inside shadow
+Out of scope: Firefox and Safari (a later project,
+[spec/11_cross_browser_extension](../11_cross_browser_extension/DESIGN.md)); images inside shadow
 roots, iframes (the content script runs in the main frame only),
 `<canvas>` and CSS background images (so Google Docs' editor, section
 3.7);
