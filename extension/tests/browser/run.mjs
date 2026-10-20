@@ -214,6 +214,11 @@ const FIXTURES = {
     };
     render();
     window.revise = () => { chart.firstChild.textContent = yaml.replace('Load test', 'Revised title'); };`),
+  // GitHub's markup: the <pre> sits in a flex wrapper beside a copy button.
+  chatflex: () => page(`<div id="msgs"></div>`, `
+    const yaml = ${JSON.stringify(lineYaml)};
+    msgs.innerHTML = '<div id="wrap" class="highlight" style="display:flex; position:relative"><pre id="chart"><code></code></pre><button id="copybtn">copy</button></div>';
+    chart.firstChild.textContent = yaml;`),
   // A chat with a prompt box that already holds text, and a send button.
   chatbox: () => page(`<div id="msgs"></div><div id="box" contenteditable="true" style="border: 1px solid #888; min-height: 40px">first</div>
     <button id="send" type="button">Send</button>`, `window.sent = 0; send.onclick = () => window.sent++;`),
@@ -856,6 +861,25 @@ for (const mode of ['inline', 'frame']) {
     await p.close();
   });
 }
+
+test('a block in a flex wrapper is replaced as a whole, not shown beside the chart', async () => {
+  await setSettings({ chatSites: [SITE] });
+  const p = await openPage('chatflex');
+  await waitFor(async () => (await chatLive(p)) === 1, 'one chart');
+  const rects = () => p.evaluate(() => {
+    const h = document.querySelector('nymph-ext-chart').getBoundingClientRect();
+    const w = document.getElementById('wrap');
+    const wr = w.getBoundingClientRect();
+    return { hostBottom: h.bottom, wrapTop: wr.top, wrapShown: getComputedStyle(w).display !== 'none', hostHeight: h.height };
+  });
+  let r = await rects();
+  assert(!r.wrapShown, 'the wrapper (with its copy button) is hidden while the chart shows');
+  await badge(p, 'toggle');
+  r = await rects();
+  assert(r.wrapShown, 'the code shows');
+  assert(r.wrapTop >= r.hostBottom - 1, `the code is below the badge row, not beside it (host bottom ${r.hostBottom}, code top ${r.wrapTop})`);
+  await p.close();
+});
 
 test('a revised block updates its chart in place', async () => {
   await setSettings({ chatSites: [SITE] });

@@ -81,6 +81,25 @@ export function insertIntoComposer(box, text) {
   }
 }
 
+/**
+ * The element that stands for a `<pre>` on the page: its parent when that lays
+ * its children out in a row or grid (GitHub's `div.highlight` with the copy
+ * button beside the code), because a chart put before the `<pre>` inside it
+ * would sit beside the code instead of above it; else the `<pre>` itself.
+ * @param {HTMLElement} pre
+ * @return {HTMLElement}
+ */
+export function wrapperOf(pre) {
+  const parent = pre.parentElement;
+  if (!parent || parent === document.body) {
+    return pre;
+  }
+  const display = getComputedStyle(parent).display;
+  return display === 'flex' || display === 'inline-flex' || display === 'grid' || parent.classList.contains('highlight')
+    ? parent
+    : pre;
+}
+
 /** The adapter for any page with `<pre><code>` blocks. */
 export const generic = {
   name: 'generic',
@@ -93,9 +112,10 @@ export const generic = {
     const blocks = [];
     for (const pre of root.querySelectorAll('pre')) {
       const code = pre.querySelector('code');
+      const wrapper = wrapperOf(pre);
       blocks.push({
-        container: pre,
-        body: pre,
+        container: wrapper,
+        body: wrapper,
         text: (code ?? pre).textContent ?? '',
         label: languageOf(code) || languageOf(pre),
       });
