@@ -8,6 +8,7 @@
 #include <iostream>
 #include <iterator>
 #include <optional>
+#include <set>
 #include <stdexcept>
 #include <string>
 #include <vector>
@@ -33,6 +34,7 @@ constexpr const char* kUsage =
     "       nymph extract <in.png> [-o <out>]     print (or write) the YAML a nymph PNG carries\n"
     "       nymph check <in>                      validate without rendering; silent when valid\n"
     "       nymph schema [<Type>] [--markdown]    element reference\n"
+    "       nymph schema --markdown --paged <dir> write it in pages: <dir>/elements.md, <dir>/elements/<Type>.md\n"
     "       nymph fonts [--licenses]              embedded fonts (names for `font:`), or their licences\n"
     "       nymph rasterizers                     whether OpenGL can be used here, and why not\n"
     "       nymph view <in> [--theme <t>] [--fit <f>]  open <in> in a window: pan, zoom, hover (nymph view --help)\n"
@@ -52,6 +54,7 @@ struct options {
   std::vector<std::string> positional;
   std::optional<std::string> output;
   bool markdown = false;
+  std::optional<std::string> paged; ///< set by --paged: the directory of the pages
   bool licenses = false;
   std::optional<rasterizer> raster; ///< set by --rasterizer
 };
@@ -86,6 +89,11 @@ options parse(std::span<const std::string_view> args) {
       }
     } else if (a == "--markdown" && o.command == "schema") {
       o.markdown = true;
+    } else if (a == "--paged" && o.command == "schema") {
+      if (i + 1 >= args.size()) {
+        throw usage_error{"--paged needs a directory"};
+      }
+      o.paged = std::string(args[++i]);
     } else if (a == "--licenses" && o.command == "fonts") {
       o.licenses = true;
     } else if (a.size() > 1 && a[0] == '-') {
@@ -146,11 +154,51 @@ int do_check(const std::string& path, const bytes_t& input) {
   return 0;
 }
 
+/// The text of the file at `path`, or nullopt when it cannot be read.
+std::optional<std::string> read_text(const fs::path& path) {
+  std::ifstream in(path, std::ios::binary);
+  if (!in) {
+    return std::nullopt;
+  }
+  return std::string(std::istreambuf_iterator<char>(in), std::istreambuf_iterator<char>());
+}
+
+/// `schema --markdown --paged <dir>`: writes the pages under `dir`, leaving
+/// a file whose text is already right untouched (so a build that changes
+/// nothing changes no timestamp), and removes pages of types that no longer
+/// exist from `<dir>/elements/`.
+void write_pages(const std::string& dir, const registry& reg, std::ostream& out) {
+  const fs::path root(dir);
+  std::set<fs::path> wanted;
+  for (const doc_page& page : schema_markdown_pages(reg)) {
+    const fs::path target = root / page.path;
+    wanted.insert(target.lexically_normal());
+    if (read_text(target) != page.text) {
+      std::error_code ec;
+      fs::create_directories(target.parent_path(), ec);
+      write_output(target.string(), page.text, out);
+    }
+  }
+  std::error_code ec;
+  for (fs::directory_iterator it(root / "elements", ec), end; !ec && it != end; it.increment(ec)) {
+    if (it->path().extension() == ".md" && wanted.count(it->path().lexically_normal()) == 0) {
+      fs::remove(it->path(), ec);
+    }
+  }
+}
+
 int do_schema(const options& o, std::ostream& out) {
   if (o.positional.size() > 1 || o.output || (o.markdown && !o.positional.empty())) {
     throw usage_error{"schema takes at most one type name, or --markdown alone"};
   }
+  if (o.paged && (!o.markdown || !o.positional.empty())) {
+    throw usage_error{"--paged goes with --markdown and takes the directory to write"};
+  }
   const registry& reg = builtin_registry();
+  if (o.paged) {
+    write_pages(*o.paged, reg, out);
+    return 0;
+  }
   if (o.markdown) {
     out << schema_markdown(reg);
     return 0;

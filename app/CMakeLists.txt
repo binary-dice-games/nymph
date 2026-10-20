@@ -10,6 +10,25 @@ if(NYMPH_MCP)
   target_compile_definitions(nymph-cli PRIVATE NYMPH_HAS_MCP=1)
 endif()
 
+# Keeps docs/elements.md and docs/elements/ (the paged element reference,
+# `nymph schema --markdown --paged`) in step with the program after every
+# build; tests/test_docs.cpp fails when they are not. Only for a native
+# build of nymph itself: not as a subproject, not cross-compiled (the
+# executable cannot run here), not a release (a source tarball's docs are
+# read-only in effect: they are already right).
+if(PROJECT_IS_TOP_LEVEL AND NOT CMAKE_CROSSCOMPILING AND NOT NYMPH_RELEASE AND NOT NYMPH_WEB)
+  set(_nymph_update_docs_default ON)
+else()
+  set(_nymph_update_docs_default OFF)
+endif()
+option(NYMPH_UPDATE_DOCS "Regenerate docs/elements.md and docs/elements/ after building nymph" ${_nymph_update_docs_default})
+if(NYMPH_UPDATE_DOCS)
+  add_custom_command(TARGET nymph-cli POST_BUILD
+    COMMAND nymph-cli schema --markdown --paged "${PROJECT_SOURCE_DIR}/docs"
+    COMMENT "Updating docs/elements.md and docs/elements/"
+    VERBATIM)
+endif()
+
 # macOS release: ld64 has no -s, so strip after the link; stripping drops
 # the linker's ad hoc signature, without which arm64 runs nothing
 # (cmake/NymphRelease.cmake).
