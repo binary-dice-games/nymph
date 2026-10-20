@@ -1,8 +1,13 @@
 # nymph — VS Code Markdown Preview: Design
 
-**Status: design only; nothing is built.** [PLAN.md](PLAN.md) is the
-ordered implementation plan; its step 1 checks the facts marked
-*unverified* before code depends on them. This document describes only
+**Status: designed; plan step 1 (feasibility) done, nothing of the
+extension built.** Step 1 checked the design against VS Code's source
+(main and 1.90.0), a JavaScript build of the library, and a Chromium page
+that reproduces the preview's CSP and DOM updates; a real VS Code was not
+run (its download host is blocked in the session that did step 1);
+section 9 lists what still needs one (steps 6 onwards and 12).
+[PLAN.md](PLAN.md) is the ordered implementation plan and records each
+step's result. This document describes only
 what this project adds or changes. It builds on
 [spec/04_web_viewer/DESIGN.md](../04_web_viewer/DESIGN.md) (*viewer
 DESIGN*: the WebAssembly module, its JavaScript API, fonts on demand) and
@@ -45,17 +50,17 @@ Two things are allowed under every setting: `data:` images and the
 extension's own preview scripts (they carry the page's nonce). The design
 uses both:
 
-1. **A static PNG first.** The extension host (Node.js, no CSP) renders
-   each block with the WebAssembly core and puts the PNG in the HTML as a
-   `data:` image. It shows at once, costs the preview nothing, and is
+1. **A static PNG first.** The extension (Node.js, no CSP) renders each
+   block with the WebAssembly core, in a worker thread, and puts the PNG
+   in the HTML as a `data:` image. It costs the preview nothing, and is
    what exports and copies carry.
-2. **Live on click, from a JavaScript build of the same C++.** Emscripten
-   can compile the library to plain JavaScript (`-sWASM=0`, wasm2js)
-   instead of WebAssembly. That build needs no `'wasm-unsafe-eval'` and
-   no fetch: a small preview script injects it, with the page's nonce, the
-   first time the user clicks a chart, and the image becomes the live
-   viewer (pan, zoom, values on hover). A rewrite of the renderer in
-   JavaScript is rejected (Decision "Compiled, not rewritten").
+2. **Live on click, from a JavaScript build of the same C++.** The
+   library's WebAssembly, converted to plain JavaScript by binaryen's
+   `wasm2js`, needs no `'wasm-unsafe-eval'` and no fetch: a small preview
+   script injects it, with the page's nonce, the first time the user
+   clicks a chart, and the image becomes the live viewer (pan, zoom,
+   values on hover). A rewrite of the renderer in JavaScript is rejected
+   (Decision "Compiled, not rewritten").
 
 ### In scope
 
@@ -94,7 +99,7 @@ uses both:
 | `vscode/package.json.in` | The extension manifest (version filled in by CMake) |
 | `vscode/src/extension.js` | `activate()`: loads the renderer, registers everything, returns `extendMarkdownIt` |
 | `vscode/src/fence.js` | The markdown-it plugin and the pure `renderBlock()` |
-| `vscode/src/renderer.js` | `NymphRenderer`: the WebAssembly core in Node, synchronous render and check, cache, fonts |
+| `vscode/src/renderer.js`, `renderer-worker.js` | `NymphRenderer`: the WebAssembly core in a Node worker thread, render and check, cache, fonts |
 | `vscode/src/blocks.js` | Finds `nymph` fences in a document's text (shared by diagnostics, CodeLens, the live panel) |
 | `vscode/src/diagnostics.js`, `vscode/src/lens.js` | Editor diagnostics and CodeLens |
 | `vscode/preview/nymph-preview.js`, `nymph-preview.css` | The preview script (the click-to-live loader, section 3.4) and styles |
@@ -118,9 +123,10 @@ uses both:
    carrying the block's YAML.
 3. **Nothing else to install.** No `nymph` executable, no npm packages at
    run time: both builds of the core ship inside the extension.
-4. **Pay only for what is used.** A preview whose charts are never
-   clicked loads one small script and no renderer; typing re-renders
-   only the block whose text changed.
+4. **Pay only for what is used, and never stall the editor.** A preview
+   whose charts are never clicked loads one small script and no renderer;
+   typing re-renders only the block whose text changed, off the
+   extension host's thread.
 5. **Errors where the author looks.** In the preview, in place of the
    chart, and as an editor diagnostic at the block's line and column.
 6. **Untrusted documents are safe.** Opening any Markdown file runs no
@@ -142,11 +148,19 @@ parsed.
 The block becomes
 
 ```html
-<div class="nymph-chart code-line" data-line="12" data-nymph-index="0" data-nymph-hash="3f9a…">
+<div class="nymph-chart code-line" data-line="12" data-nymph-hash="3f9a…">
   <img src="data:image/png;base64,…" width="640" height="360" alt="<description>">
 </div>
 ```
 
+- **While it renders.** A block whose PNG is not cached yet is sent to
+  the render worker (section 4.3) and shown as
+  `<div class="nymph-chart nymph-pending code-line" data-line="12" data-nymph-hash="…">`
+  with "Drawing chart…" and, if the block was drawn before at that
+  position (same document, same block number), that last image dimmed,
+  so typing in a block does not make the preview jump. When the worker
+  answers, the extension runs `markdown.preview.refresh` once per batch
+  (results arriving within 50 ms share one refresh).
 - **Size.** The PNG is rendered at the source's `image.width` x `height`
   times `nymph.preview.scale` (default 2, for sharp text on high-DPI
   screens) and shown at the source's size, shrunk to the column by
@@ -160,9 +174,8 @@ The block becomes
   `data-line` attribute VS Code's preview uses to sync scrolling and
   double-click-to-edit (copied from the token's attributes; a plugin that
   drops them breaks both).
-- **Identity.** `data-nymph-index` is the block's ordinal among the
-  document's `nymph` blocks, `data-nymph-hash` the SHA-256 (hex, first 16
-  bytes) of its text; the preview script uses them to keep live viewers
+- **Identity.** `data-nymph-hash` is the SHA-256 (hex, first 16 bytes)
+  of the block's text; the preview script uses it to keep live viewers
   across preview updates (section 3.4).
 - **`alt`.** The source's `description`, or "nymph chart".
 - **Export.** The chart is ordinary HTML with a `data:` image, so
@@ -210,33 +223,55 @@ used, the viewer simply stops receiving wheel events).
 first activation it adds a `<script>` element whose `src` is
 `nymph-viewer.classic.js` next to itself (from `document.currentScript`)
 and whose `nonce` is its own (`document.currentScript.nonce`), which the
-Strict CSP allows (*unverified*: step 1). While it loads (several MB,
-section 9) the chart shows a spinner over the image. The script is
-loaded once per preview webview.
+Strict CSP allows (verified in step 1 in Chromium 141 with the preview's
+exact policy). It takes about 0.2 s to load and 0.6 s from click to the
+first live frame (step 1); meanwhile the chart shows a spinner over the
+image. The script is loaded once per preview webview.
 
-**Swap.** The viewer is created with `setPng()` from the image's own
-bytes (decoded from the `data:` URL, no fetch), `fit: 'source'` (same
-size as the image, so nothing moves), `menu: false` (its save items
-download, which webviews do not support), and the theme from the body's
+**Swap.** The live viewer lives in a **shadow root** on the wrapper,
+whose only other child is a `<slot>`: the slot shows the image while the
+chart is not live and is hidden when the viewer has drawn its first
+frame. The wrapper's own attributes and light-DOM children (the `<img>`)
+are never changed, which is what lets the chart survive preview updates
+(below). The viewer is created with `png` from the image's own bytes
+(decoded from the `data:` URL, no fetch), `fit: 'source'` (same size as
+the image, so nothing moves), `menu: false` (its save items download,
+which webviews do not support), and the theme from the body's
 `vscode-dark` / `vscode-light` / `vscode-high-contrast` class, followed
-by a `MutationObserver`. The image stays under the canvas until the
-viewer's first frame (extension DESIGN, "cover until the first frame"),
-then is hidden. If the viewer fails (any error, including a font the
-build lacks), the image stays, with the hint "could not go live: <message>".
+by a `MutationObserver`. The viewer's box stops `dblclick` from
+propagating: the preview's own double-click handler (on `document`)
+would otherwise switch to the editor while the viewer fits its plot. If
+the viewer fails (any error), the image stays, with the hint "could not
+go live: <message>".
 
-**Preview updates.** VS Code updates the preview's DOM after every edit
-and fires `vscode.markdown.updateContent` on `window`. The script keeps
-its viewers in a map keyed by `data-nymph-index` and, after each update:
+**Preview updates.** After every edit VS Code patches the preview with
+morphdom (`preview-src/index.ts`, unchanged since 1.90): an element equal
+to the new one (`areNodesEqual`: tag, text, attributes except
+`data-line`, children; shadow roots are not compared) is kept as is,
+others are morphed in place or replaced by position; then
+`vscode.markdown.updateContent` fires on `window`. The script keeps its
+viewers in a map from wrapper element to `{ viewer, box, hash }` and,
+after each update:
 
-1. a chart whose hash is unchanged gets its existing viewer moved back
-   into the new wrapper (zoom kept);
-2. a chart whose hash changed gets `setPng()` with the new image on the
-   viewer of the same index (the viewer keeps the zoom of elements whose
-   IDs did not change, viewer DESIGN "Updates");
-3. viewers whose index no longer exists are destroyed.
+1. a wrapper still in the page with the same hash keeps its viewer
+   (nothing to do: morphdom kept the element, so the zoom is kept);
+2. viewers whose wrapper left the page or shows another hash are
+   detached; a wrapper without a viewer whose hash matches a detached
+   one adopts it (the box moves into its shadow root, zoom kept): this
+   is the case of text inserted above the charts, where morphdom
+   rebuilds the wrappers by position;
+3. a wrapper morphed in place to a new hash (its block was edited) keeps
+   its own viewer, given the new image with `setPng()` (the viewer keeps
+   the zoom of elements whose IDs did not change, viewer DESIGN
+   "Updates");
+4. detached viewers left over are destroyed, and their charts are
+   images again until clicked.
 
-Whether VS Code replaces or patches the DOM (it may diff it), and so
-which of these paths runs, is *unverified*; step 1 records it.
+Step 1 ran all four paths against VS Code's update code in Chromium:
+an edit outside the charts kept all three viewers and their zoom, an
+edit of one chart updated it in place, and inserted text above the charts
+moved the unchanged charts' viewers to their new wrappers. A chart that
+changes and moves in the same update falls back to its image.
 
 **Pool.** At most 8 live viewers per preview; activating a ninth parks
 the one least recently used back to its image (its view state is lost,
@@ -282,14 +317,16 @@ step, no npm dependencies, matching `extension/`.
 
 ### 4.1 `extension.js`
 
-`activate(context)` is `async`: it creates the `NymphRenderer` (loading
-the WebAssembly, about 100 ms, *unverified*) before returning
-`{ extendMarkdownIt(md) }`, so the first preview never sees a renderer
-that is not ready. VS Code's Markdown extension awaits a contributing
-extension's activation before calling `extendMarkdownIt`
-(*unverified*; step 1). It also registers the diagnostics, the CodeLens
-provider, the commands, and the theme / configuration listeners that
-call `markdown.preview.refresh`.
+`activate(context)` is `async`: it starts the `NymphRenderer` worker
+(the module loads in about 60 ms, step 1) before returning
+`{ extendMarkdownIt(md) }`. VS Code's Markdown extension awaits a
+contributing extension's `activate()` before calling `extendMarkdownIt`
+(`markdownExtensions.ts`, main and 1.90.0), and adds its own core rule
+(`source_map_data_attribute`) after every plugin, so fence tokens already
+carry `data-line` and `code-line` when the plugin's rule renders them.
+It also registers the diagnostics, the CodeLens provider, the commands,
+and the theme / configuration listeners that call
+`markdown.preview.refresh`.
 
 ### 4.2 `fence.js`
 
@@ -302,20 +339,27 @@ without markdown-it):
 - escapes every text it inserts (`&`, `<`, `>`, `"`, `'`);
 - keeps the token's `code-line` / `data-line` attributes;
 - maps error positions to document lines from `token.map`;
-- numbers `nymph` blocks in document order (`data-nymph-index`; the
-  counter lives in markdown-it's per-render `env`).
+- never waits: an uncached block becomes the pending wrapper of section
+  3.2 and a render request;
+- counts `nymph` blocks in the render's `env` (the block number of
+  sections 3.2 and 4.3; not written to the HTML).
 
 ### 4.3 `NymphRenderer` (`renderer.js`)
 
 The WebAssembly core (`nymph-viewer-core.js` and `.wasm`, built for
-`ENVIRONMENT=web,worker,node`, viewer DESIGN section 4) loaded once per
-extension host with a dynamic `import()`.
+`ENVIRONMENT=web,worker,node`, viewer DESIGN section 4), loaded once in a
+`worker_threads` worker (`renderer-worker.js`) with a dynamic `import()`.
+The extension host thread never runs the core: step 1 measured a scale-2
+render at 207 ms typical and 431 ms for the slowest example (scale 1: 58
+and 175 ms), too long to block a thread every extension shares.
 
 | Call | Result |
 |---|---|
-| `NymphRenderer.create({ coreUrl, fontDir })` | async; resolves when the module is instantiated |
-| `render(source, { theme, scale })` | sync; `{ png: Uint8Array, width, height, description }` or `{ error: { line, column, message } }` |
-| `check(source)` | sync; `null` or `{ error }` |
+| `NymphRenderer.create({ coreUrl, fontDir })` | async; resolves when the worker's module is instantiated |
+| `peek(source, { theme, scale })` | sync; the cached result or `undefined` |
+| `render(source, { theme, scale })` | async; `{ png: Uint8Array, width, height, description }` or `{ error: { line, column, message } }` |
+| `check(source)` | async; `null` or `{ error }` |
+| `onRendered(callback)` | called with each result the worker returns (the extension refreshes the preview) |
 
 Invariants:
 
@@ -330,7 +374,12 @@ Invariants:
 - **No I/O for sources.** The core sees bytes only (viewer DESIGN
   decision "No I/O in wasm"); the renderer never reads a file named by a
   block.
-- One module instance, called from the extension host thread only.
+- One worker and one module instance. Requests are queued in order; a
+  queued request whose block has since changed again (a newer request
+  for the same document and block number) is dropped unrun, so a burst
+  of typing renders the last text, not every keystroke.
+- A worker that crashes is restarted once per minute at most; meanwhile
+  blocks show the error panel "nymph renderer stopped".
 
 ### 4.4 `blocks.js`
 
@@ -343,20 +392,50 @@ markdown-it's output on the same fixtures in the VS Code test.
 
 ### 4.5 The JavaScript build (`nymph-viewer.classic.js`)
 
-The same library and `web/nymph_web.cpp`, compiled by Emscripten to
-JavaScript, plus the same `web/js/nymph-viewer.js` API, in one classic
+The same library and `web/nymph_web.cpp`, as JavaScript instead of
+WebAssembly, plus the same `web/js/nymph-viewer.js` API, in one classic
 (non-module) script that defines `globalThis.NymphViewer` (`createViewer`,
-`NymphError`, and the `<nymph-viewer>` element). It is a second configure
-of the tree, `NYMPH_WEB=ON NYMPH_WEB_JS=ON` (its own build folder), which
-differs from the WebAssembly build only in:
+`NymphError`, `loadNymph`, and the `<nymph-viewer>` element). It is a
+second configure of the tree, `NYMPH_WEB=ON NYMPH_WEB_JS=ON` (its own
+build folder), which differs from the WebAssembly build only in:
 
 | Option | WebAssembly build | JavaScript build | Why |
 |---|---|---|---|
-| Output | `-sWASM=1` | `-sWASM=0` (wasm2js) | No WebAssembly compile under the Strict CSP |
+| Output | the `.wasm` | the same kind of `.wasm`, converted by binaryen's standalone `wasm2js` (shipped with emsdk), loaded through a small `WebAssembly` shim | No WebAssembly compile under the Strict CSP |
 | Exceptions | `-fwasm-exceptions` | `-fexceptions` (JavaScript-based) | wasm2js does not support WebAssembly exceptions; the library reports errors by throwing |
 | `eval` | default | `-sDYNAMIC_EXECUTION=0` | Strict forbids `eval` and `new Function` |
-| Packaging | ES module, wasm beside it | `-sSINGLE_FILE=1 -sEXPORT_ES6=0`, API appended without `export` | Classic `<script>`, nothing to fetch |
-| Fonts | none embedded, fetched on demand | all embedded (`NYMPH_EMBED_FONTS`) | No `fetch` in the preview |
+| Packaging | ES module, wasm beside it | one file: loader, converted module, API; `export`s removed and `import.meta.url` replaced, in an IIFE | Classic `<script>`, nothing to fetch |
+| Fonts | none embedded, fetched on demand | all embedded (`NYMPH_EMBED_FONTS=all`) | No `fetch` in the preview |
+
+**Why standalone `wasm2js`, not `-sWASM=0`.** Emscripten 6.0.12 (the
+pinned version) still builds with `-sWASM=0`, and step 1 measured that
+build, but it warns that the setting is deprecated and scheduled for
+removal (emscripten issue 27608, open, removal commits linked in October
+2026). The maintainers keep binaryen's standalone `wasm2js` and endorse
+the layered route above (a normal build, `wasm2js`, a shim) for users who
+need JavaScript output. Step 1 converted the library's module this way
+(with `--emscripten` and the module's features enabled: bulk memory,
+non-trapping float-to-int, sign extension, mutable globals) without
+error; running it through a shim is plan step 3's first deliverable,
+with `-sWASM=0` as the fallback while the pinned Emscripten has it.
+
+**Measured in step 1** (the `-sWASM=0` build, MinSizeRel; Chromium 141
+with SwiftShader WebGL2, a 4-core VM):
+
+| | WebAssembly build | JavaScript build |
+|---|---|---|
+| Size, raw / gzip | 1.94 MB / 0.77 MB (`.wasm`, no fonts) | 8.1 MB / 2.9 MB (4.4 MB / 1.2 MB without fonts) |
+| Load, click to first live frame | 6 ms, 0.25 s | 0.2 s, 0.6-1.0 s |
+| Pan frame cost p50 / p95, WebGL (line, class diagram, 3D surface) | 17/32, 12/27, 17/28 ms | 20/31, 10/24, 20/34 ms |
+| The same with the software rasterizer | 10/17, 7/10, 17/28 ms | 33/53, 20/31, 49/62 ms |
+| PNG render in Node, scale 2, p50 / max | 207 / 431 ms | 445 / 1107 ms |
+
+The JavaScript build is 2-3x slower in CPU-bound work; with WebGL (what
+VS Code's Electron provides) the frame cost here was dominated by the
+emulated GPU and close to the WebAssembly build's. Its software-rendered
+PNGs equal the committed example PNGs (the web Node test "every example
+renders like its committed PNG" passes on it), and C++ exceptions report
+the same errors.
 
 Invariants:
 
@@ -384,7 +463,7 @@ whose CSP forbids WebAssembly but allows a script (a note in
 | Key | Value |
 |---|---|
 | `name`, `publisher`, `displayName` | `nymph`, the owner's publisher id (*owner*), "nymph charts" |
-| `engines.vscode` | `^1.90.0` (*unverified*: the oldest version step 1 checks) |
+| `engines.vscode` | `^1.90.0` (1.90.0 has the plugin activation, CSP, line attributes and preview update code step 1 read on main) |
 | `main` | `./src/extension.js` |
 | `activationEvents` | `onLanguage:markdown` (the Markdown extension also activates plugin contributors) |
 | `capabilities.untrustedWorkspaces` | `{ "supported": true }` (goal 6: no code from the workspace runs) |
@@ -431,9 +510,10 @@ exist in both builds, and are tested in `web/tests/node/run.mjs`.
 
 - `NYMPH_WEB_JS` (default off; only with `NYMPH_WEB`) switches the web
   build to the JavaScript options of section 4.5 and outputs
-  `nymph-viewer.classic.js` instead of the module files. It is a separate
-  build folder (for example `build-web-js`) because the exception model
-  is a whole-program compile option.
+  `nymph-viewer.classic.js` (the `wasm2js` conversion and the classic
+  assembly are CMake custom commands) instead of the module files. It is
+  a separate build folder (for example `build-web-js`) because the
+  exception model is a whole-program compile option.
 - `NYMPH_VSCODE` (default off; in the WebAssembly web build) adds
   `vscode/CMakeLists.txt`, with `NYMPH_VSCODE_JS_CORE` naming the
   JavaScript build's `nymph-viewer.classic.js`. It stages
@@ -461,19 +541,23 @@ exist in both builds, and are tested in `web/tests/node/run.mjs`.
   classic script, contains no `eval(` / `new Function`.
 - **Extension, Node, no dependencies** (`vscode/tests/node/run.mjs`,
   CTest `nymph_vscode_node`): `renderBlock` (info matching, escaping,
-  `data-line`, index and hash, error panel, line mapping, size limit)
+  `data-line`, hash, pending wrapper, error panel, line mapping, size limit)
   with fake tokens; `findBlocks` on fixtures; `NymphRenderer` with the
   real core (embedded YAML equals the block; pixels equal to the native
   CLI's software render with the theme set in the YAML; fonts on demand;
-  cache hits; errors); the `.vsix` layout.
+  cache hits; errors; superseded requests dropped; a crashed worker
+  restarted); the `.vsix` layout.
 - **Preview script, Chromium through Playwright**
   (`vscode/tests/browser/`, 77 when Playwright is missing): a fixture page
   with the Strict CSP and a nonce, built from `markdown.api.render`
   output: a click loads the classic build with no CSP violation and makes
   the chart live (`viewer.source()` equals the block); a simulated
-  content update with the same hash keeps the viewer and its zoom, a
-  changed hash updates it, a removed block destroys it; the pool parks
-  the ninth; `interactive: off` loads nothing.
+  content update through VS Code's own morphdom code (copied from
+  `preview-src/index.ts`, as step 1's probe did) with the same hash keeps
+  the viewer and its zoom, a changed hash updates it, text inserted above
+  moves the viewers to their charts, a removed block destroys its viewer;
+  a double-click on a live chart does not reach `document`; the pool
+  parks the ninth; `interactive: off` loads nothing.
 - **In VS Code** (`vscode/tests/vscode/run.mjs`, CTest
   `nymph_vscode_integration`, 77 when `@vscode/test-electron` is
   missing): `markdown.api.render` of a fixture contains the chart and
@@ -489,30 +573,45 @@ exist in both builds, and are tested in `web/tests/node/run.mjs`.
   ImPlot3D, ImUml, nymph's layout and its software rasterizer, tens of
   thousands of lines of C++. A JavaScript rewrite would be a second
   renderer that drifts from the PNGs (viewer DESIGN's rejected
-  alternatives). Emscripten's JavaScript output keeps one source of
-  truth; the price is size and speed (section 9).
+  alternatives). JavaScript converted from the same WebAssembly keeps one
+  source of truth; the price is size and speed (section 4.5).
 - **Image first, live on click.** The PNG is instant, small next to the
   classic build, needs no script, and survives export. Loading a
   multi-MB script for every preview, and wheel-zooming charts the user
   scrolls past, would make reading worse. Rejected: live by default
   (`always` stays a setting).
-- **Render the image on the extension host with WebAssembly, not the
-  `nymph` executable.** markdown-it's render rules are synchronous; a
-  child process is asynchronous and needs an installed, matching `nymph`
-  on `PATH`. The module is already built and tested in Node
-  (`web/tests/node`) and runs in remote hosts (SSH, WSL, containers)
-  without installing anything there.
+- **Render the image with WebAssembly in a worker thread, not the
+  `nymph` executable.** A child process would need an installed,
+  matching `nymph` on `PATH`; the module is already built and tested in
+  Node (`web/tests/node`) and runs in remote hosts (SSH, WSL, containers)
+  without installing anything there. The worker, not the extension host
+  thread, because a scale-2 render takes 0.1-0.4 s (step 1); the cost is
+  the pending wrapper and one preview refresh per batch. Rejected:
+  rendering synchronously at scale 1 (still up to 175 ms, and blurry on
+  high-DPI screens).
 - **Inject the classic build with the page's nonce, not as a preview
   script.** Every preview script is loaded into every preview; the
-  loader keeps unclicked previews at under 10 KB. Rejected: an `<iframe>`
+  loader keeps unclicked previews at under 10 KB, and step 1 showed a
+  `<script>` with the page's nonce loads under the Strict CSP. Rejected: an `<iframe>`
   or a worker (`frame-src` / `worker-src` fall back to `'none'`); telling
   users to set the preview's security to "Disable" (it lets every
   Markdown file run scripts in the preview).
-- **Fonts embedded in the classic build.** The preview cannot fetch;
-  embedding all fonts (about 2.8 MB, more as base64) is simplest. If
-  step 1 finds the file too large, the build embeds the default font
-  only and a chart naming another font stays an image with "could not
-  go live: font X" (the image is already right, rendered on the host).
+- **All fonts embedded in the classic build.** The preview cannot fetch.
+  Embedding all fonts makes the file 8.1 MB instead of 4.4 MB (2.9 MB
+  against 1.2 MB in the `.vsix` zip), loaded in 0.2 s from local disk
+  and only after a click (step 1), so every chart can go live. Rejected
+  for now: the default font only, with charts naming another font
+  staying images ("could not go live: font X"); the fallback if size
+  ever matters.
+- **The live viewer in a shadow root of the chart's wrapper.** VS Code
+  patches the preview with morphdom after each edit and keeps an element
+  only if it equals the new HTML; a viewer added as a child (or a changed
+  attribute) makes the wrapper unequal and morphdom restores the image.
+  A shadow root is invisible to that comparison, and its `<slot>` shows
+  the image whenever the chart is not live. Step 1 verified this against
+  VS Code's update code. Rejected: replacing the `<img>` (lost on every
+  edit) and keeping viewers outside `.markdown-body` (they would not
+  scroll or reflow with the text).
 - **`data:` images, not files.** `img-src data:` is allowed in every
   setting, works in remote hosts, and leaves nothing on disk. Rejected:
   PNGs in the extension's storage (the preview's `localResourceRoots`
@@ -536,40 +635,34 @@ exist in both builds, and are tested in `web/tests/node/run.mjs`.
 
 ## 9. Constraints, Risks, Open Questions
 
-- **Size and speed of the JavaScript build.** wasm2js output is usually
-  several times the WebAssembly size uncompressed and runs a few times
-  slower (*unverified* for nymph: step 1 measures file size, parse time,
-  first frame and pan/zoom frame times on every example). Accepted if a
-  typical chart pans at 30 fps or better and the file loads within 2 s
-  on a laptop; otherwise the default becomes `off` for live mode in the
-  preview and the panel becomes the interactive route.
-- **wasm2js coverage.** JavaScript-based exceptions, 64-bit integer
-  lowering and memory growth are supported by wasm2js, but the whole
-  library has never been built this way; step 1 builds it and runs the
-  web Node tests on it.
-- **Nonce injection and preview updates** (section 3.4) are
-  *unverified*; step 1 checks both. If a nonce'd injected script is
-  refused, the classic build becomes a second preview script (loaded in
-  every preview, parsed lazily by wrapping its body in a function called
-  on first click).
-- **Synchronous rendering blocks the extension host**, which other
-  extensions share. A large 3D plot or big data table may take hundreds
-  of milliseconds. The cache limits this to once per change of a block;
-  step 1 measures every example. If the slowest exceed 150 ms, step 4
-  switches to asynchronous rendering: a placeholder for an uncached
-  block, the render in a `worker_threads` worker, then
-  `markdown.preview.refresh` (`render()` stays behind one function so
-  this stays local).
-- **Activation order** (section 4.1) is *unverified*. If activation is
-  not awaited, the plugin emits a "loading nymph" panel and refreshes the
-  preview once the renderer is ready.
+- **Speed of the JavaScript build on real hardware.** Step 1 met the
+  thresholds (30 fps while panning a typical chart, load under 2 s) with
+  emulated WebGL; with the software rasterizer (a machine without
+  WebGL2) a line plot and the 3D surface pan at 16-19 fps. Not measured
+  with a hardware GPU or inside VS Code's Electron (step 12). If live
+  charts feel slow there, the default of `nymph.preview.interactive`
+  becomes `off` and the live panel (section 3.5) is the interactive
+  route.
+- **wasm2js's future.** Emscripten is removing `-sWASM=0`; the design
+  uses standalone binaryen `wasm2js` (section 4.5), which the
+  maintainers keep. The shim it needs is ours to maintain (small: the
+  `WebAssembly.Module` / `Instance` / `Memory` subset Emscripten's loader
+  calls).
+- **Not run in VS Code yet.** Activation order, the line attributes,
+  the update code and the CSP were read from VS Code's source (main and
+  1.90.0) and the preview reproduced in Chromium; `markdown.api.render`,
+  scroll sync, double-click, Electron's CSP handling and remote hosts
+  (the Markdown extension and this one both default to the workspace
+  extension host, so they should meet there) are checked from step 6 on,
+  in a real VS Code.
 - **GitHub does not render `nymph` fences.** A README read on GitHub
   shows the YAML. `docs/vscode.md` suggests committing the PNG next to
   the block where it must show there (or the Chrome extension, which
   draws nymph PNGs).
-- **Memory.** One WebAssembly instance in the extension host (about
-  30-60 MB with fonts registered, *unverified*) and one JavaScript
-  instance per preview that went live.
+- **Memory.** One WebAssembly instance in the render worker (the Node
+  probe of step 1 peaked at 180 MB resident for the whole process,
+  rendering every example) and one JavaScript instance per preview that
+  went live.
 - **Untrusted sources.** Every document is untrusted input to the
   library, as in the viewer: no I/O, catalog-only fonts, escaped HTML,
   sizes bounded.
