@@ -23,7 +23,7 @@ Goes in: root, Child, CollapsingHeader, Disabled, Group, HorizontalLayout, Inden
 | `frame_padding` | list of numbers | `[]` | Padding inside framed widgets [x, y]; empty is ImGui's [4, 3]. |
 | `frame_border` | true/false | `false` | Draws a border around framed widgets. |
 | `item_spacing` | list of numbers | `[]` | Space between widgets [x, y]; empty is ImGui's [8, 4]. |
-| `font` | text | `""` | Font of this element's text and of everything inside it: an embedded font file name (default, FiraMono-Bold.ttf, FiraMono-Regular.ttf, FiraSans-Bold.ttf, FiraSans-Italic.ttf, FiraSans-Regular.ttf, PT_Serif-Web-Bold.ttf, PT_Serif-Web-Italic.ttf, PT_Serif-Web-Regular.ttf). Empty (default) inherits the enclosing element's font, or image.font. |
+| `font` | text | `""` | Font of this element's text and of everything inside it: an embedded font file name (default). Empty (default) inherits the enclosing element's font, or image.font. |
 | `font_size` | number | `0` | Text size in pixels for this element and everything inside it. 0 (default) inherits the enclosing element's size, or image.font_size. (0 to 96) |
 | `text_color` | colour | `""` | Text colour ("#RRGGBB" or "#RRGGBBAA") for this element and everything inside it: titles, axis and tick labels, legends and labels. Empty (default) inherits, or uses the theme's. |
 
@@ -41,7 +41,7 @@ Goes in: Screen.
 | `color` | colour | `""` | Colour of the arrow; empty is the theme's text colour at 60 % opacity. |
 | `thickness` | number | `1.5` | Line width in pixels. (1 to 8) |
 | `dashed` | true/false | `false` | Draws the line dashed (an optional or error path, say). |
-| `font` | text | `""` | Font of this element's text and of everything inside it: an embedded font file name (default, FiraMono-Bold.ttf, FiraMono-Regular.ttf, FiraSans-Bold.ttf, FiraSans-Italic.ttf, FiraSans-Regular.ttf, PT_Serif-Web-Bold.ttf, PT_Serif-Web-Italic.ttf, PT_Serif-Web-Regular.ttf). Empty (default) inherits the enclosing element's font, or image.font. |
+| `font` | text | `""` | Font of this element's text and of everything inside it: an embedded font file name (default). Empty (default) inherits the enclosing element's font, or image.font. |
 | `font_size` | number | `0` | Text size in pixels for this element and everything inside it. 0 (default) inherits the enclosing element's size, or image.font_size. (0 to 96) |
 | `text_color` | colour | `""` | Text colour ("#RRGGBB" or "#RRGGBBAA") for this element and everything inside it: titles, axis and tick labels, legends and labels. Empty (default) inherits, or uses the theme's. |
 
@@ -66,7 +66,7 @@ Goes in: Screen. Children: ArrowButton, Bullet, BulletText, Button, Checkbox, Ch
 | `x` | number | `0` | Left edge relative to the Screen when written; else under the widget that opens it, else (modals) centred. (0 to 8192) |
 | `y` | number | `0` | Top edge relative to the Screen (see x). (0 to 8192) |
 | `flags` | flags | `None` | ImGuiWindowFlags without the prefix. (combine with '\|': None, NoTitleBar, NoResize, NoMove, NoScrollbar, NoScrollWithMouse, NoCollapse, AlwaysAutoResize, NoBackground, NoMouseInputs, MenuBar, HorizontalScrollbar, NoFocusOnAppearing, NoBringToFrontOnFocus, AlwaysVerticalScrollbar, AlwaysHorizontalScrollbar, NoNavInputs, NoNavFocus, UnsavedDocument, NoNav, NoDecoration, NoInputs) |
-| `font` | text | `""` | Font of this element's text and of everything inside it: an embedded font file name (default, FiraMono-Bold.ttf, FiraMono-Regular.ttf, FiraSans-Bold.ttf, FiraSans-Italic.ttf, FiraSans-Regular.ttf, PT_Serif-Web-Bold.ttf, PT_Serif-Web-Italic.ttf, PT_Serif-Web-Regular.ttf). Empty (default) inherits the enclosing element's font, or image.font. |
+| `font` | text | `""` | Font of this element's text and of everything inside it: an embedded font file name (default). Empty (default) inherits the enclosing element's font, or image.font. |
 | `font_size` | number | `0` | Text size in pixels for this element and everything inside it. 0 (default) inherits the enclosing element's size, or image.font_size. (0 to 96) |
 | `text_color` | colour | `""` | Text colour ("#RRGGBB" or "#RRGGBBAA") for this element and everything inside it: titles, axis and tick labels, legends and labels. Empty (default) inherits, or uses the theme's. |
 
@@ -85,6 +85,6 @@ Goes in: Screen. Children: ArrowButton, Bullet, BulletText, Button, Checkbox, Ch
 | `flags` | flags | `None` | ImGuiWindowFlags without the prefix. (combine with '\|': None, NoTitleBar, NoResize, NoMove, NoScrollbar, NoScrollWithMouse, NoCollapse, AlwaysAutoResize, NoBackground, NoMouseInputs, MenuBar, HorizontalScrollbar, NoFocusOnAppearing, NoBringToFrontOnFocus, AlwaysVerticalScrollbar, AlwaysHorizontalScrollbar, NoNavInputs, NoNavFocus, UnsavedDocument, NoNav, NoDecoration, NoInputs) |
 | `title` | text | `""` | Text of the dialog's title bar. |
 | `closable` | true/false | `false` | Shows a close button in the title bar. |
-| `font` | text | `""` | Font of this element's text and of everything inside it: an embedded font file name (default, FiraMono-Bold.ttf, FiraMono-Regular.ttf, FiraSans-Bold.ttf, FiraSans-Italic.ttf, FiraSans-Regular.ttf, PT_Serif-Web-Bold.ttf, PT_Serif-Web-Italic.ttf, PT_Serif-Web-Regular.ttf). Empty (default) inherits the enclosing element's font, or image.font. |
+| `font` | text | `""` | Font of this element's text and of everything inside it: an embedded font file name (default). Empty (default) inherits the enclosing element's font, or image.font. |
 | `font_size` | number | `0` | Text size in pixels for this element and everything inside it. 0 (default) inherits the enclosing element's size, or image.font_size. (0 to 96) |
 | `text_color` | colour | `""` | Text colour ("#RRGGBB" or "#RRGGBBAA") for this element and everything inside it: titles, axis and tick labels, legends and labels. Empty (default) inherits, or uses the theme's. |
