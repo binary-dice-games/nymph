@@ -1,0 +1,7 @@
+// MIT License © 2026 Binary Dice Games
+// Windows resources of nymph.exe: the icon Explorer, shortcuts and the
+// taskbar show for the file (resources/icon.ico, made from
+// resources/icon.png by packaging/windows/make_ico.py). Configured by
+// app/CMakeLists.txt with the icon's absolute path.
+
+1 ICON "@NYMPH_ICON_ICO@"

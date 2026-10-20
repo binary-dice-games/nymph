@@ -116,7 +116,7 @@ carries its source: `bdg::nymph::extract_source(png)` returns it.
 | `claude/` | Claude integration: the agent skill text (`claude/skill/`), the MCP App that shows charts live in the chat (`claude/app/`) and the Claude Code plugin (`claude/plugin/`, listed by `.claude-plugin/marketplace.json`) |
 | `extension/` | The Chrome extension that turns nymph PNGs on any page into live viewers (built with `NYMPH_WEB`) |
 | `examples/` | Example sources and the PNGs rendered from them |
-| `resources/` | Project assets: the logo, the app icon (`icon.png`: `nymph view`'s window, the MCP bundle), and the fonts (Google Fonts, OFL) and placeholder images compiled into the binary (`fonts/`, `placeholders/`) |
+| `resources/` | Project assets: the logo, the app icon (`icon.png`: `nymph view`'s window, the MCP bundle; `icon.ico`: `nymph.exe`), and the fonts (Google Fonts, OFL) and placeholder images compiled into the binary (`fonts/`, `placeholders/`) |
 | `cmake/` | CMake helper modules |
 | `docs/` | Detailed documentation |
 | `spec/` | Design and plan of each project, one numbered folder per project ([INDEX.md](spec/INDEX.md)) |

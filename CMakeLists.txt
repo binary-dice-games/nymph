@@ -19,6 +19,10 @@ project(
   Nymph
   VERSION 0.1.0
   LANGUAGES C CXX)
+# Windows resource scripts (the icon of nymph.exe, app/nymph.rc.in).
+if(WIN32)
+  enable_language(RC)
+endif()
 
 option(NYMPH_BUILD_TESTS "Build the nymph tests" ${PROJECT_IS_TOP_LEVEL})
 # The OpenGL rasterizer loads OpenGL at run time; nothing is linked and no
