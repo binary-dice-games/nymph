@@ -176,7 +176,7 @@ carries its source: `bdg::nymph::extract_source(png)` returns it.
 | [spec/10_gemini_extension/PLAN.md](spec/10_gemini_extension/PLAN.md) | Its implementation steps and tests |
 | [spec/11_cross_browser_extension/DESIGN.md](spec/11_cross_browser_extension/DESIGN.md) | The extension on Edge, Firefox and Safari (planned): one source tree, manifest per browser, host-access state, stores |
 | [spec/11_cross_browser_extension/PLAN.md](spec/11_cross_browser_extension/PLAN.md) | Its implementation steps and tests |
-| [spec/12_vscode_markdown/DESIGN.md](spec/12_vscode_markdown/DESIGN.md) | VS Code extension (planned): `nymph` code blocks drawn in the Markdown preview, diagnostics, live panel |
+| [spec/12_vscode_markdown/DESIGN.md](spec/12_vscode_markdown/DESIGN.md) | VS Code extension (planned): `nymph` code blocks drawn in the Markdown preview, live on click through a JavaScript build of the viewer, diagnostics |
 | [spec/12_vscode_markdown/PLAN.md](spec/12_vscode_markdown/PLAN.md) | Its implementation steps and tests |
 | [CHANGELOG.md](CHANGELOG.md) | User-facing changes between releases |
 | [CLAUDE.md](CLAUDE.md) | Coding style and project rules for AI agents and contributors |

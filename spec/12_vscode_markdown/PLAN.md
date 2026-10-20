@@ -4,44 +4,56 @@ Design: [DESIGN.md](DESIGN.md). Builds on the web viewer
 ([spec/04_web_viewer](../04_web_viewer/DESIGN.md)) and the release
 pipeline ([spec/07_release_pipeline](../07_release_pipeline/DESIGN.md)).
 
-Steps go from what could invalidate the design (step 1), to the pure
-pieces (2-4), to the extension in VS Code (5-8), to the optional live
-preview (9), to release and manual checks (10-11). Each step is a
-reviewable deliverable and ends with every existing native, Node and
-browser test passing unmodified. The extension's tests live in
-`vscode/tests/` and are registered in CTest when `NYMPH_VSCODE` is on.
-Steps with user-visible behaviour (5 onwards) add a `CHANGELOG.md`
-entry. Steps that run VS Code record its version.
+Steps go from what could invalidate the design (step 1), to the web
+module (2-3), to the extension's pure pieces (4-5), to the extension in
+VS Code (6-9), to the optional live panel (10), to release and manual
+checks (11-12). Each step is a reviewable deliverable and ends with every
+existing native, Node and browser test passing unmodified. The
+extension's tests live in `vscode/tests/` and are registered in CTest
+when `NYMPH_VSCODE` is on. Steps with user-visible behaviour (3 and 6
+onwards) add a `CHANGELOG.md` entry. Steps that run VS Code record its
+version.
 
 ## Steps
 
 ### 1. Feasibility check
 
-**Goal:** the facts DESIGN.md marks *unverified* are answered in a real
-VS Code, and DESIGN.md is updated before code depends on them.
+**Goal:** the facts DESIGN.md marks *unverified* are answered, in a real
+VS Code and with a real JavaScript build, and DESIGN.md is updated
+before code depends on them.
 
 **Deliverables:** a throwaway extension (not committed) with a
-markdown-it plugin that emits a fixed `data:` PNG for `nymph` fences and
-logs timings; the answers recorded in this step's **Result** and folded
-into DESIGN.md sections 3, 4, 5.1 and 9.
+markdown-it plugin that emits a fixed `data:` PNG for `nymph` fences, a
+loader script, and timing logs; a throwaway `-sWASM=0` build of the web
+module; the answers recorded in this step's **Result** and folded into
+DESIGN.md sections 3, 4, 5.1 and 9.
 
 1. Does VS Code await an `async activate()` before calling
    `extendMarkdownIt` (first preview of a fresh window)?
 2. Does `markdown.api.render` include the plugin's output (the test hook
-   of step 5)?
+   of step 6)?
 3. With the fence rule wrapped and `code-line` / `data-line` kept, do
    scroll sync and double-click-to-edit work on the chart?
-4. Does a `command:` link in the preview run an extension command, and
-   with what restrictions?
-5. Confirm the Strict CSP blocks `WebAssembly.compile` in a preview
-   script, and that "Disable" allows it (section 3.5).
-6. Load `nymph-viewer-core.js` in the extension host (Node) and time a
+4. In a Strict preview: does a `<script>` added by a preview script, with
+   `document.currentScript.nonce` and a `src` beside it, load? Is
+   `WebAssembly.compile` refused (and allowed under "Disable")?
+5. Preview updates: after an edit, does VS Code replace the body, or
+   patch it (which nodes survive)? Is `vscode.markdown.updateContent`
+   fired, and when? Which body classes carry the theme?
+6. The JavaScript build: does the library build with `-sWASM=0
+   -fexceptions -sDYNAMIC_EXECUTION=0 -sSINGLE_FILE=1` and all fonts
+   embedded? Do `web/tests/node` pass on it? Record: file size raw and
+   gzip (with and without fonts), parse and first-frame time in the
+   preview, frame time while panning a 2D plot, a diagram and a 3D plot
+   from `examples/`, each next to the WebAssembly build's numbers.
+   Decide against DESIGN section 9's thresholds (30 fps, 2 s load).
+7. Load the WebAssembly core in the extension host (Node) and time a
    synchronous software render of every file in `examples/` at scale 2:
    load time, p50, p95, slowest; module memory. Decide sync or worker
-   rendering (DESIGN section 9) here.
-7. Remote: the same extension over Remote-SSH or WSL and in a dev
+   rendering (DESIGN section 9).
+8. Remote: the same extension over Remote-SSH or WSL and in a dev
    container; which host runs the plugin.
-8. The oldest VS Code version where items 1-3 hold (for
+9. The oldest VS Code version where items 1-5 hold (for
    `engines.vscode`).
 
 **Tests:** none automated.
@@ -59,20 +71,46 @@ library helper they need for the overrides; viewer DESIGN section 4
 ("Web module") notes the two exports.
 
 **Tests** (`web/tests/node/run.mjs`): a valid source renders, the PNG's
-embedded YAML equals the input byte for byte; `theme: dark` override
-gives the same pixels as the source with `image.theme: dark`; scale 2
-doubles both dimensions; a broken source returns 0 with the line, column
-and message `nymph check` prints; a source naming a non-embedded font
-fails with `fonts_needed` naming it, and succeeds after
-`nymph_register_font`; `nymph_check` agrees with `nymph check` on the
-`tests/` error fixtures.
+embedded YAML equals the input byte for byte; a `dark` override gives the
+same pixels as the source with `image.theme: dark`; scale 2 doubles both
+dimensions; a broken source returns 0 with the line, column and message
+`nymph check` prints; a source naming a non-embedded font fails with
+`fonts_needed` naming it, and succeeds after `nymph_register_font`;
+`nymph_check` agrees with `nymph check` on the `tests/` error fixtures.
 
 **Result:** *(to be filled in)*
 
-### 3. `NymphRenderer`
+### 3. The JavaScript build of the viewer
+
+**Goal:** `NYMPH_WEB_JS` builds `nymph-viewer.classic.js`, a single
+classic script with the same API and the same software-rendered pixels
+as the WebAssembly build, that runs under a CSP without
+`'wasm-unsafe-eval'`, `connect-src` or `eval`.
+
+**Deliverables:** the `NYMPH_WEB_JS` option (root `CMakeLists.txt`:
+`-fexceptions` instead of `-fwasm-exceptions`, all fonts embedded;
+`web/CMakeLists.txt`: the link options of DESIGN section 4.5 and the
+classic-script assembly step); `web/js/nymph-viewer.js` with its
+`export`s and the one `import.meta` line made replaceable, behaviour
+unchanged; `docs/building.md` (the second build folder) and a note in
+`docs/viewer.md`; viewer DESIGN section 6 ("Build") mentions the variant;
+CI builds it on Linux; `CHANGELOG.md`: "Added: a single-file JavaScript
+build of the web viewer for pages that forbid WebAssembly."
+
+**Tests:** `web/tests/node/run.mjs` run against the classic file (loaded
+with `vm.Script`, so as a script): every existing assertion, and PNGs of
+every example equal to the WebAssembly build's; the file contains no
+`eval(` or `new Function`; the module file still parses as a module.
+Browser (Playwright, 77 when missing): a page with
+`script-src 'nonce-x'` and no other source loads it, draws a live chart,
+pans it, and records no `securitypolicyviolation` event.
+
+**Result:** *(to be filled in)*
+
+### 4. `NymphRenderer`
 
 **Goal:** Node code renders and checks sources synchronously with the
-core, cached, with fonts loaded on demand from a folder.
+WebAssembly core, cached, with fonts loaded on demand from a folder.
 
 **Deliverables:** `vscode/src/renderer.js` (DESIGN section 4.3);
 `vscode/tests/node/run.mjs` (dependency-free runner, the style of
@@ -88,7 +126,7 @@ never rasterizes.
 
 **Result:** *(to be filled in)*
 
-### 4. Fences: `renderBlock` and `findBlocks`
+### 5. Fences: `renderBlock` and `findBlocks`
 
 **Goal:** a `nymph` fence token becomes the chart or error HTML of
 DESIGN sections 3.2 and 3.3, and fences are found in raw text the same
@@ -100,40 +138,43 @@ way markdown-it finds them.
 
 **Tests** (Node, fake tokens and a fake renderer): `nymph`, `Nymph`,
 `nymph extra words` match, `nymphx` and `yaml` do not; non-nymph tokens
-go to the previous rule; `code-line` / `data-line` copied; `<`, `&`,
-quotes escaped in message, `alt` and source; error line mapping
-(block line 18 at fence line 11 is document line 30); the 256 KiB limit;
-a throwing renderer gives an error panel; `findBlocks` on backticks,
-tildes, longer closing runs, indented fences, unterminated fence at end
-of file, a fence inside a list item.
+go to the previous rule; `code-line` / `data-line` copied;
+`data-nymph-index` counts per render and `data-nymph-hash` follows the
+text; `data-nymph-settings` carries the settings; `<`, `&`, quotes
+escaped in message, `alt` and source; error line mapping (block line 18
+at fence line 11 is document line 30); the 256 KiB limit; a throwing
+renderer gives an error panel; `findBlocks` on backticks, tildes, longer
+closing runs, indented fences, an unterminated fence at end of file, a
+fence inside a list item.
 
 **Result:** *(to be filled in)*
 
-### 5. The extension in the preview, and its package
+### 6. The extension in the preview, and its package
 
-**Goal:** installing the `.vsix` makes `nymph` fences draw in VS Code's
-Markdown preview.
+**Goal:** installing the `.vsix` makes `nymph` fences draw as images in
+VS Code's Markdown preview.
 
 **Deliverables:** `vscode/package.json.in` (DESIGN section 5.1, without
-the live-panel commands yet), `vscode/src/extension.js`,
+the preview script and panel commands yet), `vscode/src/extension.js`,
 `vscode/preview/nymph-preview.css`, `vscode/CMakeLists.txt`,
-`cmake/NymphVsix.cmake`, the `NYMPH_VSCODE` option in the root
-`CMakeLists.txt` and `docs/building.md`; `vscode/tests/vscode/run.mjs`
-and CTest `nymph_vscode_integration` (77 when `@vscode/test-electron` is
-missing); `docs/vscode.md` and its row in `README.md`; `CHANGELOG.md`:
-"Added: a VS Code extension that draws `nymph` code blocks in the
-Markdown preview."
+`cmake/NymphVsix.cmake`, the `NYMPH_VSCODE` and `NYMPH_VSCODE_JS_CORE`
+options in the root `CMakeLists.txt` and `docs/building.md`;
+`vscode/tests/vscode/run.mjs` and CTest `nymph_vscode_integration` (77
+when `@vscode/test-electron` is missing); `docs/vscode.md` and its row in
+`README.md`; `CHANGELOG.md`: "Added: a VS Code extension that draws
+`nymph` code blocks in the Markdown preview."
 
 **Tests:** Node: the staged folder and the `.vsix` contain the manifest,
-`extension.vsixmanifest`, `[Content_Types].xml`, the core, `fonts/`;
-the manifest's version is the project's. VS Code: `markdown.api.render`
-of a fixture with one good and one broken block returns one
-`nymph-chart` with a decodable PNG and one `nymph-error` with the right
-document line; a `mermaid` block in the same file renders as before.
+`extension.vsixmanifest`, `[Content_Types].xml`, the WebAssembly core,
+`fonts/`, and `nymph-viewer.classic.js`; the manifest's version is the
+project's. VS Code: `markdown.api.render` of a fixture with one good and
+one broken block returns one `nymph-chart` with a decodable PNG and one
+`nymph-error` with the right document line; a `mermaid` block in the same
+file renders as before.
 
 **Result:** *(to be filled in)*
 
-### 6. Theme and settings
+### 7. Theme and settings
 
 **Goal:** charts follow VS Code's light or dark theme and the settings of
 DESIGN section 5.2.
@@ -150,7 +191,7 @@ renders the fence as a code block; scale 1 halves the PNG size.
 
 **Result:** *(to be filled in)*
 
-### 7. Diagnostics and highlighting
+### 8. Diagnostics and highlighting
 
 **Goal:** broken blocks are underlined in the editor and `nymph` blocks
 are highlighted as YAML.
@@ -167,73 +208,89 @@ with the expected scope names.
 
 **Result:** *(to be filled in)*
 
-### 8. CodeLens and the live panel
+### 9. Live charts in the preview
 
-**Goal:** "Open live" shows the block in an interactive viewer beside the
-editor that follows edits; "Save PNG…" writes the block's PNG.
+**Goal:** under the Strict setting, clicking a chart in the preview makes
+it a live viewer of the same size, kept across edits.
 
-**Deliverables:** `vscode/src/lens.js`, `vscode/src/live-panel.js`,
-`vscode/media/live.js`, `live.css` (DESIGN section 3.4, messages of
-section 5.3), the commands in the manifest, the preview link if step 1
-item 4 allows it; a Playwright test page for `live.js` with a stub
-`acquireVsCodeApi` under `vscode/tests/browser/`; `CHANGELOG.md` entry.
+**Deliverables:** `vscode/preview/nymph-preview.js` (DESIGN section 3.4:
+hint, nonce injection, swap with cover, theme from body classes,
+update handling by index and hash, pool of 8, `Esc` / click-outside
+releasing the wheel) and its manifest entry;
+`nymph.preview.interactive`; the `vscode/tests/browser/` fixture page
+built from step 6's `markdown.api.render` output with the Strict CSP;
+`docs/vscode.md`; `CHANGELOG.md`: "Added: click a chart in the VS Code
+preview to pan, zoom and read values."
 
-**Tests:** VS Code: one CodeLens pair per block; `nymph.openLive` at a
-block opens a panel, again reveals the same panel; `nymph.savePng`
-writes a PNG equal to the preview's. Browser (Playwright, 77 when
-missing): `source` messages update the chart and keep a zoom done before;
-a broken source keeps the chart and shows the status; "Write view to
-block" posts YAML with a `view` key; malformed messages are ignored.
-Node: block re-binding after an insertion above the bound block and after
-its deletion.
-
-**Result:** *(to be filled in)*
-
-### 9. Live charts in a preview without a policy
-
-**Goal:** with the preview's security set to "Disable", charts in the
-preview become live viewers; with any other setting nothing changes.
-
-**Deliverables:** `vscode/preview/nymph-preview.js` (DESIGN section 3.5)
-and its manifest entry; one line in `docs/vscode.md`; `CHANGELOG.md`
-entry.
-
-**Tests:** Browser: the script on a page with the Strict CSP leaves the
-images and makes no request; on a page without a CSP it replaces an
-image with a viewer showing the same source (`viewer.source()` equals
-the PNG's YAML).
+**Tests:** Browser (Playwright, 77 when missing): before any click no
+request for the classic build is made; a click loads it once, with no
+`securitypolicyviolation`, and the viewer's `source()` equals the block;
+the image stays until the first frame; a simulated update with the same
+hash keeps the viewer and a zoom done before, a changed hash updates it
+(zoom kept on an unchanged plot), a removed block destroys its viewer; a
+ninth activation parks the least recently used; `always` activates on
+scroll into view; `off` never loads the build; a dark body class gives
+the dark theme and switching it re-themes live viewers; a source with a
+font the build lacks stays an image with the hint.
 
 **Result:** *(to be filled in)*
 
-### 10. Release
+### 10. CodeLens and the live panel (optional)
+
+**Goal:** "Save PNG…" writes a block's PNG; "Open live" shows the block
+in a reflowing viewer beside the editor that follows edits and can write
+the view back.
+
+**Deliverables:** `vscode/src/lens.js` ("Save PNG…" always; "Open live"
+with the panel), `vscode/src/live-panel.js`, `vscode/media/live.js`,
+`live.css` (DESIGN section 3.5, messages of section 5.3), the commands in
+the manifest; a Playwright test page for `live.js` with a stub
+`acquireVsCodeApi`; `CHANGELOG.md` entry. Before starting, decide with
+the owner whether step 9's live preview already covers the need; if so,
+build only "Save PNG…" and record the decision here and in DESIGN
+section 3.5.
+
+**Tests:** VS Code: CodeLenses per block; `nymph.savePng` writes a PNG
+equal to the preview's; `nymph.openLive` at a block opens a panel, again
+reveals the same panel. Browser: `source` messages update the chart and
+keep a zoom done before; a broken source keeps the chart and shows the
+status; "Write view to block" posts YAML with a `view` key; malformed
+messages are ignored. Node: block re-binding after an insertion above
+the bound block and after its deletion.
+
+**Result:** *(to be filled in)*
+
+### 11. Release
 
 **Goal:** a tag push attaches the `.vsix` to the release and, once the
 owner adds the tokens, publishes to the VS Code Marketplace and Open VSX.
 
-**Deliverables:** `NYMPH_VSCODE` in the release's web build and the
-`.vsix` in the release files and `SHA256SUMS`; two publish jobs skipped
-without `VSCE_PAT` / `OVSX_PAT`; the one-time setup (publisher id,
-tokens) in `docs/releasing.md`; spec/07 DESIGN's release file list.
+**Deliverables:** the release's web job builds both variants
+(`NYMPH_WEB_JS` in its own folder) and `NYMPH_VSCODE`; the `.vsix` in
+the release files and `SHA256SUMS`; two publish jobs skipped without
+`VSCE_PAT` / `OVSX_PAT`; the one-time setup (publisher id, tokens) in
+`docs/releasing.md`; spec/07 DESIGN's release file list.
 
 **Tests:** a dry run of the workflow on a branch produces the `.vsix`;
 `code --install-extension nymph-vscode-<version>.vsix` succeeds in CI's
-Linux job and step 5's VS Code test passes against the installed
+Linux job and step 6's VS Code test passes against the installed
 package.
 
 **Result:** *(to be filled in)*
 
-### 11. Manual verification
+### 12. Manual verification
 
 **Goal:** the extension is checked by hand where the automated tests
 cannot reach.
 
 **Deliverables (recorded here and in DESIGN.md's status line):** VS Code
 stable on Linux, Windows and macOS: `docs/examples.md` copied into a
-Markdown file previews every example; typing in a block feels fluid
-(no visible stall of the editor); light, dark and high-contrast themes;
-scroll sync; live panel on two blocks at once; Remote-SSH or WSL; a
-restricted (untrusted) workspace; VSCodium or Cursor from Open VSX if
-published.
+Markdown file previews every example; typing in a block feels fluid (no
+visible stall of the editor); clicking a 2D plot, a diagram and a 3D
+plot makes them live and they pan smoothly; scrolling past charts never
+zooms them; light, dark and high-contrast themes; scroll sync;
+Remote-SSH or WSL; a restricted (untrusted) workspace; VSCodium or
+Cursor from Open VSX if published.
 
 **Tests:** none automated.
 
@@ -241,15 +298,17 @@ published.
 
 ## Completion Criteria
 
-1. Steps 2-9 tests pass in CI together with every existing test, which
-   pass unmodified.
+1. Steps 2-9 (and 10 if built) pass in CI together with every existing
+   test, which pass unmodified.
 2. In VS Code with default settings, a Markdown file with `nymph` fences
-   previews them as charts in the editor's theme, broken blocks show an
-   error panel and an editor diagnostic at the right line, and "Open
-   live" gives an interactive chart that follows edits.
-3. No document can make the extension read a file, make a request or run
+   previews them as charts in the editor's theme; a click makes a chart
+   live (pan, zoom, values) without changing the preview's security;
+   broken blocks show an error panel and an editor diagnostic at the
+   right line.
+3. A preview whose charts are never clicked loads no renderer; no
+   document can make the extension read a file, make a request or run
    code; the extension works in a restricted workspace.
 4. The `.vsix` is a release file; `README.md`, `docs/vscode.md`,
-   `docs/building.md`, `docs/releasing.md`, `CHANGELOG.md` and
-   `spec/INDEX.md` are current; DESIGN.md's *unverified* marks are
-   resolved or restated as known limits.
+   `docs/building.md`, `docs/viewer.md`, `docs/releasing.md`,
+   `CHANGELOG.md` and `spec/INDEX.md` are current; DESIGN.md's
+   *unverified* marks are resolved or restated as known limits.
