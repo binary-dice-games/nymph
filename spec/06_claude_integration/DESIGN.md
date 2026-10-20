@@ -342,7 +342,7 @@ calls current; nothing of 0.4 is needed), `server.type: "binary"`,
 `${__dirname}/server/nymph` (Claude Desktop appends `.exe` on Windows),
 `args: ["mcp"]`, the tools the server offers the model, one
 `compatibility.platforms` entry (`linux`, `win32` or `darwin`), no user
-configuration, and `icon.png` (`claude/mcpb/icon.png`, 512 x 512, the
+configuration, and `icon.png` (`resources/icon.png`, 512 x 512, the
 dragonfly of `resources/Nymph.png`). In release builds the `nymph-mcpb`
 target (`cmake/NymphMcpb.cmake`) zips the manifest, the icon and the
 executable (mode 755) into `dist/nymph-<version>-<os>-<arch>.mcpb`

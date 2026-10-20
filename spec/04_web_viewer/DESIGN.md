@@ -788,6 +788,12 @@ events it reports) made by `window_win32.cpp` or `window_x11.cpp`:
   view) to `<input>.view.png` and `Y` writes the YAML to `<input>.view.yaml`,
   next to the input and never over it; the window title says what was
   written. The title is `nymph - <file name>`.
+- **Icon.** The window shows nymph's icon (`resources/icon.png`, compiled
+  in by `src/CMakeLists.txt`, decoded once and scaled by
+  `window/window_icon.cpp`), not the system's generic one: X11 gets
+  `_NET_WM_ICON` at 16 to 128 px; Windows gets `WM_SETICON` at the
+  `SM_CXICON` / `SM_CXSMICON` sizes of the window's DPI, again when the
+  DPI changes. The executable file itself has no embedded icon resource.
 - **Not in the window**: the right-click menu and About panel (the keys
   replace them), live data feeds (`setData`), PNGs that carry no nymph
   source (an error, as for `nymph render`).

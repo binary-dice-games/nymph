@@ -140,6 +140,8 @@ nymph_add_test(test_saved_view test_saved_view.cpp)
 if(NYMPH_VIEW)
   nymph_add_test(test_view_command test_view_command.cpp)
   target_link_libraries(test_view_command PRIVATE nymph_window)
+  nymph_add_test(test_window_icon test_window_icon.cpp)
+  target_link_libraries(test_window_icon PRIVATE nymph_window)
 endif()
 
 # Script tests run a cross-built nymph through the toolchain's emulator,

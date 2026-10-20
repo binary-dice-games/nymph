@@ -14,6 +14,7 @@
 #include "render/gl/shared_library.hpp"
 #include "window/viewer_window.hpp"
 #include "window/window_host.hpp"
+#include "window/window_icon.hpp"
 
 namespace bdg::nymph {
 
@@ -291,6 +292,7 @@ class x11_window : public native_window {
     a.XChangeProperty(
         display_, window_, 67, 31, 8, 0 /* PropModeReplace */, reinterpret_cast<const unsigned char*>(kClass),
         static_cast<int>(sizeof(kClass)));
+    set_icon();
     create_context(config);
     ready_ = true;
   }
@@ -386,6 +388,32 @@ class x11_window : public native_window {
   }
 
  private:
+  /// _NET_WM_ICON: nymph's icon in a few sizes, for the title bar, the
+  /// taskbar and the window switcher. Format-32 data is passed to Xlib as
+  /// longs; each size is its width, its height, then its pixels as ARGB.
+  void set_icon() {
+    const image& icon = window_icon();
+    if (icon.rgba.empty()) {
+      return;
+    }
+    std::vector<long> data;
+    for (const int size : {16, 32, 48, 64, 128}) {
+      const image scaled = scale_icon(icon, size);
+      data.push_back(size);
+      data.push_back(size);
+      for (size_t i = 0; i < scaled.rgba.size(); i += 4) {
+        const uint8_t* p = &scaled.rgba[i];
+        const uint32_t argb = uint32_t{p[3]} << 24 | uint32_t{p[0]} << 16 | uint32_t{p[1]} << 8 | uint32_t{p[2]};
+        data.push_back(static_cast<long>(argb));
+      }
+    }
+    x11_api& a = api();
+    const XAtom net_wm_icon = a.XInternAtom(display_, "_NET_WM_ICON", 0);
+    a.XChangeProperty(
+        display_, window_, net_wm_icon, 6 /* CARDINAL */, 32, 0 /* PropModeReplace */,
+        reinterpret_cast<const unsigned char*>(data.data()), static_cast<int>(data.size()));
+  }
+
   /// A 3.3 core context, left current.
   void create_context(GLXFBConfig config) {
     x11_api& a = api();

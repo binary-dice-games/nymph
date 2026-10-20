@@ -95,7 +95,7 @@ function(nymph_add_dist_target)
       COMMAND "${CMAKE_COMMAND}"
               "-DTEMPLATE=${PROJECT_SOURCE_DIR}/claude/mcpb/manifest.json.in"
               "-DEXE=$<TARGET_FILE:nymph-cli>"
-              "-DICON=${PROJECT_SOURCE_DIR}/claude/mcpb/icon.png"
+              "-DICON=${PROJECT_SOURCE_DIR}/resources/icon.png"
               "-DVERSION=${PROJECT_VERSION}" "-DPLATFORM=${platform}"
               "-DSTAGE=${PROJECT_BINARY_DIR}/mcpb"
               "-DOUTPUT=${NYMPH_DIST_DIR}/${NYMPH_DIST_NAME}.mcpb"

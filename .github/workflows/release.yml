@@ -111,7 +111,7 @@ jobs:
             "$a/build-macos-arm64/nymph-$V-macos-arm64" "$a/build-macos-x86_64/nymph-$V-macos-x86_64"
           lipo "$RUNNER_TEMP/nymph" -verify_arch arm64 x86_64
           codesign --verify --verbose "$RUNNER_TEMP/nymph"
-          cmake -DTEMPLATE=claude/mcpb/manifest.json.in -DEXE="$RUNNER_TEMP/nymph" -DICON=claude/mcpb/icon.png \
+          cmake -DTEMPLATE=claude/mcpb/manifest.json.in -DEXE="$RUNNER_TEMP/nymph" -DICON=resources/icon.png \
             -DVERSION="$V" -DPLATFORM=darwin -DSTAGE="$RUNNER_TEMP/mcpb" \
             -DOUTPUT="$PWD/out/nymph-$V-macos-universal.mcpb" -P cmake/NymphMcpb.cmake
           cmake -DMCPB="$PWD/out/nymph-$V-macos-universal.mcpb" -DVERSION="$V" -DPLATFORM=darwin \
