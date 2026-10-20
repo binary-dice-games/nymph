@@ -18,6 +18,7 @@
  * written). Observers only queue work; it runs in idle callbacks.
  */
 
+import { ext } from '../shared/api.js';
 import { adapterFor } from './adapters/index.js';
 import { CodeReplacement } from './code-replacer.js';
 import { setCount } from './count.js';
@@ -308,7 +309,7 @@ function toast(message) {
 export async function teach() {
   let text;
   try {
-    const response = await fetch(chrome.runtime.getURL('src/gemini/primer.txt'));
+    const response = await fetch(ext.runtime.getURL('src/gemini/primer.txt'));
     text = (await response.text()).replace(/\r\n/g, '\n');
   } catch {
     toast('nymph: could not read the instructions.');
@@ -359,7 +360,7 @@ export function askToFix(error) {
 
 /** The toolbar menu's "give this chat the instructions" (the worker sends it). */
 function onMessage(message, sender, reply) {
-  if (message?.type === 'nymph-teach' && sender.id === chrome.runtime.id) {
+  if (message?.type === 'nymph-teach' && sender.id === ext.runtime.id) {
     teach().then(reply);
     return true;
   }
@@ -390,7 +391,7 @@ export function start(next = {}) {
   intersections = new IntersectionObserver(onIntersect, { rootMargin: '100% 0px' });
   mutations = new MutationObserver(schedule);
   mutations.observe(document.documentElement, { childList: true, subtree: true, characterData: true });
-  chrome.runtime.onMessage.addListener(onMessage);
+  ext.runtime.onMessage.addListener(onMessage);
   schedule();
 }
 
@@ -406,7 +407,7 @@ export function stop() {
   }
   mutations.disconnect();
   intersections.disconnect();
-  chrome.runtime.onMessage.removeListener(onMessage);
+  ext.runtime.onMessage.removeListener(onMessage);
   for (const entry of entries.values()) {
     clearTimeout(entry.timer);
     entry.gen++;

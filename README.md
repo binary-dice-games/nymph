@@ -174,6 +174,8 @@ carries its source: `bdg::nymph::extract_source(png)` returns it.
 | [spec/09_ui_mockups/PLAN.md](spec/09_ui_mockups/PLAN.md) | Its implementation steps and tests |
 | [spec/10_gemini_extension/DESIGN.md](spec/10_gemini_extension/DESIGN.md) | Gemini web chatbot (planned): Chrome extension draws nymph sources from Gemini's code blocks as live charts, primer for a Gem, error and view loops |
 | [spec/10_gemini_extension/PLAN.md](spec/10_gemini_extension/PLAN.md) | Its implementation steps and tests |
+| [spec/11_cross_browser_extension/DESIGN.md](spec/11_cross_browser_extension/DESIGN.md) | The extension on Edge, Firefox and Safari (planned): one source tree, manifest per browser, host-access state, stores |
+| [spec/11_cross_browser_extension/PLAN.md](spec/11_cross_browser_extension/PLAN.md) | Its implementation steps and tests |
 | [CHANGELOG.md](CHANGELOG.md) | User-facing changes between releases |
 | [CLAUDE.md](CLAUDE.md) | Coding style and project rules for AI agents and contributors |
 

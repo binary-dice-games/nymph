@@ -1,9 +1,11 @@
 // MIT License © 2026 Binary Dice Games
 /**
  * @file settings.js
- * @brief The extension's settings in `chrome.storage.sync`
+ * @brief The extension's settings in `storage.sync`
  * (spec/05_browser_extension/DESIGN.md section 5.2).
  */
+
+import { ext } from './api.js';
 
 /** Defaults of every setting. */
 export const DEFAULTS = Object.freeze({
@@ -22,7 +24,7 @@ export const DEFAULTS = Object.freeze({
  * @return {Promise<{off: string[], theme: 'source'|'auto', chatSites: string[], chatTheme: 'source'|'auto'}>}
  */
 export async function readSettings() {
-  const stored = await chrome.storage.sync.get(Object.keys(DEFAULTS));
+  const stored = await ext.storage.sync.get(Object.keys(DEFAULTS));
   return { ...DEFAULTS, ...stored };
 }
 
@@ -48,12 +50,15 @@ export async function setSite(origin, on) {
   if (!on) {
     next.push(origin);
   }
-  await chrome.storage.sync.set({ off: next });
+  await ext.storage.sync.set({ off: next });
 }
+
+/** Browsers' extension galleries, where extensions cannot run. */
+const RESTRICTED = new Set(['chromewebstore.google.com', 'addons.mozilla.org']);
 
 /**
  * Whether the extension can run on a URL at all (not on browser pages,
- * the Web Store or the PDF viewer).
+ * extension galleries or the PDF viewer).
  * @param {string|undefined} url
  * @return {string|null} the URL's origin when it can, else null
  */
@@ -70,7 +75,10 @@ export function runnableOrigin(url) {
   if (u.protocol !== 'http:' && u.protocol !== 'https:' && u.protocol !== 'file:') {
     return null;
   }
-  if (u.hostname === 'chromewebstore.google.com' || (u.hostname === 'chrome.google.com' && u.pathname.startsWith('/webstore'))) {
+  if (RESTRICTED.has(u.hostname) || (u.hostname === 'chrome.google.com' && u.pathname.startsWith('/webstore'))) {
+    return null;
+  }
+  if (u.hostname === 'microsoftedge.microsoft.com' && u.pathname.startsWith('/addons')) {
     return null;
   }
   return u.protocol === 'file:' ? 'file://' : u.origin;

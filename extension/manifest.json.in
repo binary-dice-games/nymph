@@ -2,19 +2,18 @@
   "manifest_version": 3,
   "name": "nymph charts",
   "short_name": "nymph",
-  "version": "@PROJECT_VERSION@",
+  "version": "@PROJECT_VERSION@",@NYMPH_EXT_BROWSER_KEYS@
   "description": "Turns nymph chart images on any page into live, interactive charts: pan, zoom and values on hover.",
-  "minimum_chrome_version": "116",
   "icons": {
     "16": "icons/on-16.png",
     "32": "icons/on-32.png",
     "48": "icons/on-48.png",
     "128": "icons/on-128.png"
   },
-  "permissions": ["storage", "contextMenus"],
+  "permissions": [@NYMPH_EXT_PERMISSIONS@],
   "host_permissions": ["<all_urls>"],
   "background": {
-    "service_worker": "src/background/service-worker.js",
+    @NYMPH_EXT_BACKGROUND@,
     "type": "module"
   },
   "action": {
@@ -38,7 +37,7 @@
   ],
   "web_accessible_resources": [
     {
-      "resources": ["src/content/*", "src/frame/*", "src/gemini/*", "viewer/*", "viewer/fonts/*"],
+      "resources": ["src/content/*", "src/frame/*", "src/shared/*", "src/gemini/*", "viewer/*", "viewer/fonts/*"],
       "matches": ["<all_urls>"]
     }
   ],

@@ -16,6 +16,7 @@
  * extension **frame** per chart.
  */
 
+import { ext } from '../shared/api.js';
 import { COPIED, hostStyle } from './sizing.js';
 
 /** The attribute that hides a replaced image. */
@@ -71,7 +72,7 @@ let viewerModule = null;
 
 /** The bundled viewer API, loaded on the first nymph image. */
 async function loadViewer() {
-  viewerModule ??= import(chrome.runtime.getURL('viewer/nymph-viewer.js'));
+  viewerModule ??= import(ext.runtime.getURL('viewer/nymph-viewer.js'));
   return viewerModule;
 }
 
@@ -181,7 +182,7 @@ export class ChartHost {
     const frame = document.createElement('iframe');
     frame.title = this.title;
     frame.setAttribute('scrolling', 'no');
-    const url = chrome.runtime.getURL('src/frame/frame.html');
+    const url = ext.runtime.getURL('src/frame/frame.html');
     const loaded = new Promise((resolve, reject) => {
       const timer = setTimeout(() => reject(new Error('the frame did not load')), FRAME_LOAD_TIMEOUT_MS);
       frame.addEventListener('load', () => (clearTimeout(timer), resolve()), { once: true });

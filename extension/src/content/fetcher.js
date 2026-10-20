@@ -10,6 +10,7 @@
  * sends back only nymph PNGs.
  */
 
+import { ext } from '../shared/api.js';
 import { sniffStream } from './sniff.js';
 
 /** Fetches running at once. */
@@ -72,7 +73,7 @@ async function readHere(url) {
 }
 
 async function readInWorker(url) {
-  const answer = await chrome.runtime.sendMessage({ type: 'nymph-sniff', url });
+  const answer = await ext.runtime.sendMessage({ type: 'nymph-sniff', url });
   if (!answer || answer.error) {
     return { nymph: false, reason: answer?.error ?? 'no answer' };
   }

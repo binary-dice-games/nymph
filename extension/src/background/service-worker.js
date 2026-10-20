@@ -6,6 +6,7 @@
  * (spec/05_browser_extension/DESIGN.md sections 3.8 and 4).
  */
 
+import { canRequestAccess, ext, hasHostAccess } from '../shared/api.js';
 import { sniffStream } from '../content/sniff.js';
 import { isOn, readSettings, runnableOrigin, setSite } from '../shared/settings.js';
 
@@ -47,7 +48,7 @@ async function sniffUrl(url) {
 /** Charts replaced per tab, kept in session storage (the worker sleeps). */
 async function chartCount(tabId) {
   const key = `count:${tabId}`;
-  const stored = await chrome.storage.session.get(key);
+  const stored = await ext.storage.session.get(key);
   return stored[key] ?? 0;
 }
 
@@ -60,23 +61,31 @@ async function showTab(tabId, url) {
   const origin = runnableOrigin(url);
   try {
     if (!origin) {
-      await chrome.action.disable(tabId);
-      await chrome.action.setIcon({ tabId, path: { 16: '/icons/off-16.png', 32: '/icons/off-32.png' } });
-      await chrome.action.setBadgeText({ tabId, text: '' });
-      await chrome.action.setTitle({ tabId, title: 'nymph cannot run on this page' });
+      await ext.action.disable(tabId);
+      await ext.action.setIcon({ tabId, path: { 16: '/icons/off-16.png', 32: '/icons/off-32.png' } });
+      await ext.action.setBadgeText({ tabId, text: '' });
+      await ext.action.setTitle({ tabId, title: 'nymph cannot run on this page' });
       return;
     }
-    await chrome.action.enable(tabId);
+    await ext.action.enable(tabId);
+    if (!(await hasHostAccess())) {
+      // Firefox and Safari let the user withhold site access
+      // (spec/11_cross_browser_extension/DESIGN.md section 3.2).
+      await ext.action.setIcon({ tabId, path: { 16: '/icons/off-16.png', 32: '/icons/off-32.png' } });
+      await ext.action.setBadgeText({ tabId, text: '' });
+      await ext.action.setTitle({ tabId, title: 'nymph needs access to sites. Click to allow.' });
+      return;
+    }
     const settings = await readSettings();
     const on = isOn(settings, origin);
     const count = on ? await chartCount(tabId) : 0;
     const site = origin === 'file://' ? 'local files' : new URL(origin).host;
     const state = on ? 'on' : 'off';
-    await chrome.action.setIcon({ tabId, path: { 16: `/icons/${state}-16.png`, 32: `/icons/${state}-32.png` } });
-    await chrome.action.setBadgeText({ tabId, text: count > 0 ? String(count) : '' });
-    await chrome.action.setBadgeBackgroundColor({ tabId, color: '#3367d6' });
+    await ext.action.setIcon({ tabId, path: { 16: `/icons/${state}-16.png`, 32: `/icons/${state}-32.png` } });
+    await ext.action.setBadgeText({ tabId, text: count > 0 ? String(count) : '' });
+    await ext.action.setBadgeBackgroundColor({ tabId, color: '#3367d6' });
     const charts = count === 1 ? '1 chart' : `${count} charts`;
-    await chrome.action.setTitle({
+    await ext.action.setTitle({
       tabId,
       title: on ? `nymph: on for ${site}, ${charts}. Click to turn off.` : `nymph: off for ${site}. Click to turn on.`,
     });
@@ -86,7 +95,7 @@ async function showTab(tabId, url) {
 }
 
 async function showAllTabs() {
-  for (const tab of await chrome.tabs.query({})) {
+  for (const tab of await ext.tabs.query({})) {
     await showTab(tab.id, tab.url);
   }
 }
@@ -98,6 +107,14 @@ async function showAllTabs() {
  * @return {Promise<boolean|null>} whether the site is now on (null: cannot run there)
  */
 async function toggleTab(tab) {
+  if (!(await hasHostAccess())) {
+    // The click is the user gesture the request needs.
+    if (canRequestAccess()) {
+      await ext.permissions.request({ origins: ['<all_urls>'] });
+    }
+    await showAllTabs();
+    return null;
+  }
   const origin = runnableOrigin(tab.url);
   if (!origin) {
     return null;
@@ -110,7 +127,9 @@ async function toggleTab(tab) {
 // For the browser tests, which cannot click the toolbar.
 globalThis.nymphToggleTab = toggleTab;
 
-chrome.action.onClicked.addListener((tab) => toggleTab(tab));
+ext.action.onClicked.addListener((tab) => toggleTab(tab));
+ext.permissions?.onAdded?.addListener(showAllTabs);
+ext.permissions?.onRemoved?.addListener(showAllTabs);
 
 // "Give this chat the nymph instructions", in the button's context menu
 // (spec/10_gemini_extension/DESIGN.md section 4.5): the page's content script
@@ -127,7 +146,7 @@ async function teachTab(tab) {
     return 'unavailable';
   }
   try {
-    return (await chrome.tabs.sendMessage(tab.id, { type: 'nymph-teach' })) ?? 'unavailable';
+    return (await ext.tabs.sendMessage(tab.id, { type: 'nymph-teach' })) ?? 'unavailable';
   } catch {
     return 'unavailable';
   }
@@ -135,40 +154,40 @@ async function teachTab(tab) {
 // For the browser tests, which cannot use the menu.
 globalThis.nymphTeachTab = teachTab;
 
-chrome.contextMenus.onClicked.addListener((info, tab) => {
+ext.contextMenus?.onClicked.addListener((info, tab) => {
   if (info.menuItemId === TEACH_MENU) {
     teachTab(tab);
   }
 });
 
-chrome.tabs.onUpdated.addListener((tabId, info, tab) => {
+ext.tabs.onUpdated.addListener((tabId, info, tab) => {
   if (info.status === 'loading' && info.url !== undefined) {
-    chrome.storage.session.remove(`count:${tabId}`);
+    ext.storage.session.remove(`count:${tabId}`);
   }
   if (info.status !== undefined || info.url !== undefined) {
     showTab(tabId, tab.url);
   }
 });
-chrome.tabs.onRemoved.addListener((tabId) => chrome.storage.session.remove(`count:${tabId}`));
-chrome.storage.onChanged.addListener((changes, area) => {
+ext.tabs.onRemoved.addListener((tabId) => ext.storage.session.remove(`count:${tabId}`));
+ext.storage.onChanged.addListener((changes, area) => {
   if (area === 'sync' && changes.off) {
     showAllTabs();
   }
 });
 
-chrome.runtime.onInstalled.addListener((details) => {
+ext.runtime.onInstalled.addListener((details) => {
   showAllTabs();
-  chrome.contextMenus.removeAll(() =>
-    chrome.contextMenus.create({ id: TEACH_MENU, title: 'Give this chat the nymph instructions', contexts: ['action'] }));
+  ext.contextMenus?.removeAll(() =>
+    ext.contextMenus.create({ id: TEACH_MENU, title: 'Give this chat the nymph instructions', contexts: ['action'] }));
   if (details.reason === 'install') {
-    chrome.tabs.create({ url: chrome.runtime.getURL('src/options/options.html?welcome=1') });
+    ext.tabs.create({ url: ext.runtime.getURL('src/options/options.html?welcome=1') });
   }
 });
 
 // ── Messages from content scripts ────────────────────────────────────────────
 
-chrome.runtime.onMessage.addListener((message, sender, reply) => {
-  if (sender.id !== chrome.runtime.id || !sender.tab) {
+ext.runtime.onMessage.addListener((message, sender, reply) => {
+  if (sender.id !== ext.runtime.id || !sender.tab) {
     return false;
   }
   if (message?.type === 'nymph-sniff' && typeof message.url === 'string') {
@@ -176,7 +195,7 @@ chrome.runtime.onMessage.addListener((message, sender, reply) => {
     return true; // answers asynchronously
   }
   if (message?.type === 'nymph-count' && Number.isInteger(message.count)) {
-    chrome.storage.session.set({ [`count:${sender.tab.id}`]: message.count }).then(() => showTab(sender.tab.id, sender.tab.url));
+    ext.storage.session.set({ [`count:${sender.tab.id}`]: message.count }).then(() => showTab(sender.tab.id, sender.tab.url));
     return false;
   }
   return false;

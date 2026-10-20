@@ -2,15 +2,15 @@
 // spec/05_browser_extension plan steps 4-6: the extension's pure modules
 // in Node (sniffer, cache, sizing, pool, URL routing, settings).
 //
-//   node run.mjs <nymph source dir>
+//   node run.mjs <nymph source dir> [<build>/extension with the manifests]
 
 import { readFile, readdir } from 'node:fs/promises';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
-const [sourceDir] = process.argv.slice(2);
+const [sourceDir, manifestDir] = process.argv.slice(2);
 if (!sourceDir) {
-  console.error('usage: node run.mjs <nymph source dir>');
+  console.error('usage: node run.mjs <nymph source dir> [<build>/extension]');
   process.exit(2);
 }
 const src = (path) => import(pathToFileURL(join(sourceDir, 'extension', 'src', path)).href);
@@ -20,6 +20,7 @@ const { hostStyle } = await src('content/sizing.js');
 const { pickToPark, distanceToViewport } = await src('content/pool.js');
 const { routeFor, fromBase64 } = await src('content/fetcher.js');
 const { isOn, runnableOrigin } = await src('shared/settings.js');
+const { ext, hasHostAccess, canRequestAccess } = await src('shared/api.js');
 
 // ── Test runner ──────────────────────────────────────────────────────────────
 
@@ -256,6 +257,92 @@ test('sites are on unless turned off, and browser pages are never runnable', () 
   assertEq(runnableOrigin('chrome://extensions'), null, 'chrome');
   assertEq(runnableOrigin('https://chromewebstore.google.com/detail/x'), null, 'store');
   assertEq(runnableOrigin(undefined), null, 'no URL');
+  assertEq(runnableOrigin('https://addons.mozilla.org/en-US/firefox/'), null, 'AMO');
+  assertEq(runnableOrigin('https://microsoftedge.microsoft.com/addons/detail/x'), null, 'Edge Add-ons');
+  assertEq(runnableOrigin('https://microsoftedge.microsoft.com/other'), 'https://microsoftedge.microsoft.com', 'Edge, not the gallery');
+  assertEq(runnableOrigin('about:addons'), null, 'about');
+  assertEq(runnableOrigin('moz-extension://abc/x.html'), null, 'extension page');
+});
+
+// ── The browser namespace and site access (spec/11_cross_browser_extension) ──
+
+test('the namespace is browser where it exists, else chrome', async () => {
+  assert(ext === undefined, 'Node has neither namespace');
+  const load = (g) => {
+    const saved = { browser: globalThis.browser, chrome: globalThis.chrome };
+    Object.assign(globalThis, g);
+    return import(`${pathToFileURL(join(sourceDir, 'extension', 'src', 'shared', 'api.js')).href}?${Math.random()}`).finally(() => {
+      globalThis.browser = saved.browser;
+      globalThis.chrome = saved.chrome;
+    });
+  };
+  const b = { id: 'b' };
+  const c = { id: 'c' };
+  assertEq((await load({ browser: b, chrome: c })).ext.id, 'b', 'both');
+  assertEq((await load({ browser: undefined, chrome: c })).ext.id, 'c', 'chrome only');
+  assertEq((await load({ browser: b, chrome: undefined })).ext.id, 'b', 'browser only');
+});
+
+test('site access is reported from permissions.contains, and assumed when the API is missing', async () => {
+  const api = (contains) => ({ permissions: { contains, request: () => {} } });
+  assertEq(await hasHostAccess(api(async () => true)), true, 'granted');
+  assertEq(await hasHostAccess(api(async () => false)), false, 'withheld');
+  assertEq(await hasHostAccess(api(async () => { throw new Error('x'); })), true, 'API error: assume granted');
+  assertEq(await hasHostAccess({}), true, 'no permissions API');
+  assertEq(await hasHostAccess(undefined), true, 'no namespace');
+  assertEq(canRequestAccess(api(async () => true)), true, 'can ask');
+  assertEq(canRequestAccess({ permissions: { contains() {} } }), false, 'cannot ask');
+  let asked;
+  await hasHostAccess({ permissions: { contains: async (q) => (asked = q, true) } });
+  assertEq(asked, { origins: ['<all_urls>'] }, 'asks for every site');
+});
+
+test('only api.js and the loader name the browser namespace', async () => {
+  const dirs = ['background', 'content', 'frame', 'options', 'shared'];
+  for (const dir of dirs) {
+    for (const name of await readdir(join(sourceDir, 'extension', 'src', dir), { recursive: true })) {
+      if (!/\.(js|html)$/.test(name) || name === 'api.js' || name === 'loader.js') {
+        continue;
+      }
+      const text = await readFile(join(sourceDir, 'extension', 'src', dir, name), 'utf8');
+      assert(!/chrome\.(runtime|storage|action|tabs|contextMenus|permissions)/.test(text), `${dir}/${name} uses chrome.* directly`);
+    }
+  }
+});
+
+// ── Manifests of each browser (spec/11_cross_browser_extension section 5.1) ──
+
+test('each browser gets the manifest it understands, and the files are the same', async (t) => {
+  if (!manifestDir) {
+    return;
+  }
+  const read = async (name) => JSON.parse(await readFile(join(manifestDir, `manifest-${name}.json`), 'utf8'));
+  const [chromium, firefox, safari] = await Promise.all(['chromium', 'firefox', 'safari'].map(read));
+  // Chromium: as before this project.
+  assertEq(chromium.background, { service_worker: 'src/background/service-worker.js', type: 'module' }, 'chromium background');
+  assertEq(chromium.minimum_chrome_version, '116', 'chromium minimum');
+  assertEq(chromium.permissions, ['storage', 'contextMenus'], 'chromium permissions');
+  assert(!chromium.browser_specific_settings, 'chromium has no gecko block');
+  // Firefox: an event page and the gecko block.
+  assertEq(firefox.background, { scripts: ['src/background/service-worker.js'], type: 'module' }, 'firefox background');
+  assert(!firefox.minimum_chrome_version, 'firefox has no minimum_chrome_version');
+  assertEq(firefox.browser_specific_settings.gecko.data_collection_permissions, { required: ['none'] }, 'data collection');
+  assert(/@/.test(firefox.browser_specific_settings.gecko.id), 'firefox id');
+  assertEq(firefox.permissions, ['storage', 'contextMenus'], 'firefox permissions');
+  // Safari: no context menu permission.
+  assertEq(safari.permissions, ['storage'], 'safari permissions');
+  assertEq(safari.background, firefox.background, 'safari background');
+  // Everything else is shared.
+  for (const key of ['manifest_version', 'name', 'version', 'icons', 'host_permissions', 'action', 'options_ui', 'content_scripts', 'web_accessible_resources', 'content_security_policy']) {
+    assertEq(firefox[key], chromium[key], `firefox ${key}`);
+    assertEq(safari[key], chromium[key], `safari ${key}`);
+  }
+  // Every file a content script or frame imports from the extension is web accessible.
+  const accessible = chromium.web_accessible_resources.flatMap((r) => r.resources);
+  for (const needed of ['src/content/main.js', 'src/content/chat.js', 'src/shared/api.js', 'src/frame/frame.html', 'src/gemini/primer.txt', 'viewer/nymph-viewer.js']) {
+    const dir = needed.slice(0, needed.lastIndexOf('/'));
+    assert(accessible.includes(needed) || accessible.includes(`${dir}/*`), `${needed} is not web accessible`);
+  }
 });
 
 // ── Chat source detection (spec/10_gemini_extension plan step 2) ─────────────

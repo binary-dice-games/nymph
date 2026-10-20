@@ -5,6 +5,8 @@
  * the image mode (main.js) and the chat mode (chat.js), which both report.
  */
 
+import { ext } from '../shared/api.js';
+
 const counts = { images: 0, chat: 0 };
 let last = -1;
 
@@ -21,7 +23,7 @@ export function setCount(kind, count) {
   }
   last = total;
   try {
-    chrome.runtime.sendMessage({ type: 'nymph-count', count: total }).catch(() => {});
+    ext.runtime.sendMessage({ type: 'nymph-count', count: total }).catch(() => {});
   } catch {
     // the extension was reloaded: this script is orphaned
   }

@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Browser extension for Firefox 140 or later: a release file `nymph-extension-firefox-<version>.zip` (load it as a temporary add-on; not yet on addons.mozilla.org). Where the browser withholds site access (Firefox, Safari), the toolbar button and the options page say so and ask for it. The "Copy the instructions" button of the options page works in every browser; the toolbar button's menu is skipped where the browser has none.
 - `nymph schema --markdown --paged <dir>` writes the element reference in pages: `elements.md` (conventions and a table of pages) and `elements/<Type>.md`, one per kind of figure with the types that go inside it, so an AI agent reads only the pages it needs. `docs/elements.md` is now the root page, and building `nymph` refreshes the pages (`NYMPH_UPDATE_DOCS`).
 - Chrome extension: nymph sources written in a chat's code blocks (Gemini, gemini.google.com) become live charts, drawn once the answer has finished and updated when it is revised; the code stays behind a "Code" button. Chat mode runs only on the sites listed in the new `chatSites` setting.
 - Chrome extension: instructions that teach Gemini nymph's format, to paste into a Gem (options page) or to put in an open chat's prompt box from the toolbar button's menu ("Give this chat the nymph instructions"); the options page also lists, adds and removes the chat sites. New `contextMenus` permission.
