@@ -79,10 +79,10 @@ their bytes checked; the default build is unchanged.
 - `src/cli/cli.cpp`: `nymph fonts` marks fonts `(not embedded)`.
 - `src/fonts/font_testing.hpp`: `hide_embedded_fonts_for_testing()`, so
   tests can run the on-demand path in the default build.
-- `docs/building.md`, `fonts/README.md`: the option.
+- `docs/building.md`, `resources/fonts/README.md`: the option.
 
 **Tests** (`tests/test_fonts_on_demand.cpp`):
-- The catalog lists every file in `fonts/`, sorted, with the right size
+- The catalog lists every file in `resources/fonts/`, sorted, with the right size
   and SHA-256; in the default build every entry has bytes.
 - `register_font()` rejects an unknown name, a wrong size and a wrong
   SHA-256, and accepts the right bytes; registering twice is harmless.

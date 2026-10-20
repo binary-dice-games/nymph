@@ -1,7 +1,7 @@
 # MIT License © 2026 Binary Dice Games
 #
 # nymph_embed_placeholders(<target>): compiles every placeholder image in
-# placeholders/*.svg into <target>, found by its name without the
+# resources/placeholders/*.svg into <target>, found by its name without the
 # extension (`image: person`); see src/placeholders/placeholders.hpp and
 # spec/09_ui_mockups/DESIGN.md section 3, "Placeholder images". Every
 # build embeds all of them (a few KB), the web build too.
@@ -11,7 +11,7 @@
 # the configure step (CONFIGURE_DEPENDS), which rewrites the table.
 
 function(nymph_embed_placeholders target)
-  file(GLOB images CONFIGURE_DEPENDS "${PROJECT_SOURCE_DIR}/placeholders/*.svg")
+  file(GLOB images CONFIGURE_DEPENDS "${PROJECT_SOURCE_DIR}/resources/placeholders/*.svg")
   list(SORT images)
   set(out_dir "${CMAKE_CURRENT_BINARY_DIR}/generated/placeholders")
   file(MAKE_DIRECTORY "${out_dir}")

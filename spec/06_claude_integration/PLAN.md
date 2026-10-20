@@ -412,7 +412,7 @@ else to do.
 4.9 MB (Linux x86-64), similar for Windows and arm64, written into
 `dist/` and its `SHA256SUMS`. The official CLI, `@anthropic-ai/mcpb`
 2.1.2 from npm: `mcpb validate` passes for the Linux and Windows
-manifests (it recommends a 512 x 512 icon, so `claude/mcpb/icon.png` was
+manifests (it recommends a 512 x 512 icon, so `claude/mcpb/icon.png`, now `resources/icon.png`, was
 made from the logo); `mcpb unpack` first failed with `EISDIR` on the
 zip's `server/` directory entry, so the zip now lists files only, and it
 then unpacks with the executable's mode kept and the unpacked server

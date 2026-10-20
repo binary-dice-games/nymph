@@ -8,6 +8,7 @@
 #include <array>
 #include <cstdlib>
 #include <cstring>
+#include <limits>
 #include <stdexcept>
 #include "core/limits.hpp"
 
@@ -154,6 +155,25 @@ uint32_t crc32(std::span<const uint8_t> bytes) {
 
 bool is_png(std::span<const uint8_t> bytes) {
   return bytes.size() >= kSignature.size() && std::memcmp(bytes.data(), kSignature.data(), kSignature.size()) == 0;
+}
+
+std::optional<image> decode_png(std::span<const uint8_t> bytes) {
+  if (!is_png(bytes) || bytes.size() > static_cast<size_t>(std::numeric_limits<int>::max())) {
+    return std::nullopt;
+  }
+  int width = 0;
+  int height = 0;
+  int channels = 0;
+  stbi_uc* pixels = stbi_load_from_memory(bytes.data(), static_cast<int>(bytes.size()), &width, &height, &channels, 4);
+  if (pixels == nullptr) {
+    return std::nullopt;
+  }
+  image img;
+  img.width = width;
+  img.height = height;
+  img.rgba.assign(pixels, pixels + static_cast<size_t>(width) * height * 4);
+  stbi_image_free(pixels);
+  return img;
 }
 
 std::vector<uint8_t> encode_png(const image& img, std::string_view source, std::string_view description) {

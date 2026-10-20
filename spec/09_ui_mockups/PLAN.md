@@ -132,8 +132,8 @@ default `selected: 0`; an empty list now means no selection. `test_ui_widgets` (
 and deterministic, in windows and in layouts.
 
 **Deliverables:** `cmake/NymphPlaceholders.cmake` embedding
-`placeholders/*.svg` with the fonts' `NymphEmbedFile.cmake`;
-`placeholders/` with the twelve SVGs of DESIGN section
+`resources/placeholders/*.svg` with the fonts' `NymphEmbedFile.cmake`;
+`resources/placeholders/` with the twelve SVGs of DESIGN section
 3, drawn for nymph, and a `README.md` stating the authoring rules and
 licence; `src/placeholders/` (`parse_svg()` for the subset,
 `placeholder_names()`, parse-once cache,
@@ -163,7 +163,7 @@ checker with the rule.
 
 **Result (done):** nymph's own SVG-subset parser (`src/placeholders/svg_shapes.*`) instead of
 nanosvg (no submodule; the files are nymph's), `src/placeholders/placeholders.*`,
-`cmake/NymphPlaceholders.cmake`, twelve drawings and `placeholders/README.md`,
+`cmake/NymphPlaceholders.cmake`, twelve drawings and `resources/placeholders/README.md`,
 `src/elements/ui/image_widgets.cpp`, `name_table` built at run time. Rounding paints the corners
 in the window colour (ImGui clips only to rectangles). Enumeration errors now suggest the closest
 name (every enum field). `test_placeholders` (13 tests).

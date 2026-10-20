@@ -15,12 +15,14 @@
 #include <windowsx.h>
 #include <algorithm>
 #include <cmath>
+#include <cstdint>
 #include <cstring>
 #include <string>
 #include <vector>
 #include "render/gl/shared_library.hpp"
 #include "window/viewer_window.hpp"
 #include "window/window_host.hpp"
+#include "window/window_icon.hpp"
 
 namespace bdg::nymph {
 
@@ -65,14 +67,22 @@ struct win32_api {
   BOOL(WINAPI* SystemParametersInfoW)(UINT, UINT, PVOID, UINT) = nullptr;
   LONG_PTR(WINAPI* SetWindowLongPtrW)(HWND, int, LONG_PTR) = nullptr;
   LONG_PTR(WINAPI* GetWindowLongPtrW)(HWND, int) = nullptr;
+  LRESULT(WINAPI* SendMessageW)(HWND, UINT, WPARAM, LPARAM) = nullptr;
+  int(WINAPI* GetSystemMetrics)(int) = nullptr;
+  HICON(WINAPI* CreateIconIndirect)(PICONINFO) = nullptr;
+  BOOL(WINAPI* DestroyIcon)(HICON) = nullptr;
   // Optional: Windows 10 and later.
   BOOL(WINAPI* SetProcessDpiAwarenessContext)(HANDLE) = nullptr;
   UINT(WINAPI* GetDpiForWindow)(HWND) = nullptr;
   BOOL(WINAPI* AdjustWindowRectExForDpi)(LPRECT, DWORD, BOOL, DWORD, UINT) = nullptr;
+  int(WINAPI* GetSystemMetricsForDpi)(int, UINT) = nullptr;
 
   int(WINAPI* ChoosePixelFormat)(HDC, const PIXELFORMATDESCRIPTOR*) = nullptr;
   BOOL(WINAPI* SetPixelFormat)(HDC, int, const PIXELFORMATDESCRIPTOR*) = nullptr;
   BOOL(WINAPI* SwapBuffers)(HDC) = nullptr;
+  HBITMAP(WINAPI* CreateDIBSection)(HDC, const BITMAPINFO*, UINT, void**, HANDLE, DWORD) = nullptr;
+  HBITMAP(WINAPI* CreateBitmap)(int, int, UINT, UINT, const void*) = nullptr;
+  BOOL(WINAPI* DeleteObject)(HGDIOBJ) = nullptr;
 
   HGLRC(WINAPI* wglCreateContext)(HDC) = nullptr;
   BOOL(WINAPI* wglDeleteContext)(HGLRC) = nullptr;
@@ -137,10 +147,18 @@ struct win32_api {
     want(user32, "SetProcessDpiAwarenessContext", SetProcessDpiAwarenessContext);
     want(user32, "GetDpiForWindow", GetDpiForWindow);
     want(user32, "AdjustWindowRectExForDpi", AdjustWindowRectExForDpi);
+    want(user32, "GetSystemMetricsForDpi", GetSystemMetricsForDpi);
+    need(user32, "SendMessageW", SendMessageW);
+    need(user32, "GetSystemMetrics", GetSystemMetrics);
+    need(user32, "CreateIconIndirect", CreateIconIndirect);
+    need(user32, "DestroyIcon", DestroyIcon);
 
     need(gdi32, "ChoosePixelFormat", ChoosePixelFormat);
     need(gdi32, "SetPixelFormat", SetPixelFormat);
     need(gdi32, "SwapBuffers", SwapBuffers);
+    need(gdi32, "CreateDIBSection", CreateDIBSection);
+    need(gdi32, "CreateBitmap", CreateBitmap);
+    need(gdi32, "DeleteObject", DeleteObject);
 
     need(opengl32, "wglCreateContext", wglCreateContext);
     need(opengl32, "wglDeleteContext", wglDeleteContext);
@@ -222,6 +240,7 @@ class win32_window : public native_window {
     if (format == 0 || !a.SetPixelFormat(dc_, format, &pfd)) {
       throw window_error(windows_error("no OpenGL pixel format"));
     }
+    set_icons();
     create_context();
     ready_ = true;
   }
@@ -238,6 +257,11 @@ class win32_window : public native_window {
     }
     if (hwnd_ != nullptr) {
       a.DestroyWindow(hwnd_); // fails harmlessly when the user closed it
+    }
+    for (HICON icon : {big_icon_, small_icon_}) {
+      if (icon != nullptr) {
+        a.DestroyIcon(icon);
+      }
     }
     if (registered_) {
       a.UnregisterClassW(kWindowClass, instance_);
@@ -324,6 +348,82 @@ class win32_window : public native_window {
   struct window_size {
     int width, height;
   };
+
+  /// WM_SETICON: nymph's icon at the sizes Windows asks for at the
+  /// window's DPI, ICON_BIG for the taskbar and Alt+Tab, ICON_SMALL for
+  /// the title bar. Called again when the DPI changes.
+  void set_icons() {
+    win32_api& a = api();
+    const image& icon = window_icon();
+    if (icon.rgba.empty()) {
+      return;
+    }
+    const UINT dpi = a.GetDpiForWindow != nullptr ? a.GetDpiForWindow(hwnd_) : 96;
+    const auto metric = [&](int index) {
+      const int value =
+          a.GetSystemMetricsForDpi != nullptr ? a.GetSystemMetricsForDpi(index, dpi) : a.GetSystemMetrics(index);
+      return value > 0 ? value : 32;
+    };
+    const auto replace = [&](HICON& slot, int size, WPARAM which) {
+      HICON fresh = make_icon(scale_icon(icon, size));
+      if (fresh == nullptr) {
+        return;
+      }
+      a.SendMessageW(hwnd_, WM_SETICON, which, reinterpret_cast<LPARAM>(fresh));
+      if (slot != nullptr) {
+        a.DestroyIcon(slot);
+      }
+      slot = fresh;
+    };
+    replace(big_icon_, metric(SM_CXICON), ICON_BIG);
+    replace(small_icon_, metric(SM_CXSMICON), ICON_SMALL);
+  }
+
+  /// An icon of `img`'s pixels with their alpha (a 32-bit top-down DIB and
+  /// an all-zero mask); nullptr on failure.
+  static HICON make_icon(const image& img) {
+    win32_api& a = api();
+    if (img.rgba.empty()) {
+      return nullptr;
+    }
+    BITMAPINFO bmi{};
+    bmi.bmiHeader.biSize = sizeof(BITMAPINFOHEADER);
+    bmi.bmiHeader.biWidth = img.width;
+    bmi.bmiHeader.biHeight = -img.height; // top row first
+    bmi.bmiHeader.biPlanes = 1;
+    bmi.bmiHeader.biBitCount = 32;
+    bmi.bmiHeader.biCompression = BI_RGB;
+    void* bits = nullptr;
+    HBITMAP color = a.CreateDIBSection(nullptr, &bmi, DIB_RGB_COLORS, &bits, nullptr, 0);
+    if (color == nullptr || bits == nullptr) {
+      if (color != nullptr) {
+        a.DeleteObject(color);
+      }
+      return nullptr;
+    }
+    auto* bgra = static_cast<uint8_t*>(bits);
+    for (size_t i = 0; i < img.rgba.size(); i += 4) {
+      bgra[i + 0] = img.rgba[i + 2];
+      bgra[i + 1] = img.rgba[i + 1];
+      bgra[i + 2] = img.rgba[i + 0];
+      bgra[i + 3] = img.rgba[i + 3];
+    }
+    // The AND mask is ignored for 32-bit icons with alpha but must exist;
+    // its rows are padded to 16 bits.
+    const std::vector<uint8_t> mask_bits(static_cast<size_t>((img.width + 15) / 16 * 2) * img.height, 0);
+    HBITMAP mask = a.CreateBitmap(img.width, img.height, 1, 1, mask_bits.data());
+    HICON result = nullptr;
+    if (mask != nullptr) {
+      ICONINFO info{};
+      info.fIcon = TRUE;
+      info.hbmMask = mask;
+      info.hbmColor = color;
+      result = a.CreateIconIndirect(&info); // copies both bitmaps
+      a.DeleteObject(mask);
+    }
+    a.DeleteObject(color);
+    return result;
+  }
 
   /// A legacy context finds wglCreateContextAttribsARB; then the 3.3 core
   /// context, left current.
@@ -447,6 +547,7 @@ class win32_window : public native_window {
         const RECT* r = reinterpret_cast<const RECT*>(lparam);
         api().SetWindowPos(
             hwnd_, nullptr, r->left, r->top, r->right - r->left, r->bottom - r->top, SWP_NOZORDER | SWP_NOACTIVATE);
+        set_icons();
         return true;
       }
       case WM_MOUSEMOVE:
@@ -554,6 +655,8 @@ class win32_window : public native_window {
   HWND hwnd_ = nullptr;
   HDC dc_ = nullptr;
   HGLRC context_ = nullptr;
+  HICON big_icon_ = nullptr; ///< Owned; destroyed after the window.
+  HICON small_icon_ = nullptr; ///< Owned; destroyed after the window.
   bool ready_ = false;
   bool tracking_ = false; ///< A WM_MOUSELEAVE is pending.
   int buttons_down_ = 0;

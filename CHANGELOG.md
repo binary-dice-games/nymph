@@ -14,6 +14,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Chrome extension: nymph sources written in a chat's code blocks (Gemini, gemini.google.com) become live charts, drawn once the answer has finished and updated when it is revised; the code stays behind a "Code" button. Chat mode runs only on the sites listed in the new `chatSites` setting.
 - Chrome extension: instructions that teach Gemini nymph's format, to paste into a Gem (options page) or to put in an open chat's prompt box from the toolbar button's menu ("Give this chat the nymph instructions"); the options page also lists, adds and removes the chat sites. New `contextMenus` permission.
 - Chrome extension: a chat code block that starts like a nymph source (`nymph: 1`, `root:` or a `nymph` label) is always replaced by the viewer; when the YAML is invalid the viewer area shows the error with its line and column, a "Copy error" button and an "Ask Gemini to fix" button that puts the request in the prompt box.
+- `nymph view`: the window shows nymph's dragonfly icon (title bar, taskbar, window switcher) on Windows and Linux instead of the system's generic icon.
+- Windows: `nymph.exe` carries nymph's icon, shown by Explorer and shortcuts.
+
+### Changed
+
+- The fonts and placeholder images moved into `resources/` (`resources/fonts/`, `resources/placeholders/`); `NYMPH_FONTS_DIR` now defaults to `resources/fonts/`. The MCP bundle's icon is now `resources/icon.png`.
 
 ## [0.1.0] - 2026-10-19
 

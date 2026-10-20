@@ -627,7 +627,7 @@ code that produced its data, kept verbatim through the PNG round trip.
 
 ### 17. Fonts and text style
 
-*Result: done.* Eight OFL fonts from Google Fonts in `fonts/` (Fira Sans
+*Result: done.* Eight OFL fonts from Google Fonts in `fonts/` (now `resources/fonts/`) (Fira Sans
 regular / bold / italic, Fira Mono regular / bold, PT Serif regular / bold
 / italic, 2.8 MB) with their licences; `cmake/NymphFonts.cmake` and
 `cmake/NymphEmbedFile.cmake`; `src/fonts/` (lookup, name check);
@@ -644,7 +644,7 @@ returns a message string, so a font error can list the fonts.
 fonts compiled into the binary, by file name.
 
 **Deliverables:**
-- `fonts/`: TTF files and licence texts from fonts.google.com, and a
+- `fonts/` (now `resources/fonts/`): TTF files and licence texts from fonts.google.com, and a
   README with their origin.
 - `cmake/NymphFonts.cmake`, `cmake/NymphEmbedFile.cmake`: embed every font
   and licence of `NYMPH_FONTS_DIR` as generated C++.

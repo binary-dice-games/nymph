@@ -1,6 +1,14 @@
 add_executable(nymph-cli main.cpp)
 target_link_libraries(nymph-cli PRIVATE nymph_cli)
 set_target_properties(nymph-cli PROPERTIES OUTPUT_NAME nymph)
+# Windows: the icon compiled into nymph.exe for Explorer (app/nymph.rc.in).
+# The running window sets its own icon (src/window/window_icon.cpp).
+if(WIN32)
+  set(NYMPH_ICON_ICO "${PROJECT_SOURCE_DIR}/resources/icon.ico")
+  configure_file(nymph.rc.in "${CMAKE_CURRENT_BINARY_DIR}/nymph.rc" @ONLY)
+  target_sources(nymph-cli PRIVATE "${CMAKE_CURRENT_BINARY_DIR}/nymph.rc")
+  set_property(SOURCE "${CMAKE_CURRENT_BINARY_DIR}/nymph.rc" APPEND PROPERTY OBJECT_DEPENDS "${NYMPH_ICON_ICO}")
+endif()
 if(NYMPH_VIEW)
   target_link_libraries(nymph-cli PRIVATE nymph_window)
   target_compile_definitions(nymph-cli PRIVATE NYMPH_HAS_VIEW=1)

@@ -320,7 +320,7 @@ TEST(live_view, AFontWithoutBytesThrowsFontsNeededUntilRegistered) {
     EXPECT_EQ(e.fonts(), std::vector<std::string>{"PT_Serif-Web-Bold.ttf"});
   }
   EXPECT_EQ(v.source(), kLine);
-  register_font("PT_Serif-Web-Bold.ttf", read_bytes(kSourceDir / "fonts/PT_Serif-Web-Bold.ttf"));
+  register_font("PT_Serif-Web-Bold.ttf", read_bytes(kSourceDir / "resources/fonts/PT_Serif-Web-Bold.ttf"));
   v.set_source(serif);
   v.resize({300, 80, 1});
   const image live = settle(v);

@@ -5,6 +5,7 @@
 #include <gtest/gtest.h>
 #include <cstdint>
 #include <cstring>
+#include <optional>
 #include <stdexcept>
 #include <string>
 #include <vector>
@@ -187,6 +188,23 @@ TEST(png_meta, Crc32MatchesTheStandardAndStbsChunks) {
 }
 
 // ── Not nymph, or broken ─────────────────────────────────────────────────────
+
+TEST(png_meta, DecodePngReturnsThePixels) {
+  const image img = gradient(33, 17);
+  const std::optional<image> decoded = decode_png(encode_png(img, "source", ""));
+  ASSERT_TRUE(decoded.has_value());
+  EXPECT_EQ(decoded->width, 33);
+  EXPECT_EQ(decoded->height, 17);
+  EXPECT_EQ(decoded->rgba, img.rgba);
+}
+
+TEST(png_meta, DecodePngOfNotAPngIsNullopt) {
+  EXPECT_FALSE(decode_png(as_bytes("plain text, not a PNG")).has_value());
+  EXPECT_FALSE(decode_png(bytes_t{}).has_value());
+  bytes_t truncated = encode_png(gradient(4, 4), "s", "");
+  truncated.resize(40);
+  EXPECT_FALSE(decode_png(truncated).has_value());
+}
 
 TEST(png_meta, NotANymphImageIsNullopt) {
   EXPECT_FALSE(read_source(as_bytes("plain text, not a PNG")).has_value());

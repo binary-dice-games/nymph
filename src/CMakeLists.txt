@@ -240,8 +240,21 @@ if(NYMPH_VIEW)
   window/editor_panel.hpp
   window/editor_panel.cpp
     window/window_host.hpp
+    window/window_icon.hpp
+    window/window_icon.cpp
     "${NYMPH_EXTERN_DIR}/imgui/backends/imgui_impl_opengl3.cpp"
   )
+  # The window's icon: resources/icon.png, compiled in (window_icon.cpp).
+  set(_nymph_icon_png "${PROJECT_SOURCE_DIR}/resources/icon.png")
+  set(_nymph_icon_cpp "${CMAKE_CURRENT_BINARY_DIR}/generated/window_icon_png.cpp")
+  add_custom_command(
+    OUTPUT "${_nymph_icon_cpp}"
+    COMMAND "${CMAKE_COMMAND}" "-DINPUT=${_nymph_icon_png}" "-DOUTPUT=${_nymph_icon_cpp}"
+            "-DSYMBOL=window_icon_png" -P "${PROJECT_SOURCE_DIR}/cmake/NymphEmbedFile.cmake"
+    DEPENDS "${_nymph_icon_png}" "${PROJECT_SOURCE_DIR}/cmake/NymphEmbedFile.cmake"
+    COMMENT "Embedding the window icon"
+    VERBATIM)
+  target_sources(nymph_window PRIVATE "${_nymph_icon_cpp}")
   # One window implementation per platform (window_host.hpp); no header or
   # library of either is needed.
   if(WIN32)

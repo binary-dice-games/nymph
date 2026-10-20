@@ -34,6 +34,11 @@ bool is_png(std::span<const uint8_t> bytes);
 ///         encoding fails.
 std::vector<uint8_t> encode_png(const image& img, std::string_view source, std::string_view description);
 
+/// @brief Decodes a PNG's pixels.
+/// @return The pixels as straight-alpha RGBA8; `std::nullopt` if `bytes`
+///         is not a PNG stb_image can decode.
+std::optional<image> decode_png(std::span<const uint8_t> bytes);
+
 /// @brief Reads the nymph source embedded in a PNG, checking the signature
 ///        and every chunk CRC on the way; pixels are never decoded.
 /// @return The source text, byte for byte as encoded; `std::nullopt` if

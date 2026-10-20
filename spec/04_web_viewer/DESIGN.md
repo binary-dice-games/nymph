@@ -205,7 +205,7 @@ stay.
 
 Sources name fonts by file name (`font: FiraSans-Regular.ttf`, core
 DESIGN section 3, "Text style"). Every build carries a **font catalog**:
-the name, size and SHA-256 of every font in `fonts/`, and the bytes of
+the name, size and SHA-256 of every font in `resources/fonts/`, and the bytes of
 the ones it embeds. The native build embeds them all, as today; the web
 build embeds none.
 
@@ -339,7 +339,7 @@ struct font_entry {
   uint32_t crc32;              // of the file bytes
   const unsigned char* data;   // embedded bytes, or nullptr when not embedded
 };
-std::span<const font_entry> font_catalog();         // every font in fonts/, sorted
+std::span<const font_entry> font_catalog();         // every font in resources/fonts/, sorted
 
 /// Makes a non-embedded catalog font available (process-wide, thread-safe).
 /// @throws std::invalid_argument for an unknown name, or bytes whose size
@@ -788,6 +788,15 @@ events it reports) made by `window_win32.cpp` or `window_x11.cpp`:
   view) to `<input>.view.png` and `Y` writes the YAML to `<input>.view.yaml`,
   next to the input and never over it; the window title says what was
   written. The title is `nymph - <file name>`.
+- **Icon.** The window shows nymph's icon (`resources/icon.png`, compiled
+  in by `src/CMakeLists.txt`, decoded once and scaled by
+  `window/window_icon.cpp`), not the system's generic one: X11 gets
+  `_NET_WM_ICON` at 16 to 128 px; Windows gets `WM_SETICON` at the
+  `SM_CXICON` / `SM_CXSMICON` sizes of the window's DPI, again when the
+  DPI changes. On Windows `nymph.exe` also carries the icon as its first
+  icon resource (`app/nymph.rc.in`, `resources/icon.ico`), which Explorer
+  and shortcuts show; the `.ico` is committed, made from `icon.png` by
+  `packaging/windows/make_ico.py` (no image tool at build time).
 - **Not in the window**: the right-click menu and About panel (the keys
   replace them), live data feeds (`setData`), PNGs that carry no nymph
   source (an error, as for `nymph render`).

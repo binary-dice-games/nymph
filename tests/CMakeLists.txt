@@ -136,10 +136,20 @@ nymph_add_test(test_imuml_interactive test_imuml_interactive.cpp)
 nymph_add_test(test_imuml_text_runs test_imuml_text_runs.cpp)
 nymph_add_test(test_saved_view test_saved_view.cpp)
 
+# The icon of nymph.exe (app/nymph.rc.in).
+if(TARGET nymph-cli)
+  nymph_add_test(test_app_icon test_app_icon.cpp)
+  target_compile_definitions(test_app_icon PRIVATE NYMPH_SOURCE_DIR="${PROJECT_SOURCE_DIR}"
+    NYMPH_EXE="$<TARGET_FILE:nymph-cli>")
+  add_dependencies(test_app_icon nymph-cli)
+endif()
+
 # `nymph view` up to the window (spec/04_web_viewer, plan step 14).
 if(NYMPH_VIEW)
   nymph_add_test(test_view_command test_view_command.cpp)
   target_link_libraries(test_view_command PRIVATE nymph_window)
+  nymph_add_test(test_window_icon test_window_icon.cpp)
+  target_link_libraries(test_window_icon PRIVATE nymph_window)
 endif()
 
 # Script tests run a cross-built nymph through the toolchain's emulator,
