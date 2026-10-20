@@ -19,6 +19,6 @@ Goes in: root, Child, CollapsingHeader, Disabled, Group, HorizontalLayout, Inden
 | `card` | true/false | `false` | Draws the children on a rounded, filled, bordered panel, inset by "padding". Colors follow the theme. |
 | `padding` | number | `12` | Inner margin of a card, in pixels. Ignored unless "card" is true. (0 to 128) |
 | `rounding` | number | `10` | Corner radius of a card, in pixels. Ignored unless "card" is true. (0 to 64) |
-| `font` | text | `""` | Font of this element's text and of everything inside it: an embedded font file name (default). Empty (default) inherits the enclosing element's font, or image.font. |
+| `font` | text | `""` | Font of this element's text and of everything inside it: an embedded font file name (default, FiraMono-Bold.ttf, FiraMono-Regular.ttf, FiraSans-Bold.ttf, FiraSans-Italic.ttf, FiraSans-Regular.ttf, PT_Serif-Web-Bold.ttf, PT_Serif-Web-Italic.ttf, PT_Serif-Web-Regular.ttf). Empty (default) inherits the enclosing element's font, or image.font. |
 | `font_size` | number | `0` | Text size in pixels for this element and everything inside it. 0 (default) inherits the enclosing element's size, or image.font_size. (0 to 96) |
 | `text_color` | colour | `""` | Text colour ("#RRGGBB" or "#RRGGBBAA") for this element and everything inside it: titles, axis and tick labels, legends and labels. Empty (default) inherits, or uses the theme's. |

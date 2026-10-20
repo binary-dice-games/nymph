@@ -23,7 +23,7 @@ Goes in: root, Child, CollapsingHeader, Disabled, Group, HorizontalLayout, Inden
 | `node_spacing` | number | `12` | Least vertical gap between nodes of a column, in pixels. (0 to 200) |
 | `show_values` | true/false | `true` | When true, each label ends with the node's total. |
 | `value_format` | text | `"%g"` | printf format of the totals in the labels ("%.0f GWh"). |
-| `font` | text | `""` | Font of this element's text and of everything inside it: an embedded font file name (default). Empty (default) inherits the enclosing element's font, or image.font. |
+| `font` | text | `""` | Font of this element's text and of everything inside it: an embedded font file name (default, FiraMono-Bold.ttf, FiraMono-Regular.ttf, FiraSans-Bold.ttf, FiraSans-Italic.ttf, FiraSans-Regular.ttf, PT_Serif-Web-Bold.ttf, PT_Serif-Web-Italic.ttf, PT_Serif-Web-Regular.ttf). Empty (default) inherits the enclosing element's font, or image.font. |
 | `font_size` | number | `0` | Text size in pixels for this element and everything inside it. 0 (default) inherits the enclosing element's size, or image.font_size. (0 to 96) |
 | `text_color` | colour | `""` | Text colour ("#RRGGBB" or "#RRGGBBAA") for this element and everything inside it: titles, axis and tick labels, legends and labels. Empty (default) inherits, or uses the theme's. |
 
