@@ -26,9 +26,23 @@ addEventListener('message', (e) => {
   port.onmessage = (m) => {
     if (m.data?.type === 'show') {
       show(m.data);
+    } else if (m.data?.type === 'set') {
+      setSource(m.data.source);
     }
   };
 });
+
+let current = null;
+
+/** Shows another source in the chart, keeping the view where the chart allows. */
+async function setSource(source) {
+  try {
+    await current.setSource(source);
+    port.postMessage({ type: 'updated' });
+  } catch (e) {
+    port.postMessage({ type: 'error', message: String(e?.message ?? e) });
+  }
+}
 
 async function show({ png, source, theme, fileName }) {
   try {
@@ -42,6 +56,7 @@ async function show({ png, source, theme, fileName }) {
       throw new Error('not a nymph source');
     }
     await viewer.rendered();
+    current = viewer;
     const sendYaml = () => {
       try {
         port.postMessage({ type: 'yaml', yaml: viewer.toYaml() });
@@ -50,7 +65,12 @@ async function show({ png, source, theme, fileName }) {
       }
     };
     viewer.on('view', sendYaml);
-    port.postMessage({ type: 'rendered', description: viewer.info().description });
+    const g = viewer.state().geometry;
+    port.postMessage({
+      type: 'rendered',
+      description: viewer.info().description,
+      layout: { width: g.layoutWidth, height: g.layoutHeight },
+    });
     sendYaml();
   } catch (e) {
     port.postMessage({ type: 'error', message: String(e?.message ?? e) });

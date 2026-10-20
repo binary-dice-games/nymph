@@ -11,11 +11,15 @@ export const DEFAULTS = Object.freeze({
   off: [],
   /** The charts' theme: the source's (as the PNG) or the page's colour scheme. */
   theme: 'source',
+  /** Sites where code blocks in a chat are read for nymph sources (spec/10_gemini_extension). */
+  chatSites: ['https://gemini.google.com'],
+  /** Chat charts' theme: the page's colour scheme or the source's. */
+  chatTheme: 'auto',
 });
 
 /**
  * Reads every setting, defaults filled in.
- * @return {Promise<{off: string[], theme: 'source'|'auto'}>}
+ * @return {Promise<{off: string[], theme: 'source'|'auto', chatSites: string[], chatTheme: 'source'|'auto'}>}
  */
 export async function readSettings() {
   const stored = await chrome.storage.sync.get(Object.keys(DEFAULTS));

@@ -277,6 +277,12 @@ add_test(NAME nymph_plugin_sync_versions
   COMMAND ${CMAKE_COMMAND} -DSOURCE_DIR=${PROJECT_SOURCE_DIR} -DWORK_DIR=${CMAKE_CURRENT_BINARY_DIR}/plugin_sync_versions
           -P ${CMAKE_CURRENT_SOURCE_DIR}/plugin_sync_versions.cmake)
 
+# ── Gemini primer (spec/10_gemini_extension step 8) ─────────────────────────
+
+add_test(NAME nymph_gemini_primer
+  COMMAND ${CMAKE_COMMAND} -DSOURCE_DIR=${PROJECT_SOURCE_DIR} -DWORK_DIR=${CMAKE_CURRENT_BINARY_DIR}/gemini_primer
+          -P ${CMAKE_CURRENT_SOURCE_DIR}/gemini_primer_check.cmake)
+
 # ── Chrome Web Store publish script (spec/07_release_pipeline step 8) ───────
 
 find_program(NYMPH_NODE_TOOL node)

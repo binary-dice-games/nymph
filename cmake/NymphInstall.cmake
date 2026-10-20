@@ -50,6 +50,8 @@ endif()
 install(FILES README.md CHANGELOG.md LICENSE
               docs/agent-guide.md docs/cli.md docs/format.md docs/elements.md
         DESTINATION "${CMAKE_INSTALL_DATADIR}/doc/nymph" COMPONENT nymph)
+install(DIRECTORY docs/elements
+        DESTINATION "${CMAKE_INSTALL_DATADIR}/doc/nymph" COMPONENT nymph)
 file(GLOB _nymph_font_licences "${NYMPH_FONTS_DIR}/*.txt")
 install(FILES LICENSE ${_nymph_font_licences}
         DESTINATION "${CMAKE_INSTALL_DATADIR}/licenses/nymph" COMPONENT nymph)

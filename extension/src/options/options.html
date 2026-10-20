@@ -20,7 +20,11 @@
   ul { padding: 0; list-style: none; }
   li { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--line); padding: 6px 0; color: var(--fg); }
   button { font: inherit; padding: 3px 12px; border-radius: 4px; border: 1px solid var(--line); background: none; color: inherit; cursor: pointer; }
-  .empty { color: var(--muted); }
+  .empty, .note { color: var(--muted); }
+  ol { color: var(--muted); padding-left: 20px; }
+  input[type="text"] { font: inherit; padding: 3px 6px; border: 1px solid var(--line); border-radius: 4px; background: none; color: inherit; }
+  pre { max-height: 320px; overflow: auto; border: 1px solid var(--line); border-radius: 4px; padding: 8px; font-size: 12px; white-space: pre-wrap; }
+  a { color: var(--accent); }
 </style>
 </head>
 <body>
@@ -38,6 +42,29 @@
 <h2>Theme</h2>
 <label><input type="radio" name="theme" value="source"> As the image (the chart's own theme)</label>
 <label><input type="radio" name="theme" value="auto"> Follow the browser's light or dark mode</label>
+
+<h2>Charts written in chats</h2>
+<p>On the sites below, nymph reads the code blocks of a chat's answers. A block holding a nymph source is drawn as a live chart, with its code one click away. Nothing leaves your browser, and nymph never types into a chat or sends anything for you.</p>
+<ul id="chat-sites"></ul>
+<p class="empty" id="no-chat-sites">No sites: chat charts are off.</p>
+<form id="add-chat-site">
+  <input type="text" id="chat-site" placeholder="https://gemini.google.com" size="32" aria-label="Site address">
+  <button type="submit">Add site</button>
+  <span class="note" id="chat-site-note"></span>
+</form>
+<label><input type="radio" name="chatTheme" value="auto"> Follow the browser's light or dark mode</label>
+<label><input type="radio" name="chatTheme" value="source"> As the chart's own theme</label>
+
+<h2>Teach Gemini to draw nymph charts</h2>
+<p>Gemini does not know nymph's format. Give it these instructions once, in a Gem:</p>
+<ol>
+  <li>Open <a href="https://gemini.google.com/gems/create" target="_blank" rel="noopener">Gemini's new Gem page</a>.</li>
+  <li>Name the Gem "nymph", press the button below, and paste into its Instructions field.</li>
+  <li>Save it, then ask that Gem for a chart.</li>
+</ol>
+<p><button type="button" id="copy-primer">Copy the instructions</button> <span class="note" id="copy-note"></span></p>
+<p>Or, in a chat already open, right-click nymph's toolbar button and choose "Give this chat the nymph instructions": they go into the prompt box and you send them yourself.</p>
+<details><summary>Show the instructions</summary><pre id="primer"></pre></details>
 
 <h2>Sites turned off</h2>
 <ul id="off"></ul>

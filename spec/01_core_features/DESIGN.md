@@ -875,7 +875,7 @@ in-process; `app/main.cpp` only forwards `argv` and the standard streams
 | `nymph extract <in.png> [-o <out.yaml>]` | Extract the embedded YAML. |
 | `nymph check <in>` | Validate only: bind and lay out, no rasterizing. Exit 0 and no output when valid. |
 | `nymph fonts [--licenses]` | List the names `font:` accepts (`default` and every embedded font), or print the embedded licence texts. |
-| `nymph schema [<Type>] [--markdown]` | Print the element reference from the registry: every type, its slot, fields, types, defaults, names and descriptions. `--markdown` prints the form kept in `docs/elements.md`. |
+| `nymph schema [<Type>] [--markdown]` | Print the element reference from the registry: every type, its slot, fields, types, defaults, names and descriptions. `--markdown` prints it as one Markdown file; `--markdown --paged <dir>` writes the form kept in `docs/`: `elements.md` (conventions, table of pages) and `elements/<Type>.md` per `figure` type with the types that go inside it (a page links, rather than repeats, the pages of the figure types and shared classes it takes), so a small-context reader loads only the pages it needs. `app/CMakeLists.txt` refreshes them after each build (`NYMPH_UPDATE_DOCS`). |
 | `nymph --version`, `nymph --help` | Version, usage. |
 
 `-o -` writes to standard output (for pipes). `check` and `render` also

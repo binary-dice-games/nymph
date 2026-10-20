@@ -112,6 +112,35 @@ globalThis.nymphToggleTab = toggleTab;
 
 chrome.action.onClicked.addListener((tab) => toggleTab(tab));
 
+// "Give this chat the nymph instructions", in the button's context menu
+// (spec/10_gemini_extension/DESIGN.md section 4.5): the page's content script
+// puts the text in the prompt box.
+const TEACH_MENU = 'nymph-teach';
+
+/**
+ * @param {{id?: number}} tab
+ * @return {Promise<string>} what the page did: inserted, copied, failed, or
+ *   unavailable (chat mode is not running there)
+ */
+async function teachTab(tab) {
+  if (!tab?.id) {
+    return 'unavailable';
+  }
+  try {
+    return (await chrome.tabs.sendMessage(tab.id, { type: 'nymph-teach' })) ?? 'unavailable';
+  } catch {
+    return 'unavailable';
+  }
+}
+// For the browser tests, which cannot use the menu.
+globalThis.nymphTeachTab = teachTab;
+
+chrome.contextMenus.onClicked.addListener((info, tab) => {
+  if (info.menuItemId === TEACH_MENU) {
+    teachTab(tab);
+  }
+});
+
 chrome.tabs.onUpdated.addListener((tabId, info, tab) => {
   if (info.status === 'loading' && info.url !== undefined) {
     chrome.storage.session.remove(`count:${tabId}`);
@@ -129,6 +158,8 @@ chrome.storage.onChanged.addListener((changes, area) => {
 
 chrome.runtime.onInstalled.addListener((details) => {
   showAllTabs();
+  chrome.contextMenus.removeAll(() =>
+    chrome.contextMenus.create({ id: TEACH_MENU, title: 'Give this chat the nymph instructions', contexts: ['action'] }));
   if (details.reason === 'install') {
     chrome.tabs.create({ url: chrome.runtime.getURL('src/options/options.html?welcome=1') });
   }

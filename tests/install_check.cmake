@@ -43,7 +43,8 @@ endif()
 foreach(file "${exe}" "${path_script}"
              share/doc/nymph/README.md share/doc/nymph/CHANGELOG.md share/doc/nymph/LICENSE
              share/doc/nymph/agent-guide.md share/doc/nymph/cli.md share/doc/nymph/format.md
-             share/doc/nymph/elements.md share/licenses/nymph/LICENSE)
+             share/doc/nymph/elements.md share/doc/nymph/elements/ClassDiagram.md
+             share/licenses/nymph/LICENSE)
   if(NOT IS_ABSOLUTE "${file}")
     set(file "${prefix}/${file}")
   endif()

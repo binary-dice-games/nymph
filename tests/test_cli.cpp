@@ -3,6 +3,7 @@
 /// @brief Plan step 12: the `nymph` command line, run in-process through
 ///        run_cli() with files in a temporary directory per test.
 #include <gtest/gtest.h>
+#include <chrono>
 #include <filesystem>
 #include <fstream>
 #include <initializer_list>
@@ -246,6 +247,32 @@ TEST_F(cli, SchemaListsTypesAndFields) {
   const run_result nope = run({"schema", "Nope"});
   EXPECT_EQ(nope.code, 1);
   EXPECT_NE(nope.err.find("unknown element type 'Nope'"), std::string::npos);
+}
+
+TEST_F(cli, SchemaPagedWritesRootAndOnePagePerFigure) {
+  const run_result r = run({"schema", "--markdown", "--paged", path("docs")});
+  ASSERT_EQ(r.code, 0) << r.err;
+  EXPECT_EQ(r.out, "");
+  const std::string root = read("docs/elements.md");
+  EXPECT_NE(root.find("](elements/ClassDiagram.md)"), std::string::npos);
+  const std::string page = read("docs/elements/ClassDiagram.md");
+  EXPECT_NE(page.find("\n## ClassRelation\n"), std::string::npos);
+  EXPECT_EQ(page.find("\n## Plot\n"), std::string::npos);
+
+  // A page of a type that no longer exists is removed; a current one left alone.
+  write("docs/elements/Gone.md", "old");
+  const fs::path current = dir_ / "docs" / "elements" / "ClassDiagram.md";
+  const auto old_time = fs::last_write_time(current) - std::chrono::hours(1);
+  fs::last_write_time(current, old_time);
+  EXPECT_EQ(run({"schema", "--markdown", "--paged", path("docs")}).code, 0);
+  EXPECT_FALSE(exists("docs/elements/Gone.md"));
+  EXPECT_EQ(fs::last_write_time(current), old_time);
+}
+
+TEST_F(cli, SchemaPagedNeedsMarkdownAndADirectory) {
+  EXPECT_EQ(run({"schema", "--paged", path("docs")}).code, 2);
+  EXPECT_EQ(run({"schema", "--markdown", "--paged"}).code, 2);
+  EXPECT_EQ(run({"schema", "Plot", "--markdown", "--paged", path("docs")}).code, 2);
 }
 
 TEST_F(cli, VersionAndHelp) {
