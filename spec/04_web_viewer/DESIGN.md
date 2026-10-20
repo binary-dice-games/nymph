@@ -205,7 +205,7 @@ stay.
 
 Sources name fonts by file name (`font: FiraSans-Regular.ttf`, core
 DESIGN section 3, "Text style"). Every build carries a **font catalog**:
-the name, size and SHA-256 of every font in `fonts/`, and the bytes of
+the name, size and SHA-256 of every font in `resources/fonts/`, and the bytes of
 the ones it embeds. The native build embeds them all, as today; the web
 build embeds none.
 
@@ -339,7 +339,7 @@ struct font_entry {
   uint32_t crc32;              // of the file bytes
   const unsigned char* data;   // embedded bytes, or nullptr when not embedded
 };
-std::span<const font_entry> font_catalog();         // every font in fonts/, sorted
+std::span<const font_entry> font_catalog();         // every font in resources/fonts/, sorted
 
 /// Makes a non-embedded catalog font available (process-wide, thread-safe).
 /// @throws std::invalid_argument for an unknown name, or bytes whose size

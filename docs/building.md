@@ -139,7 +139,7 @@ git checkout (`cmake/NymphSourceDist.cmake`).
 | Option | Default | Description |
 |--------|---------|-------------|
 | `NYMPH_BUILD_TESTS` | `ON` when top-level | Build the GoogleTest suite |
-| `NYMPH_FONTS_DIR` | `fonts/` | Folder whose `*.ttf` / `*.otf` fonts and `*.txt` licences are compiled into nymph |
+| `NYMPH_FONTS_DIR` | `resources/fonts/` | Folder whose `*.ttf` / `*.otf` fonts and `*.txt` licences are compiled into nymph |
 | `NYMPH_EMBED_FONTS` | `all` | Which of those fonts have their bytes compiled in: `all`, `none`, or a `;`-list of file names |
 | `NYMPH_WEB` | `OFF` | Build the interactive web viewer (WebAssembly) instead of the CLI; needs Emscripten (`emcmake`). See "Web viewer" below. |
 | `NYMPH_MCP` | `ON` | Build the MCP server, `nymph mcp` (off in the web build). `OFF` drops the `extern/json` dependency; `nymph mcp` then exits 2. |
@@ -185,13 +185,13 @@ sudo apt install libegl1 libegl-mesa0 libgl1-mesa-dri
 
 ## Embedded fonts
 
-The fonts in `fonts/` are compiled into the library: at build time
+The fonts in `resources/fonts/` are compiled into the library: at build time
 `cmake/NymphFonts.cmake` turns each file into a generated C++ array
 (`build/src/generated/fonts/`), so the binary reads no font file at run
 time. Sources name a font by its file name.
 
 - **Add a font:** copy its `.ttf` / `.otf` and its licence text (as
-  `<Family>-<Licence>.txt`) into `fonts/` and build. The configure step
+  `<Family>-<Licence>.txt`) into `resources/fonts/` and build. The configure step
   re-runs by itself and picks it up; `nymph fonts` lists it.
 - **Use another set:** `cmake -S . -B build -DNYMPH_FONTS_DIR=/path/to/fonts`.
   An empty folder leaves only the built-in `default` font; tests that name
@@ -207,7 +207,7 @@ time. Sources name a font by its file name.
   with the licences, to `build/fonts/` for hosting. `nymph fonts` marks
   them `(not embedded)`. The web viewer uses this to load fonts on demand
   ([spec/04_web_viewer](../spec/04_web_viewer/DESIGN.md)).
-- Licences: the standard fonts are SIL OFL 1.1 (see `fonts/README.md`);
+- Licences: the standard fonts are SIL OFL 1.1 (see `resources/fonts/README.md`);
   `nymph fonts --licenses` prints the texts compiled in with them.
 
 ---

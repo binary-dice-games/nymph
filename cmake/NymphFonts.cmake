@@ -13,7 +13,7 @@
 # changes; adding or removing a file re-runs the configure step (the glob
 # uses CONFIGURE_DEPENDS), which rewrites the lookup table.
 
-set(NYMPH_FONTS_DIR "${PROJECT_SOURCE_DIR}/fonts" CACHE PATH
+set(NYMPH_FONTS_DIR "${PROJECT_SOURCE_DIR}/resources/fonts" CACHE PATH
   "Directory whose *.ttf / *.otf fonts and *.txt licences are embedded into nymph")
 set(NYMPH_EMBED_FONTS "all" CACHE STRING
   "Fonts of NYMPH_FONTS_DIR whose bytes are compiled in: all, none, or a ;-list of file names")

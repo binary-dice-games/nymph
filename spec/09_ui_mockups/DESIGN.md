@@ -89,7 +89,7 @@ Files owned or changed: new `src/elements/ui/` (the element family,
 keyboard and text input), `src/document/view.*` (UI entries of the `view`
 key), `src/window/viewer_window.cpp` (key routing), `web/` (keyboard
 input, focus), `src/elements/layout_elements.cpp` (`Separator` /
-`SeparatorText` in windows), new `placeholders/` (the placeholder SVG
+`SeparatorText` in windows), new `resources/placeholders/` (the placeholder SVG
 files), `src/placeholders/` (SVG-subset parser, catalog and drawing),
 `cmake/NymphPlaceholders.cmake` (their embedding, with the fonts'
 `NymphEmbedFile.cmake`), `src/schema/convert.cpp` (a suggestion for an
@@ -370,7 +370,7 @@ DESIGN section 8). nymph instead builds in a small catalog of
   so a placeholder whose design needs them (checked per file: it uses
   `#FFFFFF`) draws them in the window's background colour instead.
 - **Vector, drawn by ImGui.** Each placeholder is an SVG file in
-  `placeholders/`, embedded in the binary the way fonts are (core DESIGN
+  `resources/placeholders/`, embedded in the binary the way fonts are (core DESIGN
   section 8, "Fonts"; `cmake/NymphPlaceholders.cmake`) and parsed once
   per process by nymph's own parser for the subset below
   (`src/placeholders/svg_shapes`). Its paths are drawn
@@ -392,7 +392,7 @@ DESIGN section 8). nymph instead builds in a small catalog of
   stretch (`cross`, whose diagonals run corner to corner). Painter's
   order is the file order.
 - **Adding one** is dropping an SVG that follows the rules into
-  `placeholders/` (with a licence note if it is not nymph's own; the set
+  `resources/placeholders/` (with a licence note if it is not nymph's own; the set
   above is drawn for nymph, MIT): the catalog and the enumeration are
   generated, nothing else changes.
 

@@ -181,7 +181,7 @@ The release workflow calls the same build steps (a reusable workflow,
 | `bin/nymph` (`nymph.exe`) | The executable |
 | `share/nymph/install.sh` (`install.ps1` on Windows) | The `PATH` script of section 4.9, for `--uninstall` later |
 | `share/doc/nymph/` | `README.md`, `CHANGELOG.md`, `LICENSE`, `docs/agent-guide.md`, `docs/cli.md`, `docs/format.md`, `docs/elements.md` |
-| `share/licenses/nymph/` | `LICENSE` and the embedded fonts' licences (`fonts/*.txt`) |
+| `share/licenses/nymph/` | `LICENSE` and the embedded fonts' licences (`resources/fonts/*.txt`) |
 
 - On Windows, when the prefix was not given, it is
   `%LOCALAPPDATA%/Programs/nymph` (no administrator rights needed, and

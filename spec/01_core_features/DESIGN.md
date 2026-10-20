@@ -124,7 +124,7 @@ wish nymph's keys and defaults, plus the text style:
 
 ### Text style
 
-Fonts are compiled into the binary from the `fonts/` folder (section 8)
+Fonts are compiled into the binary from the `resources/fonts/` folder (section 8)
 and named by file name. Every `figure` element that shows or contains
 text (`VerticalLayout`, `HorizontalLayout`, `Plot`, `Plot3D`, `Label`,
 `SeparatorText`) and the text series `PlotText` / `Plot3DText` take three
@@ -1044,10 +1044,10 @@ rules). ImGui is built with `IMGUI_DISABLE_WIN32_FUNCTIONS` and
 `IMGUI_DISABLE_DEFAULT_SHELL_FUNCTIONS` (no clipboard, IME or shell calls)
 but not `IMGUI_DISABLE_OBSOLETE_FUNCTIONS`, which ImPlot v1.0 still needs.
 
-**Fonts** are not a submodule: `fonts/` holds unmodified TTF files from
+**Fonts** are not a submodule: `resources/fonts/` holds unmodified TTF files from
 the Google Fonts repository (Fira Sans, Fira Mono, PT Serif; SIL Open Font
 License 1.1) with their licence texts. `cmake/NymphFonts.cmake`
-(`nymph_embed_fonts(nymph)`) globs `NYMPH_FONTS_DIR` (default `fonts/`)
+(`nymph_embed_fonts(nymph)`) globs `NYMPH_FONTS_DIR` (default `resources/fonts/`)
 for `*.ttf` / `*.otf` and `*.txt` at configure time (`CONFIGURE_DEPENDS`)
 and adds one custom command per file that runs
 `cmake/NymphEmbedFile.cmake` in script mode, writing a `.cpp` with the
@@ -1082,7 +1082,7 @@ portable between the two projects.
   transform lives in `draw_context`, so the command classes do not change.
 - **More themes**: `image.theme` maps to functions applied in
   `render_figure()`; the rasterizer is unaffected.
-- **More fonts**: a file dropped into `fonts/` (with its licence text) is
+- **More fonts**: a file dropped into `resources/fonts/` (with its licence text) is
   embedded on the next build and accepted by every `font` field; nothing
   else changes. Another set can be built in with `-DNYMPH_FONTS_DIR`.
 - **Text style on a new element**: append `text_style_fields()` to its
