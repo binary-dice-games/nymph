@@ -6,11 +6,14 @@
 #include <algorithm>
 #include <filesystem>
 #include <fstream>
+#include <set>
 #include <sstream>
 #include <string>
 #include <string_view>
 #include <vector>
 #include "cli/cli.hpp"
+#include "cli/schema_doc.hpp"
+#include "elements/register_builtin.hpp"
 #include "nymph.hpp"
 
 namespace bdg::nymph {
@@ -40,14 +43,54 @@ std::vector<fs::path> example_sources() {
 
 // ── docs/elements.md ─────────────────────────────────────────────────────────
 
-TEST(docs, ElementsMdIsTheSchemaMarkdown) {
-  const std::vector<std::string_view> args{"schema", "--markdown"};
-  std::istringstream in;
-  std::ostringstream out;
-  std::ostringstream err;
-  ASSERT_EQ(run_cli(args, in, out, err), 0) << err.str();
-  EXPECT_EQ(read_file(kSourceDir / "docs" / "elements.md"), out.str())
-      << "regenerate with: nymph schema --markdown > docs/elements.md";
+// The committed pages are what `nymph schema --markdown --paged docs` writes
+// (every build of nymph-cli refreshes them: NYMPH_UPDATE_DOCS).
+TEST(docs, ElementsPagesAreTheSchemaMarkdown) {
+  const std::vector<doc_page> pages = schema_markdown_pages(builtin_registry());
+  ASSERT_GT(pages.size(), 10u);
+  EXPECT_EQ(pages[0].path, "elements.md");
+  std::set<fs::path> expected;
+  for (const doc_page& page : pages) {
+    SCOPED_TRACE(page.path);
+    expected.insert(fs::path(page.path).lexically_normal());
+    EXPECT_EQ(read_file(kSourceDir / "docs" / page.path), page.text)
+        << "regenerate with: nymph schema --markdown --paged docs";
+  }
+  for (const fs::directory_entry& e : fs::directory_iterator(kSourceDir / "docs" / "elements")) {
+    EXPECT_EQ(expected.count(fs::path("elements") / e.path().filename()), 1u)
+        << e.path() << " is not generated: regenerate with nymph schema --markdown --paged docs";
+  }
+}
+
+TEST(docs, ElementsPagesCoverEveryClassAndStaySmall) {
+  const registry& reg = builtin_registry();
+  const std::vector<doc_page> pages = schema_markdown_pages(reg);
+  for (const element_class* c : reg.classes()) {
+    SCOPED_TRACE(c->name());
+    const std::string heading = "\n## " + std::string(c->name()) + "\n";
+    bool found = false;
+    for (const doc_page& page : pages) {
+      found = found || ("\n" + page.text).find(heading) != std::string::npos;
+    }
+    EXPECT_TRUE(found);
+  }
+  // The point of the pages: a reader loads the root and one page, which must
+  // be smaller than the whole reference (the widget catalog, on Window's
+  // page, is the largest, about half of it).
+  const size_t whole = schema_markdown(reg).size();
+  for (const doc_page& page : pages) {
+    SCOPED_TRACE(page.path);
+    EXPECT_LT(page.text.size(), whole * 2 / 3);
+  }
+}
+
+TEST(docs, ElementsRootLinksEveryPage) {
+  const std::vector<doc_page> pages = schema_markdown_pages(builtin_registry());
+  for (size_t i = 1; i < pages.size(); ++i) {
+    SCOPED_TRACE(pages[i].path);
+    EXPECT_NE(pages[0].text.find("](" + pages[i].path + ")"), std::string::npos);
+    EXPECT_NE(pages[i].text.find("](../elements.md)"), std::string::npos);
+  }
 }
 
 // ── examples/ ────────────────────────────────────────────────────────────────

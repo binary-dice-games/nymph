@@ -145,6 +145,7 @@ git checkout (`cmake/NymphSourceDist.cmake`).
 | `NYMPH_MCP` | `ON` | Build the MCP server, `nymph mcp` (off in the web build). `OFF` drops the `extern/json` dependency; `nymph mcp` then exits 2. |
 | `NYMPH_VIEW` | `ON` (`OFF` on macOS) | Build `nymph view`, the viewer in a window: Win32 / WGL on Windows, X11 / GLX on Linux, from the system's libraries opened at run time (nothing is linked, no extra file and no X or GL development package is needed). `ON` on macOS is a configure error. Off in the web and release builds. `OFF`: `nymph view` exits 2. |
 | `NYMPH_RELEASE` | `OFF` | Build the published executables: MinSizeRel, stripped, static (see "Release executables"). |
+| `NYMPH_UPDATE_DOCS` | `ON` for a native build of nymph itself (`OFF` as a subproject, cross-compiled, release or web) | After each build of `nymph`, run `nymph schema --markdown --paged docs` to refresh `docs/elements.md` and `docs/elements/` in the source tree. |
 | `NYMPH_MCP_VIEWER` | empty | The MCP App page to embed in `nymph mcp`, `build-web/claude/viewer.html` from the web build (below); empty: the server returns PNGs only. |
 | `NYMPH_INSTALL` | `ON` when top-level | Add the `cmake --install` rules (above) |
 | `NYMPH_INSTALL_UPDATE_PATH` | `ON` | `cmake --install` puts `<prefix>/bin` on the user's `PATH` |
