@@ -39,7 +39,7 @@ no section for it.
 | `source` | The source tarball, built, tested and installed with no network (Linux) and on macOS |
 | `macos-universal` | One executable for both Macs, in `nymph-X.Y.Z-macos-universal.mcpb` |
 | `release` | Gathers the files, writes `SHA256SUMS`, creates the release as a draft, uploads, publishes |
-| `plugin` | Opens a pull request pinning the release in the Claude Code plugin, set to merge when CI passes |
+| `plugin` | Opens a pull request pinning the release in the Claude Code and Cursor plugins, set to merge when CI passes |
 | `homebrew-test`, `homebrew` | Builds and tests the formula on macOS and Linux, then pushes it to the tap |
 | `chrome` | Uploads the extension to the Chrome Web Store and submits it for review |
 | `verify` | On Linux, macOS and Windows: the install scripts, a new console, the plugin launcher |

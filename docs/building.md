@@ -308,12 +308,12 @@ plugin and commit the result:
 ```sh
 cmake build-release -DNYMPH_PLUGIN_SUMS="$PWD/build-release/dist/SHA256SUMS|$PWD/build-win/dist/SHA256SUMS|$PWD/build-arm64/dist/SHA256SUMS"
 cmake --build build-release --target nymph-plugin-sync
-git add claude/plugin
+git add claude/plugin cursor/plugin
 ```
 
 Run `nymph-plugin-sync` without `NYMPH_PLUGIN_SUMS` after changing
 `claude/skill/nymph/SKILL.md` or `docs/agent-guide.md`; a test fails while
-the plugin's copies are stale.
+the plugins' copies (Claude Code's and Cursor's) are stale.
 
 ## Using nymph from another CMake project
 

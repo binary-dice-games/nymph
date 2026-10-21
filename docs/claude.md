@@ -108,6 +108,10 @@ Errors name the line and column of the source, as on the command line
 ([cli.md](cli.md)). The server also offers [agent-guide.md](agent-guide.md)
 and [elements.md](elements.md) as resources.
 
+## Other agents
+
+Cursor has its own plugin and `mcp.json` entry: [cursor.md](cursor.md).
+
 ## Limits
 
 - The YAML stays inside the PNG only while the file is copied byte for

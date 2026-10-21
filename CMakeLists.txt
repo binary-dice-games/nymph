@@ -127,13 +127,13 @@ add_subdirectory(src)
 
 if(PROJECT_IS_TOP_LEVEL AND NOT NYMPH_WEB)
   add_subdirectory(app)
-  # The Claude Code plugin's committed files (cmake/NymphPluginSync.cmake);
+  # The Claude Code and Cursor plugins' committed files (cmake/NymphPluginSync.cmake);
   # NYMPH_PLUGIN_SUMS names the release SHA256SUMS files to pin, '|'-separated.
   set(NYMPH_PLUGIN_SUMS "" CACHE STRING "SHA256SUMS files of a published release, '|'-separated")
   add_custom_target(nymph-plugin-sync
     COMMAND "${CMAKE_COMMAND}" "-DSOURCE_DIR=${PROJECT_SOURCE_DIR}" "-DVERSION=${PROJECT_VERSION}"
             "-DSUMS=${NYMPH_PLUGIN_SUMS}" -P "${PROJECT_SOURCE_DIR}/cmake/NymphPluginSync.cmake"
-    COMMENT "Updating claude/plugin"
+    COMMENT "Updating claude/plugin and cursor/plugin"
     VERBATIM)
   if(NYMPH_RELEASE)
     nymph_add_dist_target()

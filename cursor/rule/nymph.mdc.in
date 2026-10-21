@@ -1,0 +1,10 @@
+---
+description: Use when the user asks for a chart, plot, graph, diagram, flowchart, UML, Gantt chart, Sankey diagram, dashboard or user-interface mockup. Draw it with the nymph MCP tools (render_chart) and look at the image.
+alwaysApply: false
+---
+
+Draw charts and diagrams with nymph: write a short YAML source, call the
+`render_chart` tool, look at the PNG it returns and fix what is unclear.
+The nymph skill and the nymph MCP server's instructions give the source
+format; call `chart_schema` for the fields of an element type. When the
+user wants the chart kept, pass `output_path` (a `.png`) and keep the YAML.

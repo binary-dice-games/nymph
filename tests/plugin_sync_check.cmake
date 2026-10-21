@@ -39,7 +39,30 @@ string(JSON plugin_version GET "${manifest}" version)
 if(NOT plugin_version STREQUAL pinned)
   list(APPEND stale "claude/plugin/.claude-plugin/plugin.json (version ${plugin_version}, not the pinned ${pinned})")
 endif()
+# The Cursor plugin (spec/12_cursor_integration/PLAN.md step 3): the same
+# skill, reference, launcher and pins, its own rule, and the pinned version.
+set(cursor "${SOURCE_DIR}/cursor/plugin")
+foreach(pair
+    "skills/nymph/SKILL.md=claude/skill/nymph/SKILL.md"
+    "skills/nymph/reference.md=docs/agent-guide.md"
+    "rules/nymph.mdc=cursor/rule/nymph.mdc.in"
+    "bin/nymph=claude/plugin/bin/nymph"
+    "bin/checksums.txt=claude/plugin/bin/checksums.txt")
+  string(REPLACE "=" ";" pair "${pair}")
+  list(GET pair 0 copy)
+  list(GET pair 1 original)
+  execute_process(COMMAND "${CMAKE_COMMAND}" -E compare_files "${cursor}/${copy}" "${SOURCE_DIR}/${original}"
+                  RESULT_VARIABLE different)
+  if(different)
+    list(APPEND stale "cursor/plugin/${copy}")
+  endif()
+endforeach()
+file(READ "${cursor}/.cursor-plugin/plugin.json" manifest)
+string(JSON cursor_version GET "${manifest}" version)
+if(NOT cursor_version STREQUAL pinned)
+  list(APPEND stale "cursor/plugin/.cursor-plugin/plugin.json (version ${cursor_version}, not the pinned ${pinned})")
+endif()
 if(stale)
   message(FATAL_ERROR "out of date: ${stale}; run: cmake --build <build> --target nymph-plugin-sync")
 endif()
-message(STATUS "claude/plugin is in sync")
+message(STATUS "claude/plugin and cursor/plugin are in sync")

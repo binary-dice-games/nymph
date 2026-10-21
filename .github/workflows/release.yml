@@ -213,12 +213,13 @@ jobs:
           git config user.name "nymph release"
           git config user.email "nymph-release@users.noreply.github.com"
           git checkout -b "$branch"
-          git add claude/plugin/.claude-plugin/plugin.json claude/plugin/bin/checksums.txt
-          git commit -m "Claude Code plugin: pin nymph $VERSION"
+          git add claude/plugin/.claude-plugin/plugin.json claude/plugin/bin/checksums.txt \
+            cursor/plugin/.cursor-plugin/plugin.json cursor/plugin/bin/checksums.txt
+          git commit -m "Claude Code and Cursor plugins: pin nymph $VERSION"
           git push origin "$branch"
           gh pr create --repo "$GITHUB_REPOSITORY" --head "$branch" \
-            --title "Claude Code plugin: pin nymph $VERSION" \
-            --body "Pins the executables of the nymph $VERSION release in the Claude Code plugin and sets its version (spec/07_release_pipeline/DESIGN.md section 4.5). Opened by the release workflow."
+            --title "Claude Code and Cursor plugins: pin nymph $VERSION" \
+            --body "Pins the executables of the nymph $VERSION release in the Claude Code and Cursor plugins and sets their version (spec/07_release_pipeline/DESIGN.md section 4.5). Opened by the release workflow."
           gh pr merge "$branch" --repo "$GITHUB_REPOSITORY" --auto --squash ||
             echo "::warning::auto-merge is off for this repository: merge the pull request by hand"
 

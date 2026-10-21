@@ -1,8 +1,10 @@
 # MIT License © 2026 Binary Dice Games
 #
 # Script mode: brings the Claude Code plugin in claude/plugin/ up to date
-# (spec/06_claude_integration/DESIGN.md section 4.6). Its outputs are
-# committed, since the plugin installs from the repository:
+# (spec/06_claude_integration/DESIGN.md section 4.6), then the Cursor plugin
+# in cursor/plugin/ (spec/12_cursor_integration/DESIGN.md section 4.1),
+# which gets the same skill, launcher and pins. Their outputs are
+# committed, since the plugins install from the repository. Claude's:
 #
 #   bin/checksums.txt             the executables of release VERSION from
 #                                 the SHA256SUMS files in SUMS (none: kept)
@@ -59,3 +61,17 @@ string(REPLACE "@NYMPH_VERSION@" "${pinned}" manifest "${manifest}")
 file(WRITE "${plugin}/.claude-plugin/plugin.json" "${manifest}")
 configure_file("${SOURCE_DIR}/claude/skill/nymph/SKILL.md" "${plugin}/skills/nymph/SKILL.md" COPYONLY)
 configure_file("${SOURCE_DIR}/docs/agent-guide.md" "${plugin}/skills/nymph/reference.md" COPYONLY)
+
+# The Cursor plugin in cursor/plugin/ (spec/12_cursor_integration/DESIGN.md
+# section 4.1): the same skill, reference, launcher and pins as the Claude
+# plugin's (which Cursor's ${CURSOR_PLUGIN_ROOT} lets it run unchanged),
+# plus its own manifest and rule.
+set(cursor "${SOURCE_DIR}/cursor/plugin")
+file(READ "${SOURCE_DIR}/cursor/plugin.json.in" manifest)
+string(REPLACE "@NYMPH_VERSION@" "${pinned}" manifest "${manifest}")
+file(WRITE "${cursor}/.cursor-plugin/plugin.json" "${manifest}")
+configure_file("${SOURCE_DIR}/cursor/rule/nymph.mdc.in" "${cursor}/rules/nymph.mdc" COPYONLY)
+configure_file("${SOURCE_DIR}/claude/skill/nymph/SKILL.md" "${cursor}/skills/nymph/SKILL.md" COPYONLY)
+configure_file("${SOURCE_DIR}/docs/agent-guide.md" "${cursor}/skills/nymph/reference.md" COPYONLY)
+configure_file("${plugin}/bin/nymph" "${cursor}/bin/nymph" COPYONLY)
+configure_file("${plugin}/bin/checksums.txt" "${cursor}/bin/checksums.txt" COPYONLY)

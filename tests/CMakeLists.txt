@@ -281,6 +281,19 @@ if(NYMPH_POWERSHELL)
             ${PROJECT_SOURCE_DIR}/packaging/install/install.ps1 ${CMAKE_CURRENT_BINARY_DIR}/install_script_ps1)
 endif()
 
+# ── Cursor plugin (spec/12_cursor_integration step 3) ───────────────────────
+
+add_test(NAME nymph_cursor_plugin_valid
+  COMMAND ${CMAKE_COMMAND} -DSOURCE_DIR=${PROJECT_SOURCE_DIR}
+          -P ${CMAKE_CURRENT_SOURCE_DIR}/cursor_plugin_check.cmake)
+if(NOT WIN32 AND NYMPH_SH)
+  # The Cursor copy of the launcher: download, verify, cache; a tampered file is never run.
+  add_test(NAME nymph_cursor_plugin_launcher
+    COMMAND ${NYMPH_SH} ${CMAKE_CURRENT_SOURCE_DIR}/plugin_launcher.sh
+            ${PROJECT_SOURCE_DIR}/cursor/plugin/bin/nymph ${CMAKE_CURRENT_BINARY_DIR}/cursor_plugin_launcher)
+  set_tests_properties(nymph_cursor_plugin_launcher PROPERTIES SKIP_RETURN_CODE 77)
+endif()
+
 # ── Plugin pin and version (spec/07_release_pipeline step 6) ────────────────
 
 add_test(NAME nymph_plugin_sync_versions
