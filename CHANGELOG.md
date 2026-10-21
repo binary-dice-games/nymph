@@ -15,6 +15,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The Linux release executable links glibc dynamically (libstdc++ stays inside) so `nymph view` works; it needs glibc 2.39 or newer.
 
 ### Fixed
+- `nymph mcp`: a failed `output_path` write names the absolute path and suggests giving one.
 
 - The Windows and Linux release executables include `nymph view`.
 - `nymph view --edit`: clicking a diagram's shapes and arrows (nodes, links, messages, participants and their lifelines, notes, fragments) selects their element instead of the whole diagram.

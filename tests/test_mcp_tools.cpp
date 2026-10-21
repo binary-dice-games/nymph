@@ -250,6 +250,17 @@ TEST_F(mcp_tools, render_errors_match_the_cli_and_leave_the_output_untouched) {
   EXPECT_EQ(inline_text, "source" + from_file.substr(path("bad.yaml").size()));
 }
 
+TEST_F(mcp_tools, render_names_the_path_it_cannot_write) {
+  const std::string absolute = (dir_ / "no_such_dir" / "out.png").string();
+  const std::string absolute_error = error_text(call("render_chart", {{"source", kSource}, {"output_path", absolute}}));
+  EXPECT_EQ(absolute_error, absolute + ": cannot be written");
+  const std::string relative_error =
+      error_text(call("render_chart", {{"source", kSource}, {"output_path", "no_such_dir/out.png"}}));
+  EXPECT_NE(relative_error.find("out.png: cannot be written"), std::string::npos) << relative_error;
+  EXPECT_NE(relative_error.find("give an absolute path"), std::string::npos) << relative_error;
+  EXPECT_TRUE(fs::path(relative_error.substr(0, relative_error.find(": cannot"))).is_absolute()) << relative_error;
+}
+
 TEST_F(mcp_tools, render_refuses_bad_arguments) {
   EXPECT_NE(error_text(call("render_chart")).find("exactly one of 'source' and 'input_path'"), std::string::npos);
   EXPECT_NE(

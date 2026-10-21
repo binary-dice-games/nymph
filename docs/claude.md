@@ -10,7 +10,7 @@ zoom, hover for values, and Claude follows the view you leave. Design:
 | Claude | Install | What you get |
 |---|---|---|
 | Claude Code | `/plugin install nymph --marketplace binary-dice-games/nymph` | The nymph tools, the `nymph` command and the nymph skill. In the terminal, charts are files in your project; in the desktop app's Code tab they are also live in the conversation. |
-| Claude Desktop (macOS, Windows) | Double-click `nymph-<version>-macos-universal.mcpb` or `nymph-<version>-windows-x86_64.mcpb` | The nymph tools; charts live in the conversation. |
+| Claude Desktop (macOS, Windows) | Double-click `nymph-<version>-macos-universal.mcpb` or `nymph-<version>-windows-x86_64.mcpb` | The nymph tools. Charts are live in the **Code tab**; a plain chat that Desktop routes through its device bridge (tool names `mcp__remote-devices__nymph__...`) returns the PNG only. |
 | claude.ai (web, mobile) | Upload `nymph-skill-<version>.zip` as a skill | Claude runs nymph in its code sandbox and gives you the PNG. No live chart. |
 | Any MCP client | Run `nymph mcp` (below) | The tools; live charts where the client shows MCP Apps. |
 
@@ -119,7 +119,12 @@ Cursor has its own plugin and `mcp.json` entry: [cursor.md](cursor.md).
 - The YAML stays inside the PNG only while the file is copied byte for
   byte; chat apps that re-encode images drop it, so keep the YAML too.
 - The live chart needs a client that shows MCP Apps and lets them run
-  WebAssembly (Claude's do); elsewhere you get the PNG.
+  WebAssembly (Claude's do); elsewhere you get the PNG. In Claude Desktop
+  2.42304.2 (Windows) a chat session whose tools run through the device
+  bridge gets only the PNG and the text, not the widget; the Code tab shows
+  it (checked 2026-10-22).
+- A relative `output_path` is resolved in the server's working directory,
+  which an extension host may not let it write to; give an absolute path.
 - On Windows, the Claude Code plugin's launcher runs through the `sh` of
   Git for Windows, which Claude Code requires; this is not yet verified.
 - PNGs are identical byte for byte on every machine for one nymph build;

@@ -102,9 +102,20 @@ std::string absolute_of(const std::string& path) {
   return ec ? path : p.lexically_normal().string();
 }
 
+/// Writes an output file. A relative path is resolved against the server's
+/// working directory, which an extension host may not let it write to, so a
+/// failure names the absolute path and suggests giving one.
 void write_file(const std::string& path, std::string_view data) {
   std::ostringstream unused; // write_output() writes here only for "-"
-  write_output(path, data, unused);
+  try {
+    write_output(path, data, unused);
+  } catch (const cli_failure& e) {
+    std::string message = absolute_of(path) + ": " + e.message;
+    if (!fs::path(path).is_absolute()) {
+      message += " (the relative path is resolved in the server's working directory; give an absolute path)";
+    }
+    throw tool_error(message);
+  }
 }
 
 // ── Charts ──────────────────────────────────────────────────────────────────
