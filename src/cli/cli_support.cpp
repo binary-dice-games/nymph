@@ -14,6 +14,7 @@
 #include "fonts/embedded_fonts.hpp"
 #include "nymph.hpp"
 #include "png/png_meta.hpp"
+#include "shapes/shape_catalog.hpp"
 
 namespace bdg::nymph {
 
@@ -133,6 +134,14 @@ std::string fonts_text() {
     text += std::string(f.name) + (f.data == nullptr ? " (not embedded)" : "") + "\n";
   }
   return text;
+}
+
+std::string shapes_listing(const std::string& name) {
+  try {
+    return shapes_text(name);
+  } catch (const std::invalid_argument& e) {
+    throw cli_failure{"shapes", e.what()};
+  }
 }
 
 std::string schema_type_text(const std::string& type) {

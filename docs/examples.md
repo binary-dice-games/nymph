@@ -1059,6 +1059,237 @@ root:
     - {type: Note, text: runs on every push, attach: [build]}
 ```
 
+## Component diagram
+
+Components with provided and required interfaces. The ball-and-socket connectors are not written: a component that `provides` an interface name and another that `requires` it are joined automatically; `ISmtp`, which nobody provides, is drawn as a socket on a stub. `Shop` contains two components, so it is a frame around them.
+
+![Component diagram](../examples/uml_component.png)
+
+[`examples/uml_component.yaml`](../examples/uml_component.yaml):
+
+```yaml
+nymph: 1
+description: A shop's components and the interfaces that wire them together.
+image: {width: 900, height: 480}
+root:
+  type: ComponentDiagram
+  title: Online shop
+  children:
+    - {type: Component, id: web, name: Web app, requires: [IOrders, IAuth]}
+    - type: Component
+      id: shop
+      name: Shop
+      children:
+        - {type: Component, id: orders, name: Orders, provides: [IOrders], requires: [IPay]}
+        - {type: Component, id: billing, name: Billing, provides: [IPay]}
+    - {type: Component, id: auth, name: Auth service, provides: [IAuth]}
+    - {type: Component, id: mail, name: Mailer, requires: [ISmtp]}
+    - {type: ComponentLink, from: orders, to: mail, kind: Dependency, label: notifies}
+```
+
+## Deployment diagram
+
+Nodes with what is deployed on them: nesting an artifact or a component inside a node deploys it there. A `DeploymentLink` is a communication path between nodes.
+
+![Deployment diagram](../examples/uml_deployment.png)
+
+[`examples/uml_deployment.yaml`](../examples/uml_deployment.yaml):
+
+```yaml
+nymph: 1
+description: An app server running a web archive, talking to a database host.
+image: {width: 900, height: 460}
+root:
+  type: DeploymentDiagram
+  title: Production
+  children:
+    - type: DeploymentNode
+      id: srv
+      name: App server
+      kind: Device
+      children:
+        - type: DeploymentNode
+          id: jvm
+          name: JVM 21
+          kind: ExecutionEnvironment
+          children:
+            - {type: Artifact, id: war, name: shop.war}
+            - {type: Component, id: shop, name: Shop}
+    - type: DeploymentNode
+      id: db
+      name: Database host
+      kind: Device
+      children:
+        - {type: Artifact, id: schema, name: schema.sql}
+    - {type: DeploymentLink, from: srv, to: db, label: JDBC / TLS}
+```
+
+## Package diagram
+
+Packages, nested as written, and the dependencies between them (`Import`, `Access`, `Merge` or a plain `Dependency`).
+
+![Package diagram](../examples/uml_package.png)
+
+[`examples/uml_package.yaml`](../examples/uml_package.yaml):
+
+```yaml
+nymph: 1
+description: Layering of an application's packages.
+image: {width: 900, height: 480}
+root:
+  type: PackageDiagram
+  title: Layers
+  children:
+    - type: Package
+      id: ui
+      name: ui
+      children:
+        - {type: PackageItem, id: view, name: OrderView}
+        - {type: PackageItem, id: ctl, name: OrderController}
+    - type: Package
+      id: domain
+      name: domain
+      children:
+        - {type: PackageItem, id: order, name: Order}
+        - {type: PackageItem, id: repo, name: OrderRepository, kind: Interface}
+    - {type: Package, id: infra, name: infrastructure}
+    - {type: PackageRelation, from: ui, to: domain, kind: Import}
+    - {type: PackageRelation, from: infra, to: domain, kind: Access}
+```
+
+## Object diagram
+
+Instances with slot values, on the class diagram's layout. The header "name : class" is underlined; a missing name draws an anonymous instance.
+
+![Object diagram](../examples/uml_object.png)
+
+[`examples/uml_object.yaml`](../examples/uml_object.yaml):
+
+```yaml
+nymph: 1
+description: An order, its customer and the line items at one moment.
+image: {width: 900, height: 420}
+root:
+  type: ObjectDiagram
+  title: A paid order
+  children:
+    - {type: Object, id: o1, name: order1, class: Order, slots: ["total = 42.50", "state = PAID"]}
+    - {type: Object, id: c1, name: ana, class: Customer, slots: ["email = ana@example.com"]}
+    - {type: Object, id: l1, class: OrderLine, slots: ["sku = A-17", "qty = 2"]}
+    - {type: Object, id: l2, class: OrderLine, slots: ["sku = B-03", "qty = 1"]}
+    - {type: ObjectLink, from: o1, to: c1, label: placedBy, kind: DirectedAssociation}
+    - {type: ObjectLink, from: o1, to: l1, kind: Composition}
+    - {type: ObjectLink, from: o1, to: l2, kind: Composition}
+```
+
+## Tree
+
+A hierarchy written by nesting: each parent is centred over its children, siblings keep their written order, and `direction`, `edge_style` and a per-node `shape` change the look.
+
+![Tree](../examples/tree.png)
+
+[`examples/tree.yaml`](../examples/tree.yaml):
+
+```yaml
+nymph: 1
+description: The folders of a source tree.
+image: {width: 900, height: 420}
+root:
+  type: TreeDiagram
+  title: Source layout
+  children:
+    - type: TreeItem
+      text: src
+      children:
+        - {type: TreeItem, text: core}
+        - type: TreeItem
+          text: elements
+          children: [{type: TreeItem, text: uml}, {type: TreeItem, text: ui}, {type: TreeItem, text: tree}]
+        - type: TreeItem
+          text: render
+          children: [{type: TreeItem, text: rasterizers}]
+```
+
+## Mind map
+
+A root idea in the middle, branches to both sides balanced automatically (pin one with `side`), each branch in its own colour; a `MindLink` joins two nodes across branches without moving anything.
+
+![Mind map](../examples/mind_map.png)
+
+[`examples/mind_map.yaml`](../examples/mind_map.yaml):
+
+```yaml
+nymph: 1
+description: A launch plan as a mind map.
+image: {width: 900, height: 540}
+root:
+  type: MindMap
+  children:
+    - type: MindNode
+      text: Launch plan
+      children:
+        - type: MindNode
+          text: Marketing
+          children: [{type: MindNode, text: Blog}, {type: MindNode, text: Video}, {type: MindNode, text: Social}]
+        - type: MindNode
+          id: eng
+          text: Engineering
+          children: [{type: MindNode, text: Backend}, {type: MindNode, text: Frontend}]
+        - type: MindNode
+          id: qa
+          text: QA
+          children: [{type: MindNode, text: Regression}, {type: MindNode, text: Load test}]
+        - type: MindNode
+          text: Support
+          children: [{type: MindNode, text: Docs}, {type: MindNode, text: Training}]
+    - {type: MindLink, from: qa, to: eng, label: blocks}
+```
+
+## Org chart
+
+Cards with a portrait, a name and a title. `children_layout: Hanging` lists a team below its manager, `staff: true` puts an assistant beside the manager, `vacant: true` draws an open position and an `OrgLink` is a dotted reporting line.
+
+![Org chart](../examples/org_chart.png)
+
+[`examples/org_chart.yaml`](../examples/org_chart.yaml):
+
+```yaml
+nymph: 1
+description: A small company's org chart.
+image: {width: 1000, height: 560}
+root:
+  type: OrgChart
+  title: Acme Inc.
+  children:
+    - type: Person
+      id: ceo
+      name: Ana Ruiz
+      title: CEO
+      image: person
+      children:
+        - {type: Person, name: Leo Park, title: Executive assistant, staff: true}
+        - type: Person
+          id: eng
+          name: Mia Chen
+          title: VP Engineering
+          image: person
+          children_layout: Hanging
+          children:
+            - {type: Person, name: Sam Ortiz, title: Backend lead}
+            - {type: Person, name: Kai Novak, title: Frontend lead}
+            - {type: Person, name: Zoe Hall, title: QA lead}
+        - type: Person
+          id: ops
+          name: Tom Reyes
+          title: COO
+          image: person
+          children:
+            - {type: Person, name: Ines Vega, title: Support manager}
+            - {type: Person, title: Logistics manager, vacant: true}
+        - {type: Person, id: cfo, name: Eva Lund, title: CFO, image: person}
+    - {type: OrgLink, from: cfo, to: eng, label: budget}
+```
+
 ## Gantt chart
 
 Three sections with their own colours, tasks placed by `after` (drawn as arrows), `Done` / `Active` / `Critical` statuses, two milestones and a `today` line.

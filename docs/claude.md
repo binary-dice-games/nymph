@@ -103,6 +103,7 @@ download menu, since chat frames usually cannot save files.
 | `extract_chart` | The YAML a nymph PNG carries |
 | `chart_schema` | The fields of one element type, or of all |
 | `list_fonts` | The names a chart's `font` accepts |
+| `list_shapes` | The shape library (the names a node's `shape` accepts); with `name`, the details of one shape |
 
 Errors name the line and column of the source, as on the command line
 ([cli.md](cli.md)). The server also offers [agent-guide.md](agent-guide.md)

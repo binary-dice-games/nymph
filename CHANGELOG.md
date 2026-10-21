@@ -9,6 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Shape library: about 100 editable SVG shapes in `resources/shapes/` (basic geometry, flowchart symbols, arrows, callouts, UML and network icons, containers). The `Shape` element draws one in a layout; `FlowNode` takes any of them in its new `symbol` field; `nymph shapes [<name>]` and the MCP tool `list_shapes` list them, and `docs/shapes.md` shows them.
+- UML component, deployment, package and object diagrams (`ComponentDiagram`, `DeploymentDiagram`, `PackageDiagram`, `ObjectDiagram`); component interfaces are wired from their names.
+- `TreeDiagram`, `MindMap` and `OrgChart`: hierarchies written by nesting, laid out as tidy trees (a mind map grows to both sides, an org chart has portraits, hanging teams, assistants and vacancies).
 - Cursor plugin (`cursor/plugin/`, listed by `.cursor-plugin/marketplace.json`): the nymph tools, skill and a rule for Cursor's agent; `docs/cursor.md` also gives the `mcp.json` entry for the `nymph mcp` server. Not yet run in Cursor.
 
 - Browser extension for Firefox 140 or later: a release file `nymph-extension-firefox-<version>.zip` (load it as a temporary add-on; not yet on addons.mozilla.org). Where the browser withholds site access (Firefox, Safari), the toolbar button and the options page say so and ask for it. The "Copy the instructions" button of the options page works in every browser; the toolbar button's menu is skipped where the browser has none.

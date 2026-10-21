@@ -1,0 +1,17 @@
+nymph: 1
+description: A shop's components and the interfaces that wire them together.
+image: {width: 900, height: 480}
+root:
+  type: ComponentDiagram
+  title: Online shop
+  children:
+    - {type: Component, id: web, name: Web app, requires: [IOrders, IAuth]}
+    - type: Component
+      id: shop
+      name: Shop
+      children:
+        - {type: Component, id: orders, name: Orders, provides: [IOrders], requires: [IPay]}
+        - {type: Component, id: billing, name: Billing, provides: [IPay]}
+    - {type: Component, id: auth, name: Auth service, provides: [IAuth]}
+    - {type: Component, id: mail, name: Mailer, requires: [ISmtp]}
+    - {type: ComponentLink, from: orders, to: mail, kind: Dependency, label: notifies}

@@ -1,0 +1,22 @@
+nymph: 1
+description: Layering of an application's packages.
+image: {width: 900, height: 480}
+root:
+  type: PackageDiagram
+  title: Layers
+  children:
+    - type: Package
+      id: ui
+      name: ui
+      children:
+        - {type: PackageItem, id: view, name: OrderView}
+        - {type: PackageItem, id: ctl, name: OrderController}
+    - type: Package
+      id: domain
+      name: domain
+      children:
+        - {type: PackageItem, id: order, name: Order}
+        - {type: PackageItem, id: repo, name: OrderRepository, kind: Interface}
+    - {type: Package, id: infra, name: infrastructure}
+    - {type: PackageRelation, from: ui, to: domain, kind: Import}
+    - {type: PackageRelation, from: infra, to: domain, kind: Access}

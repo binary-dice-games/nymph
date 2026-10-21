@@ -71,6 +71,8 @@ add_library(nymph STATIC
   elements/sankey.cpp
   elements/layout_elements.hpp
   elements/layout_elements.cpp
+  elements/shape_element.hpp
+  elements/shape_element.cpp
   elements/ui/ui_common.hpp
   elements/ui/ui_common.cpp
   elements/ui/screen.cpp
@@ -86,6 +88,8 @@ add_library(nymph STATIC
   placeholders/placeholders.cpp
   placeholders/svg_shapes.hpp
   placeholders/svg_shapes.cpp
+  shapes/shape_catalog.hpp
+  shapes/shape_catalog.cpp
   elements/ui/widgets.cpp
   elements/ui/register_ui.cpp
   elements/uml/uml.hpp
@@ -100,6 +104,11 @@ add_library(nymph STATIC
   elements/uml/er_diagram.cpp
   elements/uml/dataflow_diagram.cpp
   elements/uml/network_diagram.cpp
+  elements/uml/component_diagram.cpp
+  elements/uml/deployment_diagram.cpp
+  elements/uml/package_diagram.cpp
+  elements/uml/object_diagram.cpp
+  elements/uml/tree_diagrams.cpp
   layout/layout.hpp
   layout/layout.cpp
   layout/sankey_layout.hpp
@@ -122,6 +131,8 @@ include("${PROJECT_SOURCE_DIR}/cmake/NymphFonts.cmake")
 nymph_embed_fonts(nymph)
 include("${PROJECT_SOURCE_DIR}/cmake/NymphPlaceholders.cmake")
 nymph_embed_placeholders(nymph)
+include("${PROJECT_SOURCE_DIR}/cmake/NymphShapes.cmake")
+nymph_embed_shapes(nymph)
 target_include_directories(nymph PUBLIC
   ${CMAKE_CURRENT_SOURCE_DIR}
   ${CMAKE_CURRENT_BINARY_DIR}/generated

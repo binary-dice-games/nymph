@@ -36,6 +36,7 @@ constexpr const char* kUsage =
     "       nymph schema [<Type>] [--markdown]    element reference\n"
     "       nymph schema --markdown --paged <dir> write it in pages: <dir>/elements.md, <dir>/elements/<Type>.md\n"
     "       nymph fonts [--licenses]              embedded fonts (names for `font:`), or their licences\n"
+    "       nymph shapes [<name>]                 the shape library (names for `shape:`), or the details of one\n"
     "       nymph rasterizers                     whether OpenGL can be used here, and why not\n"
     "       nymph view <in> [--theme <t>] [--fit <f>]  open <in> in a window: pan, zoom, hover (nymph view --help)\n"
     "       nymph mcp [--rasterizer <r>]          run as an MCP server on stdin / stdout (for AI agents)\n"
@@ -64,7 +65,7 @@ options parse(std::span<const std::string_view> args) {
   size_t i = 0;
   if (!args.empty() &&
       (args[0] == "render" || args[0] == "extract" || args[0] == "check" || args[0] == "schema" || args[0] == "fonts" ||
-       args[0] == "rasterizers")) {
+       args[0] == "shapes" || args[0] == "rasterizers")) {
     o.command = std::string(args[0]);
     i = 1;
   }
@@ -231,6 +232,16 @@ int do_fonts(const options& o, std::ostream& out) {
   return 0;
 }
 
+/// `shapes`: every shape of the library as `category/name`, or the details
+/// of the one named.
+int do_shapes(const options& o, std::ostream& out) {
+  if (o.positional.size() > 1 || o.output) {
+    throw usage_error{"shapes takes at most one shape name"};
+  }
+  out << shapes_listing(o.positional.empty() ? std::string() : o.positional[0]);
+  return 0;
+}
+
 /// `rasterizers`: one line per rasterizer, saying whether it can be used.
 int do_rasterizers(const options& o, std::ostream& out, const renderer_test_options& gl_options) {
   if (!o.positional.empty() || o.output) {
@@ -296,6 +307,9 @@ int run_cli(
     }
     if (o.command == "fonts") {
       return do_fonts(o, out);
+    }
+    if (o.command == "shapes") {
+      return do_shapes(o, out);
     }
     if (o.positional.size() != 1) {
       throw usage_error{o.positional.empty() ? "no input" : "too many inputs"};

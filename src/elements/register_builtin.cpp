@@ -7,6 +7,7 @@
 #include "elements/plot2d.hpp"
 #include "elements/plot3d.hpp"
 #include "elements/sankey.hpp"
+#include "elements/shape_element.hpp"
 #include "elements/ui/ui_common.hpp"
 #include "elements/uml/uml.hpp"
 
@@ -16,6 +17,7 @@ void register_builtin_elements(registry& reg) {
   register_plot2d(reg);
   register_plot3d(reg);
   register_layout(reg);
+  register_shape_elements(reg);
   register_uml(reg);
   register_gantt(reg);
   register_sankey(reg);

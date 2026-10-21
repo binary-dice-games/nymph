@@ -1,0 +1,162 @@
+nymph: 1
+description: The built-in shape library, by category.
+image: {width: 1030, height: 1990, font_size: 11}
+root:
+  type: VerticalLayout
+  spacing: 6
+  children:
+    - {type: SeparatorText, label: "basic"}
+    - type: HorizontalLayout
+      spacing: 6
+      children:
+        - {type: Shape, shape: brace_left, text: brace_left, width: 120, height: 106}
+        - {type: Shape, shape: bracket_left, text: bracket_left, width: 120, height: 106}
+        - {type: Shape, shape: bracket_right, text: bracket_right, width: 120, height: 106}
+        - {type: Shape, shape: circle, text: circle, width: 120, height: 106}
+        - {type: Shape, shape: cloud, text: cloud, width: 120, height: 106}
+        - {type: Shape, shape: cross, text: cross, width: 120, height: 106}
+        - {type: Shape, shape: cube, text: cube, width: 120, height: 106}
+        - {type: Shape, shape: cylinder, text: cylinder, width: 120, height: 106}
+    - type: HorizontalLayout
+      spacing: 6
+      children:
+        - {type: Shape, shape: diamond, text: diamond, width: 120, height: 106}
+        - {type: Shape, shape: ellipse, text: ellipse, width: 120, height: 106}
+        - {type: Shape, shape: heart, text: heart, width: 120, height: 106}
+        - {type: Shape, shape: hexagon, text: hexagon, width: 120, height: 106}
+        - {type: Shape, shape: octagon, text: octagon, width: 120, height: 106}
+        - {type: Shape, shape: parallelogram, text: parallelogram, width: 120, height: 106}
+        - {type: Shape, shape: pentagon, text: pentagon, width: 120, height: 106}
+        - {type: Shape, shape: plus, text: plus, width: 120, height: 106}
+    - type: HorizontalLayout
+      spacing: 6
+      children:
+        - {type: Shape, shape: rectangle, text: rectangle, width: 120, height: 106}
+        - {type: Shape, shape: right_triangle, text: right_triangle, width: 120, height: 106}
+        - {type: Shape, shape: rounded_rectangle, text: rounded_rectangle, width: 120, height: 106}
+        - {type: Shape, shape: square, text: square, width: 120, height: 106}
+        - {type: Shape, shape: stadium, text: stadium, width: 120, height: 106}
+        - {type: Shape, shape: star, text: star, width: 120, height: 106}
+        - {type: Shape, shape: trapezoid, text: trapezoid, width: 120, height: 106}
+        - {type: Shape, shape: triangle, text: triangle, width: 120, height: 106}
+    - {type: SeparatorText, label: "flowchart"}
+    - type: HorizontalLayout
+      spacing: 6
+      children:
+        - {type: Shape, shape: card, text: card, width: 120, height: 106}
+        - {type: Shape, shape: collate, text: collate, width: 120, height: 106}
+        - {type: Shape, shape: connector, text: connector, width: 120, height: 106}
+        - {type: Shape, shape: data, text: data, width: 120, height: 106}
+        - {type: Shape, shape: database, text: database, width: 120, height: 106}
+        - {type: Shape, shape: decision, text: decision, width: 120, height: 106}
+        - {type: Shape, shape: delay, text: delay, width: 120, height: 106}
+        - {type: Shape, shape: display, text: display, width: 120, height: 106}
+    - type: HorizontalLayout
+      spacing: 6
+      children:
+        - {type: Shape, shape: document, text: document, width: 120, height: 106}
+        - {type: Shape, shape: extract, text: extract, width: 120, height: 106}
+        - {type: Shape, shape: internal_storage, text: internal_storage, width: 120, height: 106}
+        - {type: Shape, shape: manual_input, text: manual_input, width: 120, height: 106}
+        - {type: Shape, shape: manual_operation, text: manual_operation, width: 120, height: 106}
+        - {type: Shape, shape: merge, text: merge, width: 120, height: 106}
+        - {type: Shape, shape: multi_document, text: multi_document, width: 120, height: 106}
+        - {type: Shape, shape: off_page_connector, text: off_page_connector, width: 120, height: 106}
+    - type: HorizontalLayout
+      spacing: 6
+      children:
+        - {type: Shape, shape: or, text: or, width: 120, height: 106}
+        - {type: Shape, shape: predefined_process, text: predefined_process, width: 120, height: 106}
+        - {type: Shape, shape: preparation, text: preparation, width: 120, height: 106}
+        - {type: Shape, shape: process, text: process, width: 120, height: 106}
+        - {type: Shape, shape: sort, text: sort, width: 120, height: 106}
+        - {type: Shape, shape: stored_data, text: stored_data, width: 120, height: 106}
+        - {type: Shape, shape: summing_junction, text: summing_junction, width: 120, height: 106}
+        - {type: Shape, shape: terminator, text: terminator, width: 120, height: 106}
+    - {type: SeparatorText, label: "arrows"}
+    - type: HorizontalLayout
+      spacing: 6
+      children:
+        - {type: Shape, shape: arrow_bent, text: arrow_bent, width: 120, height: 106}
+        - {type: Shape, shape: arrow_double, text: arrow_double, width: 120, height: 106}
+        - {type: Shape, shape: arrow_down, text: arrow_down, width: 120, height: 106}
+        - {type: Shape, shape: arrow_left, text: arrow_left, width: 120, height: 106}
+        - {type: Shape, shape: arrow_right, text: arrow_right, width: 120, height: 106}
+        - {type: Shape, shape: arrow_u_turn, text: arrow_u_turn, width: 120, height: 106}
+        - {type: Shape, shape: arrow_up, text: arrow_up, width: 120, height: 106}
+        - {type: Shape, shape: chevron, text: chevron, width: 120, height: 106}
+    - type: HorizontalLayout
+      spacing: 6
+      children:
+        - {type: Shape, shape: pentagon_arrow, text: pentagon_arrow, width: 120, height: 106}
+    - {type: SeparatorText, label: "callouts"}
+    - type: HorizontalLayout
+      spacing: 6
+      children:
+        - {type: Shape, shape: banner, text: banner, width: 120, height: 106}
+        - {type: Shape, shape: callout_box, text: callout_box, width: 120, height: 106}
+        - {type: Shape, shape: note, text: note, width: 120, height: 106}
+        - {type: Shape, shape: ribbon, text: ribbon, width: 120, height: 106}
+        - {type: Shape, shape: speech_bubble, text: speech_bubble, width: 120, height: 106}
+        - {type: Shape, shape: sticky_note, text: sticky_note, width: 120, height: 106}
+        - {type: Shape, shape: thought_bubble, text: thought_bubble, width: 120, height: 106}
+    - {type: SeparatorText, label: "uml"}
+    - type: HorizontalLayout
+      spacing: 6
+      children:
+        - {type: Shape, shape: actor, text: actor, width: 120, height: 106}
+        - {type: Shape, shape: artifact, text: artifact, width: 120, height: 106}
+        - {type: Shape, shape: boundary, text: boundary, width: 120, height: 106}
+        - {type: Shape, shape: component, text: component, width: 120, height: 106}
+        - {type: Shape, shape: control, text: control, width: 120, height: 106}
+        - {type: Shape, shape: deep_history, text: deep_history, width: 120, height: 106}
+        - {type: Shape, shape: entity, text: entity, width: 120, height: 106}
+        - {type: Shape, shape: final, text: final, width: 120, height: 106}
+    - type: HorizontalLayout
+      spacing: 6
+      children:
+        - {type: Shape, shape: flow_final, text: flow_final, width: 120, height: 106}
+        - {type: Shape, shape: fork_bar, text: fork_bar, width: 120, height: 106}
+        - {type: Shape, shape: history, text: history, width: 120, height: 106}
+        - {type: Shape, shape: initial, text: initial, width: 120, height: 106}
+        - {type: Shape, shape: interface_ball, text: interface_ball, width: 120, height: 106}
+        - {type: Shape, shape: interface_socket, text: interface_socket, width: 120, height: 106}
+        - {type: Shape, shape: lifeline_x, text: lifeline_x, width: 120, height: 106}
+        - {type: Shape, shape: node_3d, text: node_3d, width: 120, height: 106}
+    - type: HorizontalLayout
+      spacing: 6
+      children:
+        - {type: Shape, shape: object_box, text: object_box, width: 120, height: 106}
+        - {type: Shape, shape: package, text: package, width: 120, height: 106}
+        - {type: Shape, shape: signal_receive, text: signal_receive, width: 120, height: 106}
+        - {type: Shape, shape: signal_send, text: signal_send, width: 120, height: 106}
+    - {type: SeparatorText, label: "network"}
+    - type: HorizontalLayout
+      spacing: 6
+      children:
+        - {type: Shape, shape: access_point, text: access_point, width: 120, height: 106}
+        - {type: Shape, shape: container, text: container, width: 120, height: 106}
+        - {type: Shape, shape: firewall, text: firewall, width: 120, height: 106}
+        - {type: Shape, shape: function, text: function, width: 120, height: 106}
+        - {type: Shape, shape: internet, text: internet, width: 120, height: 106}
+        - {type: Shape, shape: laptop, text: laptop, width: 120, height: 106}
+        - {type: Shape, shape: load_balancer, text: load_balancer, width: 120, height: 106}
+        - {type: Shape, shape: mobile, text: mobile, width: 120, height: 106}
+    - type: HorizontalLayout
+      spacing: 6
+      children:
+        - {type: Shape, shape: queue, text: queue, width: 120, height: 106}
+        - {type: Shape, shape: router, text: router, width: 120, height: 106}
+        - {type: Shape, shape: server, text: server, width: 120, height: 106}
+        - {type: Shape, shape: storage, text: storage, width: 120, height: 106}
+        - {type: Shape, shape: switch, text: switch, width: 120, height: 106}
+        - {type: Shape, shape: user, text: user, width: 120, height: 106}
+        - {type: Shape, shape: workstation, text: workstation, width: 120, height: 106}
+    - {type: SeparatorText, label: "containers"}
+    - type: HorizontalLayout
+      spacing: 6
+      children:
+        - {type: Shape, shape: bordered_frame, text: bordered_frame, width: 120, height: 106}
+        - {type: Shape, shape: dashed_region, text: dashed_region, width: 120, height: 106}
+        - {type: Shape, shape: swimlane, text: swimlane, width: 120, height: 106}
+        - {type: Shape, shape: tabbed_folder, text: tabbed_folder, width: 120, height: 106}

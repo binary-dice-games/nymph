@@ -335,10 +335,28 @@ root:
 | `ERDiagram` (database) | `Entity` (a table) | `Relationship` (crow's foot) |
 | `DataFlowDiagram` | `ExternalEntity`, `Process`, `DataStore` | `DataFlow`, `TrustBoundary` (groups nodes) |
 | `NetworkDiagram` | `Device` (icon by `kind`) | `Link`, `Zone` (groups devices) |
+| `ComponentDiagram` | `Component` (`provides` / `requires` interface names; nested components form a frame) | `ComponentLink` |
+| `DeploymentDiagram` | `DeploymentNode` (nested), `Artifact`, `Component` | `DeploymentLink` |
+| `PackageDiagram` | `Package` (nested), `PackageItem` | `PackageRelation` |
+| `ObjectDiagram` | `Object` (`name`, `class`, `slots`) | `ObjectLink` |
 | `Flowchart` | `FlowNode`, `FlowGroup` (a box around nodes, mermaid's subgraph) | `FlowLink` |
 
 `Note` goes in every diagram. `Flowchart` is not UML: it draws any
 node-and-link diagram, with mermaid's flowchart shapes and link styles.
+
+**Component diagrams** wire themselves: a component that `provides: [IPay]` and another that `requires: [IPay]` are joined by a ball-and-socket connector; an interface with no partner is drawn on a stub, and two providers of one name are an error. In **deployment diagrams** a node, artifact or component written inside a `DeploymentNode` is deployed on it. Any node of a graph diagram may name a **library shape** (a `shape` field, `symbol` on `FlowNode`): `nymph shapes` lists the library, [docs/shapes.md](shapes.md) shows it, and the `Shape` element draws one on its own.
+
+### Trees, mind maps and org charts
+
+Hierarchies are written by nesting: the children of a node are the nodes below it. Positions are automatic (a tidy-tree layout keeps siblings in the written order and centres each parent over its children).
+
+| Diagram | Node | Also |
+|---|---|---|
+| `TreeDiagram` (`direction`, `edge_style`: Elbow, Curve, Straight) | `TreeItem` (`text`, `shape`, `collapsed`) | one root |
+| `MindMap` | `MindNode` (`text`, `side`: Left/Right on the root's children, `color` per branch, `collapsed`) | `MindLink` (`from`, `to` ids, `label`): a dashed curve that moves nothing |
+| `OrgChart` | `Person` (`name`, `title`, `department`, `image`: a placeholder name, `children_layout`: Horizontal/Hanging, `staff` assistant, `vacant`) | `OrgLink` |
+
+A node needs an `id` only when a link names it. See [docs/examples.md](examples.md).
 
 - **Ids.** Every node has an `id`, unique in the diagram; `name` (or
   `text`) is what is shown and defaults to the id. Edges name nodes by id

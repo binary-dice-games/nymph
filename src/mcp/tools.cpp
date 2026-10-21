@@ -264,6 +264,12 @@ json list_fonts(const json& args) {
   return text_result(fonts_text());
 }
 
+json list_shapes(const json& args) {
+  check_known(args, {"name"});
+  const std::optional<std::string> name = optional_string(args, "name");
+  return text_result(shapes_listing(name.value_or("")));
+}
+
 /// The App's fonts: the bytes of an embedded catalog font, by file name.
 json viewer_font(const json& args) {
   check_known(args, {"name"});
@@ -458,6 +464,20 @@ void add_builtin_tools(tool_registry& registry) {
         {"inputSchema", {{"type", "object"}, {"properties", json::object()}, {"additionalProperties", false}}},
         {"annotations", annotations("List fonts", true)}},
        list_fonts});
+
+  registry.add(
+      {{{"name", "list_shapes"},
+        {"title", "List shapes"},
+        {"description",
+         "The built-in shape library, one 'category/name' per line: the names a node's 'shape' field and the Shape "
+         "element accept. With 'name', the details of one shape (size, whether it is an icon or resizes to any size, "
+         "its text area)."},
+        {"inputSchema",
+         {{"type", "object"},
+          {"properties", {{"name", {{"type", "string"}, {"description", "One shape name, e.g. cloud."}}}}},
+          {"additionalProperties", false}}},
+        {"annotations", annotations("List shapes", true)}},
+       list_shapes});
 
   if (registry.options().viewer_html.empty()) {
     return;

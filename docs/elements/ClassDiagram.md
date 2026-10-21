@@ -74,7 +74,7 @@ Goes in: ClassDiagram.
 
 A note. In a graph diagram it sits beside the nodes it is attached to; in a sequence diagram it takes a row, over participants or beside one.
 
-Goes in: ActivityDiagram, ClassDiagram, DataFlowDiagram, ERDiagram, FlowGroup, Flowchart, Fragment, NetworkDiagram, SequenceDiagram, State, StateDiagram, TrustBoundary, UseCaseDiagram, Zone.
+Goes in: ActivityDiagram, ClassDiagram, Component, ComponentDiagram, DataFlowDiagram, DeploymentDiagram, DeploymentNode, ERDiagram, FlowGroup, Flowchart, Fragment, NetworkDiagram, ObjectDiagram, Package, PackageDiagram, SequenceDiagram, State, StateDiagram, TrustBoundary, UseCaseDiagram, Zone.
 
 | Field | Type | Default | Description |
 |---|---|---|---|

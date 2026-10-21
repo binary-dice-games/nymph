@@ -1,0 +1,24 @@
+nymph: 1
+description: A launch plan as a mind map.
+image: {width: 900, height: 540}
+root:
+  type: MindMap
+  children:
+    - type: MindNode
+      text: Launch plan
+      children:
+        - type: MindNode
+          text: Marketing
+          children: [{type: MindNode, text: Blog}, {type: MindNode, text: Video}, {type: MindNode, text: Social}]
+        - type: MindNode
+          id: eng
+          text: Engineering
+          children: [{type: MindNode, text: Backend}, {type: MindNode, text: Frontend}]
+        - type: MindNode
+          id: qa
+          text: QA
+          children: [{type: MindNode, text: Regression}, {type: MindNode, text: Load test}]
+        - type: MindNode
+          text: Support
+          children: [{type: MindNode, text: Docs}, {type: MindNode, text: Training}]
+    - {type: MindLink, from: qa, to: eng, label: blocks}

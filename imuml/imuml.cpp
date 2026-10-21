@@ -834,6 +834,133 @@ void ImUml::FlowLink(const char* from, const char* to, const char* label, ImUmlF
   AddEdge(d, ImUmlEdgeType_FlowLink, flags, from, to, label);
 }
 
+// ── Shape diagrams ───────────────────────────────────────────────────────────
+
+bool ImUml::BeginShapeDiagram(const char* title_id, const ImVec2& size, ImUmlDiagramFlags flags) {
+  return BeginDiagram(ImUmlDiagramKind_Shapes, title_id, size, flags);
+}
+
+namespace {
+
+void AddShapeItem(int type, const char* id, const char* text, const char* shape, const char* stereotype) {
+  ImUmlDiagram* d = CurrentDiagram();
+  IM_ASSERT((d->Kind == ImUmlDiagramKind_Shapes || d->Kind == ImUmlDiagramKind_Flowchart) &&
+            "ShapeNode()/BeginShapeGroup() need a shape diagram or a flowchart");
+  ImUmlNodeRec& n = ImUml::AddNode(d, type, 0, id, text);
+  n.Generic = ImUml::AddString(d, shape != nullptr && shape[0] != 0 ? shape : "rectangle", nullptr);
+  if (stereotype != nullptr && stereotype[0] != 0) {
+    n.Stereotype = ImUml::AddString(d, stereotype, nullptr);
+  }
+}
+
+} // namespace
+
+void ImUml::ShapeNode(const char* id, const char* text, const char* shape, const char* stereotype) {
+  AddShapeItem(ImUmlNodeType_ShapeNode, id, text, shape, stereotype);
+}
+
+void ImUml::BeginShapeGroup(const char* id, const char* title, const char* shape, const char* stereotype) {
+  AddShapeItem(ImUmlNodeType_ShapeGroup, id, title, shape, stereotype);
+  ImUmlDiagram* d = CurrentDiagram();
+  d->OpenStates.push_back(d->Nodes.Size - 1);
+}
+
+void ImUml::EndShapeGroup() {
+  ImUmlDiagram* d = CurrentDiagram();
+  IM_ASSERT(!d->OpenStates.empty() && "EndShapeGroup() without BeginShapeGroup()");
+  if (!d->OpenStates.empty()) {
+    d->OpenStates.pop_back();
+  }
+}
+
+void ImUml::ShapeLink(
+    const char* from,
+    const char* to,
+    const char* label,
+    ImUmlShapeLinkFlags flags,
+    const char* from_label,
+    const char* to_label) {
+  ImUmlDiagram* d = CurrentDiagram();
+  IM_ASSERT(d->Kind == ImUmlDiagramKind_Shapes);
+  ImUmlEdgeRec& e = AddEdge(d, ImUmlEdgeType_ShapeLink, flags, from, to, label);
+  if (from_label != nullptr && from_label[0] != 0) {
+    e.FromLabel = AddString(d, from_label, nullptr);
+  }
+  if (to_label != nullptr && to_label[0] != 0) {
+    e.ToLabel = AddString(d, to_label, nullptr);
+  }
+}
+
+// ── Tree diagrams ────────────────────────────────────────────────────────────
+
+bool ImUml::BeginTreeDiagram(const char* title_id, const ImVec2& size, ImUmlDiagramFlags flags) {
+  const bool open = BeginDiagram(ImUmlDiagramKind_Tree, title_id, size, flags);
+  if (open) {
+    ImUmlDiagram* d = Ctx().Current;
+    d->TreeMode = ImUmlTreeMode_Tidy;
+    d->EdgeStyle = ImUmlEdgeStyle_Elbow;
+    d->NodeSpacing = 20.0f;
+    d->RankSpacing = 40.0f;
+  }
+  return open;
+}
+
+void ImUml::SetupTree(ImUmlTreeMode mode) {
+  ImUmlDiagram* d = CurrentDiagram();
+  IM_ASSERT(d->Kind == ImUmlDiagramKind_Tree && !d->SetupLocked);
+  d->TreeMode = mode;
+  if (mode == ImUmlTreeMode_MindMap) {
+    d->EdgeStyle = ImUmlEdgeStyle_Curve;
+    d->Direction = ImUmlDirection_LeftRight;
+  }
+}
+
+void ImUml::BeginTreeNode(const ImUmlTreeNodeDesc& desc) {
+  ImUmlDiagram* d = CurrentDiagram();
+  IM_ASSERT(d->Kind == ImUmlDiagramKind_Tree);
+  ImUmlNodeRec& n = AddNode(d, ImUmlNodeType_TreeNode, 0, desc.Id, desc.Text);
+  if (desc.Id == nullptr || desc.Id[0] == 0) {
+    n.Id = 0; // anonymous: no id to name it by
+  }
+  if (desc.Text == nullptr) {
+    n.Name = AddString(d, desc.Id != nullptr ? desc.Id : "", nullptr);
+  }
+  if (desc.Subtext != nullptr && desc.Subtext[0] != 0) {
+    n.Stereotype = AddString(d, desc.Subtext, nullptr);
+  }
+  if (desc.Detail != nullptr && desc.Detail[0] != 0) {
+    n.Detail = AddString(d, desc.Detail, nullptr);
+  }
+  if (desc.Shape != nullptr && desc.Shape[0] != 0) {
+    n.Generic = AddString(d, desc.Shape, nullptr);
+  }
+  if (desc.Image != nullptr && desc.Image[0] != 0) {
+    n.Image = AddString(d, desc.Image, nullptr);
+  }
+  n.Side = desc.Side;
+  n.TreeFlags = (desc.Hanging ? ImUmlTreeFlags_Hanging : 0) | (desc.Staff ? ImUmlTreeFlags_Staff : 0) |
+                (desc.Vacant ? ImUmlTreeFlags_Vacant : 0);
+  n.Hidden = desc.Hidden;
+  if (desc.Color != 0) {
+    n.LineCol = desc.Color;
+  }
+  d->OpenStates.push_back(d->Nodes.Size - 1);
+}
+
+void ImUml::EndTreeNode() {
+  ImUmlDiagram* d = CurrentDiagram();
+  IM_ASSERT(!d->OpenStates.empty() && "EndTreeNode() without BeginTreeNode()");
+  if (!d->OpenStates.empty()) {
+    d->OpenStates.pop_back();
+  }
+}
+
+void ImUml::TreeLink(const char* from, const char* to, const char* label) {
+  ImUmlDiagram* d = CurrentDiagram();
+  IM_ASSERT(d->Kind == ImUmlDiagramKind_Tree);
+  AddEdge(d, ImUmlEdgeType_TreeLink, 0, from, to, label);
+}
+
 // ── ER diagrams ──────────────────────────────────────────────────────────────
 
 bool ImUml::BeginERDiagram(const char* title_id, const ImVec2& size, ImUmlDiagramFlags flags) {

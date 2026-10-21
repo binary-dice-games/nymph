@@ -74,6 +74,7 @@ Goes in: FlowGroup, Flowchart.
 | `id` | text | `""` | Unique id that links and notes name. |
 | `text` | text | `""` | Text in the node (a line break starts a new line); empty shows the id. |
 | `shape` | name | `Box` | Box (a step, default), Rounded, Stadium (start / end), Diamond (decision), Circle, Parallelogram (input / output), Hexagon (preparation), Cylinder (database) or Subroutine (a predefined process). (one of: Box, Rounded, Stadium, Diamond, Circle, Parallelogram, Hexagon, Cylinder, Subroutine) |
+| `symbol` | name | `none` | none (default: the `shape` above is used) or any shape of the library (`nymph shapes` lists them, docs/shapes.md shows them); it replaces `shape` and sizes the node around the text. (one of: none, access_point, actor, arrow_bent, arrow_double, arrow_down, arrow_left, arrow_right, arrow_u_turn, arrow_up, artifact, banner, bordered_frame, boundary, brace_left, bracket_left, bracket_right, callout_box, card, chevron, circle, cloud, collate, component, connector, container, control, cross, cube, cylinder, dashed_region, data, database, decision, deep_history, delay, diamond, display, document, ellipse, entity, extract, final, firewall, flow_final, fork_bar, function, heart, hexagon, history, initial, interface_ball, interface_socket, internal_storage, internet, laptop, lifeline_x, load_balancer, manual_input, manual_operation, merge, mobile, multi_document, node_3d, note, object_box, octagon, off_page_connector, or, package, parallelogram, pentagon, pentagon_arrow, plus, predefined_process, preparation, process, queue, rectangle, ribbon, right_triangle, rounded_rectangle, router, server, signal_receive, signal_send, sort, speech_bubble, square, stadium, star, sticky_note, storage, stored_data, summing_junction, swimlane, switch, tabbed_folder, terminator, thought_bubble, trapezoid, triangle, user, workstation) |
 | `rank` | text | `""` | Nodes with the same rank text are placed in one rank (Graphviz dot's rank=same); empty for none. |
 | `color` | colour | `""` | Outline colour; empty for the diagram's. |
 | `fill_color` | colour | `""` | Fill colour; empty for the diagram's. |
@@ -85,7 +86,7 @@ Goes in: FlowGroup, Flowchart.
 
 A note. In a graph diagram it sits beside the nodes it is attached to; in a sequence diagram it takes a row, over participants or beside one.
 
-Goes in: ActivityDiagram, ClassDiagram, DataFlowDiagram, ERDiagram, FlowGroup, Flowchart, Fragment, NetworkDiagram, SequenceDiagram, State, StateDiagram, TrustBoundary, UseCaseDiagram, Zone.
+Goes in: ActivityDiagram, ClassDiagram, Component, ComponentDiagram, DataFlowDiagram, DeploymentDiagram, DeploymentNode, ERDiagram, FlowGroup, Flowchart, Fragment, NetworkDiagram, ObjectDiagram, Package, PackageDiagram, SequenceDiagram, State, StateDiagram, TrustBoundary, UseCaseDiagram, Zone.
 
 | Field | Type | Default | Description |
 |---|---|---|---|
