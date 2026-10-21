@@ -6,6 +6,9 @@
 #
 #   cmake -DSOURCE_DIR=<repo> -P cursor_plugin_check.cmake
 
+# -P scripts start with no policies: quoted "mcp" would read the variable mcp.
+cmake_policy(VERSION 3.14)
+
 set(plugin "${SOURCE_DIR}/cursor/plugin")
 
 function(fail what)
@@ -19,7 +22,7 @@ if(NOT name STREQUAL "nymph")
   fail("manifest name is '${name}'")
 endif()
 string(JSON version GET "${manifest}" version)
-if(NOT version MATCHES "^[0-9]+\.[0-9]+\.[0-9]+$")
+if(NOT version MATCHES "^[0-9]+[.][0-9]+[.][0-9]+$")
   fail("manifest version '${version}' is not x.y.z")
 endif()
 foreach(key rules skills mcpServers logo)
