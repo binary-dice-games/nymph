@@ -4,8 +4,10 @@
 # (spec/06_claude_integration/DESIGN.md section 6), one file with no
 # shared-library dependency beyond the operating system's:
 #
-#   Linux        -static, NYMPH_OPENGL off (a static glibc cannot dlopen
-#                libEGL reliably; the software rasterizer is fast enough)
+#   Linux        glibc dynamic, libstdc++ and libgcc static, so it needs
+#                only glibc; NYMPH_OPENGL off (the software rasterizer is
+#                fast enough). A fully static glibc cannot dlopen libX11 /
+#                libGL: `nymph view` crashed, so glibc stays dynamic.
 #   MinGW        -static (libgcc, libstdc++, winpthread inside)
 #   MSVC         the static runtime (/MT)
 #   macOS        dynamic, but only on libSystem and libc++ (part of macOS;
@@ -39,7 +41,7 @@ endif()
 
 if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
   set(NYMPH_OPENGL OFF CACHE BOOL "" FORCE)
-  add_link_options(-static)
+  add_link_options(-static-libstdc++ -static-libgcc)
 elseif(MINGW)
   add_link_options(-static)
 endif()

@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- The Windows release executable is built with MSVC.
+- The Linux release executable links glibc dynamically (libstdc++ stays inside) so `nymph view` works; it needs glibc 2.39 or newer.
+
+### Fixed
+
+- The Windows and Linux release executables include `nymph view`.
+
 ## [0.1.0] - 2026-10-21
 
 ### Fixed

@@ -74,7 +74,7 @@ jobs:
         include:
           - { target: linux-x86_64, runner: ubuntu-24.04 }
           - { target: linux-arm64, runner: ubuntu-24.04-arm }
-          - { target: windows-msys2, runner: windows-latest }
+          - { target: windows-msvc, runner: windows-latest }
           - { target: macos-arm64, runner: macos-15 }
           - { target: macos-x86_64, runner: macos-15-intel }
     uses: ./.github/workflows/build.yml

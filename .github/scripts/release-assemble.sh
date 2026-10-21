@@ -8,7 +8,7 @@
 #   sh release-assemble.sh <artifacts dir> <version> <out dir>
 #
 # <artifacts dir> holds the downloaded artifacts, one folder each:
-#   build-linux-x86_64/ build-linux-arm64/ build-windows-msys2/
+#   build-linux-x86_64/ build-linux-arm64/ build-windows-msvc/
 #   build-macos-arm64/ build-macos-x86_64/   (each a release build's dist/)
 #   build-macos-universal/                   (the universal .mcpb)
 #   build-web/                               (claude/viewer.html, extension/*.zip)
@@ -38,8 +38,8 @@ for platform in linux-x86_64 linux-arm64; do
   take "$artifacts/build-$platform/nymph-$v-$platform"
   take "$artifacts/build-$platform/nymph-$v-$platform.mcpb"
 done
-take "$artifacts/build-windows-msys2/nymph-$v-windows-x86_64.exe"
-take "$artifacts/build-windows-msys2/nymph-$v-windows-x86_64.mcpb"
+take "$artifacts/build-windows-msvc/nymph-$v-windows-x86_64.exe"
+take "$artifacts/build-windows-msvc/nymph-$v-windows-x86_64.mcpb"
 # Per-architecture macOS bundles are not published: the universal one is.
 take "$artifacts/build-macos-arm64/nymph-$v-macos-arm64"
 take "$artifacts/build-macos-x86_64/nymph-$v-macos-x86_64"

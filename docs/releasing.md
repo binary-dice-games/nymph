@@ -35,7 +35,7 @@ no section for it.
 |---|---|
 | `check` | Tag = version, changelog section (the release notes) |
 | `web` | Emscripten build: the MCP App page and the Chrome extension, with their Node and browser tests |
-| `native` | Release builds with their tests: Linux x86-64 and arm64, Windows x86-64 (MSYS2), macOS arm64 and x86-64 |
+| `native` | Release builds with their tests: Linux x86-64 and arm64, Windows x86-64 (MSVC), macOS arm64 and x86-64 |
 | `source` | The source tarball, built, tested and installed with no network (Linux) and on macOS |
 | `macos-universal` | One executable for both Macs, in `nymph-X.Y.Z-macos-universal.mcpb` |
 | `release` | Gathers the files, writes `SHA256SUMS`, creates the release as a draft, uploads, publishes |

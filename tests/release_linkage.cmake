@@ -4,7 +4,7 @@
 # system's (spec/06_claude_integration/PLAN.md step 7,
 # spec/07_release_pipeline/DESIGN.md section 4.8):
 #
-#   Linux   fully static: no program interpreter, no dynamic section (readelf)
+#   Linux   only glibc's libraries (readelf -d); libstdc++ and libgcc inside
 #   macOS   only /usr/lib/libSystem.B.dylib and /usr/lib/libc++.1.dylib (otool -L)
 #
 #   cmake -DNYMPH=<executable> (-DREADELF=<readelf> | -DOTOOL=<otool>) -P release_linkage.cmake
@@ -15,17 +15,23 @@ if(NOT DEFINED NYMPH)
 endif()
 
 if(READELF)
-  execute_process(COMMAND "${READELF}" -lW "${NYMPH}" OUTPUT_VARIABLE headers RESULT_VARIABLE code)
+  execute_process(COMMAND "${READELF}" -dW "${NYMPH}" OUTPUT_VARIABLE dynamic RESULT_VARIABLE code)
   if(NOT code EQUAL 0)
     message(FATAL_ERROR "readelf failed on ${NYMPH}")
   endif()
-  foreach(bad INTERP DYNAMIC)
-    string(REGEX MATCH "\n +${bad} " found "${headers}")
-    if(found)
-      message(FATAL_ERROR "${NYMPH} has a ${bad} program header: it is not static\n${headers}")
+  string(REGEX MATCHALL "\\(NEEDED\\) +Shared library: \\[[^]]*\\]" needed "${dynamic}")
+  set(foreign "")
+  foreach(entry IN LISTS needed)
+    string(REGEX REPLACE "^.*\\[(.*)\\]$" "\\1" library "${entry}")
+    if(NOT library MATCHES "^(libc|libm|libdl|libpthread|librt)\\.so\\.[0-9]+$"
+       AND NOT library MATCHES "^ld-linux[^/]*\\.so\\.[0-9]+$")
+      list(APPEND foreign "${library}")
     endif()
   endforeach()
-  message(STATUS "${NYMPH}: static")
+  if(foreign)
+    message(FATAL_ERROR "${NYMPH} needs libraries outside glibc: ${foreign}\n${dynamic}")
+  endif()
+  message(STATUS "${NYMPH}: only glibc (${needed})")
 elseif(OTOOL)
   execute_process(COMMAND "${OTOOL}" -L "${NYMPH}" OUTPUT_VARIABLE listing RESULT_VARIABLE code)
   if(NOT code EQUAL 0)

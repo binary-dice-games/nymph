@@ -47,7 +47,7 @@ In scope:
 - Packaging for each client (section 3): a **Claude Code plugin** (this
   repository is its marketplace), an **MCP bundle** (`.mcpb`) for Claude
   Desktop, and a **Skill zip** for claude.ai.
-- Release builds: a static Linux executable (x86-64, arm64) and a
+- Release builds: a Linux executable (x86-64, arm64; libstdc++ inside, glibc dynamic) and a
   Windows executable, with SHA-256 sums, which the packages carry or
   download.
 
@@ -434,7 +434,8 @@ fails, 2 for bad arguments (`docs/cli.md` gains the row).
   needs Emscripten), so a release configures the web build first and
   passes its output; a missing file is a configure error.
 - `cmake/NymphRelease.cmake` (option `NYMPH_RELEASE`, default OFF):
-  MinSizeRel, `NYMPH_OPENGL=OFF` and `-static` on Linux (section 8),
+  MinSizeRel, `NYMPH_OPENGL=OFF` and `-static-libstdc++ -static-libgcc` on Linux
+  (section 8),
   `-static` with MinGW, `/MT` on MSVC (chosen in the root
   `CMakeLists.txt` before `project()`), stripped (`-s`). `nymph-dist`
   copies the executable to `<build>/dist/nymph-<version>-<os>-<arch>`
@@ -505,10 +506,12 @@ fails, 2 for bad arguments (`docs/cli.md` gains the row).
 - **Only the `view` key goes back to Claude** (section 4.4), not the
   whole YAML: Claude already has the source; resending data wastes
   context and invites Claude to "fix" values it did not change.
-- **Static Linux release with OpenGL off.** A fully static glibc binary
-  cannot `dlopen` libEGL reliably, and the software rasterizer is fast
-  enough (67 ms for the dashboard). Dynamic builds from source keep
-  OpenGL.
+- **Linux release: glibc dynamic, OpenGL off.** A fully static glibc
+  binary cannot `dlopen` libEGL or libX11 reliably (`nymph view` crashed
+  with a segfault), so the release links glibc dynamically and
+  libstdc++/libgcc statically: it needs only glibc, at least as new as
+  the build runner's. The software rasterizer is fast enough (67 ms for
+  the dashboard). Dynamic builds from source keep OpenGL.
 - **Plugin downloads its binary**, rather than committing binaries to
   git. Plugins install from the git repository; 10 MB per platform per
   version in history is not acceptable. The pinned SHA-256 keeps the

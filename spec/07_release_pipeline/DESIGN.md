@@ -121,7 +121,7 @@ section 6, `nymph-<version>-<os>-<arch>`):
 |---|---|---|
 | `nymph-<v>-linux-x86_64` | ubuntu-24.04 | Plugin launcher, direct download |
 | `nymph-<v>-linux-arm64` | ubuntu-24.04-arm | Same |
-| `nymph-<v>-windows-x86_64.exe` | windows-latest, MSYS2 MINGW64 | Same |
+| `nymph-<v>-windows-x86_64.exe` | windows-latest, MSVC (static runtime), with `nymph view` | Same |
 | `nymph-<v>-macos-arm64` | macos-15 | Same |
 | `nymph-<v>-macos-x86_64` | macos-15-intel | Same |
 | `nymph-<v>-linux-x86_64.mcpb`, `-linux-arm64.mcpb`, `-windows-x86_64.mcpb` | as the executable | Claude Desktop |
@@ -530,11 +530,11 @@ secret is missing is skipped with a warning, as wish's APT publish is):
    4.6), so per-architecture executables fit them unchanged and are half
    the download. The `.mcpb` cannot name a CPU, so it carries a
    universal binary.
-6. **Windows releases stay MinGW (MSYS2), built natively.** The
-   MinGW-w64 static build is the one Claude DESIGN verified; building it
-   in MSYS2 on a Windows runner runs its tests natively instead of under
-   Wine. MSVC is built and tested in CI so it stays a valid target, but
-   is not what ships.
+6. **Windows releases are MSVC, built natively.** The release job builds
+   with the static runtime (`/MT`) and keeps `nymph view` (the window
+   opens its system DLLs at run time). MSYS2 is still built and tested in
+   CI so it stays a valid target, but is not what ships. (The first
+   release shipped MinGW, which was built without the viewer window.)
 7. **Native arm64 runners, not QEMU.** GitHub's arm64 Linux and macOS
    runners run the tests at native speed; the cross toolchain files stay
    for local use.
