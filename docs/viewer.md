@@ -24,6 +24,14 @@ The page's Content Security Policy must allow `'wasm-unsafe-eval'` (or
 `'unsafe-eval'`) in `script-src`. The module reads no file and makes no
 request itself: the API fetches `src` URLs and fonts.
 
+## Live demo
+
+Every example, live next to its PNG, is at
+<https://binary-dice-games.github.io/nymph/demo/>. The `pages` workflow
+(`.github/workflows/pages.yml`) rebuilds and publishes it on each push to
+`main`; enable it once under Settings > Pages > Source: GitHub Actions.
+To host your own copy, serve `build-web/web/` (the demo is `demo/`).
+
 ## Embedding
 
 The element, with a URL (`.yaml` or a nymph `.png`) or with the YAML as

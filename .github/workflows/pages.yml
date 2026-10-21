@@ -1,0 +1,60 @@
+# MIT License © 2026 Binary Dice Games
+#
+# Publishes the web viewer and its demo page to GitHub Pages:
+# https://binary-dice-games.github.io/nymph/demo/
+# One-time setup: Settings > Pages > Source: GitHub Actions.
+
+name: pages
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+env:
+  EMSDK_VERSION: 6.0.12
+
+jobs:
+  deploy:
+    runs-on: ubuntu-24.04
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          submodules: recursive
+          persist-credentials: false
+      - name: Tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ninja-build
+          git clone --depth 1 https://github.com/emscripten-core/emsdk.git "$RUNNER_TEMP/emsdk"
+          "$RUNNER_TEMP/emsdk/emsdk" install "$EMSDK_VERSION"
+          "$RUNNER_TEMP/emsdk/emsdk" activate "$EMSDK_VERSION"
+      - name: Build the web viewer
+        run: |
+          . "$RUNNER_TEMP/emsdk/emsdk_env.sh"
+          emcmake cmake -S . -B build-web -G Ninja -DNYMPH_WEB=ON -DCMAKE_BUILD_TYPE=MinSizeRel
+          cmake --build build-web --parallel
+      - name: Assemble the site
+        run: |
+          mkdir site
+          cp -r build-web/web/demo build-web/web/fonts site/
+          cp build-web/web/nymph-viewer*.js build-web/web/nymph-viewer-core.wasm site/
+          echo '<meta http-equiv="refresh" content="0; url=demo/">' > site/index.html
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+      - id: deployment
+        uses: actions/deploy-pages@v4

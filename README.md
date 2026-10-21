@@ -10,7 +10,8 @@ OpenGL when a GPU is available, or on the CPU with its own software
 rasterizer: no GPU, window or display needed, and no OpenGL library
 linked.
 It is meant for AI agents that need to show information as a chart.
-The [web viewer](docs/viewer.md) shows the same charts live in a web page
+The [web viewer](docs/viewer.md) ([live demo](https://binary-dice-games.github.io/nymph/demo/))
+shows the same charts live in a web page
 (WebAssembly and WebGL2), with pan, zoom and data-point values, for
 markdown viewers and chatbots: `<nymph-viewer src="chart.yaml"></nymph-viewer>`;
 `nymph view chart.yaml` opens it in a window; `--edit` adds a panel to
