@@ -804,6 +804,8 @@ for (const mode of ['inline', 'frame']) {
     await setSettings({ chatSites: [SITE] });
     const p = await openPage('chatbad', csp);
     await waitFor(() => p.evaluate(() => document.querySelectorAll('nymph-ext-chart.nymph-ext-error').length === 3), 'three error panels', 15000);
+    // The unclaimed block is tried too: its host exists until the viewer (slower in a frame) refuses it.
+    await waitFor(() => p.evaluate(() => document.querySelectorAll('nymph-ext-chart.nymph-ext-starting').length === 0), 'every block decided', 15000);
     const state = await p.evaluate(() => {
       const panel = (id) => {
         const host = document.getElementById(id).previousElementSibling;
