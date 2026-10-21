@@ -5,12 +5,18 @@
 ///        through the model.
 #include <gtest/gtest.h>
 #include <imgui.h>
+#include <cstdlib>
+#include <fstream>
 #include <string>
 #include <vector>
 #include "edit/editor_model.hpp"
+#include "edit/element_icons.hpp"
 #include "edit/inspector.hpp"
 #include "elements/register_builtin.hpp"
+#include "png/png_meta.hpp"
 #include "render/frame_setup.hpp"
+#include "render/soft_rasterizer.hpp"
+#include "render/texture_store.hpp"
 #include "view/live_view.hpp"
 
 namespace bdg::nymph {
@@ -55,10 +61,18 @@ class headless_imgui {
     f();
     ImGui::End();
     ImGui::Render();
+    textures_.apply_all(*ImGui::GetDrawData());
+  }
+
+  /// The last frame rasterized.
+  image snapshot() {
+    const context_switch on(contexts_);
+    return rasterize(*ImGui::GetDrawData(), textures_, IM_COL32(255, 255, 255, 255));
   }
 
  private:
   imgui_contexts contexts_;
+  texture_store textures_;
   image_options options_;
   draw_context dc_{options_};
 };
@@ -171,6 +185,58 @@ TEST(inspector, ARefusedTextShowsTheErrorAndLeavesTheSource) {
   const inspector_events fine = panel.edit_text(model, "font", "default");
   EXPECT_TRUE(fine.source);
   EXPECT_EQ(panel.error(), "");
+}
+
+TEST(inspector, EveryElementTypeHasAnIcon) {
+  for (const element_class* cls : builtin_registry().classes()) {
+    EXPECT_NE(icon_for(cls->name()), element_icon::generic) << cls->name();
+  }
+  EXPECT_EQ(icon_for("Image"), element_icon::image);
+  EXPECT_EQ(icon_for("PlotLine"), element_icon::line);
+  EXPECT_EQ(icon_for("FlowLink"), element_icon::link);
+  EXPECT_EQ(icon_for("SliderFloat2"), element_icon::slider);
+  EXPECT_EQ(icon_for("NoSuchType"), element_icon::generic);
+}
+
+TEST(inspector, DrawsTheTreeAndTheErrorPanelWithARefusedChange) {
+  headless_imgui gui;
+  editor_model model(kSource);
+  inspector panel;
+  live_view view;
+  view.set_source(kSource);
+  const std::vector<edit_element> tree = view.element_list();
+  model.select(edit_target_id{"root/children/1", "font"});
+  panel.edit_text(model, "font", "NoSuchFont.ttf");
+  ASSERT_NE(panel.error(), "");
+  // Selecting a nested element from outside the tree reveals it.
+  model.select(edit_target_id{"root/children/2/children/0", "text"});
+  for (int i = 0; i < 3; ++i) {
+    inspector_events events;
+    gui.frame([&] { events = panel.draw(model, tree, ""); });
+    EXPECT_FALSE(events.source);
+    EXPECT_FALSE(events.select);
+  }
+}
+
+TEST(inspector, DumpPanelForInspection) {
+  const char* dir = std::getenv("NYMPH_EDIT_DUMP");
+  if (dir == nullptr) {
+    GTEST_SKIP();
+  }
+  headless_imgui gui;
+  editor_model model(kSource);
+  inspector panel;
+  live_view view;
+  view.set_source(kSource);
+  const std::vector<edit_element> tree = view.element_list();
+  model.select(edit_target_id{"root/children/1", "font"});
+  panel.edit_text(model, "font", "NoSuchFont.ttf");
+  for (int i = 0; i < 3; ++i) {
+    gui.frame([&] { panel.draw(model, tree, ""); });
+  }
+  const std::vector<uint8_t> png = encode_png(gui.snapshot(), "", "");
+  std::ofstream out(std::string(dir) + "/panel.png", std::ios::binary);
+  out.write(reinterpret_cast<const char*>(png.data()), static_cast<std::streamsize>(png.size()));
 }
 
 TEST(inspector, FlushWithNothingTypedDoesNothing) {

@@ -1,7 +1,8 @@
 // MIT License © 2026 Binary Dice Games
 /// @file inspector.hpp
 /// @brief The editor's contents drawn with Dear ImGui: toolbar, element
-///        list, the fields of the selection with a widget per field type
+///        tree, the fields of the selection with a widget per field type,
+///        and an error panel at the bottom
 ///        (spec/08_view_editor/DESIGN.md section 3). Pure ImGui, no OpenGL,
 ///        so it runs against any ImGui context.
 #pragma once
@@ -87,6 +88,7 @@ class inspector {
   void note(const commit_result& r, inspector_events& events);
   void draw_field(editor_model& model, const editable_field& f, bool focused, inspector_events& events);
   commit_result commit_pending(editor_model& model);
+  void draw_tree(editor_model& model, const std::vector<edit_element>& tree, inspector_events& events);
 
   std::string error_;
   std::optional<pending_text> pending_;
@@ -95,6 +97,7 @@ class inspector {
   std::string last_selection_;
   std::string typing_key_; ///< Element and field being typed into, "" when none.
   std::string drag_key_; ///< Widget being dragged, "" when none.
+  std::string revealed_; ///< The element the tree last scrolled to.
 };
 
 } // namespace bdg::nymph

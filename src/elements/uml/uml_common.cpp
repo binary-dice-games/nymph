@@ -462,7 +462,7 @@ ImUmlDiagramInfo diagram_class::submit(const node& n, draw_context& dc, const re
     // A live view pans and zooms the diagram (spec/04_web_viewer).
     flags = dc.interactive() ? ImUmlDiagramFlags_Interactive : ImUmlDiagramFlags_None;
     if (dc.edit_mode()) {
-      flags |= ImUmlDiagramFlags_CaptureText;
+      flags |= ImUmlDiagramFlags_CaptureText | ImUmlDiagramFlags_CaptureItems;
       dc.clear_item_ranges(); // what the measuring passes recorded no longer applies
     }
     // The saved view (the `view` key).
@@ -580,10 +580,34 @@ std::string field_showing(const node& item, const std::string& shown) {
   return {};
 }
 
+/// The element that made item `item` of ImUmlTextRunKind_ `kind`, the
+/// narrowest if groups nest; null for none.
+const node* element_of_item(const draw_context& dc, int kind, int item) {
+  static constexpr int kind_slot[] = {-1, 0, 1, 2, -1}; // ImUmlTextRunKind_ -> node / edge / event range
+  if (kind <= ImUmlTextRunKind_None || kind > ImUmlTextRunKind_Event) {
+    return nullptr;
+  }
+  const int slot = kind_slot[kind];
+  const item_range* best = nullptr;
+  for (const item_range& r : dc.item_ranges()) {
+    if (r.first[slot] <= item && item < r.last[slot] &&
+        (best == nullptr || r.last[slot] - r.first[slot] < best->last[slot] - best->first[slot])) {
+      best = &r;
+    }
+  }
+  return best != nullptr ? best->element : nullptr;
+}
+
 } // namespace
 
 void diagram_class::record_texts(const node& n, draw_context& dc, const ImUmlDiagramInfo& info) const {
-  static constexpr int kind_slot[] = {-1, 0, 1, 2, -1}; // ImUmlTextRunKind_ -> node / edge / event range
+  // The shapes first: a text over its own shape is recorded later, so it is on top.
+  for (int i = 0; i < info.ItemAreaCount; ++i) {
+    const ImUmlItemArea& a = info.ItemAreas[i];
+    if (const node* element = element_of_item(dc, a.Kind, a.Item)) {
+      dc.record_target(*element, {}, rect{a.Min, a.Max});
+    }
+  }
   for (int i = 0; i < info.TextRunCount; ++i) {
     const ImUmlTextRun& run = info.TextRuns[i];
     const rect area{run.Min, run.Max};
@@ -592,33 +616,22 @@ void diagram_class::record_texts(const node& n, draw_context& dc, const ImUmlDia
       dc.record_target(n, "title", area, shown);
       continue;
     }
-    if (run.Kind <= ImUmlTextRunKind_None || run.Kind > ImUmlTextRunKind_Event) {
+    const node* element = element_of_item(dc, run.Kind, run.Item);
+    if (element == nullptr) {
       continue;
     }
-    // The element that made the item, the narrowest if groups nest.
-    const int slot = kind_slot[run.Kind];
-    const item_range* best = nullptr;
-    for (const item_range& r : dc.item_ranges()) {
-      if (r.first[slot] <= run.Item && run.Item < r.last[slot] &&
-          (best == nullptr || r.last[slot] - r.first[slot] < best->last[slot] - best->first[slot])) {
-        best = &r;
-      }
-    }
-    if (best == nullptr) {
-      continue;
-    }
-    std::string field = field_showing(*best->element, shown);
+    std::string field = field_showing(*element, shown);
     std::string text = shown;
     if (field.empty() && shown.size() > 3 && std::isdigit(static_cast<unsigned char>(shown[0]))) {
       // An autonumbered message: "3. text".
       const size_t dot = shown.find(". ");
       if (dot != std::string::npos && dot <= 4) {
         text = shown.substr(dot + 2);
-        field = field_showing(*best->element, text);
+        field = field_showing(*element, text);
       }
     }
     if (!field.empty()) {
-      dc.record_target(*best->element, field, area, text);
+      dc.record_target(*element, field, area, text);
     }
   }
 }

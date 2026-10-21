@@ -12,6 +12,7 @@
 #include <string>
 #include <type_traits>
 #include <variant>
+#include "edit/element_icons.hpp"
 #include "edit/field_value.hpp"
 #include "fonts/embedded_fonts.hpp"
 #include "schema/element_class.hpp"
@@ -358,6 +359,74 @@ void inspector::draw_field(editor_model& model, const editable_field& f, bool fo
   ImGui::PopID();
 }
 
+void inspector::draw_tree(editor_model& model, const std::vector<edit_element>& tree, inspector_events& events) {
+  const std::string selected = model.selection() ? model.selection()->element : "";
+  // A selection made in the figure opens its ancestors and scrolls to it.
+  const bool reveal = selected != revealed_;
+  revealed_ = selected;
+  std::vector<int> open; // depths of the nodes pushed with TreePush
+  int skip_below = -1; // depth of a closed node whose descendants are hidden
+  const float icon = ImGui::GetTextLineHeight();
+  for (size_t i = 0; i < tree.size(); ++i) {
+    const edit_element& e = tree[i];
+    while (!open.empty() && open.back() >= e.depth) {
+      ImGui::TreePop();
+      open.pop_back();
+    }
+    if (skip_below >= 0) {
+      if (e.depth > skip_below) {
+        continue;
+      }
+      skip_below = -1;
+    }
+    const bool leaf = i + 1 == tree.size() || tree[i + 1].depth <= e.depth;
+    const bool is_selected = e.path == selected;
+    ImGuiTreeNodeFlags flags = ImGuiTreeNodeFlags_OpenOnArrow | ImGuiTreeNodeFlags_OpenOnDoubleClick |
+        ImGuiTreeNodeFlags_SpanAvailWidth | ImGuiTreeNodeFlags_DefaultOpen;
+    if (leaf) {
+      flags |= ImGuiTreeNodeFlags_Leaf | ImGuiTreeNodeFlags_NoTreePushOnOpen;
+    }
+    if (is_selected) {
+      flags |= ImGuiTreeNodeFlags_Selected;
+    }
+    if (reveal && !leaf && selected.size() > e.path.size() && selected.compare(0, e.path.size(), e.path) == 0 &&
+        selected[e.path.size()] == '/') {
+      ImGui::SetNextItemOpen(true);
+    }
+    ImGui::PushID(e.path.c_str());
+    const bool node_open = ImGui::TreeNodeEx("##node", flags);
+    if (ImGui::IsItemClicked() && !ImGui::IsItemToggledOpen()) {
+      events.select = edit_target_id{e.path, ""};
+      revealed_ = e.path; // already in view
+    }
+    if (is_selected && reveal) {
+      ImGui::SetScrollHereY(0.5f);
+    }
+    ImGui::SameLine(0.0f, 0.0f);
+    const ImVec2 at = ImGui::GetCursorScreenPos();
+    draw_element_icon(ImGui::GetWindowDrawList(), at, icon, e.type);
+    ImGui::Dummy(ImVec2(icon, icon));
+    ImGui::SameLine();
+    ImGui::TextUnformatted(e.type.c_str());
+    if (!e.label.empty()) {
+      ImGui::SameLine();
+      ImGui::TextDisabled("%s", e.label.substr(0, e.label.find('\n')).c_str());
+    }
+    ImGui::PopID();
+    if (!leaf) {
+      if (node_open) {
+        open.push_back(e.depth);
+      } else {
+        skip_below = e.depth;
+      }
+    }
+  }
+  while (!open.empty()) {
+    ImGui::TreePop();
+    open.pop_back();
+  }
+}
+
 inspector_events inspector::draw(editor_model& model, const std::vector<edit_element>& tree, const std::string& status) {
   inspector_events events;
 
@@ -399,30 +468,29 @@ inspector_events inspector::draw(editor_model& model, const std::vector<edit_ele
   if (!status.empty()) {
     ImGui::TextDisabled("%s", status.c_str());
   }
-  if (!error_.empty()) {
-    ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.85f, 0.2f, 0.2f, 1.0f));
-    ImGui::TextWrapped("%s", error_.c_str());
-    ImGui::PopStyleColor();
-  }
   ImGui::Separator();
+
+  // The error panel at the bottom takes the height of its text, at most
+  // 40% of the panel; the rest scrolls above it.
+  const ImGuiStyle& style = ImGui::GetStyle();
+  const auto error_height = [&] {
+    if (error_.empty()) {
+      return 0.0f;
+    }
+    // The child's border and padding, and room for a scrollbar, narrow the text.
+    const float wrap = ImGui::GetContentRegionAvail().x - style.WindowPadding.x * 2.0f - style.ScrollbarSize;
+    const float text = ImGui::CalcTextSize(error_.c_str(), nullptr, false, wrap).y;
+    const float frame = style.WindowPadding.y * 2.0f + style.ChildBorderSize * 2.0f + style.ItemSpacing.y;
+    return std::min(text + frame, ImGui::GetContentRegionAvail().y * 0.4f);
+  };
+  const float reserved = error_height();
+  ImGui::BeginChild("##body", ImVec2(0, reserved > 0.0f ? -(reserved + style.ItemSpacing.y) : 0.0f));
 
   // The elements.
   if (ImGui::CollapsingHeader("Elements", ImGuiTreeNodeFlags_DefaultOpen)) {
-    ImGui::BeginChild("##elements", ImVec2(0, std::min(180.0f, ImGui::GetTextLineHeightWithSpacing() * static_cast<float>(tree.size() + 1))), ImGuiChildFlags_Borders);
-    for (const edit_element& e : tree) {
-      ImGui::Indent(static_cast<float>(e.depth) * 12.0f);
-      std::string label = e.type;
-      if (!e.label.empty()) {
-        label += "  " + e.label.substr(0, e.label.find('\n'));
-      }
-      const bool is_selected = model.selection() && model.selection()->element == e.path;
-      ImGui::PushID(e.path.c_str());
-      if (ImGui::Selectable(label.c_str(), is_selected)) {
-        events.select = edit_target_id{e.path, ""};
-      }
-      ImGui::PopID();
-      ImGui::Unindent(static_cast<float>(e.depth) * 12.0f);
-    }
+    const float rows = static_cast<float>(tree.size() + 1);
+    ImGui::BeginChild("##elements", ImVec2(0, std::min(220.0f, ImGui::GetTextLineHeightWithSpacing() * rows)), ImGuiChildFlags_Borders);
+    draw_tree(model, tree, events);
     ImGui::EndChild();
   }
 
@@ -461,6 +529,16 @@ inspector_events inspector::draw(editor_model& model, const std::vector<edit_ele
     if (!r.ok && !r.error.empty()) {
       rejected_ = last_attempt_; // keep showing what was typed
     }
+  }
+  ImGui::EndChild();
+
+  // The error panel, below the fields.
+  if (!error_.empty()) {
+    ImGui::BeginChild("##error", ImVec2(0, 0), ImGuiChildFlags_Borders);
+    ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.85f, 0.2f, 0.2f, 1.0f));
+    ImGui::TextWrapped("%s", error_.c_str());
+    ImGui::PopStyleColor();
+    ImGui::EndChild();
   }
   return events;
 }

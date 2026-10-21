@@ -499,25 +499,55 @@ struct live_view::impl {
     });
     std::vector<edit_target> out;
     for (const size_t i : found) {
-      out.push_back(edit_targets[i]);
+      const edit_target& t = edit_targets[i];
+      const bool seen = std::any_of(out.begin(), out.end(), [&](const edit_target& o) {
+        return o.element == t.element && o.field == t.field;
+      });
+      if (!seen) {
+        out.push_back(t.field.empty() ? whole_element(t.element) : t);
+      }
     }
     return out;
   }
 
-  const edit_target* find_target(std::string_view element, std::string_view field) const {
-    const edit_target* whole = nullptr;
+  /// The element-level target of `element`: an element recorded in several
+  /// pieces (a diagram link's path, a participant's boxes and lifeline) is
+  /// hit piece by piece but outlined and reported as their union.
+  edit_target whole_element(std::string_view element) const {
+    std::optional<edit_target> whole;
+    for (const edit_target& t : edit_targets) {
+      if (t.element != element || !t.field.empty()) {
+        continue;
+      }
+      if (!whole) {
+        whole = t;
+        continue;
+      }
+      const float x1 = std::max(whole->x + whole->width, t.x + t.width);
+      const float y1 = std::max(whole->y + whole->height, t.y + t.height);
+      whole->x = std::min(whole->x, t.x);
+      whole->y = std::min(whole->y, t.y);
+      whole->width = x1 - whole->x;
+      whole->height = y1 - whole->y;
+    }
+    return whole ? *whole : edit_target{};
+  }
+
+  std::optional<edit_target> find_target(std::string_view element, std::string_view field) const {
+    bool has_whole = false;
     for (const edit_target& t : edit_targets) {
       if (t.element != element) {
         continue;
       }
       if (t.field == field) {
-        return &t;
+        return field.empty() ? whole_element(element) : t;
       }
-      if (t.field.empty()) {
-        whole = &t;
-      }
+      has_whole = has_whole || t.field.empty();
     }
-    return field.empty() ? whole : nullptr;
+    if (field.empty() && has_whole) {
+      return whole_element(element);
+    }
+    return std::nullopt;
   }
 
   /// "bound to $col" when the source writes field `field` of `element` as a
@@ -586,7 +616,7 @@ struct live_view::impl {
       }
     }
     if (selection) {
-      if (const edit_target* t = find_target(selection->element, selection->field)) {
+      if (const std::optional<edit_target> t = find_target(selection->element, selection->field)) {
         const auto [a, b] = to_logical(*t);
         const float grow = t->element == kImagePath ? -1.0f : 1.0f; // the figure's own edge stays inside it
         ImGui::GetForegroundDrawList()->AddRect(
@@ -932,8 +962,7 @@ std::vector<edit_target> live_view::targets_at(float x, float y) const {
 }
 
 std::optional<edit_target> live_view::target_for(std::string_view element, std::string_view field) const {
-  const edit_target* t = impl_->edit_mode ? impl_->find_target(element, field) : nullptr;
-  return t != nullptr ? std::optional<edit_target>(*t) : std::nullopt;
+  return impl_->edit_mode ? impl_->find_target(element, field) : std::nullopt;
 }
 
 void live_view::set_selection(std::optional<edit_target_id> selection) {
