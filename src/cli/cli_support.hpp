@@ -49,6 +49,11 @@ std::string source_of(const bytes_t& input, const std::string& path);
 ///        those this build does not embed marked `(not embedded)`.
 std::string fonts_text();
 
+/// @brief The `nymph shapes [<name>]` text (also the MCP tool `list_shapes`):
+///        every shape as "category/name", or the details of one.
+/// @throws cli_failure for an unknown shape name.
+std::string shapes_listing(const std::string& name);
+
 /// @brief `nymph schema <type>`: the reference of one element type.
 /// @throws cli_failure (file "schema") for an unknown type, with the
 ///         closest name and the list of types.

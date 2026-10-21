@@ -9,6 +9,7 @@
 #include "fonts/embedded_fonts.hpp"
 #include "render/figure_renderer.hpp"
 #include "render/soft_rasterizer.hpp"
+#include "shapes/shape_catalog.hpp"
 
 namespace bdg::nymph {
 
@@ -80,6 +81,7 @@ imgui_contexts::imgui_contexts() {
   ImPlot3D::SetCurrentContext(implot3d_);
   imuml_ = ImUml::CreateContext();
   ImUml::SetCurrentContext(imuml_);
+  register_shapes();
   ImGui::SetCurrentContext(prev_imgui);
   ImPlot::SetCurrentContext(prev_implot);
   ImPlot3D::SetCurrentContext(prev_implot3d);

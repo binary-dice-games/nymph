@@ -11,7 +11,9 @@ add_library(imuml STATIC
   imuml.cpp
   imuml_items.cpp
   imuml_render.cpp
+  imuml_shape.cpp
   imuml_graph_layout.cpp
+  imuml_tree_layout.cpp
   imuml_sequence_layout.cpp
 )
 target_include_directories(imuml PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})

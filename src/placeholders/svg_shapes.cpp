@@ -143,8 +143,68 @@ svg_subpath rectangle(float x, float y, float w, float h, float rx, float ry) {
   return p;
 }
 
+/// Appends the elliptical arc from `from` to `to` (SVG's endpoint form, F.6.5)
+/// to `p` as cubic curves of at most a quarter turn each.
+void append_arc(
+    svg_subpath& p, ImVec2 from, float rx, float ry, float rotation_deg, bool large, bool sweep, ImVec2 to) {
+  if (from.x == to.x && from.y == to.y) {
+    return;
+  }
+  rx = std::fabs(rx);
+  ry = std::fabs(ry);
+  if (rx == 0.0f || ry == 0.0f) {
+    p.segments.push_back({false, {}, {}, to});
+    return;
+  }
+  const double phi = static_cast<double>(rotation_deg) * 3.14159265358979323846 / 180.0;
+  const double cp = std::cos(phi), sp = std::sin(phi);
+  const double dx = (static_cast<double>(from.x) - to.x) * 0.5, dy = (static_cast<double>(from.y) - to.y) * 0.5;
+  const double x1 = cp * dx + sp * dy, y1 = -sp * dx + cp * dy;
+  double rxd = rx, ryd = ry;
+  const double lambda = x1 * x1 / (rxd * rxd) + y1 * y1 / (ryd * ryd);
+  if (lambda > 1.0) {
+    rxd *= std::sqrt(lambda);
+    ryd *= std::sqrt(lambda);
+  }
+  const double num = rxd * rxd * ryd * ryd - rxd * rxd * y1 * y1 - ryd * ryd * x1 * x1;
+  const double den = rxd * rxd * y1 * y1 + ryd * ryd * x1 * x1;
+  double coef = den == 0.0 ? 0.0 : std::sqrt(std::max(0.0, num / den));
+  if (large == sweep) {
+    coef = -coef;
+  }
+  const double cx1 = coef * rxd * y1 / ryd, cy1 = -coef * ryd * x1 / rxd;
+  const double cx = cp * cx1 - sp * cy1 + (static_cast<double>(from.x) + to.x) * 0.5;
+  const double cy = sp * cx1 + cp * cy1 + (static_cast<double>(from.y) + to.y) * 0.5;
+  const double theta1 = std::atan2((y1 - cy1) / ryd, (x1 - cx1) / rxd);
+  double delta = std::atan2((-y1 - cy1) / ryd, (-x1 - cx1) / rxd) - theta1;
+  const double two_pi = 6.28318530717958647692;
+  if (!sweep && delta > 0.0) {
+    delta -= two_pi;
+  } else if (sweep && delta < 0.0) {
+    delta += two_pi;
+  }
+  const int pieces = std::max(1, static_cast<int>(std::ceil(std::fabs(delta) / (two_pi / 4.0) - 1e-9)));
+  const double step = delta / pieces;
+  const double k = 4.0 / 3.0 * std::tan(step / 4.0);
+  double a = theta1;
+  for (int i = 0; i < pieces; ++i) {
+    const double b = a + step;
+    const double ca = std::cos(a), sa = std::sin(a), cb = std::cos(b), sb = std::sin(b);
+    const auto map = [&](double ex, double ey) {
+      return ImVec2(
+          static_cast<float>(cp * rxd * ex - sp * ryd * ey + cx), static_cast<float>(sp * rxd * ex + cp * ryd * ey + cy));
+    };
+    const ImVec2 c1 = map(ca - k * sa, sa + k * ca);
+    const ImVec2 c2 = map(cb + k * sb, sb - k * cb);
+    // The last piece ends exactly at `to`, not at a rounded point.
+    const ImVec2 end = i + 1 == pieces ? to : map(cb, sb);
+    p.segments.push_back({true, c1, c2, end});
+    a = b;
+  }
+}
+
 /// The subpaths of a path's `d`.
-std::vector<svg_subpath> parse_path(std::string_view d) {
+std::vector<svg_subpath> parse_path(std::string_view d, bool allow_arcs) {
   std::vector<svg_subpath> out;
   number_reader in(d);
   ImVec2 cur(0.0f, 0.0f);
@@ -230,8 +290,17 @@ std::vector<svg_subpath> parse_path(std::string_view d) {
         current().closed = true;
         cur = current().start;
         break;
-      case 'A':
-        throw svg_error("arcs (A) are not supported in placeholders; draw them with C curves");
+      case 'A': {
+        if (!allow_arcs) {
+          throw svg_error("arcs (A) are not supported in placeholders; draw them with C curves");
+        }
+        const float rx = in.number("path data"), ry = in.number("path data"), rotation = in.number("path data");
+        const bool large = in.number("path data") != 0.0f, sweep = in.number("path data") != 0.0f;
+        const ImVec2 to = pt();
+        append_arc(current(), cur, rx, ry, rotation, large, sweep, to);
+        cur = to;
+        break;
+      }
       default:
         throw svg_error(std::string("unknown path command '") + cmd + "'");
     }
@@ -350,13 +419,13 @@ const std::map<std::string, std::vector<std::string>, std::less<>>& allowed_attr
 }
 
 /// The subpaths of one shape element.
-std::vector<svg_subpath> geometry(const element& e) {
+std::vector<svg_subpath> geometry(const element& e, bool allow_arcs) {
   if (e.name == "path") {
     const auto it = e.attributes.find("d");
     if (it == e.attributes.end()) {
       throw svg_error("<path> needs the attribute 'd'");
     }
-    return parse_path(it->second);
+    return parse_path(it->second, allow_arcs);
   }
   if (e.name == "rect") {
     const float w = attribute(e, "width"), h = attribute(e, "height");
@@ -401,18 +470,55 @@ std::vector<svg_subpath> geometry(const element& e) {
   return {p};
 }
 
-void add_shape(svg_image& image, const element& e) {
+/// A `text` or `content` rect: a rect that is never drawn.
+svg_rect reserved_rect(const element& e, const std::string& id) {
+  if (e.name != "rect") {
+    throw svg_error("the shape element with id '" + id + "' must be a <rect>");
+  }
+  const auto none = [&](const char* key) {
+    const auto it = e.attributes.find(key);
+    return it != e.attributes.end() && lower(it->second) == "none";
+  };
+  if (!none("fill") || !none("stroke")) {
+    throw svg_error("the rect with id '" + id + "' is never drawn: give it fill=\"none\" and stroke=\"none\"");
+  }
+  const float x = attribute(e, "x", 0.0f), y = attribute(e, "y", 0.0f);
+  svg_rect r;
+  r.present = true;
+  r.min = ImVec2(x, y);
+  r.max = ImVec2(x + attribute(e, "width"), y + attribute(e, "height"));
+  if (!(r.max.x > r.min.x && r.max.y > r.min.y)) {
+    throw svg_error("the rect with id '" + id + "' needs a positive width and height");
+  }
+  return r;
+}
+
+void add_shape(svg_image& image, const element& e, svg_dialect dialect) {
+  const bool shape_file = dialect == svg_dialect::shape;
+  const char* const kind = shape_file ? "a shape" : "a placeholder";
   const auto allowed = allowed_attributes().find(e.name);
   if (allowed == allowed_attributes().end()) {
-    throw svg_error(
-        "<" + e.name + "> is not allowed in a placeholder (only path, rect, circle, ellipse, polygon, line)");
+    throw svg_error("<" + e.name + "> is not allowed in " + kind + " (only path, rect, circle, ellipse, polygon, line)");
   }
+  std::string id;
   for (const auto& [key, value] : e.attributes) {
-    const bool presentation = key == "fill" || key == "stroke" || key == "stroke-width" ||
-        key == "stroke-linejoin" || key == "stroke-linecap";
-    if (!presentation && std::find(allowed->second.begin(), allowed->second.end(), key) == allowed->second.end()) {
-      throw svg_error("attribute '" + key + "' is not allowed on <" + e.name + "> in a placeholder");
+    if (shape_file && key == "id") {
+      id = value;
+      continue;
     }
+    const bool presentation = key == "fill" || key == "stroke" || key == "stroke-width" ||
+        key == "stroke-linejoin" || key == "stroke-linecap" || (shape_file && key == "stroke-dasharray");
+    if (!presentation && std::find(allowed->second.begin(), allowed->second.end(), key) == allowed->second.end()) {
+      throw svg_error("attribute '" + key + "' is not allowed on <" + e.name + "> in " + kind);
+    }
+  }
+  if (id == "text" || id == "content") {
+    svg_rect& slot = id == "text" ? image.text : image.content;
+    if (slot.present) {
+      throw svg_error("more than one element with id '" + id + "'");
+    }
+    slot = reserved_rect(e, id);
+    return;
   }
   const auto fill_it = e.attributes.find("fill");
   const auto stroke_it = e.attributes.find("stroke");
@@ -422,10 +528,22 @@ void add_shape(svg_image& image, const element& e) {
                                                         : role_of(fill_it->second, "fill");
   const std::optional<svg_role> stroke =
       stroke_it == e.attributes.end() ? std::nullopt : role_of(stroke_it->second, "stroke");
-  if (!fill && !stroke) {
+  std::vector<svg_subpath> paths = geometry(e, shape_file);
+  if (id == "outline") {
+    if (image.has_outline) {
+      throw svg_error("more than one element with id 'outline'");
+    }
+    if (paths.size() != 1 || !paths[0].closed) {
+      throw svg_error("the element with id 'outline' must be one closed shape");
+    }
+    image.outline = paths[0];
+    image.has_outline = true;
+  } else if (!fill && !stroke) {
     throw svg_error("<" + e.name + "> is neither filled nor stroked");
   }
-  std::vector<svg_subpath> paths = geometry(e);
+  if (!fill && !stroke) {
+    return; // an outline that is only a border for clipping
+  }
   if (fill) {
     svg_shape s;
     s.role = *fill;
@@ -440,6 +558,14 @@ void add_shape(svg_image& image, const element& e) {
     if (!(s.width > 0.0f)) {
       throw svg_error("stroke-width must be above 0");
     }
+    if (const auto it = e.attributes.find("stroke-dasharray"); it != e.attributes.end()) {
+      number_reader dash(it->second);
+      s.dash = dash.number("stroke-dasharray");
+      s.gap = dash.at_end() ? s.dash : dash.number("stroke-dasharray");
+      if (!(s.dash > 0.0f && s.gap > 0.0f) || !dash.at_end()) {
+        throw svg_error("stroke-dasharray takes one or two numbers above 0 (dash and gap)");
+      }
+    }
     s.subpaths = std::move(paths);
     image.shapes.push_back(std::move(s));
   }
@@ -447,7 +573,8 @@ void add_shape(svg_image& image, const element& e) {
 
 } // namespace
 
-svg_image parse_svg(std::string_view text) {
+svg_image parse_svg(std::string_view text, svg_dialect dialect) {
+  const bool shape_file = dialect == svg_dialect::shape;
   svg_image image;
   bool in_svg = false, done = false;
   size_t pos = 0;
@@ -500,8 +627,9 @@ svg_image parse_svg(std::string_view text) {
         throw svg_error("a placeholder must be one <svg> element");
       }
       for (const auto& [key, value] : e.attributes) {
+        const bool data = shape_file && (key == "data-slice" || key == "data-grow");
         if (key != "xmlns" && key != "viewBox" && key != "width" && key != "height" && key != "version" &&
-            key != "preserveAspectRatio") {
+            key != "preserveAspectRatio" && !data) {
           throw svg_error("attribute '" + key + "' is not allowed on <svg> in a placeholder");
         }
       }
@@ -523,19 +651,52 @@ svg_image parse_svg(std::string_view text) {
           throw svg_error("preserveAspectRatio must be 'none' or 'xMidYMid meet'");
         }
       }
+      if (const auto slice = e.attributes.find("data-slice"); slice != e.attributes.end()) {
+        number_reader sin(slice->second);
+        for (float& v : image.slice) {
+          v = sin.number("data-slice");
+          if (v < 0.0f) {
+            throw svg_error("data-slice margins must not be negative");
+          }
+        }
+        if (!sin.at_end()) {
+          throw svg_error("data-slice takes four numbers: left top right bottom");
+        }
+        if (image.slice[0] + image.slice[2] >= image.view_size.x || image.slice[1] + image.slice[3] >= image.view_size.y) {
+          throw svg_error("data-slice margins must be smaller than the viewBox");
+        }
+        if (!image.stretch) {
+          throw svg_error("data-slice needs preserveAspectRatio=\"none\" (an icon has no slices)");
+        }
+      }
+      if (const auto grow = e.attributes.find("data-grow"); grow != e.attributes.end()) {
+        if (grow->second == "proportional") {
+          image.grow_proportional = true;
+        } else if (grow->second != "margins") {
+          throw svg_error("data-grow must be 'margins' or 'proportional'");
+        }
+      }
       in_svg = true;
       continue;
     }
     if (!e.self_closing) {
       throw svg_error("<" + e.name + "> must be self-closing (<" + e.name + " ... />): groups are not allowed");
     }
-    add_shape(image, e);
+    add_shape(image, e, dialect);
   }
   if (!done) {
     throw svg_error("a placeholder must be one complete <svg> element");
   }
   if (image.shapes.empty()) {
     throw svg_error("the placeholder draws nothing");
+  }
+  const auto inside = [&](const svg_rect& r) {
+    return !r.present ||
+        (r.min.x >= image.view_min.x && r.min.y >= image.view_min.y && r.max.x <= image.view_min.x + image.view_size.x &&
+         r.max.y <= image.view_min.y + image.view_size.y);
+  };
+  if (!inside(image.text) || !inside(image.content)) {
+    throw svg_error("the text and content rects must lie inside the viewBox");
   }
   return image;
 }

@@ -379,6 +379,14 @@ written. Each can be `root` or a layout child.
 | `ERDiagram` (database structure) | `Entity` (`id`, `name`, `attributes`: `"type name PK, FK \"comment\""`), `Relationship` (`from`, `to`, `from_cardinality` / `to_cardinality`: ExactlyOne/ZeroOrOne/ZeroOrMore/OneOrMore, `label`, `identifying`) |
 | `DataFlowDiagram` | `ExternalEntity`, `Process`, `DataStore` (`id`, `name`, `number`), `DataFlow` (`from`, `to`, `label`, `bidirectional`; one end a Process), `TrustBoundary` (`id`, `name`, children) |
 | `NetworkDiagram` | `Device` (`id`, `name`, `kind`: Server/Database/Storage/Router/Switch/Firewall/LoadBalancer/AccessPoint/Cloud/Internet/Workstation/Laptop/Mobile/User, `address`), `Link` (`from`, `to`, `kind`: Wired/Wireless/Vpn, `label`, `from_label`, `to_label`, `directed`), `Zone` (`id`, `name`, children) |
+| `ComponentDiagram` | `Component` (`id`, `name`, `stereotype`, `provides` / `requires`: lists of interface names, `shape`; children make a frame), `ComponentLink` (`from`, `to`, `kind`: Dependency/Association/Delegation/Realization, `label`). Interfaces wire themselves: a name one component provides and another requires is a ball-and-socket; two providers of a name are an error |
+| `DeploymentDiagram` | `DeploymentNode` (`id`, `name`, `kind`: Node/Device/ExecutionEnvironment, children are deployed on it), `Artifact` (`id`, `name`), `Component`, `DeploymentLink` (`from`, `to`, `kind`: Communication between nodes/Deploy/Manifest, `label`) |
+| `PackageDiagram` | `Package` (`id`, `name`, children), `PackageItem` (`id`, `name`, `kind`: Class/Interface/Enum/Component/Other), `PackageRelation` (`from`, `to`, `kind`: Dependency/Import/Access/Merge, `label`) |
+| `ObjectDiagram` | `Object` (`id`, `name`, `class`, `slots`: `["total = 42"]`), `ObjectLink` (`from`, `to`, `kind`: Association/DirectedAssociation/Aggregation/Composition/Dependency, `label`, `from_label`, `to_label`) |
+| `TreeDiagram` (`direction`, `edge_style`) | one `TreeItem` (`text`, `shape`, `collapsed`, `children`: more `TreeItem`s nested inside it) |
+| `MindMap` | one `MindNode` (`text`, `side`: Left/Right on the root's children, `color`, `collapsed`, nested `MindNode`s), `MindLink` (`from`, `to`, `label`) |
+| `OrgChart` | one `Person` (`name`, `title`, `department`, `image`: `person`/`people`/..., `children_layout`: Horizontal/Hanging, `staff`, `vacant`, nested `Person`s), `OrgLink` (`from`, `to`, `label`) |
+| `Shape` (not a diagram: a layout element) | `shape` (any name from `list_shapes` / `nymph shapes`), `text`, `width`, `height`, `color`, `fill_color`; diagram nodes take the same names in `shape` (`symbol` on `FlowNode`) |
 
 `Note` (`text`, `attach: [ids]`; in sequence diagrams `over: [a, b]` or
 `attach: [a]` with `side`) works in all of them.

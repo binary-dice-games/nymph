@@ -168,7 +168,7 @@ TEST_F(mcp_tools, list_names_every_tool_with_its_schemas) {
     EXPECT_TRUE(t["annotations"].contains("readOnlyHint"));
   }
   EXPECT_EQ(
-      names, (std::vector<std::string>{"render_chart", "check_chart", "extract_chart", "chart_schema", "list_fonts"}));
+      names, (std::vector<std::string>{"render_chart", "check_chart", "extract_chart", "chart_schema", "list_fonts", "list_shapes"}));
   const json& render = tools[0];
   for (const char* p : {"source", "input_path", "output_path", "rasterizer"}) {
     EXPECT_TRUE(render["inputSchema"]["properties"].contains(p)) << p;
@@ -345,6 +345,14 @@ TEST_F(mcp_tools, schema_matches_the_cli) {
 TEST_F(mcp_tools, fonts_match_the_cli) {
   EXPECT_EQ(text_of(call("list_fonts")), cli_output({"fonts"}));
   EXPECT_NE(error_text(call("list_fonts", {{"all", true}})).find("takes no arguments"), std::string::npos);
+}
+
+TEST_F(mcp_tools, shapes_match_the_cli) {
+  EXPECT_EQ(text_of(call("list_shapes")), cli_output({"shapes"}));
+  EXPECT_EQ(text_of(call("list_shapes", {{"name", "cloud"}})), cli_output({"shapes", "cloud"}));
+  const std::string unknown = error_text(call("list_shapes", {{"name", "clod"}}));
+  EXPECT_NE(unknown.find("unknown shape 'clod' (did you mean 'cloud'?)"), std::string::npos) << unknown;
+  EXPECT_NE(error_text(call("list_shapes", {{"all", true}})).find("unknown"), std::string::npos);
 }
 
 // ── The MCP App (step 5) ────────────────────────────────────────────────────

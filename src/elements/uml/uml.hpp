@@ -18,6 +18,15 @@ inline constexpr const char* kUmlFlowItemSlot = "uml.flow.item";
 inline constexpr const char* kUmlErItemSlot = "uml.er.item";
 inline constexpr const char* kUmlDataFlowItemSlot = "uml.dataflow.item";
 inline constexpr const char* kUmlNetworkItemSlot = "uml.network.item";
+inline constexpr const char* kUmlComponentItemSlot = "uml.component.item";
+inline constexpr const char* kUmlDeploymentItemSlot = "uml.deployment.item";
+inline constexpr const char* kUmlPackageItemSlot = "uml.package.item";
+inline constexpr const char* kUmlObjectItemSlot = "uml.object.item";
+inline constexpr const char* kUmlTreeItemSlot = "uml.tree.item";
+inline constexpr const char* kUmlMindItemSlot = "uml.mind.item";
+inline constexpr const char* kUmlMindLinkSlot = "uml.mind.link";
+inline constexpr const char* kUmlOrgItemSlot = "uml.org.item";
+inline constexpr const char* kUmlOrgLinkSlot = "uml.org.link";
 /// @brief `Note`, accepted by every diagram (and `Fragment`, `State`).
 inline constexpr const char* kUmlNoteSlot = "uml.note";
 

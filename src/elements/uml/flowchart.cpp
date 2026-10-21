@@ -61,6 +61,7 @@ class flow_node_class : public item_class {
                         "Box (a step, default), Rounded, Stadium (start / end), Diamond (decision), Circle, "
                         "Parallelogram (input / output), Hexagon (preparation), Cylinder (database) or "
                         "Subroutine (a predefined process)."),
+                    symbol_field(),
                     rank_field(),
                 },
                 node_color_fields()),
@@ -68,16 +69,44 @@ class flow_node_class : public item_class {
     id_ = field("id");
     text_ = field("text");
     shape_ = field("shape");
+    symbol_ = field("symbol");
   }
 
   void draw(const node& n, draw_context&) const override {
     set_next_colors(n);
     set_next_rank(n);
+    if (n.get<int64_t>(symbol_) != 0) {
+      const std::string symbol = symbol_table().format_enum(n.get<int64_t>(symbol_));
+      ImUml::ShapeNode(n.get<std::string>(id_).c_str(), or_null(n, text_), symbol.c_str());
+      return;
+    }
     ImUml::FlowNode(
         n.get<std::string>(id_).c_str(), or_null(n, text_), static_cast<ImUmlFlowShape>(n.get<int64_t>(shape_)));
   }
 
-  size_t id_, text_, shape_;
+  /// `symbol`: "none" (use `shape`) or any shape of the library.
+  static const name_table& symbol_table() {
+    static const name_table t = [] {
+      std::vector<name_entry> entries{{"none", 0}};
+      int64_t i = 1;
+      for (const name_entry& e : shape_table().entries()) {
+        entries.push_back({e.name, i++});
+      }
+      return name_table(std::move(entries));
+    }();
+    return t;
+  }
+
+  static field_desc symbol_field() {
+    return enum_field(
+        "symbol",
+        0,
+        symbol_table(),
+        "none (default: the `shape` above is used) or any shape of the library (`nymph shapes` lists them, "
+        "docs/shapes.md shows them); it replaces `shape` and sizes the node around the text.");
+  }
+
+  size_t id_, text_, shape_, symbol_;
 };
 
 class flow_group_class : public item_class {

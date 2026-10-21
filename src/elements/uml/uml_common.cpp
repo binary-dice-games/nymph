@@ -22,6 +22,7 @@
 #include "elements/plot_style.hpp"
 #include "fonts/embedded_fonts.hpp"
 #include "render/text_style.hpp"
+#include "shapes/shape_catalog.hpp"
 
 namespace bdg::nymph::uml {
 
@@ -60,6 +61,12 @@ const name_table& edge_style_names() {
   return t;
 }
 
+const name_table& tree_edge_style_names() {
+  static const name_table t{
+      {"Elbow", ImUmlEdgeStyle_Elbow}, {"Curve", ImUmlEdgeStyle_Curve}, {"Straight", ImUmlEdgeStyle_Straight}};
+  return t;
+}
+
 const name_table& note_side_names() {
   static const name_table t{{"Left", ImUmlSide_Left}, {"Right", ImUmlSide_Right}};
   return t;
@@ -90,6 +97,14 @@ begin_fn begin_of(diagram_kind k) {
       return &ImUml::BeginDataFlowDiagram;
     case diagram_kind::network:
       return &ImUml::BeginNetworkDiagram;
+    case diagram_kind::component:
+    case diagram_kind::deployment:
+    case diagram_kind::package:
+      return &ImUml::BeginShapeDiagram;
+    case diagram_kind::tree:
+    case diagram_kind::mind_map:
+    case diagram_kind::org_chart:
+      return &ImUml::BeginTreeDiagram;
     default:
       return &ImUml::BeginClassDiagram;
   }
@@ -113,6 +128,14 @@ end_fn end_of(diagram_kind k) {
       return &ImUml::EndDataFlowDiagram;
     case diagram_kind::network:
       return &ImUml::EndNetworkDiagram;
+    case diagram_kind::component:
+    case diagram_kind::deployment:
+    case diagram_kind::package:
+      return &ImUml::EndShapeDiagram;
+    case diagram_kind::tree:
+    case diagram_kind::mind_map:
+    case diagram_kind::org_chart:
+      return &ImUml::EndTreeDiagram;
     default:
       return &ImUml::EndClassDiagram;
   }
@@ -134,7 +157,24 @@ std::vector<field_desc> diagram_fields(diagram_kind kind, std::vector<field_desc
           "VerticalLayout a negative value is a stretch weight.",
           value_range{-1000, 8192}),
   };
-  if (is_graph(kind)) {
+  if (is_tree_kind(kind)) {
+    if (kind != diagram_kind::mind_map) {
+      f.push_back(enum_field(
+          "direction",
+          ImUmlDirection_TopDown,
+          direction_names(),
+          "Direction the levels grow: TopDown (default), BottomUp, LeftRight or RightLeft."));
+    }
+    f.push_back(enum_field(
+        "edge_style",
+        kind == diagram_kind::mind_map ? ImUmlEdgeStyle_Curve : ImUmlEdgeStyle_Elbow,
+        tree_edge_style_names(),
+        "Shape of the connectors: Elbow (right angles), Curve (smooth) or Straight."));
+    f.push_back(number_field(
+        "node_spacing", 0.0, "Pixels between sibling subtrees; 0 uses the default (20).", value_range{0, 500}));
+    f.push_back(number_field(
+        "rank_spacing", 0.0, "Pixels between levels; 0 uses the default (40).", value_range{0, 500}));
+  } else if (is_graph(kind)) {
     f.push_back(enum_field(
         "direction",
         kind == diagram_kind::use_case || kind == diagram_kind::data_flow ? ImUmlDirection_LeftRight
@@ -279,11 +319,21 @@ diagram_class::diagram_class(
     diagram_kind kind,
     const char* item_slot,
     std::vector<field_desc> extra_fields,
-    std::string description)
+    std::string description,
+    std::vector<std::string> extra_slots)
     : element_class(
           std::move(name),
           std::string(kFigureSlot),
-          {item_slot, kUmlNoteSlot},
+          [&] {
+            std::vector<std::string> slots{item_slot};
+            if (!is_tree_kind(kind)) {
+              slots.push_back(kUmlNoteSlot);
+            }
+            for (std::string& s : extra_slots) {
+              slots.push_back(std::move(s));
+            }
+            return slots;
+          }(),
           diagram_fields(kind, std::move(extra_fields)),
           std::move(description)),
       kind_(kind) {
@@ -310,12 +360,13 @@ void diagram_class::check(const node& n) const {
   id_table ids;
   size_t nodes = 0, edges = 0, rows = 0;
   walk(n, [&](const node& child, size_t depth) {
-    if (depth > kMaxUmlNesting) {
+    const size_t max_depth = is_tree_kind(kind_) ? kMaxTreeDepth : kMaxUmlNesting;
+    if (depth > max_depth) {
       throw error(
           child.line,
           child.column,
           std::string(child.cls->name()) + " is nested " + std::to_string(depth) + " deep; at most " +
-              std::to_string(kMaxUmlNesting) + " levels are allowed");
+              std::to_string(max_depth) + " levels are allowed");
     }
     const auto* item = dynamic_cast<const item_class*>(child.cls);
     if (item == nullptr) {
@@ -328,6 +379,10 @@ void diagram_class::check(const node& n) const {
     }
     const size_t idf = static_cast<size_t>(item->id_field());
     const std::string& id = child.get<std::string>(idf);
+    if (id.empty() && item->optional_id()) {
+      ++nodes;
+      return;
+    }
     if (id.empty()) {
       child.cls->fail_at(child, idf, "is empty; every node needs an id that edges can name");
     }
@@ -627,6 +682,55 @@ void diagram_class::offer_hovered(const node& n, draw_context& dc, const ImUmlDi
 
 // ── Field helpers ────────────────────────────────────────────────────────────
 
+const name_table& shape_table() {
+  static const name_table t = [] {
+    std::vector<name_entry> entries;
+    int64_t i = 0;
+    for (const std::string& name : shape_names()) {
+      entries.push_back({name, i++});
+    }
+    return name_table(std::move(entries));
+  }();
+  return t;
+}
+
+field_desc shape_field(const char* def, const std::string& description) {
+  return enum_field(
+      "shape",
+      shape_table().find(def).value_or(0),
+      shape_table(),
+      description + " Any shape of the library (`nymph shapes` lists them, docs/shapes.md shows them); default " + def +
+          ".");
+}
+
+std::string shape_of(const node& n, size_t field) {
+  return shape_table().format_enum(n.get<int64_t>(field));
+}
+
+void draw_shape_item(
+    const node& n, draw_context& dc, const std::string& id, const char* text, const std::string& shape,
+    const char* stereotype) {
+  if (n.children.empty()) {
+    ImUml::ShapeNode(id.c_str(), text, shape.c_str(), stereotype);
+    return;
+  }
+  ImUml::BeginShapeGroup(id.c_str(), text, shape.c_str(), stereotype);
+  dc.draw_children(n);
+  ImUml::EndShapeGroup();
+}
+
+bool contains_node(const node& outer, const node& inner) {
+  if (&outer == &inner) {
+    return true;
+  }
+  for (const node& c : outer.children) {
+    if (contains_node(c, inner)) {
+      return true;
+    }
+  }
+  return false;
+}
+
 ImU32 color_u32(const std::string& hex) {
   if (hex.empty()) {
     return 0;
@@ -821,6 +925,11 @@ void register_uml(registry& reg) {
   uml::register_er_diagram(reg);
   uml::register_dataflow_diagram(reg);
   uml::register_network_diagram(reg);
+  uml::register_component_diagram(reg);
+  uml::register_deployment_diagram(reg);
+  uml::register_package_diagram(reg);
+  uml::register_object_diagram(reg);
+  uml::register_tree_diagrams(reg);
 }
 
 } // namespace bdg::nymph

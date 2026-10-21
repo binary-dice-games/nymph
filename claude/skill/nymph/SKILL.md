@@ -13,7 +13,7 @@ its source, so it can be read back and changed later.
 - With the nymph MCP tools: `render_chart` (returns the image; give
   `output_path` to also save a `.png`), `check_chart`, `chart_schema`
   (fields of an element type), `extract_chart` (the source of a nymph
-  PNG), `list_fonts`.
+  PNG), `list_fonts`, `list_shapes`.
 - Without them: the `nymph` command. `nymph chart.yaml` writes
   `chart.png`; `nymph check chart.yaml` validates; `nymph schema
   PlotLine` lists fields; `nymph chart.png` prints the source back. Exit
@@ -66,7 +66,9 @@ data: |
   a `VerticalLayout` / `HorizontalLayout` whose `children` are plots,
   `Label`s and separators. Diagrams: `ClassDiagram`, `SequenceDiagram`,
   `StateDiagram`, `ActivityDiagram`, `UseCaseDiagram`, `ERDiagram`,
-  `NetworkDiagram`, `DataFlowDiagram`, `Flowchart`; charts:
+  `NetworkDiagram`, `DataFlowDiagram`, `Flowchart`, `ComponentDiagram`,
+  `DeploymentDiagram`, `PackageDiagram`, `ObjectDiagram`; hierarchies written by
+  nesting: `TreeDiagram`, `MindMap`, `OrgChart`; charts:
   `GanttChart`, `SankeyDiagram`.
 - 2D series go in a `Plot`'s `children`: `PlotLine`, `PlotScatter`,
   `PlotBars`, `PlotBarsH`, `PlotBarGroups`, `PlotShaded`, `PlotStairs`,

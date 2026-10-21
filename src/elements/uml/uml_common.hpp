@@ -18,7 +18,30 @@
 
 namespace bdg::nymph::uml {
 
-enum class diagram_kind { class_diagram, sequence, state, activity, use_case, flowchart, er, data_flow, network };
+enum class diagram_kind {
+  class_diagram,
+  sequence,
+  state,
+  activity,
+  use_case,
+  flowchart,
+  er,
+  data_flow,
+  network,
+  component,
+  deployment,
+  package,
+  object,
+  tree,
+  mind_map,
+  org_chart,
+};
+
+/// @brief Whether `k` is a tree, mind map or org chart (laid out by the tree
+///        layout, no ids needed, no notes).
+inline bool is_tree_kind(diagram_kind k) {
+  return k == diagram_kind::tree || k == diagram_kind::mind_map || k == diagram_kind::org_chart;
+}
 
 /// @brief The kind of the diagram whose ImUml scope is open, so `Note`
 ///        calls the matching ImUml function.
@@ -51,6 +74,11 @@ class item_class : public element_class {
   bool is_edge() const {
     return is_edge_;
   }
+  /// @brief Whether an empty `id` is allowed (tree nodes: only nodes that
+  ///        links name need one).
+  bool optional_id() const {
+    return optional_id_;
+  }
 
   /// @brief Index of field `name`; the field must exist.
   size_t field(std::string_view name) const;
@@ -59,11 +87,15 @@ class item_class : public element_class {
   void set_edge(bool edge) {
     is_edge_ = edge;
   }
+  void set_optional_id(bool optional) {
+    optional_id_ = optional;
+  }
 
  private:
   int id_field_ = -1;
   std::vector<size_t> ref_fields_;
   bool is_edge_ = false;
+  bool optional_id_ = false;
 };
 
 /// @brief The nodes of a diagram by id.
@@ -105,7 +137,8 @@ class diagram_class : public element_class {
       diagram_kind kind,
       const char* item_slot,
       std::vector<field_desc> extra_fields,
-      std::string description);
+      std::string description,
+      std::vector<std::string> extra_slots = {});
 
   void check(const node& n) const override;
   ImVec2 measure(const node& n, draw_context& dc, float width) const override;
@@ -166,6 +199,23 @@ field_desc rank_field();
 /// @brief `weight`, `min_length`, `constraint` (dot's attributes) and `color`.
 std::vector<field_desc> edge_layout_fields();
 
+/// @brief The shape library as an enumeration (`nymph shapes`).
+const name_table& shape_table();
+/// @brief A `shape` field defaulting to library shape `def`.
+field_desc shape_field(const char* def, const std::string& description);
+/// @brief The shape name chosen in enumeration field `field` of `n`.
+std::string shape_of(const node& n, size_t field);
+
+/// @brief Draws a node, or a group when `n` has children (notes included),
+///        with the ImUml shape calls: `text` is the label (null: the id),
+///        `stereotype` the line over it (null: none).
+void draw_shape_item(
+    const node& n, draw_context& dc, const std::string& id, const char* text, const std::string& shape,
+    const char* stereotype);
+
+/// @brief Whether `inner` is `outer` or inside it, at any depth.
+bool contains_node(const node& outer, const node& inner);
+
 /// @brief Appends `b` to `a`.
 std::vector<field_desc> concat(std::vector<field_desc> a, const std::vector<field_desc>& b);
 
@@ -181,5 +231,10 @@ void register_flowchart(registry& reg);
 void register_er_diagram(registry& reg);
 void register_dataflow_diagram(registry& reg);
 void register_network_diagram(registry& reg);
+void register_component_diagram(registry& reg);
+void register_deployment_diagram(registry& reg);
+void register_package_diagram(registry& reg);
+void register_object_diagram(registry& reg);
+void register_tree_diagrams(registry& reg);
 
 } // namespace bdg::nymph::uml

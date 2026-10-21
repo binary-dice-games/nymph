@@ -3,13 +3,13 @@
 Part of the [nymph element reference](../elements.md), which has the
 conventions these tables follow.
 
-Other elements it takes have their own pages: [ActivityDiagram](ActivityDiagram.md), [ClassDiagram](ClassDiagram.md), [ColorScale](ColorScale.md), [DataFlowDiagram](DataFlowDiagram.md), [ERDiagram](ERDiagram.md), [Flowchart](Flowchart.md), [GanttChart](GanttChart.md), [HorizontalLayout](HorizontalLayout.md), [Label](Label.md), [NetworkDiagram](NetworkDiagram.md), [Plot](Plot.md), [Plot3D](Plot3D.md), [SankeyDiagram](SankeyDiagram.md), [Screen](Screen.md), [Separator](Separator.md), [SeparatorText](SeparatorText.md), [SequenceDiagram](SequenceDiagram.md), [Spring](Spring.md), [StateDiagram](StateDiagram.md), [UseCaseDiagram](UseCaseDiagram.md), [VerticalLayout](VerticalLayout.md), [Image](Image.md), [Window](Window.md).
+Other elements it takes have their own pages: [ActivityDiagram](ActivityDiagram.md), [ClassDiagram](ClassDiagram.md), [ColorScale](ColorScale.md), [ComponentDiagram](ComponentDiagram.md), [DataFlowDiagram](DataFlowDiagram.md), [DeploymentDiagram](DeploymentDiagram.md), [ERDiagram](ERDiagram.md), [Flowchart](Flowchart.md), [GanttChart](GanttChart.md), [HorizontalLayout](HorizontalLayout.md), [Label](Label.md), [MindMap](MindMap.md), [NetworkDiagram](NetworkDiagram.md), [ObjectDiagram](ObjectDiagram.md), [OrgChart](OrgChart.md), [PackageDiagram](PackageDiagram.md), [Plot](Plot.md), [Plot3D](Plot3D.md), [SankeyDiagram](SankeyDiagram.md), [Screen](Screen.md), [Separator](Separator.md), [SeparatorText](SeparatorText.md), [SequenceDiagram](SequenceDiagram.md), [Shape](Shape.md), [Spring](Spring.md), [StateDiagram](StateDiagram.md), [TreeDiagram](TreeDiagram.md), [UseCaseDiagram](UseCaseDiagram.md), [VerticalLayout](VerticalLayout.md), [Image](Image.md), [Window](Window.md).
 
 ## VerticalLayout
 
 Stacks children top-to-bottom.
 
-Goes in: root, Child, CollapsingHeader, Disabled, Group, HorizontalLayout, Indent, Popup, PopupModal, TabItem, TableRow, Tooltip, TreeNode, VerticalLayout, Window. Children: ActivityDiagram, ClassDiagram, ColorScale, DataFlowDiagram, ERDiagram, Flowchart, GanttChart, HorizontalLayout, Image, Label, NetworkDiagram, Plot, Plot3D, SankeyDiagram, Screen, Separator, SeparatorText, SequenceDiagram, Spring, StateDiagram, UseCaseDiagram, VerticalLayout, Window.
+Goes in: root, Child, CollapsingHeader, Disabled, Group, HorizontalLayout, Indent, Popup, PopupModal, TabItem, TableRow, Tooltip, TreeNode, VerticalLayout, Window. Children: ActivityDiagram, ClassDiagram, ColorScale, ComponentDiagram, DataFlowDiagram, DeploymentDiagram, ERDiagram, Flowchart, GanttChart, HorizontalLayout, Image, Label, MindMap, NetworkDiagram, ObjectDiagram, OrgChart, PackageDiagram, Plot, Plot3D, SankeyDiagram, Screen, Separator, SeparatorText, SequenceDiagram, Shape, Spring, StateDiagram, TreeDiagram, UseCaseDiagram, VerticalLayout, Window.
 
 | Field | Type | Default | Description |
 |---|---|---|---|

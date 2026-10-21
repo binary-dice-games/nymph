@@ -41,16 +41,39 @@ struct svg_shape {
   svg_role role = svg_role::tint;
   bool stroke = false; ///< Stroked with `width`, else filled.
   float width = 1.0f;
+  float dash = 0.0f; ///< `stroke-dasharray` (shapes only): dash and gap, viewBox units; 0 is solid.
+  float gap = 0.0f;
   std::vector<svg_subpath> subpaths;
 };
 
-/// @brief A parsed placeholder.
+/// @brief A rectangle in viewBox units (the `text` and `content` rects of a
+///        shape).
+struct svg_rect {
+  bool present = false;
+  ImVec2 min{0.0f, 0.0f};
+  ImVec2 max{0.0f, 0.0f};
+};
+
+/// @brief A parsed placeholder or shape.
 struct svg_image {
   ImVec2 view_min{0.0f, 0.0f}; ///< The viewBox.
   ImVec2 view_size{0.0f, 0.0f};
   bool stretch = false; ///< `preserveAspectRatio="none"`: always fills its box.
   std::vector<svg_shape> shapes; ///< In painter's order.
+
+  // Shape files only (spec/13_more_diagrams_and_shapes/DESIGN.md section 3).
+  float slice[4] = {0, 0, 0, 0}; ///< `data-slice`: left, top, right, bottom margins that keep their size.
+  bool grow_proportional = false; ///< `data-grow="proportional"` (else `margins`).
+  svg_rect text; ///< `id="text"`: where the label goes.
+  svg_rect content; ///< `id="content"`: where a container's children go.
+  svg_subpath outline; ///< `id="outline"`: the border for clipping (empty: the viewBox).
+  bool has_outline = false;
 };
+
+/// @brief Which files are accepted: placeholders (square-ish, no arcs, no
+///        metadata) or shapes (any viewBox, arcs, `data-*` and the `text` /
+///        `content` / `outline` ids).
+enum class svg_dialect { placeholder, shape };
 
 /// @brief A file outside the subset; the message names the rule.
 class svg_error : public std::runtime_error {
@@ -63,10 +86,12 @@ class svg_error : public std::runtime_error {
 ///        arcs), `rect` (with `rx` / `ry`), `circle`, `ellipse`, `polygon`
 ///        and `line` elements whose `fill` / `stroke` are `#000000`,
 ///        `#808080`, `#FFFFFF` or `none`. Comments and the XML declaration
-///        are skipped.
+///        are skipped. With `svg_dialect::shape`, also arcs (`A`, converted to
+///        cubics), `id` attributes, `data-slice` / `data-grow` on `<svg>` and
+///        the reserved ids `text`, `content` and `outline`.
 /// @throws svg_error for anything else (an element, attribute, colour or
 ///         command outside the subset), naming it.
-svg_image parse_svg(std::string_view text);
+svg_image parse_svg(std::string_view text, svg_dialect dialect = svg_dialect::placeholder);
 
 /// @brief Points of `subpath` with its curves flattened into `segments`
 ///        lines each (for checks: drawing lets ImGui flatten them).

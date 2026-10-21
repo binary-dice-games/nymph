@@ -139,6 +139,56 @@ void SmoothPath(const ImVector<ImVec2>& pts, ImVector<ImVec2>* out, bool along_y
 ImVec2 ClipToShape(ImUmlShape shape, const ImVec2& centre, const ImVec2& size, const ImVec2& towards);
 } // namespace ImUml
 
+// ── Tree layout (imuml_tree_layout.cpp) ──────────────────────────────────────
+
+struct ImUmlTreeNodeIn {
+  ImVec2 Size; ///< Whole pixels.
+  int Parent; ///< Index of the parent (always before the node), or -1 for the root.
+  int Side; ///< Mind map, root children: ImUmlSide_Left / Right, else -1.
+  bool Hanging; ///< Its descendants hang below it in an indented list.
+  bool Staff; ///< An assistant, placed beside its parent.
+  ImUmlTreeNodeIn() {
+    Size = ImVec2(0, 0);
+    Parent = -1;
+    Side = -1;
+    Hanging = Staff = false;
+  }
+};
+
+struct ImUmlTreeInput {
+  ImVector<ImUmlTreeNodeIn> Nodes; ///< The root is node 0; parents come before children.
+  ImUmlTreeMode Mode;
+  ImUmlDirection Direction;
+  float NodeSpacing; ///< Between sibling subtrees.
+  float RankSpacing; ///< Between levels.
+  float Indent; ///< Hanging lists: the indent per level.
+  float StaffGap; ///< Between a node and its assistants.
+  ImUmlTreeInput() {
+    Mode = ImUmlTreeMode_Tidy;
+    Direction = ImUmlDirection_TopDown;
+    NodeSpacing = 20.0f;
+    RankSpacing = 40.0f;
+    Indent = 24.0f;
+    StaffGap = 24.0f;
+  }
+};
+
+struct ImUmlTreeOutput {
+  ImVector<ImVec2> Pos; ///< Centres.
+  ImVector<int> Depth;
+  ImVector<int> Branch; ///< Mind map: the index of the root's child the node descends from.
+  ImVector<unsigned char> OnRight; ///< Mind map: on the root's right (else left).
+  ImVector<int> HangRoot; ///< Members of a hanging list: the node it hangs from, else -1.
+  ImVec2 Size;
+};
+
+namespace ImUml {
+/// @brief Lays out a tree: parents centred over their children, subtrees
+///        packed by contour, siblings in written order (DESIGN.md section 4,
+///        "Tree layout"). Coordinates of node top-lefts are whole pixels.
+void LayoutTree(const ImUmlTreeInput& in, ImUmlTreeOutput* out);
+} // namespace ImUml
+
 // ── Sequence layout (imuml_sequence_layout.cpp) ──────────────────────────────
 
 enum ImUmlSeqEventType_ {
@@ -228,6 +278,8 @@ enum ImUmlDiagramKind_ {
   ImUmlDiagramKind_ER,
   ImUmlDiagramKind_DataFlow,
   ImUmlDiagramKind_Network,
+  ImUmlDiagramKind_Shapes,
+  ImUmlDiagramKind_Tree,
 };
 
 enum ImUmlNodeType_ {
@@ -247,6 +299,9 @@ enum ImUmlNodeType_ {
   ImUmlNodeType_Participant,
   ImUmlNodeType_FlowNode, ///< Kind: ImUmlFlowShape_.
   ImUmlNodeType_FlowGroup, ///< Composite (a cluster) when it has children.
+  ImUmlNodeType_ShapeNode, ///< Shape name in Generic, stereotype in Stereotype.
+  ImUmlNodeType_ShapeGroup, ///< Composite (a cluster) when it has children.
+  ImUmlNodeType_TreeNode,
 };
 
 enum ImUmlEdgeType_ {
@@ -259,6 +314,8 @@ enum ImUmlEdgeType_ {
   ImUmlEdgeType_Link,
   ImUmlEdgeType_NoteLink,
   ImUmlEdgeType_FlowLink, ///< Kind: ImUmlFlowLinkFlags_.
+  ImUmlEdgeType_ShapeLink, ///< Kind: ImUmlShapeLinkFlags_.
+  ImUmlEdgeType_TreeLink,
 };
 
 /// @brief A string in the diagram's text buffer (offsets survive growth).
@@ -289,11 +346,20 @@ struct ImUmlLine {
   int Keys; ///< ER attributes: ImUmlAttributeKeys_.
 };
 
+enum ImUmlTreeFlags_ {
+  ImUmlTreeFlags_Hanging = 1 << 0,
+  ImUmlTreeFlags_Staff = 1 << 1,
+  ImUmlTreeFlags_Vacant = 1 << 2,
+};
+
 struct ImUmlNodeRec {
   ImGuiID Id;
   int Type; ///< ImUmlNodeType_
   int Kind;
   ImUmlStr Name, Stereotype, Generic; ///< Stereotype also holds a process / store number, a device address.
+  ImUmlStr Detail, Image; ///< Tree nodes: an org chart's third line and portrait.
+  int TreeFlags; ///< ImUmlTreeFlags_
+  int Hidden; ///< Tree nodes: collapsed descendants.
   int FirstLine, LineCount;
   int FirstAttach, AttachCount; ///< Notes: ids in AttachIds.
   int Parent; ///< Composite state containing it, or -1.
@@ -383,11 +449,15 @@ struct ImUmlDiagram {
   float NextZoom;
   ImVec2 NextCenter;
   ImRect Boundary; ///< Use case system boundary (diagram coordinates).
+  ImUmlTreeMode TreeMode;
+  ImVector<unsigned char> TreeRight; ///< Mind map: node on the root's right.
+  ImVector<int> TreeDepth, TreeBranch, TreeHang;
 
   ImUmlDiagram() {
     ID = 0;
     Kind = 0;
     Flags = 0;
+    TreeMode = ImUmlTreeMode_Tidy;
     OpenClass = -1;
     OpenFragments = 0;
     SkippedItems = 0;
@@ -413,8 +483,23 @@ struct ImUmlStyleMod {
   ImVec2 Backup;
 };
 
+/// A registered shape artwork (deep copy of an ImUmlShapeDesc).
+struct ImUmlShapeArt {
+  ImVector<char> Name;
+  ImVec2 ViewSize;
+  bool Resizable;
+  float Slice[4];
+  bool GrowProportional;
+  bool HasText, HasContent;
+  ImVec2 TextMin, TextMax, ContentMin, ContentMax;
+  ImVector<ImVec2> Points;
+  ImVector<ImUmlShapePath> Paths;
+  ImVector<ImVec2> Outline;
+};
+
 struct ImUmlContext {
   ImUmlStyle Style;
+  ImVector<ImUmlShapeArt*> Shapes; ///< Sorted by name.
   ImVector<ImUmlColorMod> ColorModifiers;
   ImVector<ImUmlStyleMod> StyleModifiers;
   ImVector<ImUmlDiagram*> Diagrams;
@@ -437,6 +522,11 @@ struct ImUmlContext {
   char NextRank[64];
   int NextWeight, NextMinLen;
   bool NextConstraint;
+  ~ImUmlContext() {
+    for (int i = 0; i < Shapes.Size; ++i) {
+      IM_DELETE(Shapes[i]);
+    }
+  }
   ImUmlContext() {
     HasNextView = false;
     NextZoom = 1.0f;
@@ -514,6 +604,8 @@ void RenderFragmentFrame(
     ImU32 border,
     ImU32 tab_fill,
     float lw);
+/// @brief The registered shape artwork called `name`, or null.
+const ImUmlShapeArt* FindShapeArt(const char* name);
 /// @brief Database cylinder filling `a`..`b`.
 void RenderCylinder(ImDrawList* dl, const ImVec2& a, const ImVec2& b, ImU32 fill, ImU32 border, float lw);
 } // namespace ImUml

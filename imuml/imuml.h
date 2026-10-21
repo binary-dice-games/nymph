@@ -62,6 +62,8 @@ typedef int ImUmlDataFlowFlags; // -> enum ImUmlDataFlowFlags_
 typedef int ImUmlDeviceKind; // -> enum ImUmlDeviceKind_
 typedef int ImUmlLinkKind; // -> enum ImUmlLinkKind_
 typedef int ImUmlLinkFlags; // -> enum ImUmlLinkFlags_
+typedef int ImUmlShapeLinkFlags; // -> enum ImUmlShapeLinkFlags_
+typedef int ImUmlTreeMode; // -> enum ImUmlTreeMode_
 
 // ── Enums ────────────────────────────────────────────────────────────────────
 
@@ -142,6 +144,9 @@ enum ImUmlDirection_ {
 enum ImUmlEdgeStyle_ {
   ImUmlEdgeStyle_Spline,
   ImUmlEdgeStyle_Polyline,
+  ImUmlEdgeStyle_Elbow, ///< Tree diagrams: orthogonal connectors.
+  ImUmlEdgeStyle_Curve, ///< Tree diagrams: smooth curves.
+  ImUmlEdgeStyle_Straight, ///< Tree diagrams: straight lines.
 };
 
 enum ImUmlClassKind_ {
@@ -149,6 +154,7 @@ enum ImUmlClassKind_ {
   ImUmlClassKind_Abstract, ///< «abstract», italic name.
   ImUmlClassKind_Interface, ///< «interface».
   ImUmlClassKind_Enum, ///< «enumeration».
+  ImUmlClassKind_Object, ///< An object diagram instance: the name ("order1 : Order") is underlined.
 };
 
 enum ImUmlRelationKind_ {
@@ -375,6 +381,92 @@ struct ImUmlDiagramInfo {
     HoveredNodeId = HoveredEdgeFrom = HoveredEdgeTo = 0;
     HoveredMin = HoveredMax = ImVec2(0, 0);
   }
+};
+
+/// Link styles of ShapeLink().
+enum ImUmlShapeLinkFlags_ {
+  ImUmlShapeLinkFlags_None = 0,
+  ImUmlShapeLinkFlags_Dashed = 1 << 0,
+  ImUmlShapeLinkFlags_Thick = 1 << 1,
+  ImUmlShapeLinkFlags_ArrowOpen = 1 << 2, ///< Open arrow at `to`.
+  ImUmlShapeLinkFlags_ArrowFilled = 1 << 3, ///< Filled arrow at `to`.
+  ImUmlShapeLinkFlags_ArrowHollow = 1 << 4, ///< Hollow triangle at `to` (generalisation, realisation).
+  ImUmlShapeLinkFlags_BothEnds = 1 << 5, ///< The same arrow at `from` too.
+  /// A ball-and-socket connector: a ball on the `from` side (the provider),
+  /// a socket cupping it on the `to` side (the consumer), the label beside.
+  ImUmlShapeLinkFlags_Assembly = 1 << 6,
+  ImUmlShapeLinkFlags_RankToFirst = 1 << 7, ///< The layout ranks `to` above `from`.
+};
+
+/// Layout and look of a tree diagram.
+enum ImUmlTreeMode_ {
+  ImUmlTreeMode_Tidy, ///< A plain tree: each parent centred over its children.
+  ImUmlTreeMode_MindMap, ///< The root in the middle, branches to both sides, coloured by branch.
+  ImUmlTreeMode_OrgChart, ///< Cards with a portrait, name, title; hanging teams; assistants beside the parent.
+};
+
+/// @brief One node of a tree diagram (BeginTreeNode()).
+struct ImUmlTreeNodeDesc {
+  const char* Id; ///< Optional; needed to be named by TreeLink().
+  const char* Text; ///< The label; an org chart's name.
+  const char* Subtext; ///< Org chart: the job title.
+  const char* Detail; ///< Org chart: a small third line (department).
+  const char* Shape; ///< A registered shape; null: the mode's default.
+  const char* Image; ///< Org chart: a registered shape or placeholder image ("image:person") for a portrait.
+  int Side; ///< Mind map, root children: ImUmlSide_Left or Right; -1 balances.
+  bool Hanging; ///< Org chart: this node's descendants hang below it in an indented list.
+  bool Staff; ///< Org chart: an assistant, drawn beside its parent.
+  bool Vacant; ///< Org chart: a dashed card with no portrait.
+  int Hidden; ///< Descendants not submitted (collapsed): a "+N" badge when above 0.
+  ImU32 Color; ///< Branch or outline colour; 0 for the mode's.
+  ImUmlTreeNodeDesc() {
+    Id = Text = Subtext = Detail = Shape = Image = nullptr;
+    Side = -1;
+    Hanging = Staff = Vacant = false;
+    Hidden = 0;
+    Color = 0;
+  }
+};
+
+// ── Shapes ───────────────────────────────────────────────────────────────────
+// A shape is vector artwork registered by name (nymph registers the SVG files
+// of resources/shapes/; any ImGui program can register its own). ImUml knows
+// geometry only: no files, no parser. Spec: spec/13_more_diagrams_and_shapes.
+
+/// Colour a shape path takes.
+enum ImUmlShapeRole_ {
+  ImUmlShapeRole_Line, ///< The line colour (SVG #000000).
+  ImUmlShapeRole_Half, ///< The line colour at half alpha (SVG #808080).
+  ImUmlShapeRole_Fill, ///< The node fill colour (SVG #FFFFFF).
+};
+
+/// @brief One filled or stroked polyline of a shape, in viewBox units.
+struct ImUmlShapePath {
+  int Role; ///< ImUmlShapeRole_
+  bool Stroke; ///< Stroked (else filled).
+  bool Closed;
+  float Width; ///< Stroke width, a multiple of the line weight.
+  float Dash, Gap; ///< Dashed stroke, viewBox units (0: solid).
+  int PointStart, PointCount; ///< Range in ImUmlShapeDesc::Points.
+};
+
+/// @brief What AddShape() takes; copied, so the arrays need not outlive the call.
+struct ImUmlShapeDesc {
+  const char* Name;
+  ImVec2 ViewSize; ///< Nominal size: one unit is one pixel at zoom 1.
+  bool Resizable; ///< Fills any size (else an icon: keeps its aspect ratio).
+  float Slice[4]; ///< Left, top, right, bottom margins that keep their size when resized.
+  bool GrowProportional; ///< Node size grows with the label's ratio (else by margins).
+  bool HasText; ///< Label rect (else the whole shape; icons put the label below).
+  ImVec2 TextMin, TextMax;
+  bool HasContent; ///< Where a container's children go.
+  ImVec2 ContentMin, ContentMax;
+  const ImVec2* Points; ///< All paths' flattened points.
+  int PointCount;
+  const ImUmlShapePath* Paths; ///< In painter's order.
+  int PathCount;
+  const ImVec2* Outline; ///< Closed border for clipping; null: the viewBox.
+  int OutlineCount;
 };
 
 namespace ImUml {
@@ -627,6 +719,68 @@ IMGUI_API void Link(
     const char* from_label = nullptr,
     const char* to_label = nullptr,
     ImUmlLinkFlags flags = 0);
+
+// ── Shape diagrams ───────────────────────────────────────────────────────────
+// Component, deployment and package diagrams, and flowcharts with library
+// shapes: nodes and groups drawn with registered shapes (AddShape), on the
+// layered layout.
+
+IMGUI_API bool BeginShapeDiagram(const char* title_id, const ImVec2& size = ImVec2(-1, 0), ImUmlDiagramFlags flags = 0);
+IMGUI_API void EndShapeDiagram();
+/// @brief A node drawn with shape `shape`: `text` (lines separated by newlines) in
+///        the shape's text area, `stereotype` ("component": drawn as
+///        guillemets) above it. Also valid in a Flowchart.
+IMGUI_API void ShapeNode(const char* id, const char* text = nullptr, const char* shape = "rectangle", const char* stereotype = nullptr);
+/// @brief A group: a frame drawn with `shape`, its title in the header band,
+///        the nodes submitted until EndShapeGroup() inside it. A group with
+///        nothing in it is a node. Also valid in a Flowchart.
+IMGUI_API void BeginShapeGroup(const char* id, const char* title = nullptr, const char* shape = "rectangle", const char* stereotype = nullptr);
+IMGUI_API void EndShapeGroup();
+/// @brief A link between two nodes or groups; `from_label` / `to_label` are
+///        drawn next to each end.
+IMGUI_API void ShapeLink(
+    const char* from, const char* to, const char* label = nullptr, ImUmlShapeLinkFlags flags = 0,
+    const char* from_label = nullptr, const char* to_label = nullptr);
+
+// ── Tree diagrams ────────────────────────────────────────────────────────────
+// Trees, mind maps and org charts: the hierarchy is the nesting of
+// BeginTreeNode() / EndTreeNode(); positions come from a tidy-tree layout.
+
+IMGUI_API bool BeginTreeDiagram(const char* title_id, const ImVec2& size = ImVec2(-1, 0), ImUmlDiagramFlags flags = 0);
+IMGUI_API void EndTreeDiagram();
+/// @brief Sets the mode; call after Begin and before the first node. The
+///        direction and edge style come from SetupLayout() (Elbow, Curve or
+///        Straight edges).
+IMGUI_API void SetupTree(ImUmlTreeMode mode);
+IMGUI_API void BeginTreeNode(const ImUmlTreeNodeDesc& desc);
+IMGUI_API void EndTreeNode();
+/// @brief A dashed curve between two nodes with an id; it does not move
+///        anything.
+IMGUI_API void TreeLink(const char* from, const char* to, const char* label = nullptr);
+
+// ── Shapes (imuml_shape.cpp) ─────────────────────────────────────────────────
+
+/// @brief Registers (or replaces) a shape in the current context.
+IMGUI_API void AddShape(const ImUmlShapeDesc& desc);
+/// @brief Whether a shape of that name is registered.
+IMGUI_API bool HasShape(const char* name);
+/// @brief Draws shape `name` into [`min`, `max`): a resizable shape fills it
+///        (margins of its slice scaled by `zoom`), an icon is centred at its
+///        aspect ratio. Returns false (drawing nothing) for an unknown name.
+IMGUI_API bool RenderShape(
+    ImDrawList* dl, const char* name, const ImVec2& min, const ImVec2& max, ImU32 line, ImU32 fill, float line_weight,
+    float zoom = 1.0f);
+/// @brief The label rectangle of shape `name` once drawn into [`min`, `max`)
+///        (the whole box for a shape without one). False for an unknown name.
+IMGUI_API bool GetShapeTextRect(const char* name, const ImVec2& min, const ImVec2& max, float zoom, ImVec2* text_min, ImVec2* text_max);
+/// @brief The size a node of shape `name` needs around a label of
+///        `label_size` (zoom 1): never below the shape's nominal size. An icon
+///        needs only its nominal size (the label goes below it).
+IMGUI_API ImVec2 GetShapeNodeSize(const char* name, const ImVec2& label_size);
+/// @brief The shape's nominal size; (0, 0) for an unknown name.
+IMGUI_API ImVec2 GetShapeSize(const char* name);
+/// @brief Whether shape `name` is an icon (keeps its aspect ratio).
+IMGUI_API bool IsShapeIcon(const char* name);
 
 // ── Queries ──────────────────────────────────────────────────────────────────
 

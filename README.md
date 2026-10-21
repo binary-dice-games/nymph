@@ -131,7 +131,7 @@ carries its source: `bdg::nymph::extract_source(png)` returns it.
 | Concept | Description |
 |---------|-------------|
 | **Source** | One YAML document: `description`, `image` options, a `root` element tree, `data`, and optional `source`. |
-| **UML diagrams and flowcharts** | `ClassDiagram`, `SequenceDiagram`, `StateDiagram`, `ActivityDiagram`, `UseCaseDiagram`, `ERDiagram` (database tables), `DataFlowDiagram`, `NetworkDiagram` and `Flowchart` (any node-and-link diagram, with groups): nodes and edges named by `id`, laid out automatically (Graphviz dot-style). See [docs/format.md](docs/format.md#uml-diagrams). |
+| **UML diagrams and flowcharts** | `ClassDiagram`, `SequenceDiagram`, `StateDiagram`, `ActivityDiagram`, `UseCaseDiagram`, `ERDiagram` (database tables), `DataFlowDiagram`, `NetworkDiagram`, `ComponentDiagram`, `DeploymentDiagram`, `PackageDiagram`, `ObjectDiagram` and `Flowchart`, plus `TreeDiagram`, `MindMap` and `OrgChart` (hierarchies written by nesting; `Shape` and `nymph shapes` for the shape library) (any node-and-link diagram, with groups): nodes and edges named by `id`, laid out automatically (Graphviz dot-style). See [docs/format.md](docs/format.md#uml-diagrams). |
 | **Elements** | `Plot` / `Plot3D` and their series (lines, bars, grouped bars, error bars, heatmaps, annotations, ...; log, time and category axes), `GanttChart` (schedules), `SankeyDiagram` (flows), `ColorScale`, plus `VerticalLayout` / `HorizontalLayout`, `Spring`, `Label` and separators to combine them. New types register a class; see [the design](spec/01_core_features/DESIGN.md#9-extension-points). |
 | **User interfaces** | A `Screen` of Dear ImGui `Window`s holding ImGui widgets by their ImGui names (`Button`, `SliderFloat`, `TreeNode`, `Table`, menus, popups), built-in placeholder `Image`s and `WindowTransition` arrows for the UI flow: a mockup in a PNG, usable in the viewers. See [docs/format.md](docs/format.md#user-interfaces). |
 | **Data** | `data` holds one table, or several named tables, as CSV text or columns. |
@@ -152,6 +152,7 @@ carries its source: `bdg::nymph::extract_source(png)` returns it.
 | [docs/agent-guide.md](docs/agent-guide.md) | Self-contained instructions and recipes for AI agents |
 | [docs/cursor.md](docs/cursor.md) | nymph in Cursor: the plugin, the `mcp.json` entry, the rule |
 | [docs/claude.md](docs/claude.md) | nymph in Claude: the Claude Code plugin, the Claude Desktop extension, the claude.ai skill, `nymph mcp` |
+| [docs/shapes.md](docs/shapes.md) | The shape library: every shape, how to use and add one |
 | [docs/examples.md](docs/examples.md) | The example charts with their sources and images |
 | [docs/viewer.md](docs/viewer.md) | The web viewer: files, embedding, JavaScript API, events, interaction |
 | [docs/extension.md](docs/extension.md) | The Chrome extension: install, the toolbar button, sites, privacy, limits |

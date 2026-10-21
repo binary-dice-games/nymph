@@ -1,0 +1,14 @@
+nymph: 1
+description: An order, its customer and the line items at one moment.
+image: {width: 900, height: 420}
+root:
+  type: ObjectDiagram
+  title: A paid order
+  children:
+    - {type: Object, id: o1, name: order1, class: Order, slots: ["total = 42.50", "state = PAID"]}
+    - {type: Object, id: c1, name: ana, class: Customer, slots: ["email = ana@example.com"]}
+    - {type: Object, id: l1, class: OrderLine, slots: ["sku = A-17", "qty = 2"]}
+    - {type: Object, id: l2, class: OrderLine, slots: ["sku = B-03", "qty = 1"]}
+    - {type: ObjectLink, from: o1, to: c1, label: placedBy, kind: DirectedAssociation}
+    - {type: ObjectLink, from: o1, to: l1, kind: Composition}
+    - {type: ObjectLink, from: o1, to: l2, kind: Composition}

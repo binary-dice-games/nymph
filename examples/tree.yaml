@@ -1,0 +1,17 @@
+nymph: 1
+description: The folders of a source tree.
+image: {width: 900, height: 420}
+root:
+  type: TreeDiagram
+  title: Source layout
+  children:
+    - type: TreeItem
+      text: src
+      children:
+        - {type: TreeItem, text: core}
+        - type: TreeItem
+          text: elements
+          children: [{type: TreeItem, text: uml}, {type: TreeItem, text: ui}, {type: TreeItem, text: tree}]
+        - type: TreeItem
+          text: render
+          children: [{type: TreeItem, text: rasterizers}]

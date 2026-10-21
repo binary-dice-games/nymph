@@ -1,0 +1,34 @@
+nymph: 1
+description: A small company's org chart.
+image: {width: 1000, height: 560}
+root:
+  type: OrgChart
+  title: Acme Inc.
+  children:
+    - type: Person
+      id: ceo
+      name: Ana Ruiz
+      title: CEO
+      image: person
+      children:
+        - {type: Person, name: Leo Park, title: Executive assistant, staff: true}
+        - type: Person
+          id: eng
+          name: Mia Chen
+          title: VP Engineering
+          image: person
+          children_layout: Hanging
+          children:
+            - {type: Person, name: Sam Ortiz, title: Backend lead}
+            - {type: Person, name: Kai Novak, title: Frontend lead}
+            - {type: Person, name: Zoe Hall, title: QA lead}
+        - type: Person
+          id: ops
+          name: Tom Reyes
+          title: COO
+          image: person
+          children:
+            - {type: Person, name: Ines Vega, title: Support manager}
+            - {type: Person, title: Logistics manager, vacant: true}
+        - {type: Person, id: cfo, name: Eva Lund, title: CFO, image: person}
+    - {type: OrgLink, from: cfo, to: eng, label: budget}

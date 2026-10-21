@@ -1,0 +1,26 @@
+nymph: 1
+description: An app server running a web archive, talking to a database host.
+image: {width: 900, height: 460}
+root:
+  type: DeploymentDiagram
+  title: Production
+  children:
+    - type: DeploymentNode
+      id: srv
+      name: App server
+      kind: Device
+      children:
+        - type: DeploymentNode
+          id: jvm
+          name: JVM 21
+          kind: ExecutionEnvironment
+          children:
+            - {type: Artifact, id: war, name: shop.war}
+            - {type: Component, id: shop, name: Shop}
+    - type: DeploymentNode
+      id: db
+      name: Database host
+      kind: Device
+      children:
+        - {type: Artifact, id: schema, name: schema.sql}
+    - {type: DeploymentLink, from: srv, to: db, label: JDBC / TLS}

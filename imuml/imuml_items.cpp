@@ -299,6 +299,51 @@ ImVec2 FlowNodeSize(const ImUmlDiagram* d, int shape, const ImVec2& text) {
   }
 }
 
+/// "«text»" for a shape node's stereotype into `buf`; false when it has none.
+bool StereotypeText(const ImUmlDiagram* d, const ImUmlNodeRec& n, char* buf, int size) {
+  if (n.Stereotype.Empty()) {
+    buf[0] = 0;
+    return false;
+  }
+  ImFormatString(buf, (size_t)size, "\xC2\xAB%.*s\xC2\xBB", n.Stereotype.Len, StrBegin(d, n.Stereotype));
+  return true;
+}
+
+/// The label of a shape node at zoom `zoom`: the stereotype line over the name.
+ImVec2 ShapeLabelSize(const ImUmlDiagram* d, const ImUmlNodeRec& n, float zoom) {
+  const ImVec2 name = TextSize(n.Text, zoom, StrBegin(d, n.Name), StrEnd(d, n.Name));
+  char buf[256];
+  if (!StereotypeText(d, n, buf, IM_ARRAYSIZE(buf))) {
+    return name;
+  }
+  const ImVec2 st = TextSize(n.Text, zoom, buf, buf + strlen(buf));
+  return ImVec2(ImMax(name.x, st.x), name.y + st.y);
+}
+
+/// A node drawn with a library shape, at zoom 1.
+ImVec2 MeasureShapeNode(const ImUmlDiagram* d, const ImUmlNodeRec& n, const char* shape) {
+  const ImVec2 pad = d->Style.NodePadding;
+  const ImVec2 label = ShapeLabelSize(d, n, 1.0f);
+  const ImUmlShapeArt* art = ImUml::FindShapeArt(shape);
+  if (art == nullptr) {
+    return label + pad * 2.0f;
+  }
+  if (!art->Resizable) {
+    return ImVec2(ImMax(art->ViewSize.x, label.x) + 4.0f, art->ViewSize.y + 4.0f + label.y);
+  }
+  return ImUml::GetShapeNodeSize(shape, label + pad * 0.5f);
+}
+
+/// The header band of a shape group: its shape's top margin (a tab, a cube's
+/// top face) over the title.
+float ShapeGroupHeader(const ImUmlDiagram* d, const ImUmlNodeRec& n, float* width) {
+  const ImVec2 label = ShapeLabelSize(d, n, 1.0f);
+  const ImUmlShapeArt* art = ImUml::FindShapeArt(StrBegin(d, n.Generic));
+  const float frame_sides = art != nullptr && art->HasText ? art->ViewSize.x - (art->TextMax.x - art->TextMin.x) : 0.0f;
+  *width = label.x + d->Style.NodePadding.x * 2.0f + frame_sides;
+  return ImCeil((art != nullptr ? art->Slice[1] : 0.0f) + label.y + d->Style.NodePadding.y * 2.0f);
+}
+
 /// Size and shape of a node that is not a composite state, at zoom 1.
 void MeasureNode(const ImUmlDiagram* d, ImUmlNodeRec& n) {
   const ImVec2 pad = d->Style.NodePadding;
@@ -397,6 +442,10 @@ void MeasureNode(const ImUmlDiagram* d, ImUmlNodeRec& n) {
       n.Shape = n.Kind == ImUmlFlowShape_Diamond ? ImUmlShape_Diamond
           : n.Kind == ImUmlFlowShape_Circle      ? ImUmlShape_Circle
                                                  : ImUmlShape_Box;
+      break;
+    case ImUmlNodeType_ShapeNode:
+    case ImUmlNodeType_ShapeGroup: // a group with nothing in it is a node
+      n.Size = MeasureShapeNode(d, n, StrBegin(d, n.Generic));
       break;
     case ImUmlNodeType_FlowGroup: // a group with nothing in it: its title in a box
       n.Size = ImVec2(ImMax(text.x + pad.x * 2.0f, 60.0f), text.y + pad.y * 2.0f);
@@ -520,6 +569,23 @@ EdgeLook LookOf(const ImUmlDiagram* d, const ImUmlEdgeRec& e) {
     case ImUmlEdgeType_Relationship:
       l.Dashed = ((e.Kind >> 8) & ImUmlRelationshipFlags_NonIdentifying) != 0;
       break;
+    case ImUmlEdgeType_ShapeLink: {
+      const int f = e.Kind;
+      l.Dashed = (f & ImUmlShapeLinkFlags_Dashed) != 0;
+      l.WeightScale = (f & ImUmlShapeLinkFlags_Thick) != 0 ? 2.0f : 1.0f;
+      const ImUmlMarker m = (f & ImUmlShapeLinkFlags_ArrowHollow) ? ImUmlMarker_Hollow
+          : (f & ImUmlShapeLinkFlags_ArrowFilled)                 ? ImUmlMarker_Filled
+          : (f & ImUmlShapeLinkFlags_ArrowOpen)                   ? ImUmlMarker_Open
+                                                                  : ImUmlMarker_None;
+      l.AtTo = m;
+      l.AtFrom = (f & ImUmlShapeLinkFlags_BothEnds) ? m : ImUmlMarker_None;
+      l.RankToFirst = (f & ImUmlShapeLinkFlags_RankToFirst) != 0;
+      break;
+    }
+    case ImUmlEdgeType_TreeLink:
+      l.Dashed = true;
+      l.AtTo = ImUmlMarker_Open;
+      break;
     case ImUmlEdgeType_DataFlow:
       l.AtTo = ImUmlMarker_Filled;
       if (e.Kind & ImUmlDataFlowFlags_Bidirectional) {
@@ -555,6 +621,7 @@ ImGuiID HashItems(const ImUmlDiagram* d) {
   h = ImHashData(&d->RankSpacing, sizeof(d->RankSpacing), h);
   h = ImHashData(&d->SequenceFlags, sizeof(d->SequenceFlags), h);
   h = ImHashData(&d->SystemLabel, sizeof(d->SystemLabel), h);
+  h = ImHashData(&d->TreeMode, sizeof(d->TreeMode), h);
   h = ImHashData(&d->Style, sizeof(d->Style) - sizeof(d->Style.Colors) - sizeof(ImFont*), h);
   h = ImHashData(&d->Style.ItalicFont, sizeof(ImFont*), h);
   if (d->TextBuf.Size > 0) {
@@ -656,11 +723,12 @@ ImVec2 LayoutAll(ImUmlDiagram* d) {
     if (!n.Composite) {
       continue;
     }
-    n.HeaderHeight = CompositeHeader(d, n);
+    float header_w = TextSize(n.Text, 1.0f, StrBegin(d, n.Name), StrEnd(d, n.Name)).x + pad.x * 2.0f;
+    n.HeaderHeight = n.Type == ImUmlNodeType_ShapeGroup ? ShapeGroupHeader(d, n, &header_w) : CompositeHeader(d, n);
     n.Shape = ImUmlShape_Box;
     ImUmlGraphCluster gc;
     gc.Parent = n.Parent >= 0 ? cluster_of[n.Parent] : -1;
-    gc.HeaderSize = ImVec2(TextSize(n.Text, 1.0f, StrBegin(d, n.Name), StrEnd(d, n.Name)).x + pad.x * 2.0f, n.HeaderHeight);
+    gc.HeaderSize = ImVec2(header_w, n.HeaderHeight);
     gc.Padding = pad.x * 2.0f;
     cluster_of[i] = in.Clusters.Size;
     in.Clusters.push_back(gc);
@@ -888,6 +956,90 @@ ImVec2 LayoutGraphDiagram(ImUmlDiagram* d) {
   return CeilPx(bounds.GetSize() + ImVec2(kMargin, kMargin) * 2.0f);
 }
 
+// ── Tree layout ──────────────────────────────────────────────────────────────
+
+const float kOrgPortrait = 40.0f; // org chart portrait, zoom 1
+
+/// A tree node's size at zoom 1 for the diagram's mode.
+ImVec2 MeasureTreeNode(const ImUmlDiagram* d, const ImUmlNodeRec& n, int depth) {
+  const ImVec2 pad = d->Style.NodePadding;
+  const ImVec2 name = TextSize(n.Text, 1.0f, StrBegin(d, n.Name), StrEnd(d, n.Name));
+  switch (d->TreeMode) {
+    case ImUmlTreeMode_OrgChart: {
+      const ImVec2 title = TextSize(n.Text, 1.0f, StrBegin(d, n.Stereotype), StrEnd(d, n.Stereotype));
+      const ImVec2 detail = TextSize(n.Text, 1.0f, StrBegin(d, n.Detail), StrEnd(d, n.Detail));
+      const bool portrait = !n.Image.Empty() && !(n.TreeFlags & ImUmlTreeFlags_Vacant);
+      const float text_w = ImMax(name.x, ImMax(title.x, detail.x));
+      const float text_h = name.y + title.y + detail.y;
+      // The card's content (portrait beside the text lines), padded; the
+      // shape grows around it so it fits inside the shape's text area.
+      const ImVec2 content((portrait ? kOrgPortrait + pad.x : 0.0f) + text_w + pad.x,
+                           ImMax(text_h, portrait ? kOrgPortrait : 0.0f) + pad.y);
+      const bool vacant = (n.TreeFlags & ImUmlTreeFlags_Vacant) != 0;
+      const char* shape = vacant ? "dashed_region" : (n.Generic.Empty() ? "rounded_rectangle" : StrBegin(d, n.Generic));
+      ImVec2 size = ImUml::FindShapeArt(shape) != nullptr && ImUml::FindShapeArt(shape)->Resizable
+          ? ImUml::GetShapeNodeSize(shape, content)
+          : content + pad;
+      size.x = ImMax(size.x, 110.0f);
+      return size;
+    }
+    case ImUmlTreeMode_MindMap:
+      if (depth == 0) {
+        return ImVec2(name.x + pad.x * 4.0f, name.y + pad.y * 3.0f);
+      }
+      if (depth == 1) {
+        return ImVec2(name.x + pad.x * 3.0f, name.y + pad.y * 2.0f);
+      }
+      return ImVec2(name.x + pad.x, name.y + pad.y + 3.0f);
+    default:
+      return MeasureShapeNode(d, n, n.Generic.Empty() ? "rounded_rectangle" : StrBegin(d, n.Generic));
+  }
+}
+
+/// Lays out a tree diagram; node Pos / Size at zoom 1, with the margin.
+ImVec2 LayoutTreeDiagram(ImUmlDiagram* d) {
+  const int count = d->Nodes.Size;
+  ImUmlTreeInput in;
+  in.Mode = d->TreeMode;
+  in.Direction = d->TreeMode == ImUmlTreeMode_MindMap ? ImUmlDirection_LeftRight : d->Direction;
+  in.NodeSpacing = d->NodeSpacing;
+  in.RankSpacing = d->RankSpacing;
+  ImVector<int> depth;
+  depth.resize(count);
+  for (int i = 0; i < count; ++i) {
+    ImUmlNodeRec& n = d->Nodes[i];
+    n.Composite = false;
+    depth[i] = n.Parent >= 0 ? depth[n.Parent] + 1 : 0;
+    n.Size = CeilPx(MeasureTreeNode(d, n, depth[i]));
+    ImUmlTreeNodeIn tn;
+    tn.Size = n.Size;
+    tn.Parent = n.Parent;
+    tn.Side = n.Parent == 0 ? n.Side : -1;
+    tn.Hanging = (n.TreeFlags & ImUmlTreeFlags_Hanging) != 0;
+    tn.Staff = (n.TreeFlags & ImUmlTreeFlags_Staff) != 0;
+    in.Nodes.push_back(tn);
+  }
+  ImUmlTreeOutput out;
+  ImUml::LayoutTree(in, &out);
+  const ImVec2 origin(kMargin, kMargin);
+  for (int i = 0; i < count; ++i) {
+    d->Nodes[i].Pos = (i < out.Pos.Size ? out.Pos[i] : ImVec2(0, 0)) + origin;
+  }
+  d->TreeDepth = out.Depth;
+  d->TreeBranch = out.Branch;
+  d->TreeHang = out.HangRoot;
+  d->TreeRight = out.OnRight;
+  d->CacheEdges.resize(d->Edges.Size);
+  for (int e = 0; e < d->Edges.Size; ++e) {
+    d->CacheEdges[e].PointStart = d->CacheEdges[e].PointCount = 0;
+    d->CacheEdges[e].Bezier = false;
+    d->CacheEdges[e].LabelPos = ImVec2(0, 0);
+  }
+  d->Points.resize(0);
+  d->Boundary = ImRect(0, 0, 0, 0);
+  return CeilPx(out.Size + origin * 2.0f);
+}
+
 // ── Sequence layout ──────────────────────────────────────────────────────────
 
 const char* FragmentKeyword(int kind) {
@@ -1062,6 +1214,12 @@ struct Painter {
   }
 };
 
+/// Draws library shape `name` into [a, b); false when it is not registered
+/// (ImUml without nymph's shape library), so the caller draws its fallback.
+bool DrawLibraryShape(const Painter& pt, const char* name, const ImVec2& a, const ImVec2& b, ImU32 fill, ImU32 border) {
+  return ImUml::RenderShape(pt.DL, name, a, b, border, fill, pt.LW, pt.Zoom);
+}
+
 void DrawClass(const Painter& pt, const ImUmlNodeRec& n, ImU32 fill, ImU32 border) {
   const ImUmlDiagram* d = pt.D;
   const ClassGeometry g = MeasureClass(d, n);
@@ -1079,6 +1237,12 @@ void DrawClass(const Painter& pt, const ImUmlNodeRec& n, ImU32 fill, ImU32 borde
   }
   ImFont* name_font = n.Kind == ImUmlClassKind_Abstract ? ItalicFont(d) : nullptr;
   TextCentered(pt.DL, n.Text, pt.Zoom, cx, y, StrBegin(d, n.Name), StrEnd(d, n.Name), n.Text.Col, name_font);
+  if (n.Kind == ImUmlClassKind_Object) {
+    // An instance: its "name : class" is underlined.
+    const ImVec2 s = TextSize(n.Text, pt.Zoom, StrBegin(d, n.Name), StrEnd(d, n.Name));
+    const float uy = ImFloor(y + s.y) + 0.5f;
+    pt.DL->AddLine(ImVec2(cx - s.x * 0.5f, uy), ImVec2(cx + s.x * 0.5f, uy), n.Text.Col, ImMax(1.0f, pt.Zoom));
+  }
   if (!n.Generic.Empty()) {
     const ImVec2 gs = TextSize(n.Text, pt.Zoom, StrBegin(d, n.Generic), StrEnd(d, n.Generic));
     const ImVec2 ga(b.x - gs.x * 0.5f - pt.S(6.0f), a.y - gs.y * 0.5f - pt.S(3.0f));
@@ -1205,10 +1369,15 @@ void DrawFlowNode(const Painter& pt, const ImUmlNodeRec& n, ImU32 fill, ImU32 bo
       break;
     }
     case ImUmlFlowShape_Cylinder:
-      ImUml::RenderCylinder(pt.DL, a, b, fill, border, pt.LW);
+      if (!DrawLibraryShape(pt, "database", a, b, fill, border)) {
+        ImUml::RenderCylinder(pt.DL, a, b, fill, border, pt.LW);
+      }
       text_y += ImMin(h * 0.15f, 8.0f) * 0.5f; // below the top rim
       break;
     case ImUmlFlowShape_Subroutine: {
+      if (DrawLibraryShape(pt, "predefined_process", a, b, fill, border)) {
+        break;
+      }
       pt.DL->AddRectFilled(a, b, fill);
       pt.DL->AddRect(a, b, border, 0.0f, ImDrawFlags_None, pt.LW);
       const float inset = pt.S(kSubroutineInset);
@@ -1222,6 +1391,64 @@ void DrawFlowNode(const Painter& pt, const ImUmlNodeRec& n, ImU32 fill, ImU32 bo
       break;
   }
   TextCentered(pt.DL, n.Text, pt.Zoom, c.x, text_y, nb, ne, n.Text.Col);
+}
+
+/// The library shape that draws a network device of `kind`.
+const char* DeviceShape(ImUmlDeviceKind kind) {
+  static const char* const names[] = {"server", "database", "storage", "router", "switch", "firewall", "load_balancer",
+                                      "access_point", "cloud", "internet", "workstation", "laptop", "mobile", "user"};
+  return kind >= 0 && kind < (int)IM_ARRAYSIZE(names) ? names[kind] : "server";
+}
+
+/// A node or group drawn with library shape `shape`.
+void DrawShapeNodeAs(const Painter& pt, const ImUmlNodeRec& n, const char* shape, ImU32 fill, ImU32 border) {
+  const ImUmlDiagram* d = pt.D;
+  const ImVec2 pad = d->Style.NodePadding;
+  const ImVec2 a = pt.P(n.Pos - n.Size * 0.5f), b = pt.P(n.Pos + n.Size * 0.5f);
+  const ImUmlShapeArt* art = ImUml::FindShapeArt(shape);
+  char sbuf[256];
+  const bool has_stereotype = StereotypeText(d, n, sbuf, IM_ARRAYSIZE(sbuf));
+  const char* nb = StrBegin(d, n.Name);
+  const char* ne = StrEnd(d, n.Name);
+  const float stereotype_h = has_stereotype ? TextSize(n.Text, pt.Zoom, sbuf, sbuf + strlen(sbuf)).y : 0.0f;
+  const float block_h = stereotype_h + TextSize(n.Text, pt.Zoom, nb, ne).y;
+  // The label: stereotype over name, centred on `cx` from `y`.
+  const auto label = [&](float cx, float y) {
+    if (has_stereotype) {
+      TextCentered(pt.DL, n.Text, pt.Zoom, cx, y, sbuf, sbuf + strlen(sbuf), n.Text.Col);
+      y += stereotype_h;
+    }
+    TextCentered(pt.DL, n.Text, pt.Zoom, cx, y, nb, ne, n.Text.Col);
+  };
+  const float cx = (a.x + b.x) * 0.5f;
+  if (n.Composite) {
+    const ImU32 inside = GroupFill(pt, n);
+    if (art != nullptr) {
+      ImUml::RenderShape(pt.DL, shape, a, b, border, inside, pt.LW, pt.Zoom);
+    } else {
+      pt.DL->AddRectFilled(a, b, inside);
+      pt.DL->AddRect(a, b, border, 0.0f, ImDrawFlags_None, pt.LW);
+    }
+    label(cx, a.y + pt.S(art != nullptr ? art->Slice[1] : 0.0f) + pt.S(pad.y));
+    return;
+  }
+  if (art == nullptr) {
+    pt.DL->AddRectFilled(a, b, fill);
+    pt.DL->AddRect(a, b, border, 0.0f, ImDrawFlags_None, pt.LW);
+    label(cx, (a.y + b.y - block_h) * 0.5f);
+    return;
+  }
+  if (!art->Resizable) {
+    const ImVec2 view = art->ViewSize * pt.Zoom;
+    ImUml::RenderShape(pt.DL, shape, ImVec2(cx - view.x * 0.5f, a.y), ImVec2(cx + view.x * 0.5f, a.y + view.y), border,
+                       fill, pt.LW, pt.Zoom);
+    label(cx, a.y + view.y + pt.S(4.0f));
+    return;
+  }
+  ImUml::RenderShape(pt.DL, shape, a, b, border, fill, pt.LW, pt.Zoom);
+  ImVec2 tmin, tmax;
+  ImUml::GetShapeTextRect(shape, a, b, pt.Zoom, &tmin, &tmax);
+  label((tmin.x + tmax.x) * 0.5f, (tmin.y + tmax.y - block_h) * 0.5f);
 }
 
 void DrawNode(const Painter& pt, const ImUmlNodeRec& n) {
@@ -1347,8 +1574,11 @@ void DrawNode(const Painter& pt, const ImUmlNodeRec& n) {
       break;
     case ImUmlNodeType_Actor: {
       const float fig_w = pt.S(24.0f), fig_h = pt.S(40.0f);
-      ImUml::RenderActorFigure(pt.DL, ImVec2(cx - fig_w * 0.5f, a.y), ImVec2(cx + fig_w * 0.5f, a.y + fig_h), border,
-                               pt.LW);
+      if (!DrawLibraryShape(pt, "actor", ImVec2(cx - fig_w * 0.5f, a.y), ImVec2(cx + fig_w * 0.5f, a.y + fig_h), fill,
+                            border)) {
+        ImUml::RenderActorFigure(pt.DL, ImVec2(cx - fig_w * 0.5f, a.y), ImVec2(cx + fig_w * 0.5f, a.y + fig_h), border,
+                                 pt.LW);
+      }
       TextCentered(pt.DL, n.Text, pt.Zoom, cx, a.y + fig_h + pt.S(4.0f), nb, ne, n.Text.Col);
       break;
     }
@@ -1362,6 +1592,10 @@ void DrawNode(const Painter& pt, const ImUmlNodeRec& n) {
     }
     case ImUmlNodeType_FlowNode:
       DrawFlowNode(pt, n, fill, border);
+      break;
+    case ImUmlNodeType_ShapeNode:
+    case ImUmlNodeType_ShapeGroup:
+      DrawShapeNodeAs(pt, n, StrBegin(d, n.Generic), fill, border);
       break;
     case ImUmlNodeType_FlowGroup: {
       if (!n.Composite) {
@@ -1432,8 +1666,11 @@ void DrawNode(const Painter& pt, const ImUmlNodeRec& n) {
     }
     case ImUmlNodeType_Device: {
       const float icon_w = pt.S(44.0f), icon_h = pt.S(36.0f);
-      ImUml::RenderDeviceIcon(pt.DL, n.Kind, ImVec2(cx - icon_w * 0.5f, a.y), ImVec2(cx + icon_w * 0.5f, a.y + icon_h),
-                              border, fill, pt.LW);
+      if (!DrawLibraryShape(pt, DeviceShape(n.Kind), ImVec2(cx - icon_w * 0.5f, a.y),
+                            ImVec2(cx + icon_w * 0.5f, a.y + icon_h), fill, border)) {
+        ImUml::RenderDeviceIcon(pt.DL, n.Kind, ImVec2(cx - icon_w * 0.5f, a.y), ImVec2(cx + icon_w * 0.5f, a.y + icon_h),
+                                border, fill, pt.LW);
+      }
       float y = a.y + icon_h + pt.S(4.0f);
       TextCentered(pt.DL, n.Text, pt.Zoom, cx, y, nb, ne, n.Text.Col);
       y += ts.y + pt.S(1.0f);
@@ -1548,6 +1785,66 @@ void DrawEdgeLabel(const Painter& pt, const ImUmlTextStyle& ts, const ImVec2& ce
   TextCentered(pt.DL, ts, pt.Zoom, c.x, a.y, b, e, ts.Col);
 }
 
+/// The part of polyline `pts` between arc lengths `from` and `to`.
+void PathSlice(const ImVector<ImVec2>& pts, float from, float to, ImVector<ImVec2>* out) {
+  out->resize(0);
+  float at = 0.0f;
+  for (int i = 0; i + 1 < pts.Size; ++i) {
+    const ImVec2 a = pts[i], b = pts[i + 1];
+    const float seg = ImSqrt(ImLengthSqr(b - a));
+    if (seg <= 0.0f) {
+      continue;
+    }
+    const float s0 = ImMax(from, at), s1 = ImMin(to, at + seg);
+    if (s1 > s0) {
+      const ImVec2 p0 = a + (b - a) * ((s0 - at) / seg), p1 = a + (b - a) * ((s1 - at) / seg);
+      if (out->Size == 0) {
+        out->push_back(p0);
+      }
+      out->push_back(p1);
+    }
+    at += seg;
+  }
+}
+
+/// A ball-and-socket connector along `path`: a ball on the provider (start)
+/// side cupped by a socket on the consumer side, at the middle of the path.
+void DrawAssembly(const Painter& pt, ImU32 col, const ImVector<ImVec2>& path) {
+  float total = 0.0f;
+  for (int i = 0; i + 1 < path.Size; ++i) {
+    total += ImSqrt(ImLengthSqr(path[i + 1] - path[i]));
+  }
+  const float rb = pt.S(5.0f), rs = pt.S(8.5f);
+  if (path.Size < 2 || total < 2.0f * rs + 2.0f) {
+    ImUml::RenderPath(pt.DL, path.Data, path.Size, col, pt.LW, false, 0.0f, 0.0f);
+    return;
+  }
+  const float mid = total * 0.5f;
+  ImVector<ImVec2> tail, head, around;
+  PathSlice(path, mid - 1.0f, mid + 1.0f, &around);
+  ImVec2 m = path[0], t(0.0f, 1.0f);
+  if (around.Size >= 2) {
+    m = (around[0] + around.back()) * 0.5f;
+    const ImVec2 dir = around.back() - around[0];
+    const float len = ImSqrt(ImLengthSqr(dir));
+    t = len > 0.0f ? dir * (1.0f / len) : t;
+  }
+  PathSlice(path, 0.0f, mid - rb, &tail);
+  PathSlice(path, mid + rs, total, &head);
+  if (tail.Size >= 2) {
+    ImUml::RenderPath(pt.DL, tail.Data, tail.Size, col, pt.LW, false, 0.0f, 0.0f);
+  }
+  if (head.Size >= 2) {
+    ImUml::RenderPath(pt.DL, head.Data, head.Size, col, pt.LW, false, 0.0f, 0.0f);
+  }
+  const float theta = ImAtan2(t.y, t.x);
+  const int seg = ImUml::CircleSegments(rs);
+  pt.DL->PathArcTo(m, rs, theta - IM_PI * 0.5f, theta + IM_PI * 0.5f, seg / 2);
+  pt.DL->PathStroke(col, ImDrawFlags_None, pt.LW);
+  pt.DL->AddCircleFilled(m, rb, pt.Col(ImUmlCol_NodeFill), ImUml::CircleSegments(rb));
+  pt.DL->AddCircle(m, rb, col, ImUml::CircleSegments(rb), pt.LW);
+}
+
 void DrawEdge(const Painter& pt, const ImUmlEdgeRec& e, const ImUmlGraphEdgeOut& eo, ImVector<ImVec2>* scratch) {
   const ImUmlDiagram* d = pt.D;
   BeginRuns(ImUmlTextRunKind_Edge, (int)(&e - d->Edges.Data));
@@ -1569,8 +1866,12 @@ void DrawEdge(const Painter& pt, const ImUmlEdgeRec& e, const ImUmlGraphEdgeOut&
   const ImVec2 to_tip = path.back(), from_tip = path[0];
   TrimPath(&path, ImUml::MarkerLength(look.AtTo, size), true);
   TrimPath(&path, ImUml::MarkerLength(look.AtFrom, size), false);
-  ImUml::RenderPath(pt.DL, path.Data, path.Size, col, pt.LW * look.WeightScale, look.Dashed,
-                    pt.S(d->Style.DashLength * look.DashScale), pt.S(d->Style.GapLength * look.DashScale));
+  if (e.Type == ImUmlEdgeType_ShapeLink && (e.Kind & ImUmlShapeLinkFlags_Assembly)) {
+    DrawAssembly(pt, col, path);
+  } else {
+    ImUml::RenderPath(pt.DL, path.Data, path.Size, col, pt.LW * look.WeightScale, look.Dashed,
+                      pt.S(d->Style.DashLength * look.DashScale), pt.S(d->Style.GapLength * look.DashScale));
+  }
   ImUml::RenderMarker(pt.DL, look.AtTo, to_tip, to_dir, size, col, pt.Col(ImUmlCol_Bg), pt.LW);
   ImUml::RenderMarker(pt.DL, look.AtFrom, from_tip, from_dir, size, col, pt.Col(ImUmlCol_Bg), pt.LW);
   if (e.Type == ImUmlEdgeType_Relationship) {
@@ -1623,6 +1924,371 @@ void DrawGraphDiagram(const Painter& pt) {
   }
 }
 
+// ── Tree drawing ─────────────────────────────────────────────────────────────
+
+const ImU32 kBranchColors[8] = {
+    IM_COL32(78, 121, 167, 255), IM_COL32(242, 142, 43, 255), IM_COL32(89, 161, 79, 255), IM_COL32(225, 87, 89, 255),
+    IM_COL32(176, 122, 161, 255), IM_COL32(118, 183, 178, 255), IM_COL32(237, 201, 72, 255), IM_COL32(255, 157, 167, 255)};
+
+/// Black or white, whichever reads on `col`.
+ImU32 TextOn(ImU32 col) {
+  const ImVec4 c = ImGui::ColorConvertU32ToFloat4(col);
+  return 0.299f * c.x + 0.587f * c.y + 0.114f * c.z > 0.6f ? IM_COL32(20, 20, 20, 255) : IM_COL32(255, 255, 255, 255);
+}
+
+/// The colour of a mind map node's branch: the nearest colour set on it or
+/// an ancestor below the root, else the palette entry of its branch.
+ImU32 BranchColor(const ImUmlDiagram* d, int i) {
+  for (int a = i; a > 0; a = d->Nodes[a].Parent) {
+    if (d->Nodes[a].LineCol != 0) {
+      return d->Nodes[a].LineCol;
+    }
+  }
+  if (i == 0) {
+    return d->Nodes[0].LineCol != 0 ? d->Nodes[0].LineCol : d->Colors[ImUmlCol_NodeBorder];
+  }
+  return kBranchColors[d->TreeBranch[i] & 7];
+}
+
+/// Strokes the polyline or curve of one tree connector.
+void StrokeConnector(const Painter& pt, const ImVec2* pts, int count, bool bezier, ImU32 col, float lw) {
+  ImVector<ImVec2> flat;
+  ImUml::FlattenPath(pts, count, bezier, &flat);
+  ImUml::RenderPath(pt.DL, flat.Data, flat.Size, col, lw, false, 0.0f, 0.0f);
+}
+
+/// Whether the connector of node `i` is drawn with its parent's other
+/// elbow connectors (one stem and one bus per parent).
+bool IsBusChild(const ImUmlDiagram* d, int i) {
+  const ImUmlNodeRec& c = d->Nodes[i];
+  return d->TreeMode != ImUmlTreeMode_MindMap && d->EdgeStyle == ImUmlEdgeStyle_Elbow && c.Parent >= 0 &&
+         d->TreeHang[i] < 0 && !(c.TreeFlags & ImUmlTreeFlags_Staff);
+}
+
+void DrawElbowBuses(const Painter& pt) {
+  const ImUmlDiagram* d = pt.D;
+  const bool vertical = d->Direction == ImUmlDirection_TopDown || d->Direction == ImUmlDirection_BottomUp;
+  for (int p = 0; p < d->Nodes.Size; ++p) {
+    float lo = FLT_MAX, hi = -FLT_MAX;
+    int kids = 0;
+    for (int i = p + 1; i < d->Nodes.Size; ++i) {
+      if (d->Nodes[i].Parent != p || !IsBusChild(d, i)) {
+        continue;
+      }
+      const ImVec2 c = pt.P(d->Nodes[i].Pos);
+      lo = ImMin(lo, vertical ? c.x : c.y);
+      hi = ImMax(hi, vertical ? c.x : c.y);
+      ++kids;
+    }
+    if (kids == 0) {
+      continue;
+    }
+    const ImUmlNodeRec& pa = d->Nodes[p];
+    const ImVec2 pmin = pt.P(pa.Pos - pa.Size * 0.5f), pmax = pt.P(pa.Pos + pa.Size * 0.5f), pc = pt.P(pa.Pos);
+    const ImU32 col = pa.LineCol != 0 && false ? pa.LineCol : pt.Col(ImUmlCol_Line);
+    // The bus runs halfway between the parent and its nearest child.
+    float near_edge = FLT_MAX;
+    for (int i = p + 1; i < d->Nodes.Size; ++i) {
+      if (d->Nodes[i].Parent != p || !IsBusChild(d, i)) {
+        continue;
+      }
+      const ImVec2 cmin = pt.P(d->Nodes[i].Pos - d->Nodes[i].Size * 0.5f), cmax = pt.P(d->Nodes[i].Pos + d->Nodes[i].Size * 0.5f);
+      switch (d->Direction) {
+        case ImUmlDirection_BottomUp:
+          near_edge = ImMin(near_edge, pmin.y - cmax.y);
+          break;
+        case ImUmlDirection_LeftRight:
+          near_edge = ImMin(near_edge, cmin.x - pmax.x);
+          break;
+        case ImUmlDirection_RightLeft:
+          near_edge = ImMin(near_edge, pmin.x - cmax.x);
+          break;
+        default:
+          near_edge = ImMin(near_edge, cmin.y - pmax.y);
+          break;
+      }
+    }
+    const float bus = ImMin(near_edge * 0.5f, pt.S(d->RankSpacing * 0.5f));
+    ImVec2 stem_from, stem_to, bus_a, bus_b;
+    switch (d->Direction) {
+      case ImUmlDirection_BottomUp:
+        stem_from = ImVec2(pc.x, pmin.y);
+        stem_to = ImVec2(pc.x, pmin.y - bus);
+        bus_a = ImVec2(lo, stem_to.y);
+        bus_b = ImVec2(hi, stem_to.y);
+        break;
+      case ImUmlDirection_LeftRight:
+        stem_from = ImVec2(pmax.x, pc.y);
+        stem_to = ImVec2(pmax.x + bus, pc.y);
+        bus_a = ImVec2(stem_to.x, lo);
+        bus_b = ImVec2(stem_to.x, hi);
+        break;
+      case ImUmlDirection_RightLeft:
+        stem_from = ImVec2(pmin.x, pc.y);
+        stem_to = ImVec2(pmin.x - bus, pc.y);
+        bus_a = ImVec2(stem_to.x, lo);
+        bus_b = ImVec2(stem_to.x, hi);
+        break;
+      default:
+        stem_from = ImVec2(pc.x, pmax.y);
+        stem_to = ImVec2(pc.x, pmax.y + bus);
+        bus_a = ImVec2(lo, stem_to.y);
+        bus_b = ImVec2(hi, stem_to.y);
+        break;
+    }
+    const ImVec2 stem[2] = {stem_from, stem_to};
+    StrokeConnector(pt, stem, 2, false, col, pt.LW);
+    if (kids > 1 || (vertical ? ImFabs(bus_a.x - stem_to.x) : ImFabs(bus_a.y - stem_to.y)) > 0.5f) {
+      const float a = vertical ? ImMin(lo, stem_to.x) : ImMin(lo, stem_to.y);
+      const float b = vertical ? ImMax(hi, stem_to.x) : ImMax(hi, stem_to.y);
+      const ImVec2 bar[2] = {vertical ? ImVec2(a, stem_to.y) : ImVec2(stem_to.x, a),
+                             vertical ? ImVec2(b, stem_to.y) : ImVec2(stem_to.x, b)};
+      StrokeConnector(pt, bar, 2, false, col, pt.LW);
+    }
+    for (int i = p + 1; i < d->Nodes.Size; ++i) {
+      if (d->Nodes[i].Parent != p || !IsBusChild(d, i)) {
+        continue;
+      }
+      const ImUmlNodeRec& c = d->Nodes[i];
+      const ImVec2 cmin = pt.P(c.Pos - c.Size * 0.5f), cmax = pt.P(c.Pos + c.Size * 0.5f), cc = pt.P(c.Pos);
+      ImVec2 on_bus, at_child;
+      switch (d->Direction) {
+        case ImUmlDirection_BottomUp:
+          on_bus = ImVec2(cc.x, stem_to.y);
+          at_child = ImVec2(cc.x, cmax.y);
+          break;
+        case ImUmlDirection_LeftRight:
+          on_bus = ImVec2(stem_to.x, cc.y);
+          at_child = ImVec2(cmin.x, cc.y);
+          break;
+        case ImUmlDirection_RightLeft:
+          on_bus = ImVec2(stem_to.x, cc.y);
+          at_child = ImVec2(cmax.x, cc.y);
+          break;
+        default:
+          on_bus = ImVec2(cc.x, stem_to.y);
+          at_child = ImVec2(cc.x, cmin.y);
+          break;
+      }
+      const ImVec2 drop[2] = {on_bus, at_child};
+      StrokeConnector(pt, drop, 2, false, c.LineCol != 0 ? c.LineCol : col, pt.LW);
+    }
+  }
+}
+
+void DrawTreeEdges(const Painter& pt) {
+  const ImUmlDiagram* d = pt.D;
+  const bool mind = d->TreeMode == ImUmlTreeMode_MindMap;
+  DrawElbowBuses(pt);
+  for (int i = 1; i < d->Nodes.Size; ++i) {
+    const ImUmlNodeRec& c = d->Nodes[i];
+    if (c.Parent < 0 || IsBusChild(d, i)) {
+      continue;
+    }
+    const ImUmlNodeRec& pa = d->Nodes[c.Parent];
+    const ImVec2 pmin = pt.P(pa.Pos - pa.Size * 0.5f), pmax = pt.P(pa.Pos + pa.Size * 0.5f);
+    const ImVec2 cmin = pt.P(c.Pos - c.Size * 0.5f), cmax = pt.P(c.Pos + c.Size * 0.5f);
+    const ImVec2 pc = (pmin + pmax) * 0.5f, cc = (cmin + cmax) * 0.5f;
+    ImUmlDirection dir = d->Direction;
+    if (mind) {
+      dir = d->TreeRight[i] ? ImUmlDirection_LeftRight : ImUmlDirection_RightLeft;
+    }
+    ImU32 col = pt.Col(ImUmlCol_Line);
+    float lw = pt.LW;
+    if (mind) {
+      col = BranchColor(d, i);
+      const int depth = d->TreeDepth[i];
+      lw = pt.LW * (depth <= 1 ? 2.4f : depth == 2 ? 1.7f : 1.2f);
+    } else if (c.LineCol != 0) {
+      col = c.LineCol;
+    }
+    const bool staff = (c.TreeFlags & ImUmlTreeFlags_Staff) != 0 && !mind;
+    if (staff) {
+      const ImVec2 pts[2] = {ImVec2(pmax.x, pc.y), ImVec2(cmin.x, cc.y)};
+      StrokeConnector(pt, pts, 2, false, col, lw);
+      continue;
+    }
+    if (d->TreeHang[i] >= 0 && d->Direction == ImUmlDirection_TopDown) {
+      // The spine runs down the parent's left side; a tick to each child.
+      const float spine = pmin.x + pt.S(12.0f);
+      const ImVec2 pts[3] = {ImVec2(spine, pmax.y), ImVec2(spine, cc.y), ImVec2(cmin.x, cc.y)};
+      StrokeConnector(pt, pts, 3, false, col, lw);
+      continue;
+    }
+    ImVec2 from, to;
+    switch (dir) {
+      case ImUmlDirection_BottomUp:
+        from = ImVec2(pc.x, pmin.y);
+        to = ImVec2(cc.x, cmax.y);
+        break;
+      case ImUmlDirection_LeftRight:
+        from = ImVec2(pmax.x, pc.y);
+        to = ImVec2(cmin.x, cc.y);
+        break;
+      case ImUmlDirection_RightLeft:
+        from = ImVec2(pmin.x, pc.y);
+        to = ImVec2(cmax.x, cc.y);
+        break;
+      default:
+        from = ImVec2(pc.x, pmax.y);
+        to = ImVec2(cc.x, cmin.y);
+        break;
+    }
+    const bool vertical = dir == ImUmlDirection_TopDown || dir == ImUmlDirection_BottomUp;
+    const float delta = vertical ? to.y - from.y : to.x - from.x;
+    const float sign = delta < 0.0f ? -1.0f : 1.0f;
+    if (d->EdgeStyle == ImUmlEdgeStyle_Straight) {
+      const ImVec2 pts[2] = {from, to};
+      StrokeConnector(pt, pts, 2, false, col, lw);
+    } else if (d->EdgeStyle == ImUmlEdgeStyle_Curve) {
+      const float k = ImFabs(delta) * 0.5f * sign;
+      const ImVec2 pts[4] = {
+          from,
+          vertical ? ImVec2(from.x, from.y + k) : ImVec2(from.x + k, from.y),
+          vertical ? ImVec2(to.x, to.y - k) : ImVec2(to.x - k, to.y),
+          to};
+      StrokeConnector(pt, pts, 4, true, col, lw);
+    } else {
+      const float bus_at = ImMin(ImFabs(delta) * 0.5f, pt.S(d->RankSpacing * 0.5f)) * sign;
+      ImVec2 pts[4];
+      if (vertical) {
+        pts[0] = from;
+        pts[1] = ImVec2(from.x, from.y + bus_at);
+        pts[2] = ImVec2(to.x, from.y + bus_at);
+        pts[3] = to;
+      } else {
+        pts[0] = from;
+        pts[1] = ImVec2(from.x + bus_at, from.y);
+        pts[2] = ImVec2(from.x + bus_at, to.y);
+        pts[3] = to;
+      }
+      StrokeConnector(pt, pts, 4, false, col, lw);
+    }
+  }
+  // Cross links: dashed curves that move nothing.
+  ImVector<ImVec2> scratch;
+  for (int e = 0; e < d->Edges.Size; ++e) {
+    const ImUmlEdgeRec& er = d->Edges[e];
+    if (er.Type != ImUmlEdgeType_TreeLink || er.From < 0 || er.To < 0) {
+      continue;
+    }
+    BeginRuns(ImUmlTextRunKind_Edge, e);
+    const ImUmlNodeRec& a = d->Nodes[er.From];
+    const ImUmlNodeRec& b = d->Nodes[er.To];
+    const ImVec2 p0 = ImUml::ClipToShape(ImUmlShape_Box, a.Pos, a.Size, b.Pos);
+    const ImVec2 p3 = ImUml::ClipToShape(ImUmlShape_Box, b.Pos, b.Size, a.Pos);
+    const ImVec2 mid = (p0 + p3) * 0.5f, delta = p3 - p0;
+    const ImVec2 bulge = ImVec2(-delta.y, delta.x) * 0.25f;
+    const ImVec2 pts[4] = {pt.P(p0), pt.P(p0 + delta * 0.33f + bulge), pt.P(p0 + delta * 0.66f + bulge), pt.P(p3)};
+    ImUml::FlattenPath(pts, 4, true, &scratch);
+    const ImU32 col = er.Col != 0 ? er.Col : pt.Col(ImUmlCol_Lifeline);
+    const ImVec2 tip = scratch.back();
+    const ImVec2 dir = EndDirection(scratch, true, pt.S(d->Style.ArrowSize));
+    TrimPath(&scratch, ImUml::MarkerLength(ImUmlMarker_Open, pt.S(d->Style.ArrowSize)), true);
+    ImUml::RenderPath(pt.DL, scratch.Data, scratch.Size, col, pt.LW, true, pt.S(d->Style.DashLength),
+                      pt.S(d->Style.GapLength));
+    ImUml::RenderMarker(pt.DL, ImUmlMarker_Open, tip, dir, pt.S(d->Style.ArrowSize), col, pt.Col(ImUmlCol_Bg), pt.LW);
+    if (!er.Label.Empty()) {
+      DrawEdgeLabel(pt, er.Text, mid + bulge * 0.75f, StrBegin(d, er.Label), StrEnd(d, er.Label));
+    }
+  }
+}
+
+/// "+N" in the bottom-right corner of a node with collapsed descendants.
+void DrawHiddenBadge(const Painter& pt, const ImUmlNodeRec& n, const ImVec2& max) {
+  if (n.Hidden <= 0) {
+    return;
+  }
+  char buf[24];
+  ImFormatString(buf, IM_ARRAYSIZE(buf), "+%d", n.Hidden);
+  const ImVec2 s = TextSize(n.Text, pt.Zoom * 0.8f, buf, buf + strlen(buf));
+  const ImVec2 a(max.x - s.x - pt.S(8.0f), max.y - s.y * 0.5f - pt.S(2.0f));
+  pt.DL->AddRectFilled(a, ImVec2(a.x + s.x + pt.S(6.0f), a.y + s.y + pt.S(2.0f)), pt.Col(ImUmlCol_Bg), pt.S(4.0f));
+  pt.DL->AddRect(a, ImVec2(a.x + s.x + pt.S(6.0f), a.y + s.y + pt.S(2.0f)), pt.Col(ImUmlCol_NodeBorder), pt.S(4.0f),
+                 ImDrawFlags_None, pt.LW);
+  pt.DL->AddText(n.Text.Font, n.Text.Size * pt.Zoom * 0.8f, ImVec2(a.x + pt.S(3.0f), a.y + pt.S(1.0f)), n.Text.Col, buf,
+                 buf + strlen(buf));
+}
+
+void DrawTreeNode(const Painter& pt, int i) {
+  const ImUmlDiagram* d = pt.D;
+  const ImUmlNodeRec& n = d->Nodes[i];
+  BeginRuns(ImUmlTextRunKind_Node, i);
+  const ImVec2 pad = d->Style.NodePadding;
+  const ImVec2 a = pt.P(n.Pos - n.Size * 0.5f), b = pt.P(n.Pos + n.Size * 0.5f);
+  const float cx = (a.x + b.x) * 0.5f, cy = (a.y + b.y) * 0.5f;
+  const char* nb = StrBegin(d, n.Name);
+  const char* ne = StrEnd(d, n.Name);
+  const ImVec2 ts = TextSize(n.Text, pt.Zoom, nb, ne);
+  const ImU32 fill = n.FillCol != 0 ? n.FillCol : pt.Col(ImUmlCol_NodeFill);
+  switch (d->TreeMode) {
+    case ImUmlTreeMode_MindMap: {
+      const int depth = d->TreeDepth[i];
+      const ImU32 col = BranchColor(d, i);
+      if (depth <= 1) {
+        const ImU32 box = n.FillCol != 0 ? n.FillCol : col;
+        pt.DL->AddRectFilled(a, b, box, (b.y - a.y) * 0.5f);
+        TextCentered(pt.DL, n.Text, pt.Zoom, cx, cy - ts.y * 0.5f, nb, ne, TextOn(box));
+      } else {
+        TextCentered(pt.DL, n.Text, pt.Zoom, cx, a.y + pt.S(pad.y * 0.5f), nb, ne, n.Text.Col);
+        pt.DL->AddLine(ImVec2(a.x, b.y - pt.S(1.0f)), ImVec2(b.x, b.y - pt.S(1.0f)), col, pt.LW * 1.4f);
+      }
+      DrawHiddenBadge(pt, n, b);
+      break;
+    }
+    case ImUmlTreeMode_OrgChart: {
+      const bool vacant = (n.TreeFlags & ImUmlTreeFlags_Vacant) != 0;
+      const char* shape = vacant ? "dashed_region" : (n.Generic.Empty() ? "rounded_rectangle" : StrBegin(d, n.Generic));
+      const ImU32 border = n.LineCol != 0 ? n.LineCol : pt.Col(ImUmlCol_NodeBorder);
+      if (!ImUml::RenderShape(pt.DL, shape, a, b, border, fill, pt.LW, pt.Zoom)) {
+        pt.DL->AddRectFilled(a, b, fill);
+        pt.DL->AddRect(a, b, border, 0.0f, ImDrawFlags_None, pt.LW);
+      }
+      // The content lies inside the shape's text area, centred in it.
+      ImVec2 tmin = a, tmax = b;
+      const ImUmlShapeArt* art = ImUml::FindShapeArt(shape);
+      if (art != nullptr && art->Resizable) {
+        ImUml::GetShapeTextRect(shape, a, b, pt.Zoom, &tmin, &tmax);
+      }
+      const float ccy = (tmin.y + tmax.y) * 0.5f;
+      float x = tmin.x + pt.S(pad.x * 0.5f);
+      if (!n.Image.Empty() && !vacant) {
+        const float p = pt.S(kOrgPortrait);
+        ImUml::RenderShape(pt.DL, StrBegin(d, n.Image), ImVec2(x, ccy - p * 0.5f), ImVec2(x + p, ccy + p * 0.5f), border,
+                           fill, pt.LW, pt.Zoom);
+        x += p + pt.S(pad.x);
+      }
+      const char* tb = StrBegin(d, n.Stereotype);
+      const char* te = StrEnd(d, n.Stereotype);
+      const char* db = StrBegin(d, n.Detail);
+      const char* de = StrEnd(d, n.Detail);
+      const ImVec2 title = TextSize(n.Text, pt.Zoom, tb, te), detail = TextSize(n.Text, pt.Zoom, db, de);
+      float y = ccy - (ts.y + title.y + detail.y) * 0.5f;
+      TextAt(pt.DL, n.Text, pt.Zoom, ImVec2(x, y), nb, ne, n.Text.Col);
+      y += ts.y;
+      TextAt(pt.DL, n.Text, pt.Zoom, ImVec2(x, y), tb, te, pt.Col(ImUmlCol_Lifeline));
+      y += title.y;
+      TextAt(pt.DL, n.Text, pt.Zoom, ImVec2(x, y), db, de, pt.Col(ImUmlCol_Lifeline));
+      DrawHiddenBadge(pt, n, b);
+      break;
+    }
+    default: {
+      const ImU32 border = n.LineCol != 0 ? n.LineCol : pt.Col(ImUmlCol_NodeBorder);
+      DrawShapeNodeAs(pt, n, n.Generic.Empty() ? "rounded_rectangle" : StrBegin(d, n.Generic), fill, border);
+      DrawHiddenBadge(pt, n, b);
+      break;
+    }
+  }
+}
+
+void DrawTreeDiagram(const Painter& pt) {
+  const ImUmlDiagram* d = pt.D;
+  DrawTreeEdges(pt);
+  for (int i = 0; i < d->Nodes.Size; ++i) {
+    DrawTreeNode(pt, i);
+  }
+}
+
 void DrawParticipantBox(const Painter& pt, const ImUmlNodeRec& n, float x, float top) {
   const ImUmlDiagram* d = pt.D;
   const ImU32 fill = n.FillCol != 0 ? n.FillCol : pt.Col(ImUmlCol_NodeFill);
@@ -1635,13 +2301,23 @@ void DrawParticipantBox(const Painter& pt, const ImUmlNodeRec& n, float x, float
   switch (n.Kind) {
     case ImUmlParticipantKind_Actor: {
       const float w = pt.S(22.0f), h = pt.S(36.0f);
-      ImUml::RenderActorFigure(pt.DL, ImVec2(cx - w * 0.5f, a.y), ImVec2(cx + w * 0.5f, a.y + h), border, pt.LW);
+      if (!DrawLibraryShape(pt, "actor", ImVec2(cx - w * 0.5f, a.y), ImVec2(cx + w * 0.5f, a.y + h), fill, border)) {
+        ImUml::RenderActorFigure(pt.DL, ImVec2(cx - w * 0.5f, a.y), ImVec2(cx + w * 0.5f, a.y + h), border, pt.LW);
+      }
       TextCentered(pt.DL, n.Text, pt.Zoom, cx, b.y - ts.y, nb, ne, n.Text.Col);
       break;
     }
     case ImUmlParticipantKind_Boundary:
     case ImUmlParticipantKind_Control:
     case ImUmlParticipantKind_Entity: {
+      const char* icon = n.Kind == ImUmlParticipantKind_Boundary ? "boundary"
+          : n.Kind == ImUmlParticipantKind_Entity                 ? "entity"
+                                                                  : "control";
+      const float iw = pt.S(36.0f), ih = pt.S(28.0f);
+      if (DrawLibraryShape(pt, icon, ImVec2(cx - iw * 0.5f, a.y), ImVec2(cx + iw * 0.5f, a.y + ih), fill, border)) {
+        TextCentered(pt.DL, n.Text, pt.Zoom, cx, b.y - ts.y, nb, ne, n.Text.Col);
+        break;
+      }
       const float r = pt.S(12.0f);
       const ImVec2 c(cx + (n.Kind == ImUmlParticipantKind_Boundary ? pt.S(4.0f) : 0.0f), a.y + pt.S(14.0f));
       const int seg = ImUml::CircleSegments(r);
@@ -1660,7 +2336,9 @@ void DrawParticipantBox(const Painter& pt, const ImUmlNodeRec& n, float x, float
       break;
     }
     case ImUmlParticipantKind_Database:
-      ImUml::RenderCylinder(pt.DL, a, b, fill, border, pt.LW);
+      if (!DrawLibraryShape(pt, "database", a, b, fill, border)) {
+        ImUml::RenderCylinder(pt.DL, a, b, fill, border, pt.LW);
+      }
       TextCentered(pt.DL, n.Text, pt.Zoom, cx, (a.y + b.y - ts.y) * 0.5f + pt.S(4.0f), nb, ne, n.Text.Col);
       break;
     default:
@@ -1898,7 +2576,9 @@ void EndDiagram(int kind) {
   }
   if (!(d->LayoutValid && d->LayoutHash == hash)) {
     const int skipped_before = d->SkippedItems;
-    d->ContentSize = kind == ImUmlDiagramKind_Sequence ? LayoutSequenceDiagram(d, ids) : LayoutGraphDiagram(d);
+    d->ContentSize = kind == ImUmlDiagramKind_Sequence ? LayoutSequenceDiagram(d, ids)
+        : kind == ImUmlDiagramKind_Tree                    ? LayoutTreeDiagram(d)
+                                                           : LayoutGraphDiagram(d);
     d->CacheNodePos.resize(d->Nodes.Size);
     d->CacheNodeSize.resize(d->Nodes.Size);
     d->CacheNodeHeader.resize(d->Nodes.Size);
@@ -2052,6 +2732,8 @@ void EndDiagram(int kind) {
   pt.Origin = ImVec2(ImFloor(fitted.x + pan.x), ImFloor(fitted.y + pan.y));
   if (kind == ImUmlDiagramKind_Sequence) {
     DrawSequenceDiagram(pt);
+  } else if (kind == ImUmlDiagramKind_Tree) {
+    DrawTreeDiagram(pt);
   } else {
     DrawGraphDiagram(pt);
     if (interactive && hovered && !ImGui::IsMouseDragging(ImGuiMouseButton_Left)) {
@@ -2087,6 +2769,14 @@ void ImUml::EndUseCaseDiagram() {
 
 void ImUml::EndFlowchart() {
   EndDiagram(ImUmlDiagramKind_Flowchart);
+}
+
+void ImUml::EndShapeDiagram() {
+  EndDiagram(ImUmlDiagramKind_Shapes);
+}
+
+void ImUml::EndTreeDiagram() {
+  EndDiagram(ImUmlDiagramKind_Tree);
 }
 
 void ImUml::EndERDiagram() {
