@@ -11,8 +11,10 @@
 #include <fstream>
 #include <iterator>
 #include <map>
+#include <optional>
 #include <variant>
 #include <string>
+#include <utility>
 #include <vector>
 #include "core/error.hpp"
 #include "document/bind.hpp"
@@ -385,11 +387,91 @@ TEST(live_view_edit, ADiagramTextIsFoundBeforeItsNodeAndTheDiagram) {
   d.run();
   const edit_target text = *d.v.target_for("root/children/0", "text");
   const std::vector<edit_target> hit = d.v.targets_at(text.x + text.width / 2, text.y + text.height / 2);
-  ASSERT_EQ(hit.size(), 3u); // the text, the diagram (a node is no element-level target), the image
+  ASSERT_EQ(hit.size(), 4u); // the text, its node, the diagram, the image
   EXPECT_EQ(hit[0].element, "root/children/0");
   EXPECT_EQ(hit[0].field, "text");
-  EXPECT_EQ(hit[1].element, "root");
+  EXPECT_EQ(hit[1].element, "root/children/0");
   EXPECT_EQ(hit[1].field, "");
+  EXPECT_EQ(hit[2].element, "root");
+  EXPECT_EQ(hit[2].field, "");
+}
+
+/// A point in `whole` where `element` is the best target, if any.
+std::optional<std::pair<float, float>> point_selecting(
+    const live_view& v, const edit_target& whole, const std::string& element) {
+  for (float y = whole.y; y <= whole.y + whole.height; y += 1.0f) {
+    for (float x = whole.x; x <= whole.x + whole.width; x += 1.0f) {
+      const std::vector<edit_target> hit = v.targets_at(x, y);
+      if (!hit.empty() && hit[0].element == element && hit[0].field.empty()) {
+        return std::pair<float, float>{x, y};
+      }
+    }
+  }
+  return std::nullopt;
+}
+
+TEST(live_view_edit, ADiagramNodesBoxAwayFromItsTextSelectsTheNode) {
+  driven_view d(kFlow, 500, 360);
+  d.v.set_edit_mode(true);
+  d.run();
+  const std::optional<edit_target> box = d.v.target_for("root/children/0", "");
+  const std::optional<edit_target> text = d.v.target_for("root/children/0", "text");
+  ASSERT_TRUE(box);
+  ASSERT_TRUE(text);
+  EXPECT_GT(box->width, text->width);
+  const std::vector<edit_target> hit = d.v.targets_at(box->x + 2.0f, box->y + box->height / 2);
+  ASSERT_FALSE(hit.empty());
+  EXPECT_EQ(hit[0].element, "root/children/0");
+  EXPECT_EQ(hit[0].field, "");
+  // A click there selects the node.
+  d.click(box->x + 2.0f, box->y + box->height / 2);
+  const std::optional<edit_target> clicked = d.v.take_edit_click();
+  ASSERT_TRUE(clicked);
+  EXPECT_EQ(clicked->element, "root/children/0");
+}
+
+TEST(live_view_edit, ALinksPathSelectsTheLinkAndIsReportedWhole) {
+  driven_view d(kFlow, 500, 360);
+  d.v.set_edit_mode(true);
+  d.run();
+  // The link without a label: only its path can be clicked.
+  const std::optional<edit_target> whole = d.v.target_for("root/children/4", "");
+  ASSERT_TRUE(whole);
+  const auto at = point_selecting(d.v, *whole, "root/children/4");
+  ASSERT_TRUE(at);
+  const std::vector<edit_target> hit = d.v.targets_at(at->first, at->second);
+  // The hit is the whole path, not the piece under the pointer.
+  EXPECT_EQ(hit[0].x, whole->x);
+  EXPECT_EQ(hit[0].y, whole->y);
+  EXPECT_EQ(hit[0].width, whole->width);
+  EXPECT_EQ(hit[0].height, whole->height);
+  // Far from every path and node (a corner of the diagram): the diagram.
+  const std::optional<edit_target> diagram = d.v.target_for("root", "");
+  ASSERT_TRUE(diagram);
+  const std::vector<edit_target> margin = d.v.targets_at(diagram->x + 2.0f, diagram->y + diagram->height - 2.0f);
+  ASSERT_FALSE(margin.empty());
+  EXPECT_EQ(margin[0].element, "root");
+}
+
+TEST(live_view_edit, SequenceArrowsAndParticipantsSelectTheirElements) {
+  const std::string source = read_text(kSourceDir / "examples" / "uml_sequence.yaml");
+  const figure f = bind_source(source, builtin_registry());
+  driven_view d(source, static_cast<float>(f.image.width), static_cast<float>(f.image.height));
+  d.v.set_edit_mode(true);
+  d.run();
+  int messages = 0, participants = 0;
+  for (const edit_element& e : d.v.element_list()) {
+    if (e.type != "Message" && e.type != "Participant") {
+      continue;
+    }
+    SCOPED_TRACE(e.path);
+    const std::optional<edit_target> whole = d.v.target_for(e.path, "");
+    ASSERT_TRUE(whole);
+    EXPECT_TRUE(point_selecting(d.v, *whole, e.path));
+    ++(e.type == "Message" ? messages : participants);
+  }
+  EXPECT_GE(messages, 4);
+  EXPECT_GE(participants, 2);
 }
 
 TEST(live_view_edit, EditModeDrawsADiagramLikeThePlainView) {

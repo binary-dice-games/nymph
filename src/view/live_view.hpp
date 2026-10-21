@@ -275,7 +275,9 @@ class live_view {
 
   /// @brief The targets under (`x`, `y`), CSS pixels, best first: the
   ///        smallest, and of equal size the one drawn last. Text targets
-  ///        are padded by 3 px. Empty outside edit mode.
+  ///        are padded by 3 px. An element recorded in pieces (a diagram
+  ///        link's path) is listed once, as the union of its pieces. Empty
+  ///        outside edit mode.
   std::vector<edit_target> targets_at(float x, float y) const;
 
   /// @brief The target of `element` (path) and `field` in the last frame;

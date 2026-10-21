@@ -109,10 +109,13 @@ text style), `src/window/view_command.*` (`--edit`), `docs/format.md`.
   `live_view` is not needed: `bind` is enough), pushes undo and returns the
   new source for the view. Testable without a window.
 - **`inspector`** (`src/edit/inspector.hpp`): draws the editor's contents
-  with Dear ImGui from an `editor_model`: element tree, "Selection" section
-  (focused field first), "All fields" section, undo / redo / save, error
-  line. Pure ImGui, no OpenGL, so it runs headless in tests against a
-  plain ImGui context.
+  with Dear ImGui from an `editor_model`: undo / redo / save, element
+  tree (collapsible `TreeNode`s, an icon per element type from
+  `src/edit/element_icons.*`, ancestors opened when the figure selects a
+  nested element), "Selection" section (focused field first), "All fields"
+  section, all in a scrolling area above an error panel that appears at the
+  bottom while the last change is refused. Pure ImGui, no OpenGL, so it
+  runs headless in tests against a plain ImGui context.
 - **Docked panel** (in `src/window/viewer_window.cpp`): a strip of
   `panel_width` logical pixels (320) at the right of the one window. The
   viewer owns a second, plain ImGui context (not the figure's), also drawn
@@ -174,12 +177,24 @@ Capture happens at three levels, coarse to fine:
    needs no per-diagram code and no run roles. A text no field shows (a
    class's id, its member lines, a guillemet stereotype) stays with the
    element target.
+4. **Diagram shapes.** With `ImUmlDiagramFlags_CaptureItems` the diagram
+   also records the screen areas of the shapes each item draws as
+   `ImUmlItemArea`s (`ImUmlDiagramInfo::ItemAreas`): a node's or
+   participant's box, a note's or fragment's frame as one rectangle; an edge,
+   a message, a lifeline or an `else` line as its path cut into pieces of a
+   few pixels, each padded by 4 pixels, so a diagonal arrow is not one large
+   rectangle. `record_texts()` turns each area into an element-level target
+   of the element that made the item (same `item_range` lookup), before the
+   texts, so a click on an arrow or a box selects its link or node rather
+   than the diagram.
 
 **Hit test:** among targets whose rectangle contains the pointer, the one
 with the smallest area wins, ties going to the later draw order (what is on
 top). Text targets are therefore chosen over their element, and a node text
 over its diagram. A click on the empty part of a plot selects the plot.
-Rectangles are padded by 3 logical pixels so thin text is easy to hit.
+Rectangles are padded by 3 logical pixels so thin text is easy to hit. An
+element recorded in several pieces is hit piece by piece but reported and
+outlined as the union of its pieces (`targets_at()`, `target_for()`).
 
 **Click, pan and zoom coexist:** `live_view` already reports a primary
 click "pressed and released without dragging" (`take_click()`), so a drag

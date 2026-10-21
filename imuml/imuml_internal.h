@@ -513,6 +513,8 @@ struct ImUmlContext {
   ImVector<ImUmlTextRun> Runs;
   ImVector<int> RunTextOffsets;
   ImVector<char> RunText;
+  bool CaptureItems = false; ///< ImUmlDiagramFlags_CaptureItems.
+  ImVector<ImUmlItemArea> Areas;
   bool HasNextView; ///< SetNextDiagramView(), taken by the next Begin.
   float NextZoom;
   ImVec2 NextCenter;

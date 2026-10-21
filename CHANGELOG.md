@@ -9,12 +9,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- `nymph view --edit`: the element list is a tree with collapsible nodes and an icon per element type; errors show in their own panel at the bottom of the editor.
+
 - The Windows release executable is built with MSVC.
 - The Linux release executable links glibc dynamically (libstdc++ stays inside) so `nymph view` works; it needs glibc 2.39 or newer.
 
 ### Fixed
 
 - The Windows and Linux release executables include `nymph view`.
+- `nymph view --edit`: clicking a diagram's shapes and arrows (nodes, links, messages, participants and their lifelines, notes, fragments) selects their element instead of the whole diagram.
 
 ## [0.1.0] - 2026-10-21
 

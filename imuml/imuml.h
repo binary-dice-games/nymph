@@ -115,6 +115,11 @@ enum ImUmlDiagramFlags_ {
   /// the item it belongs to, so a host can tell what is under the pointer.
   /// Drawing is unchanged.
   ImUmlDiagramFlags_CaptureText = 1 << 4,
+  /// Records the screen areas of the shapes each item draws (node boxes,
+  /// edge and message paths; ImUmlDiagramInfo::ItemAreas), so a host can tell
+  /// which item a click on a shape or an arrow belongs to. Drawing is
+  /// unchanged.
+  ImUmlDiagramFlags_CaptureItems = 1 << 5,
 };
 
 /// What an ImUmlTextRun belongs to.
@@ -132,6 +137,16 @@ struct ImUmlTextRun {
   int Item;
   ImVec2 Min, Max; ///< Screen rectangle of the text (all its lines).
   const char* Text; ///< The text as drawn, zero-terminated; valid until the next diagram is drawn.
+};
+
+/// @brief Part of the shape an item drew, in screen coordinates
+///        (ImUmlDiagramFlags_CaptureItems). A node is one area (its box); a
+///        path is cut into short pieces, each padded by a few pixels, so the
+///        areas stay close to the line.
+struct ImUmlItemArea {
+  int Kind; ///< ImUmlTextRunKind_ (never Title).
+  int Item;
+  ImVec2 Min, Max;
 };
 
 enum ImUmlDirection_ {
@@ -360,6 +375,10 @@ struct ImUmlDiagramInfo {
   /// ImUmlDiagramFlags_CaptureText only: the texts drawn, in drawing order.
   int TextRunCount;
   const ImUmlTextRun* TextRuns;
+  /// ImUmlDiagramFlags_CaptureItems only: the item shapes drawn, in drawing
+  /// order; valid until the next diagram is drawn.
+  int ItemAreaCount;
+  const ImUmlItemArea* ItemAreas;
   // ImUmlDiagramFlags_Interactive only:
   float ViewZoom; ///< The user's zoom on top of the fit (1 = fitted).
   ImVec2 ViewCenter; ///< Content point (zoom-1 units) at the centre of the view; also with SetNextDiagramView().
@@ -375,6 +394,8 @@ struct ImUmlDiagramInfo {
     NodeCount = EdgeCount = SkippedItems = 0;
     TextRunCount = 0;
     TextRuns = nullptr;
+    ItemAreaCount = 0;
+    ItemAreas = nullptr;
     ViewZoom = 1.0f;
     ViewCenter = ImVec2(0, 0);
     HoveredNode = HoveredEdge = -1;

@@ -63,18 +63,59 @@ void CaptureRun(const ImVec2& min, const ImVec2& max, const char* b, const char*
   g->Runs.push_back(run);
 }
 
-/// The texts drawn from here on belong to item `item` of `kind`.
+/// The texts and shapes drawn from here on belong to item `item` of `kind`.
 void BeginRuns(int kind, int item) {
-  if (GImUml != nullptr && GImUml->CaptureText) {
+  if (GImUml != nullptr && (GImUml->CaptureText || GImUml->CaptureItems)) {
     GImUml->RunKind = kind;
     GImUml->RunItem = item;
   }
 }
 
-/// Stops capturing and publishes the runs in `info`.
+/// Notes that the item being drawn covers [min, max]
+/// (ImUmlDiagramFlags_CaptureItems).
+void CaptureArea(const ImVec2& min, const ImVec2& max) {
+  ImUmlContext* g = GImUml;
+  if (g == nullptr || !g->CaptureItems || g->RunKind == ImUmlTextRunKind_None ||
+      g->RunKind == ImUmlTextRunKind_Title) {
+    return;
+  }
+  ImUmlItemArea area;
+  area.Kind = g->RunKind;
+  area.Item = g->RunItem;
+  area.Min = ImMin(min, max);
+  area.Max = ImMax(min, max);
+  g->Areas.push_back(area);
+}
+
+/// Notes the screen path the item being drawn strokes, cut into pieces no
+/// longer than a few pixels, each padded by `pad`, so a diagonal line is not
+/// one large rectangle.
+void CapturePath(const ImVec2* pts, int count, float pad) {
+  if (GImUml == nullptr || !GImUml->CaptureItems) {
+    return;
+  }
+  const float piece = ImMax(pad * 3.0f, 8.0f);
+  const ImVec2 grow(pad, pad);
+  for (int i = 0; i + 1 < count; ++i) {
+    const ImVec2 a = pts[i], b = pts[i + 1];
+    const float length = ImSqrt(ImLengthSqr(b - a));
+    const bool straight = ImFabs(a.x - b.x) < 0.5f || ImFabs(a.y - b.y) < 0.5f;
+    const int pieces = straight ? 1 : ImMax(1, (int)ImCeil(length / piece));
+    for (int k = 0; k < pieces; ++k) {
+      const ImVec2 p = ImLerp(a, b, (float)k / (float)pieces);
+      const ImVec2 q = ImLerp(a, b, (float)(k + 1) / (float)pieces);
+      CaptureArea(ImMin(p, q) - grow, ImMax(p, q) + grow);
+    }
+  }
+}
+
+/// Stops capturing and publishes the runs and areas in `info`.
 void EndRuns(ImUmlDiagramInfo* info) {
   ImUmlContext& g = *GImUml;
   g.RunKind = ImUmlTextRunKind_None;
+  info->ItemAreaCount = g.CaptureItems ? g.Areas.Size : 0;
+  info->ItemAreas = g.CaptureItems ? g.Areas.Data : nullptr;
+  g.CaptureItems = false;
   if (!g.CaptureText) {
     info->TextRunCount = 0;
     info->TextRuns = nullptr;
@@ -87,6 +128,10 @@ void EndRuns(ImUmlDiagramInfo* info) {
   info->TextRunCount = g.Runs.Size;
   info->TextRuns = g.Runs.Data;
 }
+
+/// How far a captured path reaches on each side of the line (screen pixels),
+/// so a thin line is easy to click.
+constexpr float kPathPad = 4.0f;
 
 /// Draws each line of [b, e) centred on `cx`, the first line's top at `y`.
 void TextCentered(ImDrawList* dl, const ImUmlTextStyle& ts, float zoom, float cx, float y, const char* b, const char* e,
@@ -1458,6 +1503,7 @@ void DrawNode(const Painter& pt, const ImUmlNodeRec& n) {
   const ImU32 border = n.LineCol != 0 ? n.LineCol : pt.Col(ImUmlCol_NodeBorder);
   const ImU32 line = n.LineCol != 0 ? n.LineCol : pt.Col(ImUmlCol_Line);
   const ImVec2 a = pt.P(n.Pos - n.Size * 0.5f), b = pt.P(n.Pos + n.Size * 0.5f);
+  CaptureArea(a, b);
   const ImVec2 pad = d->Style.NodePadding;
   const char* nb = StrBegin(d, n.Name);
   const char* ne = StrEnd(d, n.Name);
@@ -1860,6 +1906,7 @@ void DrawEdge(const Painter& pt, const ImUmlEdgeRec& e, const ImUmlGraphEdgeOut&
   }
   ImUml::FlattenPath(screen.Data, screen.Size, eo.Bezier, scratch);
   ImVector<ImVec2>& path = *scratch;
+  CapturePath(path.Data, path.Size, kPathPad);
   const float size = pt.S(d->Style.ArrowSize);
   const ImVec2 to_dir = EndDirection(path, true, size);
   const ImVec2 from_dir = EndDirection(path, false, size);
@@ -2182,6 +2229,7 @@ void DrawTreeEdges(const Painter& pt) {
     const ImVec2 pts[4] = {pt.P(p0), pt.P(p0 + delta * 0.33f + bulge), pt.P(p0 + delta * 0.66f + bulge), pt.P(p3)};
     ImUml::FlattenPath(pts, 4, true, &scratch);
     const ImU32 col = er.Col != 0 ? er.Col : pt.Col(ImUmlCol_Lifeline);
+    CapturePath(scratch.Data, scratch.Size, kPathPad);
     const ImVec2 tip = scratch.back();
     const ImVec2 dir = EndDirection(scratch, true, pt.S(d->Style.ArrowSize));
     TrimPath(&scratch, ImUml::MarkerLength(ImUmlMarker_Open, pt.S(d->Style.ArrowSize)), true);
@@ -2216,6 +2264,7 @@ void DrawTreeNode(const Painter& pt, int i) {
   BeginRuns(ImUmlTextRunKind_Node, i);
   const ImVec2 pad = d->Style.NodePadding;
   const ImVec2 a = pt.P(n.Pos - n.Size * 0.5f), b = pt.P(n.Pos + n.Size * 0.5f);
+  CaptureArea(a, b);
   const float cx = (a.x + b.x) * 0.5f, cy = (a.y + b.y) * 0.5f;
   const char* nb = StrBegin(d, n.Name);
   const char* ne = StrEnd(d, n.Name);
@@ -2294,6 +2343,7 @@ void DrawParticipantBox(const Painter& pt, const ImUmlNodeRec& n, float x, float
   const ImU32 fill = n.FillCol != 0 ? n.FillCol : pt.Col(ImUmlCol_NodeFill);
   const ImU32 border = n.LineCol != 0 ? n.LineCol : pt.Col(ImUmlCol_NodeBorder);
   const ImVec2 a = pt.P(ImVec2(x - n.Size.x * 0.5f, top)), b = pt.P(ImVec2(x + n.Size.x * 0.5f, top + n.Size.y));
+  CaptureArea(a, b);
   const char* nb = StrBegin(d, n.Name);
   const char* ne = StrEnd(d, n.Name);
   const ImVec2 ts = TextSize(n.Text, pt.Zoom, nb, ne);
@@ -2368,8 +2418,11 @@ void DrawSequenceDiagram(const Painter& pt) {
   for (int k = 0; k < d->SeqParticipants.Size; ++k) {
     const ImUmlSeqParticipantOut& p = s.Participants[k];
     const ImVec2 pts[2] = {pt.P(ImVec2(p.X, p.LifelineStart)), pt.P(ImVec2(p.X, p.LifelineEnd))};
+    BeginRuns(ImUmlTextRunKind_Node, d->SeqParticipants[k]);
+    CapturePath(pts, 2, kPathPad);
     ImUml::RenderPath(pt.DL, pts, 2, pt.Col(ImUmlCol_Lifeline), pt.LW, true, dash, gap);
   }
+  BeginRuns(ImUmlTextRunKind_None, 0);
   // Activations.
   for (int i = 0; i < s.Activations.Size; ++i) {
     const ImRect& r = s.Activations[i].Rect;
@@ -2406,6 +2459,7 @@ void DrawSequenceDiagram(const Painter& pt) {
           path.push_back(pt.P(ImVec2(eo.X1, eo.Y)));
           path.push_back(pt.P(ImVec2(eo.X2, eo.Y)));
         }
+        CapturePath(path.Data, path.Size, kPathPad);
         const ImVec2 tip = path.back();
         const ImVec2 dir = EndDirection(path, true, size);
         TrimPath(&path, ImUml::MarkerLength(marker, size), true);
@@ -2429,6 +2483,7 @@ void DrawSequenceDiagram(const Painter& pt) {
         if (eo.Rect.GetWidth() <= 0.0f) {
           break;
         }
+        CaptureArea(pt.P(eo.Rect.Min), pt.P(eo.Rect.Max));
         const ImU32 fill = ev.Col != 0 ? ev.Col : pt.Col(ImUmlCol_NoteFill);
         ImUml::RenderNoteShape(pt.DL, pt.P(eo.Rect.Min), pt.P(eo.Rect.Max), pt.S(d->Style.NoteFold), fill,
                                pt.Col(ImUmlCol_NoteBorder), pt.LW);
@@ -2439,6 +2494,7 @@ void DrawSequenceDiagram(const Painter& pt) {
         const char* kw = FragmentKeyword(ev.Kind);
         const ImVec2 a = pt.P(eo.Rect.Min), b = pt.P(eo.Rect.Max);
         const ImU32 border = pt.Col(ImUmlCol_FragmentBorder);
+        CaptureArea(a, b);
         float label_x = a.x + pt.S(pad.x);
         const float tab_h = TextSize(ts, pt.Zoom, "A", nullptr).y + pt.S(pad.y * 2.0f);
         if (kw[0] != 0) {
@@ -2458,6 +2514,7 @@ void DrawSequenceDiagram(const Painter& pt) {
       }
       case ImUmlSeqEventType_FragmentElse: {
         const ImVec2 pts[2] = {pt.P(ImVec2(eo.Rect.Min.x, eo.Rect.Min.y)), pt.P(ImVec2(eo.Rect.Max.x, eo.Rect.Min.y))};
+        CapturePath(pts, 2, kPathPad);
         ImUml::RenderPath(pt.DL, pts, 2, pt.Col(ImUmlCol_FragmentBorder), pt.LW, true, dash, gap);
         if (!ev.Text.Empty()) {
           ImFormatString(buf, IM_ARRAYSIZE(buf), "[%.*s]", ev.Text.Len, StrBegin(d, ev.Text));
@@ -2715,6 +2772,8 @@ void EndDiagram(int kind) {
   ImDrawList* dl = ImGui::GetWindowDrawList();
   dl->PushClipRect(bb.Min, bb.Max, true);
   GImUml->CaptureText = (d->Flags & ImUmlDiagramFlags_CaptureText) != 0;
+  GImUml->CaptureItems = (d->Flags & ImUmlDiagramFlags_CaptureItems) != 0;
+  GImUml->Areas.resize(0);
   GImUml->Runs.resize(0);
   GImUml->RunTextOffsets.resize(0);
   GImUml->RunText.resize(0);
