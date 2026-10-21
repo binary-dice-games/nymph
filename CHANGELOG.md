@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.0] - 2026-10-21
+
 ### Added
 
 - winget: `winget install BinaryDiceGames.Nymph` (Windows), updated by each release once the package is accepted into the winget community repository.
@@ -28,8 +30,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - The fonts and placeholder images moved into `resources/` (`resources/fonts/`, `resources/placeholders/`); `NYMPH_FONTS_DIR` now defaults to `resources/fonts/`. The MCP bundle's icon is now `resources/icon.png`.
-
-## [0.1.0] - 2026-10-19
 
 ### Added
 
