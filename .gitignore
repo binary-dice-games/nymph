@@ -9,5 +9,6 @@ __pycache__/
 *.pyc
 *.pyo
 
-# The Claude Code plugin ships its launcher in bin/ (claude/plugin/bin/).
+# The Claude Code and Cursor plugins ship their launcher in bin/.
 !claude/plugin/bin/
+!cursor/plugin/bin/

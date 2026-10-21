@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- Source archives include the Cursor plugin's launcher (`cursor/plugin/bin/`).
+
 ## [0.1.0] - 2026-10-21
 
 ### Added
