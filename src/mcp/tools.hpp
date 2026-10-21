@@ -72,7 +72,7 @@ class tool_registry {
 };
 
 /// @brief Adds the built-in tools (render_chart, check_chart,
-///        extract_chart, chart_schema, list_fonts, list_shapes) to `registry`, and when
+///        extract_chart, chart_schema, example_chart, list_fonts, list_shapes) to `registry`, and when
 ///        its options carry the App page, render_chart's `_meta.ui` and
 ///        the app-only viewer_font (DESIGN.md section 4.2).
 void add_builtin_tools(tool_registry& registry);

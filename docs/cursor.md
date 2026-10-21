@@ -72,9 +72,10 @@ description: Use when the user asks for a chart, plot, graph, diagram, flowchart
 alwaysApply: false
 ---
 
-Draw charts and diagrams with nymph: write a short YAML source, call the
-`render_chart` tool, look at the PNG it returns and fix what is unclear.
-Call `chart_schema` for the fields of an element type. To keep a chart,
+Draw charts and diagrams with nymph. Do not write the YAML from memory:
+call `example_chart` with the element type you will use to get a working
+source, call `chart_schema` for the fields of each element type you add,
+then call `render_chart` and look at the PNG it returns. To keep a chart,
 pass `output_path` (a `.png`) and keep the YAML.
 ```
 
@@ -82,7 +83,7 @@ or, in `AGENTS.md`:
 
 ```
 For charts and diagrams use the nymph MCP tools (`render_chart`); read
-docs/agent-guide.md of nymph, or call `chart_schema`, for the YAML format.
+docs/agent-guide.md of nymph, or call `example_chart` and `chart_schema`, for the YAML format.
 ```
 
 ## The live chart

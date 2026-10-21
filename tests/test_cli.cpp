@@ -249,6 +249,31 @@ TEST_F(cli, SchemaListsTypesAndFields) {
   EXPECT_NE(nope.err.find("unknown element type 'Nope'"), std::string::npos);
 }
 
+TEST_F(cli, ExampleListsAndShowsSourcesThatRender) {
+  const run_result list = run({"example"});
+  EXPECT_EQ(list.code, 0);
+  EXPECT_NE(list.out.find("line: "), std::string::npos);
+  EXPECT_NE(list.out.find("[Plot, PlotLine"), std::string::npos);
+
+  // By example name: the file of examples/, byte for byte.
+  const run_result line = run({"example", "line"});
+  EXPECT_EQ(line.code, 0);
+  EXPECT_EQ(line.out.rfind("nymph: 1\n", 0), 0u);
+
+  // By element type: the smallest example that uses it.
+  for (const char* type : {"PlotHeatmap", "ClassDiagram", "Window", "GanttChart"}) {
+    const run_result r = run({"example", type});
+    ASSERT_EQ(r.code, 0) << type << ": " << r.err;
+    write("chart.yaml", r.out);
+    EXPECT_EQ(run({"check", path("chart.yaml")}).code, 0) << type;
+  }
+
+  const run_result nope = run({"example", "PlotHeatmapp"});
+  EXPECT_EQ(nope.code, 1);
+  EXPECT_NE(nope.err.find("PlotHeatmap"), std::string::npos);
+  EXPECT_EQ(run({"example", "a", "b"}).code, 2);
+}
+
 TEST_F(cli, SchemaPagedWritesRootAndOnePagePerFigure) {
   const run_result r = run({"schema", "--markdown", "--paged", path("docs")});
   ASSERT_EQ(r.code, 0) << r.err;

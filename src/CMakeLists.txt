@@ -174,6 +174,23 @@ add_library(nymph_cli STATIC
 )
 target_link_libraries(nymph_cli PUBLIC nymph)
 
+# The sources of examples/, compiled in for `nymph example` and the MCP
+# tool example_chart.
+set(_cli_out "${CMAKE_CURRENT_BINARY_DIR}/generated/cli")
+file(MAKE_DIRECTORY "${_cli_out}")
+file(GLOB _example_sources CONFIGURE_DEPENDS "${PROJECT_SOURCE_DIR}/examples/*.yaml")
+add_custom_command(
+  OUTPUT "${_cli_out}/cli_examples.cpp"
+  COMMAND "${CMAKE_COMMAND}" "-DEXAMPLES=${PROJECT_SOURCE_DIR}/examples" "-DOUTPUT=${_cli_out}/cli_examples.txt"
+          -P "${PROJECT_SOURCE_DIR}/cmake/NymphExampleBundle.cmake"
+  COMMAND "${CMAKE_COMMAND}" "-DINPUT=${_cli_out}/cli_examples.txt" "-DOUTPUT=${_cli_out}/cli_examples.cpp"
+          "-DSYMBOL=cli_examples" -P "${PROJECT_SOURCE_DIR}/cmake/NymphEmbedFile.cmake"
+  DEPENDS ${_example_sources} "${PROJECT_SOURCE_DIR}/cmake/NymphExampleBundle.cmake"
+          "${PROJECT_SOURCE_DIR}/cmake/NymphEmbedFile.cmake"
+  COMMENT "Embedding examples/"
+  VERBATIM)
+target_sources(nymph_cli PRIVATE "${_cli_out}/cli_examples.cpp")
+
 # ── nymph_mcp — the MCP server over the library and the CLI helpers ─────────
 
 # spec/06_claude_integration/DESIGN.md section 4.1. Above nymph_cli, whose

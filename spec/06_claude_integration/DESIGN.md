@@ -283,7 +283,7 @@ message).
 
 `docs/agent-guide.md` stays the reference. From it, one short text
 (about 60 lines: the workflow, the source skeleton, the error format,
-when to call `chart_schema`) is written once as
+when to call `example_chart` and `chart_schema`) is written once as
 `claude/skill/nymph/SKILL.md` and used three ways: the MCP server's
 `instructions` (embedded at build time, front matter stripped), the
 plugin's skill and the claude.ai Skill. The full `agent-guide.md`
@@ -378,6 +378,7 @@ executable must be inside the zip.
 | `check_chart` | `source` or `input_path` | `text`: `valid`, or `isError` with the message. |
 | `extract_chart` | `input_path` (`.png`) or `png_base64`; optional `output_path` (`.yaml`) | `text`: the YAML the PNG carries; `isError` for a PNG without one. |
 | `chart_schema` | optional `type` | `text`: `nymph schema [type]` output; an unknown type is `isError` with suggestions. |
+| `example_chart` | optional `type` (an element type or an example name) | `text`: `nymph example [type]` output: a complete source from `examples/` (compiled in) that uses the type, so the agent starts from a working source instead of trial and error; without `type`, the list of examples; an unknown type is `isError` with suggestions. |
 | `list_fonts` | none | `text`: `nymph fonts` output. |
 | `viewer_font` (visibility `["app"]`) | `name` | `structuredContent`: `{name, base64}` of an embedded catalog font; `isError` for any other name. |
 

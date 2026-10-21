@@ -1,7 +1,7 @@
 // MIT License © 2026 Binary Dice Games
 /// @file cli_support.hpp
-/// @brief File input and output, and the text of `nymph schema` and
-///        `nymph fonts`, shared by the command line and the MCP server
+/// @brief File input and output, and the text of `nymph schema`,
+///        `nymph fonts` and `nymph example`, shared by the command line and the MCP server
 ///        (spec/06_claude_integration/DESIGN.md section 5.1).
 #pragma once
 
@@ -58,5 +58,16 @@ std::string shapes_listing(const std::string& name);
 /// @throws cli_failure (file "schema") for an unknown type, with the
 ///         closest name and the list of types.
 std::string schema_type_text(const std::string& type);
+
+/// @brief `nymph example [<name or Type>]`: a complete, working chart
+///        source to start from.
+///
+/// With an empty `query`, one line per example: its name, its description
+/// and the element types it uses. With an example's name, that source. With
+/// an element type, the smallest example that uses it, then the names of the
+/// others. The sources are the files of `examples/`, compiled in.
+/// @throws cli_failure (file "example") for a name or type no example has,
+///         with the closest name and the list of examples.
+std::string example_text(const std::string& query);
 
 } // namespace bdg::nymph

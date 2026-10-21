@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `nymph example [<Type or name>]` and the MCP tool `example_chart`: a complete, working source that uses an element type (or an example by name), to start from; the nymph skill and Cursor rule now tell the agent to start from it and look up fields with `chart_schema` instead of trial and error.
+
 - Shape library: about 100 editable SVG shapes in `resources/shapes/` (basic geometry, flowchart symbols, arrows, callouts, UML and network icons, containers). The `Shape` element draws one in a layout; `FlowNode` takes any of them in its new `symbol` field; `nymph shapes [<name>]` and the MCP tool `list_shapes` list them, and `docs/shapes.md` shows them.
 - UML component, deployment, package and object diagrams (`ComponentDiagram`, `DeploymentDiagram`, `PackageDiagram`, `ObjectDiagram`); component interfaces are wired from their names.
 - `TreeDiagram`, `MindMap` and `OrgChart`: hierarchies written by nesting, laid out as tidy trees (a mind map grows to both sides, an org chart has portraits, hanging teams, assistants and vacancies).

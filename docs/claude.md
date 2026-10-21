@@ -102,6 +102,7 @@ download menu, since chat frames usually cannot save files.
 | `check_chart` | Validates a source without drawing it |
 | `extract_chart` | The YAML a nymph PNG carries |
 | `chart_schema` | The fields of one element type, or of all |
+| `example_chart` | A complete, working source using an element type (or an example by name), to copy and adapt; without `type`, the list of examples |
 | `list_fonts` | The names a chart's `font` accepts |
 | `list_shapes` | The shape library (the names a node's `shape` accepts); with `name`, the details of one shape |
 

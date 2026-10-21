@@ -259,6 +259,11 @@ json chart_schema(const json& args) {
   return text_result(type ? schema_type_text(*type) : schema_text(builtin_registry()));
 }
 
+json example_chart(const json& args) {
+  check_known(args, {"type"});
+  return text_result(example_text(optional_string(args, "type").value_or("")));
+}
+
 json list_fonts(const json& args) {
   check_known(args, {});
   return text_result(fonts_text());
@@ -402,7 +407,8 @@ void add_builtin_tools(tool_registry& registry) {
          "root:\n  type: Plot\n  title: Revenue\n  children:\n    - {type: PlotLine, label: revenue, ys: "
          "$revenue}\ndata: {revenue: [12, 15, 11, 18]}\n"
          "On an error the result says <line>:<column> in the source: fix that spot and call again. Use "
-         "chart_schema for an element's fields. The PNG carries its source (extract_chart reads it back)."},
+         "chart_schema for an element's fields and example_chart for a working source to start from. The PNG "
+         "carries its source (extract_chart reads it back)."},
         {"inputSchema",
          {{"type", "object"}, {"properties", std::move(render_properties)}, {"additionalProperties", false}}},
         {"outputSchema",
@@ -456,6 +462,24 @@ void add_builtin_tools(tool_registry& registry) {
           {"additionalProperties", false}}},
         {"annotations", annotations("Chart element schema", true)}},
        chart_schema});
+
+  registry.add(
+      {{{"name", "example_chart"},
+        {"title", "Example chart source"},
+        {"description",
+         "A complete, valid chart source to copy and adapt: pass the element type you will use (a Plot series such "
+         "as PlotHeatmap, a diagram such as ClassDiagram, Window, GanttChart, ...) and get the smallest example "
+         "that uses it, or an example's name. Without 'type', one line per example with the element types it "
+         "uses. Start from it, then chart_schema for the fields you need beyond it."},
+        {"inputSchema",
+         {{"type", "object"},
+          {"properties",
+           {{"type",
+             {{"type", "string"},
+              {"description", "An element type (e.g. PlotHeatmap) or an example name (e.g. uml_class)."}}}}},
+          {"additionalProperties", false}}},
+        {"annotations", annotations("Example chart source", true)}},
+       example_chart});
 
   registry.add(
       {{{"name", "list_fonts"},

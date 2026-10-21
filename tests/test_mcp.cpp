@@ -124,7 +124,7 @@ TEST(mcp_session, lists_answer_after_initialize) {
       initialize() + notification("notifications/initialized") + request(2, "tools/list") +
       request(3, "resources/list", {{"cursor", "x"}}));
   ASSERT_EQ(r.responses.size(), 3u);
-  EXPECT_EQ(r.responses[1]["result"]["tools"].size(), 6u);
+  EXPECT_EQ(r.responses[1]["result"]["tools"].size(), 7u);
   EXPECT_EQ(r.responses[2]["result"]["resources"].size(), 2u);
 }
 

@@ -168,7 +168,9 @@ TEST_F(mcp_tools, list_names_every_tool_with_its_schemas) {
     EXPECT_TRUE(t["annotations"].contains("readOnlyHint"));
   }
   EXPECT_EQ(
-      names, (std::vector<std::string>{"render_chart", "check_chart", "extract_chart", "chart_schema", "list_fonts", "list_shapes"}));
+      names,
+      (std::vector<std::string>{
+          "render_chart", "check_chart", "extract_chart", "chart_schema", "example_chart", "list_fonts", "list_shapes"}));
   const json& render = tools[0];
   for (const char* p : {"source", "input_path", "output_path", "rasterizer"}) {
     EXPECT_TRUE(render["inputSchema"]["properties"].contains(p)) << p;
@@ -340,6 +342,18 @@ TEST_F(mcp_tools, schema_matches_the_cli) {
   const std::string unknown = error_text(call("chart_schema", {{"type", "PlotLyne"}}));
   EXPECT_EQ(unknown.rfind("schema: unknown element type 'PlotLyne' (did you mean 'PlotLine'?) (types: ", 0), 0u)
       << unknown;
+}
+
+TEST_F(mcp_tools, examples_match_the_cli_and_render) {
+  EXPECT_EQ(text_of(call("example_chart")), cli_output({"example"}));
+  EXPECT_EQ(text_of(call("example_chart", {{"type", "PlotHeatmap"}})), cli_output({"example", "PlotHeatmap"}));
+  // By element type or by name, the source is complete: it renders.
+  for (const char* query : {"PlotHeatmap", "ClassDiagram", "Window", "GanttChart", "uml_state"}) {
+    const std::string text = text_of(call("example_chart", {{"type", query}}));
+    EXPECT_FALSE(call("render_chart", {{"source", text}}).value("isError", false)) << query;
+  }
+  const std::string unknown = error_text(call("example_chart", {{"type", "PlotHeatmapp"}}));
+  EXPECT_NE(unknown.find("(did you mean 'PlotHeatmap'?)"), std::string::npos) << unknown;
 }
 
 TEST_F(mcp_tools, fonts_match_the_cli) {
