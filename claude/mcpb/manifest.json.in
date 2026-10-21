@@ -23,6 +23,7 @@
     { "name": "check_chart", "description": "Validate a chart source without drawing it." },
     { "name": "extract_chart", "description": "Return the YAML source a nymph PNG carries." },
     { "name": "chart_schema", "description": "The fields of a nymph element type." },
+    { "name": "example_chart", "description": "A complete, working source using an element type, to copy and adapt." },
     { "name": "list_fonts", "description": "The font names a chart accepts." },
     { "name": "list_shapes", "description": "The shape library a chart's nodes can use." }
   ],
