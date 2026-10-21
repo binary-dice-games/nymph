@@ -278,6 +278,10 @@ if(NOT WIN32)
       COMMAND ${NYMPH_SH} ${CMAKE_CURRENT_SOURCE_DIR}/install_script.sh
               ${PROJECT_SOURCE_DIR}/packaging/install/install.sh ${CMAKE_CURRENT_BINARY_DIR}/install_script_sh)
     set_tests_properties(nymph_install_script_sh PROPERTIES SKIP_RETURN_CODE 77)
+    # The winget manifests, filled from a fake SHA256SUMS.
+    add_test(NAME nymph_winget_manifest
+      COMMAND ${NYMPH_SH} ${CMAKE_CURRENT_SOURCE_DIR}/winget_manifest.sh
+              ${PROJECT_SOURCE_DIR}/.github/scripts/winget-manifest.sh ${CMAKE_CURRENT_BINARY_DIR}/winget_manifest)
   endif()
 endif()
 find_program(NYMPH_POWERSHELL NAMES pwsh powershell)

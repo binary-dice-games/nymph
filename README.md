@@ -42,6 +42,7 @@ From a published release:
 brew install binary-dice-games/nymph/nymph       # macOS, Linux (Homebrew)
 curl -fsSL https://github.com/binary-dice-games/nymph/releases/latest/download/install.sh | sh
 irm https://github.com/binary-dice-games/nymph/releases/latest/download/install.ps1 | iex   # Windows
+winget install BinaryDiceGames.Nymph             # Windows (winget)
 ```
 
 The scripts install the release executable for your system (checked
@@ -122,7 +123,7 @@ carries its source: `bdg::nymph::extract_source(png)` returns it.
 | `cmake/` | CMake helper modules |
 | `docs/` | Detailed documentation |
 | `spec/` | Design and plan of each project, one numbered folder per project ([INDEX.md](spec/INDEX.md)) |
-| `packaging/` | Install scripts (`install.sh`, `install.ps1`), the Homebrew formula template and the Chrome Web Store upload |
+| `packaging/` | Install scripts (`install.sh`, `install.ps1`), the Homebrew formula and winget manifest templates and the Chrome Web Store upload |
 | `.github/` | CI and release workflows and their scripts |
 | `extern/` | Third-party dependencies (git submodules) |
 

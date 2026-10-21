@@ -403,6 +403,32 @@ installs and runs it.
 - The `verify` job is green.
 - By hand: the Web Store listing shows the version once review passes.
 
+### 11. winget
+
+*Result: written; the script test passes locally (Git Bash). The `winget`
+job has not run: it needs `WINGET_TOKEN`, a `winget-pkgs` fork and a real
+release.*
+
+**Goal:** each release opens a pull request that adds the Windows
+executable to `microsoft/winget-pkgs` as `BinaryDiceGames.Nymph`.
+
+**Deliverables:**
+- `packaging/winget/*.yaml.in`, `.github/scripts/winget-manifest.sh`
+  (DESIGN section 4.10).
+- `release.yml` job `winget`, skipped with a warning without
+  `WINGET_TOKEN`.
+- `docs/releasing.md` (setting, fork, review), `README.md` install line,
+  `CHANGELOG.md`.
+
+**Tests:**
+- `tests/winget_manifest.sh` (`nymph_winget_manifest`): the three files,
+  URL, upper-case SHA-256 of the Windows executable, version, no
+  placeholder, failure when the executable is not in `SHA256SUMS`.
+- By hand, once: `winget validate --manifest <dir>` accepts the output;
+  after the first pull request merges, `winget install
+  BinaryDiceGames.Nymph` installs it and a new console runs `nymph
+  --version`.
+
 ## Completion Criteria
 
 - One tag push publishes a release with every file of DESIGN section 3
@@ -417,6 +443,8 @@ installs and runs it.
   Windows, Linux and macOS finds `nymph` with no further step, and
   `--uninstall` undoes the `PATH` change.
 - `brew install binary-dice-games/nymph/nymph` works on macOS and Linux.
+- `winget install BinaryDiceGames.Nymph` works on Windows once the package
+  is accepted.
 - The plugin's version and checksums always name a published release.
 - No published release file is ever replaced; prereleases and dry runs
   update no channel.

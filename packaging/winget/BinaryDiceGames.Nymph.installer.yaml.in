@@ -1,0 +1,17 @@
+# MIT License © 2026 Binary Dice Games
+#
+# winget installer manifest of nymph, filled in by .github/scripts/winget-manifest.sh
+# for each release (spec/07_release_pipeline/DESIGN.md section 4.10). The
+# release executable is a single file: winget installs it as a portable
+# package and puts the `nymph` command on the user's PATH.
+PackageIdentifier: BinaryDiceGames.Nymph
+PackageVersion: @VERSION@
+InstallerType: portable
+Commands:
+  - nymph
+Installers:
+  - Architecture: x64
+    InstallerUrl: @INSTALLER_URL@
+    InstallerSha256: @INSTALLER_SHA256@
+ManifestType: installer
+ManifestVersion: 1.6.0

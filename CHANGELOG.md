@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- winget: `winget install BinaryDiceGames.Nymph` (Windows), updated by each release once the package is accepted into the winget community repository.
 - `nymph example [<Type or name>]` and the MCP tool `example_chart`: a complete, working source that uses an element type (or an example by name), to start from; the nymph skill and Cursor rule now tell the agent to start from it and look up fields with `chart_schema` instead of trial and error.
 
 - Shape library: about 100 editable SVG shapes in `resources/shapes/` (basic geometry, flowchart symbols, arrows, callouts, UML and network icons, containers). The `Shape` element draws one in a layout; `FlowNode` takes any of them in its new `symbol` field; `nymph shapes [<name>]` and the MCP tool `list_shapes` list them, and `docs/shapes.md` shows them.

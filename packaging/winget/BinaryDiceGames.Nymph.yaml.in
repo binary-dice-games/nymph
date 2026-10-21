@@ -1,0 +1,9 @@
+# MIT License © 2026 Binary Dice Games
+#
+# winget version manifest of nymph, filled in by .github/scripts/winget-manifest.sh
+# for each release (spec/07_release_pipeline/DESIGN.md section 4.10).
+PackageIdentifier: BinaryDiceGames.Nymph
+PackageVersion: @VERSION@
+DefaultLocale: en-US
+ManifestType: version
+ManifestVersion: 1.6.0

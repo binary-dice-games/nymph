@@ -1,0 +1,24 @@
+# MIT License © 2026 Binary Dice Games
+#
+# winget locale manifest of nymph, filled in by .github/scripts/winget-manifest.sh
+# for each release (spec/07_release_pipeline/DESIGN.md section 4.10).
+PackageIdentifier: BinaryDiceGames.Nymph
+PackageVersion: @VERSION@
+PackageLocale: en-US
+Publisher: Binary Dice Games
+PublisherUrl: https://github.com/binary-dice-games
+PackageName: nymph
+PackageUrl: https://github.com/binary-dice-games/nymph
+License: MIT
+LicenseUrl: https://github.com/binary-dice-games/nymph/blob/main/LICENSE
+ShortDescription: Charts and diagrams as PNG images from short YAML sources
+Moniker: nymph
+Tags:
+  - chart
+  - diagram
+  - plot
+  - yaml
+  - mcp
+ReleaseNotesUrl: @RELEASE_URL@
+ManifestType: defaultLocale
+ManifestVersion: 1.6.0

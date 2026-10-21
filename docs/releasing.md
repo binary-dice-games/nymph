@@ -41,6 +41,7 @@ no section for it.
 | `release` | Gathers the files, writes `SHA256SUMS`, creates the release as a draft, uploads, publishes |
 | `plugin` | Opens a pull request pinning the release in the Claude Code and Cursor plugins, set to merge when CI passes |
 | `homebrew-test`, `homebrew` | Builds and tests the formula on macOS and Linux, then pushes it to the tap |
+| `winget` | Opens a pull request on `microsoft/winget-pkgs` with the release's manifests |
 | `chrome` | Uploads the extension to the Chrome Web Store and submits it for review |
 | `verify` | On Linux, macOS and Windows: the install scripts, a new console, the plugin launcher |
 
@@ -76,6 +77,8 @@ release itself needs none.
 |---|---|---|
 | `NYMPH_RELEASE_TOKEN` | secret | Plugin pin pull request: a fine-grained token (or GitHub App token) with Contents and Pull requests write on this repository. One made with the default `GITHUB_TOKEN` would start no CI. |
 | `HOMEBREW_TAP_TOKEN` | secret | Homebrew: Contents write on `binary-dice-games/homebrew-nymph` |
+| `WINGET_TOKEN` | secret | winget: a classic token with `public_repo`, of an account that owns a fork of `microsoft/winget-pkgs` |
+| `WINGET_FORK` | variable (optional) | winget: the fork, `owner/winget-pkgs` (default: `<repository owner>/winget-pkgs`) |
 | `CHROME_EXTENSION_ID`, `CHROME_PUBLISHER_ID` | variables | Chrome Web Store item and publisher |
 | `CHROME_CLIENT_ID`, `CHROME_CLIENT_SECRET`, `CHROME_REFRESH_TOKEN` | secrets | Chrome Web Store API (OAuth) |
 | `APPLE_CERTIFICATE_P12` (base64), `APPLE_CERTIFICATE_PASSWORD` | secrets | macOS: Developer ID Application certificate |
@@ -91,6 +94,14 @@ release itself needs none.
   `binary-dice-games/homebrew-nymph` with a README; the workflow adds
   `Formula/nymph.rb`. Users then run
   `brew install binary-dice-games/nymph/nymph`.
+- **winget.** Fork `microsoft/winget-pkgs` under the account whose token
+  you set. Each release then opens a pull request there from the branch
+  `nymph-X.Y.Z`; winget's bot validates the manifests and Microsoft merges
+  it, usually within a day. The first one adds the package
+  `BinaryDiceGames.Nymph` and is reviewed by hand; answer the reviewers on
+  the pull request. Users then run `winget install BinaryDiceGames.Nymph`.
+  The Windows executable is installed as a portable package. It is not
+  code-signed, so Windows SmartScreen may warn on a browser download.
 - **Chrome Web Store.** With a developer account: create the item by
   uploading `nymph-extension-X.Y.Z.zip` once by hand, fill the listing
   (description, screenshots, the 128 px icon `extension/icons/on-128.png`),

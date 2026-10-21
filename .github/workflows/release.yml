@@ -6,7 +6,7 @@
 #   git tag v0.2.0 && git push origin v0.2.0
 #
 # check -> web -> native (5 platforms) + source -> macos-universal ->
-# release (draft, every file, then published) -> plugin, homebrew, chrome
+# release (draft, every file, then published) -> plugin, homebrew, winget, chrome
 # -> verify. A tag v<X.Y.Z>-<pre> makes a GitHub prerelease and updates no
 # channel; workflow_dispatch is a dry run: the files are workflow artifacts
 # and nothing is published. A channel whose secret is missing is skipped
@@ -305,6 +305,82 @@ jobs:
           git add Formula/nymph.rb
           git commit -m "nymph $VERSION"
           git push
+
+  # Opens a pull request on microsoft/winget-pkgs from the token owner's fork
+  # (WINGET_FORK, default <owner>/winget-pkgs); winget's bot validates it and
+  # Microsoft merges it. The first one is a new-package submission, reviewed by hand.
+  winget:
+    needs: [check, release]
+    if: needs.check.outputs.channels == 'true'
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - name: Token
+        id: gate
+        env:
+          TOKEN: ${{ secrets.WINGET_TOKEN }}
+        run: |
+          if [ -z "$TOKEN" ]; then
+            echo "::warning::WINGET_TOKEN not set: no winget pull request is opened (docs/releasing.md)"
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+          fi
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        if: steps.gate.outputs.ready == 'true'
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        if: steps.gate.outputs.ready == 'true'
+        with:
+          name: release-files
+          path: ${{ runner.temp }}/release
+      - name: Open the winget pull request
+        if: steps.gate.outputs.ready == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.WINGET_TOKEN }}
+          FORK: ${{ vars.WINGET_FORK || format('{0}/winget-pkgs', github.repository_owner) }}
+          VERSION: ${{ needs.check.outputs.version }}
+          TAG: ${{ needs.check.outputs.tag }}
+        run: |
+          branch="nymph-$VERSION"
+          dir=manifests/b/BinaryDiceGames/Nymph/$VERSION
+          fork_owner=${FORK%%/*}
+          if [ -n "$(gh pr list --repo microsoft/winget-pkgs --head "$fork_owner:$branch" --state all --json number --jq '.[].number')" ]; then
+            echo "a winget pull request for nymph $VERSION already exists"
+            exit 0
+          fi
+          # A shallow, sparse copy of upstream: winget-pkgs is very large.
+          git clone --quiet --depth 1 --filter=blob:none --sparse \
+            "https://x-access-token:$GH_TOKEN@github.com/$FORK.git" winget-pkgs
+          cd winget-pkgs
+          git sparse-checkout set "$dir"
+          git remote add upstream https://github.com/microsoft/winget-pkgs.git
+          git fetch --quiet --depth 1 upstream master
+          git checkout --quiet -b "$branch" FETCH_HEAD
+          cd ..
+          sh .github/scripts/winget-manifest.sh "$VERSION" "$RUNNER_TEMP/release/SHA256SUMS" \
+            "https://github.com/$GITHUB_REPOSITORY/releases/download/$TAG" "winget-pkgs/$dir"
+          if command -v winget > /dev/null 2>&1; then
+            winget validate --manifest "winget-pkgs/$dir"
+          else
+            echo "::warning::winget is not on this runner: manifests not validated here"
+          fi
+          cd winget-pkgs
+          if [ -z "$(git status --porcelain -- "$dir")" ]; then
+            echo "winget-pkgs already has nymph $VERSION"
+            exit 0
+          fi
+          git config user.name "nymph release"
+          git config user.email "nymph-release@users.noreply.github.com"
+          git add "$dir"
+          git commit --quiet -m "New version: BinaryDiceGames.Nymph version $VERSION"
+          git push --quiet origin "$branch"
+          gh pr create --repo microsoft/winget-pkgs --head "$fork_owner:$branch" --base master \
+            --title "New version: BinaryDiceGames.Nymph version $VERSION" \
+            --body "nymph $VERSION: https://github.com/$GITHUB_REPOSITORY/releases/tag/$TAG. Opened by the release workflow."
 
   chrome:
     needs: [check, release]

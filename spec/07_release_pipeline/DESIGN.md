@@ -48,6 +48,8 @@ In scope:
    the release executable for users who neither build nor use Homebrew.
 5. **Homebrew**: a tap, `binary-dice-games/homebrew-nymph`, whose formula
    builds the release source tarball; each release updates it.
+   **winget**: each release opens a pull request adding the Windows
+   executable to `microsoft/winget-pkgs` (section 4.10).
 6. **Chrome extension**: each release uploads the extension to the Chrome
    Web Store and submits it for review.
 7. **Claude Code plugin**: each release pins its executables in
@@ -71,7 +73,7 @@ New and changed files:
 | `.github/workflows/source.yml` | Reusable: the source tarball, then its offline build |
 | `.github/workflows/ci.yml` | Build and test every target on pull requests and `main` |
 | `.github/workflows/release.yml` | The release, from a `v*` tag |
-| `.github/scripts/` | `ci-build.sh` (configure, build, test, `PATH` check), `release-check.sh` (tag, version, notes), `release-assemble.sh` (the release files), `homebrew-formula.sh`, `release-verify.sh` |
+| `.github/scripts/` | `ci-build.sh` (configure, build, test, `PATH` check), `release-check.sh` (tag, version, notes), `release-assemble.sh` (the release files), `homebrew-formula.sh`, `winget-manifest.sh`, `release-verify.sh` |
 | `CMakeLists.txt`, `cmake/NymphInstall.cmake`, `cmake/NymphInstallPath.cmake` | `install()` rules, `NYMPH_INSTALL` and `NYMPH_INSTALL_UPDATE_PATH` options, Windows default prefix, the install-time `PATH` step, missing-`extern/` error, macOS defaults |
 | `src/core/charconv.*` | `from_chars_double()`: `std::from_chars` for `double`, with a portable fallback for Apple's libc++ |
 | `app/CMakeLists.txt` | macOS release: strip and sign after the link (`NYMPH_CODESIGN_IDENTITY`) |
@@ -80,8 +82,9 @@ New and changed files:
 | `cmake/NymphSourceDist.cmake` | Script mode: the source tarball |
 | `cmake/NymphPluginSync.cmake` | Plugin version follows the pinned release (section 4.5) |
 | `packaging/homebrew/nymph.rb.in` | The formula template |
+| `packaging/winget/*.yaml.in` | The winget manifest templates (section 4.10) |
 | `packaging/chrome/publish.sh` | Chrome Web Store upload and publish |
-| `tests/` | `install_check.cmake`, `install_subproject.cmake`, `install_script.sh` / `.ps1`, `release_linkage.cmake` (was `release_static.cmake`), `source_dist_check.cmake`, `plugin_sync_versions.cmake`, `chrome_publish_test.mjs`, `test_charconv.cpp` |
+| `tests/` | `install_check.cmake`, `install_subproject.cmake`, `install_script.sh` / `.ps1`, `release_linkage.cmake` (was `release_static.cmake`), `source_dist_check.cmake`, `plugin_sync_versions.cmake`, `chrome_publish_test.mjs`, `winget_manifest.sh`, `test_charconv.cpp` |
 | `docs/building.md`, `docs/releasing.md` (new), `docs/extension.md`, `docs/claude.md`, `README.md`, `CLAUDE.md` | macOS, installing, releasing |
 
 ## 2. Design Goals
@@ -372,6 +375,33 @@ logic and tests. `install.sh` is POSIX `sh` (like the plugin launcher,
 whose OS, CPU and SHA-256 code it reuses); `install.ps1` runs in
 Windows PowerShell 5.1 and PowerShell 7.
 
+### 4.10 winget
+
+- Package `BinaryDiceGames.Nymph` in `microsoft/winget-pkgs`, at
+  `manifests/b/BinaryDiceGames/Nymph/<v>/`. Users:
+  `winget install BinaryDiceGames.Nymph`.
+- The release's `nymph-<v>-windows-x86_64.exe` is one file, so the
+  installer manifest is `InstallerType: portable` with `Commands: [nymph]`:
+  winget puts the command on `PATH` (section 4.9) and removes it on
+  uninstall. No installer (MSI, MSIX) is built.
+- `packaging/winget/*.yaml.in` are the version, installer and locale
+  templates, filled by `.github/scripts/winget-manifest.sh` from the
+  release's `SHA256SUMS` (tested by `tests/winget_manifest.sh`).
+- The `winget` job (Windows runner) fills them with the release URLs,
+  validates them when `winget` is on the runner, commits them to a branch
+  `nymph-<v>` of the `WINGET_TOKEN` owner's fork (shallow, sparse copy of
+  upstream) and opens a pull request on `microsoft/winget-pkgs`. winget's
+  bot validates it and Microsoft merges it, so the channel lags the
+  release by hours; the first pull request is a new-package submission
+  reviewed by hand. Idempotent: an existing pull request for the branch, or
+  upstream already at that version, ends the job. Without `WINGET_TOKEN`
+  the job is skipped with a warning.
+- Rejected: the `winget-releaser` action (a third-party action holding the
+  token; the template and script keep the channel like Homebrew's and
+  testable) and an MSI (a build step and signing for no gain over a portable
+  executable). The executable is unsigned; winget does not require a
+  signature.
+
 ## 5. Data Flow
 
 ```
@@ -395,6 +425,7 @@ release ───────────── universal macOS .mcpb, one SHA25
   ▼ (not for prereleases; each job independent)
   ├─► plugin ──────── pull request pinning the release, auto-merge
   ├─► homebrew ────── formula built and tested, pushed to the tap
+  ├─► winget ──────── manifests, pull request on microsoft/winget-pkgs
   └─► chrome ──────── upload and publish to the Web Store
   │
   ▼
@@ -424,6 +455,7 @@ For users:
 | Channel | Command |
 |---|---|
 | Homebrew (macOS, Linux) | `brew install binary-dice-games/nymph/nymph` |
+| winget (Windows) | `winget install BinaryDiceGames.Nymph` |
 | Source | download `nymph-<v>-src.tar.gz`, then `cmake -S nymph-<v> -B build && cmake --build build && cmake --install build` (puts `nymph` on `PATH`) |
 | Release executable, Linux / macOS | `curl -fsSL https://github.com/binary-dice-games/nymph/releases/latest/download/install.sh \| sh` |
 | Release executable, Windows | `irm https://github.com/binary-dice-games/nymph/releases/latest/download/install.ps1 \| iex` |
@@ -439,6 +471,7 @@ secret is missing is skipped with a warning, as wish's APT publish is):
 |---|---|---|
 | `NYMPH_RELEASE_TOKEN` | secret: token with contents and pull-request write on this repository | plugin pull request (one made with `GITHUB_TOKEN` starts no CI) |
 | `HOMEBREW_TAP_TOKEN` | secret: contents write on the tap | homebrew |
+| `WINGET_TOKEN` | secret: classic token, `public_repo`, owner of a `winget-pkgs` fork (`WINGET_FORK` variable names it) | winget |
 | `CHROME_EXTENSION_ID`, `CHROME_PUBLISHER_ID` | variables | chrome |
 | `CHROME_CLIENT_ID`, `CHROME_CLIENT_SECRET`, `CHROME_REFRESH_TOKEN` | secrets | chrome |
 | `APPLE_CERTIFICATE_P12`, `APPLE_CERTIFICATE_PASSWORD`, `APPLE_API_KEY`, `APPLE_API_KEY_ID`, `APPLE_API_ISSUER` | secrets | macOS signing and notarization |
