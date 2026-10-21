@@ -7,12 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.0] - 2026-10-21
+
 ### Fixed
 
 - Source archives include the Cursor plugin's launcher (`cursor/plugin/bin/`).
 - The MCP bundle manifest lists the `example_chart` tool.
-
-## [0.1.0] - 2026-10-21
 
 ### Added
 
