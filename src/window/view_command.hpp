@@ -22,6 +22,9 @@ struct view_args {
   std::string input; ///< A YAML file or a nymph PNG.
   std::string theme; ///< "light", "dark", "classic", or "" for the source's own.
   bool edit = false; ///< `--edit`: open with the editor panel (the E key shows it too).
+  /// `--no-mcp`: no MCP server for agents while editing
+  /// (spec/14_editor_workspace/DESIGN.md section 7).
+  bool no_mcp = false;
   view_fit fit = view_fit::fill; ///< How the layout follows the window.
 };
 

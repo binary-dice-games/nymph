@@ -36,6 +36,10 @@ class registry {
   ///        slot it accepts), "A, B, C", each once.
   std::string names_taken_by(const element_class& parent) const;
 
+  /// @brief The classes `parent` takes as children, in the order of its
+  ///        slots, then by name, each once (names_taken_by() as a list).
+  std::vector<const element_class*> classes_taken_by(const element_class& parent) const;
+
   /// @brief Names of the classes that accept children of slot `slot`, "A,
   ///        B", for "X goes in: ..." messages.
   std::string names_accepting(std::string_view slot) const;

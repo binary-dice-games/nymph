@@ -197,6 +197,9 @@ struct live_view::impl {
   /// and the paths the user changed (they are saved by source_with_view()).
   view_map last_states;
   std::set<std::string> touched;
+  /// The view to start from instead of the source's `view` key: the view
+  /// on screen carried to renamed paths (set_source() with a rename).
+  view_map start_views;
   int input_frames_left = 0;
 
   // Edit mode (spec/08_view_editor/DESIGN.md section 4).
@@ -464,6 +467,53 @@ struct live_view::impl {
     return out;
   }
 
+  /// The view to save: the source's `view` entries (or the carried ones),
+  /// with what the user changed since (plots' state, user-interface elements') over them.
+  view_map saved_views(const std::map<std::string, const node*, std::less<>>& nodes) const {
+    // After a rename the carried view is the base: it holds the source's
+    // entries and what the user had changed before.
+    view_map saved = start_views.empty() ? fig->views : start_views;
+    for (const std::string& path : touched) {
+      if (const auto it = last_states.find(path); it != last_states.end()) {
+        saved[path] = it->second;
+      }
+    }
+    // User-interface elements keep what the user changed in their state.
+    for (const auto& [path, v] : ui_changes(nodes)) {
+      element_view& entry = saved[path];
+      // Merged over the source's own entry: a window moved now keeps a size
+      // saved before.
+      if (v.position) {
+        entry.position = v.position;
+      }
+      if (v.size) {
+        entry.size = v.size;
+      }
+      if (v.scroll) {
+        entry.scroll = v.scroll;
+      }
+      if (v.collapsed) {
+        entry.collapsed = v.collapsed;
+      }
+      if (v.closed) {
+        entry.closed = v.closed;
+      }
+      if (v.flag) {
+        entry.flag = v.flag;
+      }
+      if (v.index) {
+        entry.index = v.index;
+      }
+      if (v.numbers) {
+        entry.numbers = v.numbers;
+      }
+      if (v.text) {
+        entry.text = v.text;
+      }
+    }
+    return saved;
+  }
+
   /// Bumps ui_revision when the UI state the user changed differs from the
   /// last frame's.
   void track_ui_changes() {
@@ -634,7 +684,7 @@ struct live_view::impl {
     io.DeltaTime = static_cast<float>(std::clamp(step, 1e-4, 0.25));
     last_time = now;
     ctx->begin_frame();
-    ctx->set_views(&fig->views, &paths);
+    ctx->set_views(start_views.empty() ? &fig->views : &start_views, &paths);
     // Source limits stay fixed while fresh contexts settle (static parity
     // with render_figure()); then they let go for pan and zoom.
     ctx->set_lock_limits(fresh_frames < kFigureFrames);
@@ -732,6 +782,30 @@ live_view::~live_view() = default;
 live_view::live_view(live_view&&) noexcept = default;
 live_view& live_view::operator=(live_view&&) noexcept = default;
 
+void live_view::set_source_moved(std::string_view source, const path_rename& rename) {
+  impl& m = *impl_;
+  if (!m.fig) {
+    set_source(source);
+    return;
+  }
+  // The view on screen, under the paths its elements have in `source`.
+  view_map carried;
+  for (auto& [path, v] : m.saved_views(element_paths(m.fig->root))) {
+    if (const std::optional<std::string> to = rename(path)) {
+      carried[*to] = v;
+    }
+  }
+  std::set<std::string> touched;
+  for (const std::string& path : m.touched) {
+    if (const std::optional<std::string> to = rename(path)) {
+      touched.insert(*to);
+    }
+  }
+  set_source(source, true); // throws before anything changes
+  m.start_views = std::move(carried);
+  m.touched = std::move(touched); // still the user's changes: a save keeps them
+}
+
 void live_view::set_source(std::string_view source, bool reset_view) {
   impl& m = *impl_;
   figure f = bind_source(source, builtin_registry());
@@ -766,6 +840,7 @@ void live_view::set_source(std::string_view source, bool reset_view) {
   m.last_states.clear();
   if (reset_view) {
     m.touched.clear();
+    m.start_views.clear();
   }
   m.overflowed = false;
   if (reset_view) {
@@ -1066,50 +1141,12 @@ std::string live_view::source_with_view() const {
   if (!m.fig) {
     return m.source;
   }
-  view_map saved = m.fig->views;
-  for (const std::string& path : m.touched) {
-    if (const auto it = m.last_states.find(path); it != m.last_states.end()) {
-      saved[path] = it->second;
-    }
-  }
-  // User-interface elements keep what the user changed in their state.
   const auto nodes = element_paths(m.fig->root);
   std::map<std::string, view_kind, std::less<>> kinds;
   for (const auto& [path, n] : nodes) {
     kinds[path] = n->cls->viewable();
   }
-  for (const auto& [path, v] : m.ui_changes(nodes)) {
-    element_view& entry = saved[path];
-    // Merged over the source's own entry: a window moved now keeps a size
-    // saved before.
-    if (v.position) {
-      entry.position = v.position;
-    }
-    if (v.size) {
-      entry.size = v.size;
-    }
-    if (v.scroll) {
-      entry.scroll = v.scroll;
-    }
-    if (v.collapsed) {
-      entry.collapsed = v.collapsed;
-    }
-    if (v.closed) {
-      entry.closed = v.closed;
-    }
-    if (v.flag) {
-      entry.flag = v.flag;
-    }
-    if (v.index) {
-      entry.index = v.index;
-    }
-    if (v.numbers) {
-      entry.numbers = v.numbers;
-    }
-    if (v.text) {
-      entry.text = v.text;
-    }
-  }
+  const view_map saved = m.saved_views(nodes);
   const std::string text = write_view(saved, kinds);
   if (text == write_view(m.fig->views, kinds)) {
     return m.source; // nothing changed: the source as written

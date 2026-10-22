@@ -65,6 +65,31 @@ YAML has a `source` key, read it first: it says how the data was made, so
 you can rerun that prompt, query or code for fresh data instead of
 guessing. Keep `source` up to date when you change the data.
 
+## The chart open in the editor
+
+When the user has a chart open in the nymph editor (`nymph view --edit
+chart.yaml`), `nymph mcp` also offers `editor_*` tools that work on that
+chart as the user would: every change is checked like any source, shows at
+once and can be undone in the editor.
+
+1. `editor_state`: the file, a `version`, every element by path (with its
+   type, label and `id`), the **selection** (its path, written fields and
+   the child types it takes), the data tables and the view on screen.
+   "This", "the selected node" mean the selection.
+2. Change it: `editor_add_element` (`parent`, `type`, `fields`, e.g. a
+   `FlowLink` with `{"from": "cart", "to": "purchases"}`),
+   `editor_set_fields` (`path`, `fields`; `null` clears one, `"$col"` is a
+   column reference), `editor_remove_element` (`with_references` also
+   removes the links that name it), `editor_move_element`,
+   `editor_set_cells` / `editor_set_table` for data. Pass the
+   `expected_version` from `editor_state`: if the user changed the chart
+   meanwhile the change is refused, so read the state again.
+3. `editor_view_image` shows what the user sees.
+
+A refused change names the problem as the loader does and changes nothing.
+With several editors open, `editor` (a file name or process id) chooses
+one; without an open editor the tools say so: use `render_chart` instead.
+
 ## Source format
 
 ```yaml

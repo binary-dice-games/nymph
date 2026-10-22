@@ -8,11 +8,14 @@
 
 #include <imgui.h>
 #include <algorithm>
+#include <filesystem>
 #include <optional>
 #include <string>
 #include <vector>
 #include "edit/editor_model.hpp"
 #include "edit/inspector.hpp"
+#include "edit/table_grid.hpp"
+#include "edit/workspace_layout.hpp"
 #include "view/live_view.hpp"
 #include "window/window_host.hpp"
 
@@ -23,8 +26,6 @@ namespace bdg::nymph {
 ///        too where it says so.
 class editor_panel {
  public:
-  /// Width of the strip, CSS pixels.
-  static constexpr float kWidth = 320.0f;
 
   /// What the user decided in a confirmation dialog.
   enum class decision {
@@ -48,12 +49,55 @@ class editor_panel {
   void set_theme(const std::string& theme);
 
   /// @brief The window's client area (CSS pixels) and display scale: the
-  ///        strip is its right-hand kWidth.
+  ///        strip is its right-hand strip_width().
   void resize(float width, float height, float scale);
+
+  /// @brief The strip's width in the current window, CSS pixels: the width
+  ///        asked for, clamped (clamp_strip_width()).
+  float strip_width() const {
+    return width_ > 0.0f ? clamp_strip_width(width_, wanted_strip_) : wanted_strip_; // before the first resize()
+  }
+  /// @brief The width asked for (by dragging the divider), kept while the
+  ///        window is too narrow for it.
+  float wanted_strip_width() const {
+    return wanted_strip_;
+  }
+  /// @brief Asks for a strip `width` CSS pixels wide (the divider was dragged).
+  void set_strip_width(float width) {
+    wanted_strip_ = width;
+    refresh();
+  }
 
   /// @brief Where the strip starts, CSS pixels from the left.
   float strip_x() const {
-    return width_ - kWidth;
+    return width_ - strip_width();
+  }
+
+  /// @brief Height of the tab bar over the left side, CSS pixels.
+  static constexpr float kTabBarHeight = 28.0f;
+
+  /// @brief The regions of the window (workspace_layout.hpp).
+  workspace_layout layout() const {
+    return layout_workspace(width_, height_, wanted_strip_, kTabBarHeight);
+  }
+
+  /// @brief Where the figure is shown: the left side under the tab bar
+  ///        while "Chart" is the tab, empty while a data table is.
+  layout_box figure_box() const {
+    return tab_ ? layout_box{} : layout().left;
+  }
+
+  /// @brief The data table shown instead of the figure ("" for the single
+  ///        unnamed one), or nullopt for "Chart".
+  const std::optional<std::string>& data_tab() const {
+    return tab_;
+  }
+  /// @brief Shows table `name`'s tab, or "Chart" for nullopt.
+  void show_tab(std::optional<std::string> name);
+
+  /// @brief The folder of the input file: where the CSV dialogs start.
+  void set_folder(std::filesystem::path folder) {
+    grid_.set_folder(std::move(folder));
   }
 
   // ── Input (x, y in CSS pixels from the window's top-left corner) ──────
@@ -71,6 +115,19 @@ class editor_panel {
   bool popup_open() const {
     return popup_open_;
   }
+  /// @brief A tree shortcut on the selected element, outside text fields:
+  ///        Delete, Ctrl+D (duplicate), Alt+Up / Alt+Down (move).
+  /// @return What changed, as frame() reports it; nothing for other keys.
+  inspector_events shortcut(window_key key, key_mods mods);
+
+  /// @brief Opens the menu of the element at `path` (add, insert, move,
+  ///        delete) at (`x`, `y`), CSS pixels in the window: a right-click on
+  ///        it in the figure.
+  void open_element_menu(const std::string& path, float x, float y) {
+    inspector_.menu().open_at(path, x, y);
+    refresh();
+  }
+
   /// @brief Opens the "overwrite the input?" dialog (the Save button).
   void ask_save();
   /// @brief Opens the "unsaved changes" dialog (the window is being closed).
@@ -112,6 +169,8 @@ class editor_panel {
 
  private:
   void draw_dialogs();
+  void draw_tabs(inspector_events& events);
+  void draw_table_dialogs(inspector_events& events);
 
   editor_model model_;
   inspector inspector_;
@@ -119,6 +178,7 @@ class editor_panel {
   float width_ = 0.0f;
   float height_ = 0.0f;
   float scale_ = 1.0f;
+  float wanted_strip_ = kDefaultStripWidth;
   int frames_left_ = 3;
   bool wants_keyboard_ = false;
   bool popup_open_ = false;
@@ -128,6 +188,14 @@ class editor_panel {
   decision decision_ = decision::none;
   std::string theme_;
   std::optional<double> last_time_;
+  table_grid grid_;
+  std::optional<std::string> tab_; ///< The data table shown; nullopt: "Chart".
+  bool select_tab_ = false; ///< tab_ was set from outside the tab bar: select it there.
+  enum class table_ask { none, name_both, rename } table_ask_ = table_ask::none;
+  bool open_table_dialog_ = false;
+  std::string renaming_; ///< The table being renamed.
+  char first_name_[64] = {}; ///< Name dialogs' fields.
+  char second_name_[64] = {};
 };
 
 } // namespace bdg::nymph

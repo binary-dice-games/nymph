@@ -60,6 +60,8 @@ struct win32_api {
   HDC(WINAPI* GetDC)(HWND) = nullptr;
   int(WINAPI* ReleaseDC)(HWND, HDC) = nullptr;
   HCURSOR(WINAPI* LoadCursorW)(HINSTANCE, LPCWSTR) = nullptr;
+  HCURSOR(WINAPI* SetCursor)(HCURSOR) = nullptr;
+  BOOL(WINAPI* PostMessageW)(HWND, UINT, WPARAM, LPARAM) = nullptr;
   HWND(WINAPI* SetCapture)(HWND) = nullptr;
   BOOL(WINAPI* ReleaseCapture)() = nullptr;
   SHORT(WINAPI* GetKeyState)(int) = nullptr;
@@ -132,6 +134,8 @@ struct win32_api {
     need(user32, "GetDC", GetDC);
     need(user32, "ReleaseDC", ReleaseDC);
     need(user32, "LoadCursorW", LoadCursorW);
+    need(user32, "SetCursor", SetCursor);
+    need(user32, "PostMessageW", PostMessageW);
     need(user32, "SetCapture", SetCapture);
     need(user32, "GetKeyState", GetKeyState);
     need(user32, "ReleaseCapture", ReleaseCapture);
@@ -343,8 +347,22 @@ class win32_window : public native_window {
   const char* glsl_version() const override {
     return "#version 330";
   }
+  void set_cursor(cursor_shape shape) override {
+    // IDC_ARROW, IDC_SIZEWE, IDC_IBEAM
+    const WORD id = shape == cursor_shape::resize_horizontal ? 32644 : shape == cursor_shape::text ? 32513 : 32512;
+    win32_api& a = api();
+    cursor_ = a.LoadCursorW(nullptr, MAKEINTRESOURCEW(id)); // shared: never destroyed
+    a.SetCursor(cursor_);
+  }
+  void wake() override {
+    // PostMessageW may be called from any thread; GetMessageW in pump() returns for it.
+    api().PostMessageW(hwnd_, kWakeMessage, 0, 0);
+  }
 
  private:
+  /// Posted by wake(): it only ends a waiting GetMessageW.
+  static constexpr UINT kWakeMessage = WM_APP + 1;
+
   struct window_size {
     int width, height;
   };
@@ -512,6 +530,7 @@ class win32_window : public native_window {
       case VK_NEXT: return window_key::page_down;
       case 'A': return window_key::a;
       case 'C': return window_key::c;
+      case 'D': return window_key::d;
       case 'E': return window_key::e;
       case 'Q': return window_key::q;
       case 'R': return window_key::r;
@@ -533,6 +552,19 @@ class win32_window : public native_window {
     switch (message) {
       case WM_ERASEBKGND:
         result = 1;
+        return true;
+      case WM_SETCURSOR:
+        if (LOWORD(lparam) == HTCLIENT && cursor_ != nullptr) {
+          api().SetCursor(cursor_);
+          result = TRUE;
+          return true;
+        }
+        return false;
+      case WM_SETFOCUS:
+      case WM_KILLFOCUS:
+        events_.on_focus(message == WM_SETFOCUS);
+        return true;
+      case kWakeMessage:
         return true;
       case WM_PAINT:
         api().ValidateRect(hwnd_, nullptr);
@@ -590,6 +622,21 @@ class win32_window : public native_window {
         mods.ctrl = (api().GetKeyState(VK_CONTROL) & 0x8000) != 0;
         mods.shift = (api().GetKeyState(VK_SHIFT) & 0x8000) != 0;
         mods.alt = (api().GetKeyState(VK_MENU) & 0x8000) != 0;
+        events_.on_key(key_of(wparam), mods, down, down && (lparam & (1 << 30)) != 0);
+        return true;
+      }
+      case WM_SYSKEYDOWN:
+      case WM_SYSKEYUP: {
+        // With Alt held keys arrive as system keys: Alt+Up / Alt+Down move a
+        // tree element; everything else (Alt+F4, the menu) stays Windows'.
+        if (wparam != VK_UP && wparam != VK_DOWN) {
+          return false;
+        }
+        key_mods mods;
+        mods.ctrl = (api().GetKeyState(VK_CONTROL) & 0x8000) != 0;
+        mods.shift = (api().GetKeyState(VK_SHIFT) & 0x8000) != 0;
+        mods.alt = true;
+        const bool down = message == WM_SYSKEYDOWN;
         events_.on_key(key_of(wparam), mods, down, down && (lparam & (1 << 30)) != 0);
         return true;
       }
@@ -660,6 +707,7 @@ class win32_window : public native_window {
   bool ready_ = false;
   bool tracking_ = false; ///< A WM_MOUSELEAVE is pending.
   int buttons_down_ = 0;
+  HCURSOR cursor_ = nullptr; ///< The client area's cursor (set_cursor()); a shared system cursor.
   char32_t high_surrogate_ = 0; ///< First half of a surrogate pair typed, waiting for its second.
   float last_x_ = 0.0f; ///< Last pointer position, client pixels.
   float last_y_ = 0.0f;

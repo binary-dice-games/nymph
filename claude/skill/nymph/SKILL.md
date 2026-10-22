@@ -53,6 +53,15 @@ from a working one and look up every field you use.
    again, put that `view:` block in the source (replacing any `view`
    key) so the user keeps their zoom; leave it out to show the whole
    chart again.
+9. When the user has a chart open in the nymph editor (`nymph view
+   --edit`), work on that chart with the `editor_*` tools instead of
+   rendering a new one: `editor_state` first (the elements by path, the
+   selection, which is what "this" means, and the tables), then
+   `editor_add_element`, `editor_set_fields`, `editor_remove_element`,
+   `editor_set_cells` with the `expected_version` it returned, and
+   `editor_view_image` to see the result. Each change shows in the
+   editor at once and the user can undo it. Without an open editor they
+   say so: then use `render_chart`.
 
 | To draw | Root element |
 |---|---|

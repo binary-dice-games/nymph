@@ -6,7 +6,9 @@
 #include <algorithm>
 #include <cfloat>
 #include <cmath>
+#include <cstdio>
 #include <utility>
+#include "edit/image_fields.hpp"
 #include "render/frame_setup.hpp"
 
 namespace bdg::nymph {
@@ -53,6 +55,7 @@ ImGuiKey imgui_key(window_key key) {
     case window_key::page_down: return ImGuiKey_PageDown;
     case window_key::a: return ImGuiKey_A;
     case window_key::c: return ImGuiKey_C;
+    case window_key::d: return ImGuiKey_D;
     case window_key::v: return ImGuiKey_V;
     case window_key::x: return ImGuiKey_X;
     case window_key::y: return ImGuiKey_Y;
@@ -140,6 +143,25 @@ void editor_panel::text(char32_t codepoint) {
   refresh();
 }
 
+inspector_events editor_panel::shortcut(window_key key, key_mods mods) {
+  inspector_events events;
+  const std::optional<edit_target_id>& selection = model_.selection();
+  if (!selection || selection->element == kImagePath || selection->element == "root") {
+    return events;
+  }
+  const std::string path = selection->element;
+  tree_menu& menu = inspector_.menu();
+  if (key == window_key::del && !mods.ctrl && !mods.alt) {
+    menu.remove(model_, path, events);
+  } else if (key == window_key::d && mods.ctrl && !mods.alt) {
+    menu.duplicate(model_, path, events);
+  } else if ((key == window_key::up || key == window_key::down) && mods.alt && !mods.ctrl) {
+    menu.move(model_, path, key == window_key::up ? -1 : +1, events);
+  }
+  refresh();
+  return events;
+}
+
 void editor_panel::ask_save() {
   asked_ = ask::save;
   refresh();
@@ -170,16 +192,50 @@ inspector_events editor_panel::frame(double now_seconds, const std::vector<edit_
 
   ImGui_ImplOpenGL3_NewFrame();
   ImGui::NewFrame();
-  ImGui::SetNextWindowPos(ImVec2(strip_x(), 0.0f), ImGuiCond_Always);
-  ImGui::SetNextWindowSize(ImVec2(kWidth, height_), ImGuiCond_Always);
-  ImGui::Begin(
-      "##nymph_editor",
-      nullptr,
-      ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoMove |
-          ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoBringToFrontOnFocus);
-  const inspector_events events = inspector_.draw(model_, tree, status);
+  const workspace_layout regions = layout();
+  constexpr ImGuiWindowFlags kFixed = ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize |
+      ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoSavedSettings |
+      ImGuiWindowFlags_NoBringToFrontOnFocus;
+  inspector_events table_events;
+  draw_tabs(table_events);
+  if (tab_) {
+    // A data table in place of the figure.
+    ImGui::SetNextWindowPos(ImVec2(regions.left.x, regions.left.y), ImGuiCond_Always);
+    ImGui::SetNextWindowSize(ImVec2(regions.left.width, regions.left.height), ImGuiCond_Always);
+    ImGui::Begin("##nymph_table", nullptr, kFixed);
+    grid_.draw(model_, *tab_, table_events);
+    ImGui::End();
+  }
+  ImGui::SetNextWindowPos(ImVec2(regions.strip.x, 0.0f), ImGuiCond_Always);
+  ImGui::SetNextWindowSize(ImVec2(regions.strip.width, height_), ImGuiCond_Always);
+  ImGui::Begin("##nymph_editor", nullptr, kFixed);
+  inspector_events events = inspector_.draw(model_, tree, status);
   draw_dialogs();
+  grid_.dialogs(model_, table_events);
+  draw_table_dialogs(table_events);
   ImGui::End();
+  // A table change: shown like any other (the inspector's own come first).
+  if (table_events.source && !events.source) {
+    events.source = table_events.source;
+  }
+  if (!table_events.error.empty()) {
+    events.error = table_events.error;
+    inspector_.set_error(table_events.error);
+  } else if (table_events.source) {
+    inspector_.set_error("");
+  }
+  if (events.show_data) {
+    show_tab(events.show_data->first);
+    grid_.show_column(events.show_data->first, events.show_data->second);
+  }
+  // A tab whose table went away (an undo, a rename) falls back to the chart.
+  if (tab_) {
+    const std::vector<data_table> tables = model_.tables();
+    if (std::none_of(tables.begin(), tables.end(), [&](const data_table& t) { return t.name == *tab_; })) {
+      tab_.reset();
+      select_tab_ = true;
+    }
+  }
   wants_keyboard_ = io.WantTextInput;
   modal_open_ = ImGui::IsPopupOpen(kSaveDialog) || ImGui::IsPopupOpen(kCloseDialog);
   popup_open_ = ImGui::IsPopupOpen(nullptr, ImGuiPopupFlags_AnyPopupId | ImGuiPopupFlags_AnyPopupLevel);
@@ -188,6 +244,156 @@ inspector_events editor_panel::frame(double now_seconds, const std::vector<edit_
     --frames_left_;
   }
   return events;
+}
+
+void editor_panel::show_tab(std::optional<std::string> name) {
+  tab_ = std::move(name);
+  select_tab_ = true;
+  refresh();
+}
+
+void editor_panel::draw_tabs(inspector_events& events) {
+  const workspace_layout regions = layout();
+  ImGui::SetNextWindowPos(ImVec2(regions.tabs.x, regions.tabs.y), ImGuiCond_Always);
+  ImGui::SetNextWindowSize(ImVec2(regions.tabs.width, regions.tabs.height), ImGuiCond_Always);
+  ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(6.0f, 4.0f));
+  ImGui::Begin(
+      "##nymph_tabs", nullptr,
+      ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoMove |
+          ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoBringToFrontOnFocus | ImGuiWindowFlags_NoScrollbar);
+  ImGui::PopStyleVar();
+  if (ImGui::BeginTabBar("##tabs", ImGuiTabBarFlags_FittingPolicyScroll)) {
+    const bool select = select_tab_;
+    select_tab_ = false;
+    if (ImGui::BeginTabItem("Chart", nullptr, select && !tab_ ? ImGuiTabItemFlags_SetSelected : 0)) {
+      if (!select) {
+        tab_.reset();
+      }
+      ImGui::EndTabItem();
+    }
+    for (const data_table& t : model_.tables()) {
+      const std::string label = (t.name.empty() ? std::string("data") : t.name) + "##table_" + t.name;
+      const bool chosen = select && tab_ && *tab_ == t.name;
+      if (ImGui::BeginTabItem(label.c_str(), nullptr, chosen ? ImGuiTabItemFlags_SetSelected : 0)) {
+        if (!select) {
+          tab_ = t.name;
+        }
+        ImGui::EndTabItem();
+      }
+      if (ImGui::BeginPopupContextItem(("##tab_menu_" + t.name).c_str())) {
+        ImGui::BeginDisabled(t.name.empty());
+        if (ImGui::MenuItem("Rename")) {
+          renaming_ = t.name;
+          std::snprintf(first_name_, sizeof(first_name_), "%s", t.name.c_str());
+          table_ask_ = table_ask::rename;
+          open_table_dialog_ = true;
+        }
+        ImGui::EndDisabled();
+        if (t.name.empty()) {
+          ImGui::SetItemTooltip("The single table has no name; add a second table to name both.");
+        }
+        if (ImGui::MenuItem("Import CSV")) {
+          grid_.ask_import(t.name);
+        }
+        if (ImGui::MenuItem("Export CSV")) {
+          grid_.ask_export(t.name);
+        }
+        ImGui::Separator();
+        if (ImGui::MenuItem("Delete")) {
+          const commit_result r = model_.remove_table(t.name);
+          if (r.ok) {
+            events.source = r.source;
+          } else {
+            events.error = r.error;
+          }
+        }
+        ImGui::EndPopup();
+      }
+    }
+    if (ImGui::TabItemButton("+", ImGuiTabItemFlags_Trailing | ImGuiTabItemFlags_NoTooltip)) {
+      const std::vector<data_table> tables = model_.tables();
+      if (tables.size() == 1 && tables.front().name.empty()) {
+        // The single table needs a name too: ask for both.
+        std::snprintf(first_name_, sizeof(first_name_), "table1");
+        std::snprintf(second_name_, sizeof(second_name_), "table2");
+        table_ask_ = table_ask::name_both;
+        open_table_dialog_ = true;
+      } else {
+        const std::string name = tables.empty() ? std::string() : model_.fresh_table_name();
+        const commit_result r = model_.add_table(name, editor_model::starter_table());
+        if (r.ok) {
+          events.source = r.source;
+          tab_ = name;
+          select_tab_ = true;
+        } else {
+          events.error = r.error;
+        }
+      }
+    }
+    ImGui::SetItemTooltip("Add a data table");
+    ImGui::EndTabBar();
+  }
+  ImGui::End();
+}
+
+void editor_panel::draw_table_dialogs(inspector_events& events) {
+  constexpr const char* kNameBoth = "Name the tables";
+  constexpr const char* kRename = "Rename table";
+  if (open_table_dialog_) {
+    ImGui::OpenPopup(table_ask_ == table_ask::rename ? kRename : kNameBoth);
+    open_table_dialog_ = false;
+  }
+  const ImVec2 middle(width_ * 0.5f, height_ * 0.5f);
+  const ImGuiWindowFlags flags = ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoSavedSettings;
+  const bool escape = ImGui::IsKeyPressed(ImGuiKey_Escape, false);
+  ImGui::SetNextWindowPos(middle, ImGuiCond_Always, ImVec2(0.5f, 0.5f));
+  if (ImGui::BeginPopupModal(kNameBoth, nullptr, flags)) {
+    ImGui::TextWrapped("With two tables each needs a name; references to the first become $name:column.");
+    ImGui::InputText("first table", first_name_, sizeof(first_name_));
+    ImGui::InputText("new table", second_name_, sizeof(second_name_));
+    if (ImGui::Button("Add", ImVec2(100, 0))) {
+      const commit_result r = model_.add_table(second_name_, editor_model::starter_table(), first_name_);
+      if (r.ok) {
+        events.source = r.source;
+        tab_ = second_name_;
+        select_tab_ = true;
+      } else {
+        events.error = r.error;
+      }
+      table_ask_ = table_ask::none;
+      ImGui::CloseCurrentPopup();
+    }
+    ImGui::SameLine();
+    if (ImGui::Button("Cancel", ImVec2(100, 0)) || escape) {
+      table_ask_ = table_ask::none;
+      ImGui::CloseCurrentPopup();
+    }
+    ImGui::EndPopup();
+  }
+  ImGui::SetNextWindowPos(middle, ImGuiCond_Always, ImVec2(0.5f, 0.5f));
+  if (ImGui::BeginPopupModal(kRename, nullptr, flags)) {
+    ImGui::InputText("name", first_name_, sizeof(first_name_));
+    if (ImGui::Button("Rename", ImVec2(100, 0))) {
+      const commit_result r = model_.rename_table(renaming_, first_name_);
+      if (r.ok) {
+        events.source = r.source;
+        if (tab_ && *tab_ == renaming_) {
+          tab_ = first_name_;
+          select_tab_ = true;
+        }
+      } else {
+        events.error = r.error;
+      }
+      table_ask_ = table_ask::none;
+      ImGui::CloseCurrentPopup();
+    }
+    ImGui::SameLine();
+    if (ImGui::Button("Cancel", ImVec2(100, 0)) || escape) {
+      table_ask_ = table_ask::none;
+      ImGui::CloseCurrentPopup();
+    }
+    ImGui::EndPopup();
+  }
 }
 
 void editor_panel::draw_dialogs() {

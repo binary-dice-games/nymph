@@ -197,5 +197,13 @@ TEST(source_edit, TheEditedSourceParsesToTheIntendedValue) {
   EXPECT_EQ(parse_yaml(out).find("root")->find("title")->text, "x: #y");
 }
 
+TEST(source_edit, ABlockListBecomesAValueOnItsKeysLine) {
+  // spec/14_editor_workspace: a list replaced by a column reference.
+  const std::string source = "root:\n  type: Plot\n  children:\n    - type: PlotLine\n      ys:\n        - 1\n        - 3\n      label: a\n";
+  EXPECT_EQ(
+      set_field(source, "root/children/0", "ys", "$y"),
+      "root:\n  type: Plot\n  children:\n    - type: PlotLine\n      ys: $y\n      label: a\n");
+}
+
 } // namespace
 } // namespace bdg::nymph

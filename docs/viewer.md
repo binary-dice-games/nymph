@@ -133,7 +133,9 @@ to the field instead (`Esc` leaves it). See [cli.md](cli.md).
 ### Editing in the window
 
 `nymph view --edit chart.yaml` (or the `E` key in any `nymph view`) docks
-an editor panel to the right of the figure; `E` hides it again.
+an editor panel to the right of the figure; `E` hides it again. Drag the
+divider between them to make the panel wider or narrower (double-click it
+for the default width).
 
 - **Click to select.** Click a title, an axis label or the legend of a plot, a
   `Label`, a node, group or link text of a diagram: the thing is outlined and
@@ -165,9 +167,48 @@ an editor panel to the right of the figure; `E` hides it again.
   diagram apply to all its text; every diagram item (node, link, note, ...)
   has its own, which falls back to the diagram's. A text that comes from the
   data (`text: $names`) is shown but not edited; **replace by this text**
-  writes it into the field instead.
-- **Limits.** Elements cannot be added, removed or moved, and the `data`
-  tables are not edited. Copy and paste work inside the panel only.
+  writes it into the field instead, and **columns** takes it from another
+  column.
+- **Lists and columns.** A list field (a series' `xs`, `ys`, `values`, ...)
+  is a text box holding its value as in the source: `[1, 3, 2]`,
+  `$monthly:cost`, or several columns `[$revenue, $cost]` (grouped bars). Its
+  **columns** button lists every column of the data: choosing one points the
+  series at it. To plot a new column, add it in the table's tab, add the
+  series (right-click the plot, **Add child**), then choose the column for
+  its `ys` (and `xs`).
+- **Adding and removing elements.** Right-click an element, in the figure
+  or in the **Elements** list, for its menu: **Add child**, **Insert
+  before** / **after** (only the types that can go there: `FlowNode`,
+  `FlowLink`, `Note`, ... in a `Flowchart`), **Duplicate** (`Ctrl+D`; ids
+  are renamed), **Move up** / **down** (`Alt+Up` / `Alt+Down`) and
+  **Delete** (`Del`). A new element starts valid: a fresh id, sample data for
+  a series, and a link from the selected node to the next one; when it
+  cannot (a link in a diagram with no nodes), a dialog asks for its fields.
+  Deleting a node that links or notes name offers to delete them too. On the
+  root, **Add chart below** / **to the right** puts the chart and a new one
+  in a layout.
+- **Data tables.** The tabs over the figure are **Chart** and one per
+  `data` table: a table tab is a grid of its cells. Click a cell or a column
+  name to change it (Enter moves down, Tab right); right-click a row or
+  column header to insert or delete; `Ctrl+V` of several cells (from a
+  spreadsheet) pastes them from that cell on. **Import CSV** / **Export
+  CSV** read and write a file, **Paste CSV** replaces the table with the
+  clipboard. **+** adds a table (with two tables each needs a name:
+  `$column` references become `$table:column`). A `$` beside a column name
+  lists the elements that use it; **Go to data** on such a field opens it. A
+  table keeps its form in the file (CSV text or columns); comments inside
+  that table are not kept.
+- **AI agents.** While the editor is open, an agent that uses
+  [`nymph mcp`](claude.md) (Claude Code, Claude Desktop, Cursor) can work on
+  the chart on screen through its `editor_*` tools: read the elements, the
+  selection, the tables and an image of the view, and change them. "Connect
+  this node to the Purchases node" works on what you selected. Each change
+  shows at once and can be undone; the panel says when an agent is
+  connected. `--no-mcp` turns this off. Agents reach the editor through a
+  socket in a folder only you can read (`$XDG_RUNTIME_DIR/nymph`, else
+  `/tmp/nymph-<uid>`; `%LOCALAPPDATA%\nymph\editors` on Windows).
+- **Limits.** Copy and paste work inside the panel only on Linux; the CSV
+  file dialog is nymph's own (no system dialog).
 
 ## Saving and iterating
 

@@ -186,6 +186,18 @@ class live_view {
   ///         way the previous figure stays.
   void set_source(std::string_view source, bool reset_view = false);
 
+  /// @brief Maps an element path of the figure on screen to its path in a
+  ///        new source; nullopt for an element the new source removed.
+  using path_rename = std::function<std::optional<std::string>(std::string_view)>;
+
+  /// @brief set_source() for a source whose elements moved (an insert, a
+  ///        removal, the root wrapped in a layout): each element's view state
+  ///        (zoom, pan, hidden series, a moved window) follows it to its new
+  ///        path, as a saved view does when a file is opened
+  ///        (spec/14_editor_workspace/DESIGN.md section 7).
+  /// @throws As set_source(); the previous figure and its state stay.
+  void set_source_moved(std::string_view source, const path_rename& rename);
+
   /// @brief Replaces the figure's data with `data_yaml` (the value of a
   ///        top-level `data` key, as YAML or JSON) and keeps the rest of
   ///        the source and the view state.

@@ -9,6 +9,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <optional>
 #include <string>
 #include <type_traits>
 #include <variant>
@@ -62,6 +63,8 @@ std::string preview(const value& v) {
     for (size_t i = 0; i < items.size() && i < 8; ++i) {
       if constexpr (std::is_same_v<std::decay_t<decltype(items[i])>, std::string>) {
         out += (i ? ", " : "") + items[i];
+      } else if constexpr (std::is_same_v<std::decay_t<decltype(items[i])>, double>) {
+        out += (i ? ", " : "") + encode_number(items[i]); // 1.5, not 1.500000
       } else {
         out += (i ? ", " : "") + std::to_string(items[i]);
       }
@@ -120,15 +123,67 @@ widget_kind widget_for(const field_desc& f) {
     case field_type::number_array:
     case field_type::integer_array:
     case field_type::text_array:
-      return widget_kind::read_only;
+      return widget_kind::list;
   }
   return widget_kind::read_only;
+}
+
+namespace {
+
+/// A "columns" button whose menu lists every column of the data as a
+/// reference. @return The one chosen, or "".
+std::string column_picker(const editor_model& model) {
+  std::string chosen;
+  ImGui::SameLine();
+  if (ImGui::SmallButton("columns")) {
+    ImGui::OpenPopup("##columns");
+  }
+  ImGui::SetItemTooltip("Take the values from a column of the data.");
+  if (ImGui::BeginPopup("##columns")) {
+    const std::vector<std::string> refs = model.column_references();
+    if (refs.empty()) {
+      ImGui::TextDisabled("No data: add a table with the + tab.");
+    }
+    for (const std::string& ref : refs) {
+      if (ImGui::Selectable(ref.c_str())) {
+        chosen = ref;
+      }
+    }
+    ImGui::EndPopup();
+  }
+  return chosen;
+}
+
+/// "Go to data" for a field that names a column: its table and column.
+std::optional<std::pair<std::string, std::string>> data_of(const std::string& reference) {
+  if (reference.size() < 2 || reference[0] != '$') {
+    return std::nullopt;
+  }
+  const std::string ref = reference.substr(1);
+  const size_t colon = ref.find(':');
+  return colon == std::string::npos ? std::make_pair(std::string(), ref)
+                                    : std::make_pair(ref.substr(0, colon), ref.substr(colon + 1));
+}
+
+} // namespace
+
+inspector_events inspector::edit_list(editor_model& model, const std::string& field, const std::string& yaml) {
+  inspector_events events;
+  const size_t a = yaml.find_first_not_of(" \t");
+  const std::string text = a == std::string::npos ? std::string() : yaml.substr(a, yaml.find_last_not_of(" \t") - a + 1);
+  if (text.empty()) {
+    note(model.clear(field), events);
+  } else {
+    note(model.commit(field, text, false, /*replace_binding=*/true), events);
+  }
+  return events;
 }
 
 void inspector::note(const commit_result& r, inspector_events& events) {
   if (r.ok) {
     error_.clear();
     events.source = r.source;
+    events.paths.then(r.paths);
     return;
   }
   error_ = r.error;
@@ -192,7 +247,7 @@ void inspector::draw_field(editor_model& model, const editable_field& f, bool fo
   if (!d.description.empty()) {
     ImGui::SetItemTooltip("%s", d.description.c_str());
   }
-  if (f.written && f.bound_to.empty()) {
+  if (f.written && (f.bound_to.empty() || widget_for(d) == widget_kind::list)) {
     ImGui::SameLine();
     if (ImGui::SmallButton("reset")) {
       note(model.clear(d.name), events);
@@ -205,7 +260,9 @@ void inspector::draw_field(editor_model& model, const editable_field& f, bool fo
   }
 
   ImGui::SetNextItemWidth(-FLT_MIN);
-  const widget_kind kind = f.bound_to.empty() ? widget_for(d) : widget_kind::read_only;
+  const widget_kind kind = widget_for(d) == widget_kind::list ? widget_kind::list
+      : f.bound_to.empty()                                    ? widget_for(d)
+                                                              : widget_kind::read_only;
   switch (kind) {
     case widget_kind::checkbox: {
       bool v = std::get<bool>(f.current);
@@ -339,10 +396,61 @@ void inspector::draw_field(editor_model& model, const editable_field& f, bool fo
       }
       break;
     }
+    case widget_kind::list: {
+      // The list as YAML, committed when the field is left (Enter, Tab, a click).
+      const bool typing = list_key_ == key;
+      char scratch[sizeof(list_buffer_)];
+      char* buffer = typing ? list_buffer_ : scratch;
+      if (!typing) {
+        std::snprintf(scratch, sizeof(scratch), "%s", f.source_text.c_str());
+      }
+      ImGui::SetNextItemWidth(-ImGui::CalcTextSize("columns").x - ImGui::GetStyle().FramePadding.x * 2.0f -
+                              ImGui::GetStyle().ItemSpacing.x);
+      ImGui::InputTextWithHint("##v", "[1, 2, 3] or $table:column", buffer, sizeof(list_buffer_));
+      if (ImGui::IsItemActivated()) {
+        list_key_ = key;
+        std::snprintf(list_buffer_, sizeof(list_buffer_), "%s", f.source_text.c_str());
+      }
+      if (ImGui::IsItemDeactivatedAfterEdit() && list_key_ == key) {
+        const std::string typed = list_buffer_;
+        if (typed != f.source_text) {
+          const inspector_events e = edit_list(model, d.name, typed);
+          events.source = e.source;
+          events.paths.then(e.paths);
+        }
+      }
+      if (ImGui::IsItemDeactivated() && list_key_ == key) {
+        list_key_.clear();
+      }
+      if (const std::string ref = column_picker(model); !ref.empty()) {
+        const inspector_events e = edit_list(model, d.name, ref);
+        events.source = e.source;
+      }
+      // What it holds now, and the way to its data.
+      ImGui::TextDisabled("%s", preview(f.current).c_str());
+      if (const auto data = data_of(f.bound_to)) {
+        ImGui::SameLine();
+        if (ImGui::SmallButton("Go to data")) {
+          events.show_data = data;
+        }
+      }
+      break;
+    }
     case widget_kind::read_only: {
       if (!f.bound_to.empty()) {
         const std::string shown = std::holds_alternative<std::string>(f.current) ? std::get<std::string>(f.current) : "";
         ImGui::TextDisabled("%s", f.bound_to.c_str());
+        ImGui::SameLine();
+        if (ImGui::SmallButton("Go to data")) {
+          // "$t:col" or "$col": the table and the column to show.
+          const std::string ref = f.bound_to.substr(1);
+          const size_t colon = ref.find(':');
+          events.show_data = colon == std::string::npos ? std::make_pair(std::string(), ref)
+                                                        : std::make_pair(ref.substr(0, colon), ref.substr(colon + 1));
+        }
+        if (const std::string ref = column_picker(model); !ref.empty()) {
+          note(model.commit(d.name, ref, false, true), events);
+        }
         ImGui::TextWrapped("%s", shown.c_str());
         if (d.type == field_type::text && ImGui::SmallButton("replace by this text")) {
           note(model.commit(d.name, encode_text(shown), false, true), events);
@@ -398,6 +506,10 @@ void inspector::draw_tree(editor_model& model, const std::vector<edit_element>& 
     if (ImGui::IsItemClicked() && !ImGui::IsItemToggledOpen()) {
       events.select = edit_target_id{e.path, ""};
       revealed_ = e.path; // already in view
+    }
+    menu_.row(model, e, events);
+    if (events.select && events.select->element == e.path) {
+      revealed_ = e.path; // a right-click selects too: in view, no scroll
     }
     if (is_selected && reveal) {
       ImGui::SetScrollHereY(0.5f);
@@ -531,6 +643,13 @@ inspector_events inspector::draw(editor_model& model, const std::vector<edit_ele
     }
   }
   ImGui::EndChild();
+
+  menu_.dialogs(model, events);
+  if (!events.error.empty()) {
+    error_ = events.error;
+  } else if (events.source && events.paths.empty() == false) {
+    error_.clear();
+  }
 
   // The error panel, below the fields.
   if (!error_.empty()) {

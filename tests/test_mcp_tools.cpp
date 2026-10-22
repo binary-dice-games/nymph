@@ -15,6 +15,7 @@
 #include "cli/cli.hpp"
 #include "fonts/embedded_fonts.hpp"
 #include "mcp/base64.hpp"
+#include "mcp/editor_tools.hpp"
 #include "mcp/mcp_session.hpp"
 #include "nymph.hpp"
 
@@ -167,10 +168,13 @@ TEST_F(mcp_tools, list_names_every_tool_with_its_schemas) {
     EXPECT_EQ(t["inputSchema"]["additionalProperties"], false);
     EXPECT_TRUE(t["annotations"].contains("readOnlyHint"));
   }
-  EXPECT_EQ(
-      names,
-      (std::vector<std::string>{
-          "render_chart", "check_chart", "extract_chart", "chart_schema", "example_chart", "list_fonts", "list_shapes"}));
+  // The chart tools, then the tools of a running editor (spec/14_editor_workspace).
+  std::vector<std::string> expected{
+      "render_chart", "check_chart", "extract_chart", "chart_schema", "example_chart", "list_fonts", "list_shapes"};
+  for (const json& t : editor_tool_definitions()) {
+    expected.push_back(t["name"]);
+  }
+  EXPECT_EQ(names, expected);
   const json& render = tools[0];
   for (const char* p : {"source", "input_path", "output_path", "rasterizer"}) {
     EXPECT_TRUE(render["inputSchema"]["properties"].contains(p)) << p;
@@ -414,8 +418,10 @@ TEST_F(mcp_tools, the_app_is_a_resource_linked_from_render_chart) {
   ASSERT_EQ(tools[0]["name"], "render_chart");
   EXPECT_EQ(tools[0]["_meta"]["ui"]["resourceUri"], "ui://nymph/viewer");
   EXPECT_EQ(tools[0]["_meta"]["ui"]["visibility"], json({"model", "app"}));
-  ASSERT_EQ(tools.back()["name"], "viewer_font");
-  EXPECT_EQ(tools.back()["_meta"]["ui"]["visibility"], json({"app"}));
+  // The chart tools end with the app-only viewer_font; the editor's follow.
+  const json& font = tools[tools.size() - 1 - editor_tool_definitions().size()];
+  ASSERT_EQ(font["name"], "viewer_font");
+  EXPECT_EQ(font["_meta"]["ui"]["visibility"], json({"app"}));
 
   const json resources = rpc(*session_, "resources/list", json::object())["result"]["resources"];
   ASSERT_EQ(resources.size(), 3u);
