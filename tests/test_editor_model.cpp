@@ -3,6 +3,7 @@
 /// @brief spec/08_view_editor plan step 9: selection, the fields of the
 ///        selection, validated changes, undo and redo.
 #include <gtest/gtest.h>
+#include <iostream>
 #include <string>
 #include "core/error.hpp"
 #include "edit/editor_model.hpp"
@@ -333,6 +334,27 @@ TEST(editor_model, AddElementSetsTheGivenFields) {
   ASSERT_TRUE(r.ok) << r.error;
   EXPECT_NE(m.source().find("{type: FlowNode, id: node1, text: Pay, shape: Diamond}"), std::string::npos) << m.source();
   EXPECT_EQ(r.paths.apply("root/children/2"), "root/children/3");
+}
+
+TEST(editor_model, AddTextElementsToTheRootLayout) {
+  for (const char* type : {"Label"}) {
+    editor_model m(kSource);
+    const commit_result r = m.add_element("root", kAppend, type);
+    ASSERT_TRUE(r.ok) << type << ": " << r.error;
+    EXPECT_EQ(r.path, "root/children/2") << type;
+    EXPECT_FALSE(m.fields().empty()) << type;
+  }
+}
+
+TEST(editor_model, AnEditThatOverflowsAFittingLayoutIsRefused) {
+  editor_model m(
+      "image: {width: 400, height: 100}\n"
+      "root: {type: VerticalLayout, children: [{type: Label, text: a}]}\n");
+  const std::string before = m.source();
+  const commit_result r = m.add_element("root", kAppend, "Image");
+  EXPECT_FALSE(r.ok);
+  EXPECT_NE(r.error.find("height"), std::string::npos);
+  EXPECT_EQ(m.source(), before);
 }
 
 TEST(editor_model, AddElementRefusesATypeTheParentDoesNotTake) {

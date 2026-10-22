@@ -349,7 +349,11 @@ void tree_menu::items(editor_model& model, const edit_element& e, inspector_even
   const bool is_root = e.path == "root";
   ImGui::TextDisabled("%s", e.type.c_str());
   ImGui::Separator();
+  const uint64_t version = model.version();
   type_menu(model, "Add child", child_types(*n->cls), e.path, kAppend, events);
+  if (model.version() != version) {
+    return; // the figure was rebuilt: `n` is gone
+  }
   if (is_root && n->cls->placement_of(*builtin_registry().find("Plot")) < 0) {
     // The root is not a layout: a new chart goes next to it.
     for (const auto& [label, placement] :
@@ -378,6 +382,9 @@ void tree_menu::items(editor_model& model, const edit_element& e, inspector_even
     const std::vector<type_group> groups = child_types(*p->cls);
     type_menu(model, "Insert before", groups, parent, index, events);
     type_menu(model, "Insert after", groups, parent, index + 1, events);
+    if (model.version() != version) {
+      return;
+    }
   }
   ImGui::Separator();
   if (ImGui::MenuItem("Duplicate", "Ctrl+D")) {

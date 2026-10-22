@@ -14,6 +14,7 @@
 #include "edit/source_edit.hpp"
 #include "edit/yaml_text.hpp"
 #include "elements/register_builtin.hpp"
+#include "render/figure_renderer.hpp"
 #include "schema/element_class.hpp"
 #include "schema/registry.hpp"
 
@@ -176,6 +177,19 @@ commit_result editor_model::apply(std::string next, const std::string& key, bool
     return fail(problem->message, problem->line, problem->column);
   }
   figure replacement = bind_source(next, builtin_registry());
+  try {
+    (void)layout_figure(replacement); // the view refuses a layout that does not fit
+  } catch (const error& e) {
+    bool fitted = false; // an edit may not break a layout that fitted
+    try {
+      (void)layout_figure(*figure_);
+      fitted = true;
+    } catch (const error&) {
+    }
+    if (fitted) {
+      return fail(e.what(), e.line(), e.column());
+    }
+  }
   if (!(merge && key == last_key_ && !undo_.empty())) {
     undo_.push_back(source_);
     if (undo_.size() > kMaxUndo) {

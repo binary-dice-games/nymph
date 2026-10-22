@@ -18,6 +18,7 @@
 #include <vector>
 #include "core/error.hpp"
 #include "document/bind.hpp"
+#include "edit/editor_model.hpp"
 #include "document/view.hpp"
 #include "elements/register_builtin.hpp"
 #include "live_view_driver.hpp"
@@ -587,6 +588,45 @@ TEST(live_view_edit, DumpOutlinesForInspection) {
     std::ofstream out(std::string(dir) + "/" + field + ".png", std::ios::binary);
     out.write(reinterpret_cast<const char*>(png.data()), static_cast<std::streamsize>(png.size()));
   }
+}
+
+TEST(live_view_edit, AnEmptyLabelInARootLayoutDrawsInEditMode) {
+  driven_view d("root: {type: VerticalLayout, children: [{type: Label}]}\n");
+  d.v.set_edit_mode(true);
+  d.run();
+  EXPECT_NE(d.last, nullptr);
+}
+
+TEST(live_view_edit, ALabelAfterAnOrgChartAndGanttDrawsInEditMode) {
+  driven_view d(
+      "root: {type: VerticalLayout, children: ["
+      "{type: OrgChart, title: Acme, children: [{type: Person, id: a, name: Ana}]}, "
+      "{type: GanttChart, children: [{type: GanttTask, name: Task, start: 0, duration: 1}]}, "
+      "{type: Label}]}\n");
+  d.v.set_edit_mode(true);
+  d.run();
+  EXPECT_NE(d.last, nullptr);
+}
+
+TEST(live_view_edit, AnImageInARootLayoutDrawsInEditMode) {
+  driven_view d("root: {type: VerticalLayout, children: [{type: Label, text: a}, {type: Image}]}\n");
+  d.v.set_edit_mode(true);
+  d.v.set_selection(edit_target_id{"root/children/1", ""});
+  d.run();
+  ASSERT_NE(d.last, nullptr);
+  const auto list = d.v.element_list();
+  EXPECT_EQ(list.size(), 4u);
+}
+
+TEST(live_view_edit, ASourceTheModelAcceptsShowsInTheView) {
+  editor_model m(
+      "image: {width: 400, height: 100}\n"
+      "root: {type: VerticalLayout, children: [{type: Label, text: a}]}\n");
+  driven_view d(m.source());
+  // An Image does not fit: refused, so the model never holds what the view cannot show.
+  const commit_result r = m.add_element("root", kAppend, "Image");
+  EXPECT_FALSE(r.ok);
+  EXPECT_NO_THROW(d.v.set_source(m.source()));
 }
 
 } // namespace

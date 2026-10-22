@@ -25,6 +25,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The Linux release executable links glibc dynamically (libstdc++ stays inside) so `nymph view` works; it needs glibc 2.39 or newer.
 
 ### Fixed
+- `nymph view --edit`: adding a child from an element's right-click menu no longer crashes.
+- `nymph view --edit`: an edit that makes the layout overflow the image (such as adding an Image to a full layout) is refused with the layout error instead of leaving the editor out of sync.
 - `nymph mcp`: a failed `output_path` write names the absolute path and suggests giving one.
 
 - The Windows and Linux release executables include `nymph view`.
