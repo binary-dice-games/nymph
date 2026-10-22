@@ -244,7 +244,10 @@ jobs:
           VERSION: ${{ needs.check.outputs.version }}
         run: |
           if [ "$RUNNER_OS" = Linux ]; then eval "$(/home/linuxbrew/.linuxbrew/bin/brew shellenv)"; fi
-          export HOMEBREW_NO_AUTO_UPDATE=1 HOMEBREW_NO_INSTALL_FROM_API=1
+          export HOMEBREW_NO_AUTO_UPDATE=1
+          # The macOS runner has homebrew/core tapped; Linuxbrew reads the
+          # dependencies (cmake, ninja) from Homebrew's API instead.
+          if [ "$RUNNER_OS" = macOS ]; then export HOMEBREW_NO_INSTALL_FROM_API=1; fi
           sh .github/scripts/homebrew-formula.sh "$VERSION" "$RUNNER_TEMP/release/SHA256SUMS" \
             "file://$RUNNER_TEMP/release" "$RUNNER_TEMP/nymph.rb"
           brew tap-new --no-git local/nymph
