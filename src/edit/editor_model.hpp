@@ -31,6 +31,9 @@ struct editable_field {
   /// Non-empty when the field's value comes from the data (`$names`): shown,
   /// not edited.
   std::string bound_to;
+  /// The value as the source writes it, on one line (`$monthly:cost`,
+  /// `[1, 2]`, `[$a, $b]`); empty when the field is not written.
+  std::string source_text;
   /// Non-empty for a text style field of an element that passes it on:
   /// "applies to all text of this Plot".
   std::string scope_note;
@@ -206,6 +209,11 @@ class editor_model {
   commit_result remove_table(std::string_view name);
   /// @brief Renames a table and the references to it.
   commit_result rename_table(std::string_view from, std::string_view to);
+
+  /// @brief Every column of every table as the reference a field takes:
+  ///        `$name` with one unnamed table, `$table:name` with named ones
+  ///        (quoted by encode_text() when needed: `"$unit price"`).
+  std::vector<std::string> column_references() const;
 
   /// @brief A name no table has: "table1", "table2", ...
   std::string fresh_table_name() const;

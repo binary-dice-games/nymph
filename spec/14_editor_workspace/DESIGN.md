@@ -137,6 +137,13 @@ session, the bridge in `nymph mcp`), `src/schema/registry.*`
   map to its selection and to the `view` key; the viewer passes it to
   `live_view::set_source_moved()`. `version()` counts accepted changes, undo
   and redo included (section 6). `tables()` reads the current tables.
+- **List fields** (`inspector`, added after the plan): `xs`, `ys`,
+  `values` and other list fields, read-only in 08, get a one-line YAML text
+  box (`[1, 3, 2]`, `$monthly:cost`, `[$a, $b]`), committed when left, and
+  a **columns** button listing `editor_model::column_references()`; text
+  fields bound to a column get the same button. `editable_field` carries
+  the value as written (`source_text`). Replacing a block list puts the new
+  value on its key's line (`source_edit::set_field`).
 - **`tree_menu`** (`src/edit/tree_menu.hpp`): the right-click menu of a tree
   row (and of an element right-clicked in the figure, `open_at()`), the New
   element dialog and the Delete dialog, ImGui only, drawn from the registry.

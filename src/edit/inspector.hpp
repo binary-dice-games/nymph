@@ -28,7 +28,8 @@ enum class widget_kind {
   color, ///< colour picker with an "automatic" state
   choice, ///< enumeration: a combo of its names
   flags, ///< a checkbox per flag
-  read_only, ///< lists and anything else: shown as text
+  list, ///< lists: the YAML text (`[1, 2]`, `$table:column`) and a column picker
+  read_only, ///< anything else: shown as text
 };
 
 /// @brief The widget for `f`; independent of any value.
@@ -66,6 +67,12 @@ class inspector {
   ///        once (the widget does it after a short pause). Returns the
   ///        events as draw() would.
   inspector_events edit_text(editor_model& model, const std::string& field, const std::string& text);
+
+  /// @brief What writing `yaml` (one line: `[1, 2]`, `$monthly:cost`) into
+  ///        list field `field` does, as the list widget and its column picker
+  ///        do: a column reference may replace a list or another reference;
+  ///        empty text clears the field.
+  inspector_events edit_list(editor_model& model, const std::string& field, const std::string& yaml);
 
   /// @brief Commits a text typed a moment ago, if any (also done by draw()
   ///        when the pause is over or the widget loses focus).
@@ -119,6 +126,8 @@ class inspector {
   std::string typing_key_; ///< Element and field being typed into, "" when none.
   std::string drag_key_; ///< Widget being dragged, "" when none.
   std::string revealed_; ///< The element the tree last scrolled to.
+  std::string list_key_; ///< Element and field of the list being typed into, "" when none.
+  char list_buffer_[4096] = {}; ///< Its text.
   tree_menu menu_;
 };
 

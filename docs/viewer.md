@@ -167,7 +167,15 @@ for the default width).
   diagram apply to all its text; every diagram item (node, link, note, ...)
   has its own, which falls back to the diagram's. A text that comes from the
   data (`text: $names`) is shown but not edited; **replace by this text**
-  writes it into the field instead.
+  writes it into the field instead, and **columns** takes it from another
+  column.
+- **Lists and columns.** A list field (a series' `xs`, `ys`, `values`, ...)
+  is a text box holding its value as in the source: `[1, 3, 2]`,
+  `$monthly:cost`, or several columns `[$revenue, $cost]` (grouped bars). Its
+  **columns** button lists every column of the data: choosing one points the
+  series at it. To plot a new column, add it in the table's tab, add the
+  series (right-click the plot, **Add child**), then choose the column for
+  its `ys` (and `xs`).
 - **Adding and removing elements.** Right-click an element, in the figure
   or in the **Elements** list, for its menu: **Add child**, **Insert
   before** / **after** (only the types that can go there: `FlowNode`,

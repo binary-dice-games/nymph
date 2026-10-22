@@ -11,6 +11,7 @@
 #include "edit/field_value.hpp"
 #include "edit/image_fields.hpp"
 #include "edit/source_edit.hpp"
+#include "edit/yaml_text.hpp"
 #include "elements/register_builtin.hpp"
 #include "schema/element_class.hpp"
 #include "schema/registry.hpp"
@@ -21,6 +22,31 @@ namespace {
 
 bool is_text_style_field(std::string_view name) {
   return name == "font" || name == "font_size" || name == "text_color";
+}
+
+/// Field `field` of the element at `path` as the source writes it, on one
+/// line: the text itself when it is on one line, else a list of its items.
+std::string written_text(const std::string& source, const yaml_node& doc, std::string_view path, std::string_view field) {
+  const yaml_node* element = find_element(doc, path);
+  const yaml_node* value = element != nullptr ? element->find(field) : nullptr;
+  if (value == nullptr) {
+    return {};
+  }
+  const yaml_text::text_index t(source);
+  const size_t from = t.offset(value->line, value->column);
+  const size_t to = yaml_text::value_end(*value, t);
+  std::string text = to > from ? source.substr(from, to - from) : std::string();
+  if (text.find('\n') == std::string::npos) {
+    return text;
+  }
+  if (value->is_sequence()) {
+    std::string list = "[";
+    for (size_t i = 0; i < value->children.size(); ++i) {
+      list += (i ? ", " : "") + encode_text(value->children[i].text);
+    }
+    return list + "]";
+  }
+  return value->is_scalar() ? encode_text(value->text) : std::string();
 }
 
 } // namespace
@@ -124,6 +150,7 @@ std::vector<editable_field> editor_model::fields() const {
     f.written = n.field_pos[i].line > 0;
     if (doc && f.written) {
       f.bound_to = field_reference(*doc, selection_->element, f.desc->name).value_or(std::string());
+      f.source_text = written_text(source_, *doc, selection_->element, f.desc->name);
     }
     if (figure_element && is_text_style_field(f.desc->name) && n.cls->name() != "Label" &&
         n.cls->name() != "SeparatorText") {
@@ -639,6 +666,16 @@ commit_result editor_model::remove_table(std::string_view name) {
 
 commit_result editor_model::rename_table(std::string_view from, std::string_view to) {
   return apply_data("data/rename", [&] { return bdg::nymph::rename_table(source_, from, to); });
+}
+
+std::vector<std::string> editor_model::column_references() const {
+  std::vector<std::string> out;
+  for (const data_table& t : tables()) {
+    for (const std::string& h : t.cells.headers) {
+      out.push_back(encode_text("$" + (t.name.empty() ? h : t.name + ":" + h)));
+    }
+  }
+  return out;
 }
 
 std::string editor_model::fresh_table_name() const {

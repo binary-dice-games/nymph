@@ -85,6 +85,18 @@ set_field(std::string_view source, std::string_view element_path, std::string_vi
         return out;
       }
     }
+    if (!value.is_scalar() && !is_flow(value, t)) {
+      // A block list or mapping on the lines below its key: the new value
+      // goes after the key, on its line ("ys:\n  - 1" becomes "ys: $c").
+      size_t colon = t.offset(key.end_line, key.end_column);
+      while (t.at(colon) == ' ' || t.at(colon) == '\t') {
+        ++colon;
+      }
+      if (t.at(colon) == ':') {
+        out.replace(colon + 1, value_end(value, t) - colon - 1, " " + std::string(yaml_value));
+        return out;
+      }
+    }
     const size_t from = t.offset(value.line, value.column);
     out.replace(from, value_end(value, t) - from, yaml_value);
     return out;
