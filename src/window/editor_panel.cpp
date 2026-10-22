@@ -35,6 +35,43 @@ class panel_context_scope {
   ImGuiContext* previous_;
 };
 
+/// The panel's look beyond the figure theme's colours: rounder, roomier
+/// controls and softer borders. Only the panel's own context uses it; the
+/// figure and rendered images keep the theme as is.
+void apply_panel_style(ImGuiStyle& style) {
+  style.WindowRounding = 8.0f;
+  style.ChildRounding = 6.0f;
+  style.FrameRounding = 6.0f;
+  style.PopupRounding = 8.0f;
+  style.GrabRounding = 6.0f;
+  style.ScrollbarRounding = 8.0f;
+  style.TabRounding = 6.0f;
+  style.WindowPadding = ImVec2(10.0f, 8.0f);
+  style.FramePadding = ImVec2(10.0f, 6.0f);
+  style.ItemSpacing = ImVec2(8.0f, 7.0f);
+  style.ItemInnerSpacing = ImVec2(6.0f, 5.0f);
+  style.IndentSpacing = 18.0f;
+  style.ScrollbarSize = 14.0f;
+  style.GrabMinSize = 12.0f;
+  style.WindowBorderSize = 0.0f;
+  style.ChildBorderSize = 1.0f;
+  style.PopupBorderSize = 1.0f;
+  style.FrameBorderSize = 0.0f;
+  style.TabBarBorderSize = 1.0f;
+  style.SeparatorTextBorderSize = 2.0f;
+  style.SeparatorTextPadding = ImVec2(16.0f, 4.0f);
+  style.WindowMenuButtonPosition = ImGuiDir_Right;
+  style.ButtonTextAlign = ImVec2(0.5f, 0.5f);
+}
+
+/// Softens the theme's frame borders and gives hovered/pressed buttons a
+/// clear step, whatever the theme.
+void soften_colors(ImGuiStyle& style) {
+  ImVec4* c = style.Colors;
+  c[ImGuiCol_Border].w = std::min(c[ImGuiCol_Border].w, 0.45f);
+  c[ImGuiCol_Separator].w = std::min(c[ImGuiCol_Separator].w, 0.5f);
+  c[ImGuiCol_PopupBg].w = 1.0f;
+}
 
 } // namespace
 
@@ -73,6 +110,7 @@ editor_panel::editor_panel(std::string source, std::string file_name, const char
   io.IniFilename = nullptr;
   io.LogFilename = nullptr;
   ImGui::GetStyle().FontSizeBase = 15.0f;
+  apply_panel_style(ImGui::GetStyle());
   set_theme("light");
   ImGui_ImplOpenGL3_Init(glsl_version);
 }
@@ -93,7 +131,8 @@ void editor_panel::set_theme(const std::string& name) {
   }
   theme_ = name;
   const panel_context_scope scope(context_);
-  t->imgui(&ImGui::GetStyle()); // the colours of the figure's theme, nothing else
+  t->imgui(&ImGui::GetStyle()); // the colours of the figure's theme
+  soften_colors(ImGui::GetStyle());
   refresh();
 }
 
