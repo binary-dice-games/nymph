@@ -1,2 +1,6 @@
-# SHA-256 of the nymph release executables (cmake/NymphPluginSync.cmake).
-# None published yet: set NYMPH_BIN to a nymph executable.
+# SHA-256 of the nymph 0.1.0 release executables (cmake/NymphPluginSync.cmake).
+cf5e08f25b6bad648c611d0fe4c4c6f2c98ccb0c56aaef48d861c510387897d6  nymph-0.1.0-linux-arm64
+4d3e1d1a7a6653781e24c88c2650ec0648a10759b4bbd19fe0023a9b9e194c25  nymph-0.1.0-linux-x86_64
+fa57711565d3c8249edb2f551dbee8c0e59e899a3310e3be26ca094f7fc3aa9f  nymph-0.1.0-macos-arm64
+cfee3b8b9cdf86dcaf26885815d264081d22f82a1f679b89253a9427f4a71b5a  nymph-0.1.0-macos-x86_64
+6ca538439799ee1771d6c530994f93ef7eaa65da45fffccd1f5f7f0bd8b37cc8  nymph-0.1.0-windows-x86_64.exe
