@@ -176,6 +176,16 @@ the style fields `color`, `fill_color`, `line_weight`, `fill_alpha`,
 `marker`, `marker_size` and `colormap`. Integer fields with named values
 take names or numbers (`flags: NoLegend|NoTitle`).
 
+Unlike wish, where every series takes `label` and all six style fields,
+a series type takes only those ImPlot draws it with (`series_style` in
+`src/elements/plot_style.hpp`): a heatmap, pie or text has none, bars
+have no markers, and so on. A field that would be accepted and then
+ignored is refused instead, so the schema, `nymph schema` and the
+editor's inspector offer only fields that change the image. The fields
+a type takes keep their order, so each type's own fields start at
+`first_own()` of its set. `fill_color` also colours marker faces (ImPlot
+fills them with the line colour otherwise).
+
 Two plots and a caption in one image:
 
 ```yaml

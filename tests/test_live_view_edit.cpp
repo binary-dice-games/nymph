@@ -629,5 +629,93 @@ TEST(live_view_edit, ASourceTheModelAcceptsShowsInTheView) {
   EXPECT_NO_THROW(d.v.set_source(m.source()));
 }
 
+
+// ── Style edits redraw ───────────────────────────────────────────────────────
+
+/// A plot with one series of `type`, its `style` fields and `body`.
+std::string styled_plot(const std::string& type, const std::string& body, const std::string& style) {
+  const std::string plot = type.rfind("Plot3D", 0) == 0 ? "Plot3D" : "Plot";
+  return "image: {width: 300, height: 200}\n"
+         "root:\n"
+         "  type: " +
+         plot +
+         "\n"
+         "  children:\n"
+         "    - {type: " +
+         type + ", label: s, " + body + (style.empty() ? "" : ", " + style) + "}\n";
+}
+
+/// Editing a series' style in an open view draws what a fresh view of the
+/// edited source draws: nothing kept from the first source wins.
+TEST(live_view_edit, StyleEditsInAnOpenViewMatchAFreshView) {
+  const std::string xy = "xs: [0, 1, 2, 3], ys: [1, 3, 2, 4]";
+  const std::vector<std::pair<std::string, std::string>> series{
+      {"PlotLine", xy},
+      {"PlotScatter", xy},
+      {"PlotBars", xy},
+      {"PlotShaded", xy},
+      {"PlotStems", xy},
+      {"PlotHistogram", "values: [1, 2, 2, 3, 3, 3]"},
+      {"PlotInfLines", "values: [1, 2]"},
+      {"Plot3DLine", "xs: [0, 1], ys: [0, 1], zs: [0, 1]"},
+      {"Plot3DScatter", "xs: [0, 1], ys: [0, 1], zs: [0, 1]"},
+  };
+  const std::vector<std::pair<std::string, std::string>> edits{
+      {"", "color: \"#00FF00\""},
+      {"color: \"#00FF00\"", "color: \"#FF0000\""},
+      {"color: \"#00FF00\"", ""},
+      {"", "fill_color: \"#FF00FF\""},
+      {"", "line_weight: 5"},
+  };
+  for (const auto& [type, body] : series) {
+    for (const auto& [before, after] : edits) {
+      const std::string field = (after.empty() ? before : after).substr(0, (after.empty() ? before : after).find(':'));
+      if (builtin_registry().find(type)->field_index(field) < 0) {
+        continue; // not a field of this series type
+      }
+      SCOPED_TRACE(type + ": [" + before + "] -> [" + after + "]");
+      driven_view edited(styled_plot(type, body, before));
+      edited.v.set_source(styled_plot(type, body, after));
+      edited.run();
+      driven_view fresh(styled_plot(type, body, after));
+      const image a = rasterized(edited);
+      const image b = rasterized(fresh);
+      EXPECT_TRUE(a.rgba == b.rgba);
+    }
+  }
+}
+
+
+/// A legend entry hidden in the open view stays hidden through an edit.
+TEST(live_view_edit, AHiddenSeriesStaysHiddenThroughAnEdit) {
+  for (const std::string type : {"PlotLine", "Plot3DLine"}) {
+    SCOPED_TRACE(type);
+    const bool flat = type == "PlotLine";
+    const std::string body = flat ? "xs: [0, 1, 2], ys: [1, 3, 2]" : "xs: [0, 1, 2], ys: [1, 3, 2], zs: [0, 1, 2]";
+    const std::string plot = flat ? "Plot" : "Plot3D";
+    const auto source = [&](const std::string& color) {
+      return "image: {width: 300, height: 200}\n"
+             "root:\n"
+             "  type: " +
+          plot +
+          "\n"
+          "  children:\n"
+          "    - {type: " +
+          type + ", label: a, " + body + ", color: \"" + color +
+          "\"}\n"
+          "    - {type: " +
+          type + ", label: b, " + body +
+          "}\n"
+          "view:\n"
+          "  root: {hidden: [a]}\n";
+    };
+    driven_view d(source("#00FF00"));
+    ASSERT_EQ(d.plot().hidden, std::vector<std::string>{"a"});
+    d.v.set_source(source("#FF0000"));
+    d.run();
+    EXPECT_EQ(d.plot().hidden, std::vector<std::string>{"a"});
+  }
+}
+
 } // namespace
 } // namespace bdg::nymph

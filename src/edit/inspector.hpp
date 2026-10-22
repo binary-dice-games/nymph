@@ -136,6 +136,9 @@ class inspector {
   std::string last_selection_;
   std::string typing_key_; ///< Element and field being typed into, "" when none.
   std::string drag_key_; ///< Widget being dragged, "" when none.
+  /// Colour field whose picker opens next frame (it was automatic and just
+  /// got its first colour), "" when none.
+  std::string open_picker_key_;
   std::string revealed_; ///< The element the tree last scrolled to.
   std::string list_key_; ///< Element and field of the list being typed into, "" when none.
   char list_buffer_[4096] = {}; ///< Its text.

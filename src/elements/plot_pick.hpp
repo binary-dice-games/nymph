@@ -12,6 +12,7 @@
 #include <functional>
 #include <optional>
 #include <string>
+#include <vector>
 #include "render/draw_context.hpp"
 #include "schema/node.hpp"
 
@@ -98,6 +99,16 @@ void finish_picks(draw_context& dc, ImDrawList* dl);
 ///        ImPlot's colour assignment alone; it shows from the next frame,
 ///        and PNGs and fresh live views run several frames first.
 void sync_hidden(draw_context& dc, const char* label);
+
+/// @brief Drops the items of every 2D and 3D plot in the current ImPlot
+///        and ImPlot3D contexts, and with them the colours ImPlot gave
+///        them, so the next frame gives each series its colour as a fresh
+///        render does. ImPlot keeps an item's colour for as long as the
+///        item lives: without this a live view keeps showing a colour the
+///        new source no longer sets. For the live view, on a new source.
+/// @return The IDs of the items that were hidden, for
+///         draw_context::set_rehidden().
+std::vector<ImGuiID> forget_plot_items();
 
 /// @brief Ends picking for the open plot: takes the best candidate, draws
 ///        its highlight ring and (when enabled) the tooltip, and makes it

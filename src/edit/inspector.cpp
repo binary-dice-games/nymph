@@ -3,6 +3,7 @@
 /// @brief The editor's panel (see inspector.hpp).
 #include "edit/inspector.hpp"
 #include <imgui.h>
+#include <imgui_internal.h> // ImGuiContext::ColorPickerRef
 #include <algorithm>
 #include <array>
 #include <cfloat>
@@ -352,8 +353,18 @@ void inspector::draw_field(editor_model& model, const editable_field& f, bool fo
       if (current.empty() || !parse_color(current, rgba)) {
         if (ImGui::Button("automatic: click to choose")) {
           note(model.commit(d.name, *encode_color(kDefaultColor)), events);
+          open_picker_key_ = key; // the starting colour may look like the automatic one: choose at once
         }
       } else {
+        if (open_picker_key_ == key) {
+          // As a click on ColorEdit4's swatch does: inside its ID, with the
+          // colour it started from.
+          open_picker_key_.clear();
+          ImGui::PushID("##v");
+          ImGui::OpenPopup("picker");
+          ImGui::PopID();
+          ImGui::GetCurrentContext()->ColorPickerRef = ImVec4(rgba[0], rgba[1], rgba[2], rgba[3]);
+        }
         ImGui::SetNextItemWidth(-FLT_MIN);
         if (ImGui::ColorEdit4(
                 "##v",
