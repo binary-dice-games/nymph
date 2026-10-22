@@ -126,13 +126,45 @@ text style), `src/window/view_command.*` (`--edit`), `docs/format.md`.
   starts at x = 0); keyboard and text go to the panel while a panel text
   field is active, otherwise the viewer's keys apply. The figure's view box
   is the client area minus the strip.
-- **Field widgets by type**: `boolean` checkbox; `integer` / `number` drag
-  or input with the `limits`; `text` single or multi-line input (a field
+- **Field widgets by type**: `boolean` checkbox; `integer` / `number` a
+  number box (`src/edit/number_box.*`) clamped to the `limits`; `text`
+  single or multi-line input (a field
   whose description says line breaks start a new line is multi-line);
   `color` colour picker plus hex input and "automatic" (empty); `enumeration`
   combo from `names`; `flags` one checkbox per name; `font` (a `text` field
   with the font check) a combo of `nymph fonts`; arrays and `$column`
   references are shown read-only as source text.
+- **`number_box`** (`src/edit/number_box.hpp`): a number field that a click
+  (press and release without moving) turns into a text field (Enter, Tab or
+  a click elsewhere accepts, Escape cancels) and a sideways drag changes:
+  the step per pixel is a power of ten near 1/200 of the limits' span, or of
+  the value's size when the span is unknown or huge (at least 0.1 for whole
+  numbers), Shift ten times finer, Ctrl ten times coarser; values are
+  rounded to the step so a drag writes `0.3`, not `0.30000000000000004`. It
+  reports `dragged` (one undo step per gesture) or `typed`. `font_size` 0
+  shows as "auto" and a drag from it starts at the inherited size
+  (`editor_model::inherited_font_size()`). Public ImGui API only.
+- **`edit_toolbar`** (`src/edit/edit_toolbar.hpp`): a floating toolbar for
+  the fields changed most often, drawn as its own window in the panel's
+  ImGui context (which covers the whole window) over the figure, centred
+  above the selection's rectangle, else under it, else at the top of the
+  figure. Tools appear when the element has the field and does not take it
+  from the data: `shape` (a grid of shape pictures drawn with
+  `ImUml::RenderShape` from a private ImUml context, tabs by category for
+  the shape library; flowchart names map to library shapes), `fill_color`,
+  `color`, `text_color` (a palette of 18 colours, Automatic, a custom
+  picker), `colormap` (rows of ImPlot colormap stripes from a private ImPlot
+  context; an element without colours of its own, such as a pie chart or a
+  heatmap, edits its plot's: `colormap_owner()`), `font`, `font_size`,
+  `line_weight`, `line`, `arrow`, `marker` (a grid of marker pictures),
+  `marker_size`; then copy
+  style (a format painter: the next element selected takes the style as one
+  `set_fields()` step; enumerations only between elements of one type),
+  clear style, duplicate and delete (through `tree_menu`, so deleting a
+  referenced node asks). The viewer passes the selection's rectangle
+  (`live_view::target_for()`) and sends the pointer to the panel over the
+  toolbar (`editor_panel::over_toolbar()`), except during a drag that began
+  in the figure.
 
 ## 4. Finding the object under the cursor
 
@@ -161,8 +193,16 @@ Capture happens at three levels, coarse to fine:
    `CanvasRect`; an axis label sits inside the axis' `HoverRect` less
    `PlotPadding` (X at the bottom, Y turned a quarter round, so as wide as the
    text is high); the legend is `Items.Legend.Rect`, only when drawn. The
-   rectangles were checked against rendered output. Series (lines, bars) are
-   not text targets; the Elements list reaches them.
+   rectangles were checked against rendered output. Each legend entry is
+   also a target of the series it names (field `label`; a pie chart's slice
+   label selects the chart). ImPlot leaves `ImPlotItem::LegendHoverRect`
+   empty, so the entries are laid out from the legend rectangle as ImPlot
+   does (rows one text line high, `LegendInnerPadding` / `LegendSpacing`,
+   sorted with `ImPlotLegendFlags_Sort`, one row when horizontal). In edit
+   mode the plot adds `ImPlotLegendFlags_NoButtons`, so a click selects
+   instead of hiding the series (drawing is unchanged). The series' own
+   lines and bars are not targets; their legend entry and the Elements list
+   reach them.
 3. **Diagram texts.** ImUml draws text with its own `TextCentered` /
    `TextAt` helpers. With `ImUmlDiagramFlags_CaptureText` the diagram
    records every text it draws as an `ImUmlTextRun` (`Kind`: node, edge,
@@ -256,7 +296,11 @@ order, current value, `written`, `bound_to`, `scope_note`), `commit(field,
 yaml_value, merge, replace_binding)`, `clear(field)`, `undo()`, `redo()`,
 `reset()`. `field_value.hpp`: `encode_text / bool / int / number / color /
 enum / flags` and `find_source_problem()`. `inspector` (`src/edit/inspector.hpp`):
-`widget_for(field_desc)`, `draw()`, `edit_text()`, `flush()`. The panel
+`widget_for(field_desc)`, `draw()`, `edit_text()`, `flush()`. `number_box`:
+`draw(id, value, options, width) -> number_box_change`, `drag_step()`,
+`tidy()`, `format()`, `parse()`. `edit_toolbar`: `tools_for(model)`,
+`place(anchor, area, w, h)`, `draw(model, menu, area, anchor)`,
+`contains(x, y)`, `copy_style()`, `paste_style()`, `clear_style()`. The panel
 itself is `src/window/editor_panel.*` (its ImGui context and the OpenGL3
 backend), driven by `viewer_window.cpp`.
 
@@ -337,6 +381,19 @@ panel.
   gestures on the figure, saved in the `view` key as today. The editor's
   "View" row offers Reset view and shows the current axis ranges; typing
   ranges writes the `view` entry through the existing saved-view code.
+- **A toolbar for the frequent fields, not a second inspector.** The panel
+  lists every field, which makes the few changed most often (colours, shape,
+  text size) slow to find. The toolbar repeats only those, next to the
+  selection, and builds itself from the same schema: an element gets a tool
+  when it has the field, so no per-element code. It lives in the panel's
+  ImGui context (its popups, keyboard and undo are the panel's) rather than
+  in the figure's, which is redrawn from the source and must stay
+  byte-identical to the PNG.
+- **A number box instead of ImGui's drag field.** `DragScalar` needs a
+  double-click or Ctrl+click to type, drags at a speed unrelated to the
+  value, and with a `%.2f` format would show (and type over) a rounded
+  value. The number box types on a plain click, shows the shortest decimal,
+  and scales its drag step to the limits or the value.
 - **Legend position by field, not by dragging.** `legend_location` is a combo
   of the nine locations. Dragging the legend to a corner is a possible
   later nicety; ImPlot's own legend context menus stay off.

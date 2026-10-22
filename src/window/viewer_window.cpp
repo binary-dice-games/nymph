@@ -25,6 +25,7 @@
 #include "core/error.hpp"
 #include "nymph.hpp"
 #include "view/live_view.hpp"
+#include "edit/image_fields.hpp"
 #include "edit/workspace_layout.hpp"
 #include "window/editor_panel.hpp"
 #include "window/window_host.hpp"
@@ -165,12 +166,14 @@ class viewer : public window_events {
     // but over the figure, and a drag that began in it. The figure starts
     // under the tab bar.
     const layout_box figure = panel_->figure_box();
-    const bool over_panel = !figure.contains(e.x, e.y) || panel_->popup_open();
+    const bool over_panel = !figure.contains(e.x, e.y) || panel_->popup_open() || panel_->over_toolbar(e.x, e.y);
     e.y -= figure.y;
     if (type == pointer_event::kind::down) {
       panel_drag_ = over_panel;
+      figure_drag_ = !over_panel;
     }
-    const bool to_panel = panel_drag_ || over_panel;
+    // A drag that began in the figure (a pan) stays with it over the toolbar.
+    const bool to_panel = panel_drag_ || (over_panel && !(figure_drag_ && panel_->over_toolbar(e.x, e.y + figure.y)));
     if (to_panel) {
       if (!pointer_in_panel_) { // the figure sees the pointer leave
         view_.input({pointer_event::kind::leave, 0.0f, 0.0f, 0});
@@ -187,6 +190,7 @@ class viewer : public window_events {
     }
     if (type == pointer_event::kind::up) {
       panel_drag_ = false;
+      figure_drag_ = false;
     }
   }
 
@@ -659,6 +663,7 @@ class viewer : public window_events {
       grown_tabs_ = false;
       pointer_in_panel_ = false;
       panel_drag_ = false;
+      figure_drag_ = false;
       divider_drag_ = false;
       set_cursor(cursor_shape::arrow);
     }
@@ -753,6 +758,28 @@ class viewer : public window_events {
     return in.gcount() == 8 && std::memcmp(head, kSignature, 8) == 0;
   }
 
+  /// Where the selected element is drawn, CSS pixels in the window: the
+  /// floating toolbar's anchor. nullopt for the image options or an element
+  /// not drawn.
+  std::optional<layout_box> selection_box() const {
+    const std::optional<edit_target_id>& selection = panel_->model().selection();
+    if (!selection || selection->element == kImagePath) {
+      return std::nullopt;
+    }
+    std::optional<edit_target> t = view_.target_for(selection->element, "");
+    if (!t) {
+      t = view_.target_for(selection->element, selection->field);
+    }
+    if (!t) {
+      t = view_.target_for(selection->element, "label"); // a series: its legend entry
+    }
+    if (!t) {
+      return std::nullopt;
+    }
+    const layout_box figure = panel_->figure_box();
+    return layout_box{figure.x + t->x, figure.y + t->y, t->width, t->height};
+  }
+
   /// A changed `image.width` / `height` sizes the window to the new layout,
   /// as opening the file would.
   void fit_window_to_image() {
@@ -796,6 +823,7 @@ class viewer : public window_events {
         panel_->refresh();
       }
       panel_->set_theme(view_.theme());
+      panel_->set_anchor(selection_box());
       if (panel_->wants_frame()) {
         const inspector_events events = panel_->frame(now_seconds(), view_.element_list(), status_line());
         apply(events);
@@ -885,6 +913,7 @@ class viewer : public window_events {
   bool grown_ = false; ///< The window was made wider for the panel.
   bool grown_tabs_ = false; ///< The window was made taller for the tab bar.
   bool panel_drag_ = false; ///< A button went down over the panel and is still held.
+  bool figure_drag_ = false; ///< A button went down over the figure and is still held.
   bool divider_drag_ = false; ///< The divider is being dragged.
   std::optional<std::pair<float, float>> right_down_; ///< Where the right button went down in the figure.
   double divider_clicked_at_ = -1.0; ///< When the divider was last pressed, for double-clicks.

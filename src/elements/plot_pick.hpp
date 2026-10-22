@@ -124,12 +124,15 @@ struct plot_texts {
   std::string y2_label;
   bool has_y2 = false;
   std::string legend_field = "legend_location"; ///< The field of the legend's location; "" for none.
+  /// Legend entries select the element's children that they name (series).
+  bool element_children = true;
 };
 
 /// @brief In edit mode, records the plot's title, axis labels and legend
 ///        as edit targets (fields `title`, `x_label`, `y_label`,
 ///        `y2_label`, `legend_location`; spec/08_view_editor/DESIGN.md
-///        section 4). Call right after EndPlot(), with the pointer
+///        section 4), and each legend entry as a target of the series it
+///        names (its `label`; a pie chart's slice selects the chart). Call right after EndPlot(), with the pointer
 ///        ImPlot::GetCurrentPlot() returned before it.
 void record_plot_texts(draw_context& dc, const plot_texts& texts, const ImPlotPlot* plot);
 

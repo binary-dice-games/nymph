@@ -12,6 +12,7 @@
 #include <optional>
 #include <string>
 #include <vector>
+#include "edit/edit_toolbar.hpp"
 #include "edit/editor_model.hpp"
 #include "edit/inspector.hpp"
 #include "edit/table_grid.hpp"
@@ -110,6 +111,27 @@ class editor_panel {
   bool wants_keyboard() const {
     return wants_keyboard_;
   }
+  /// @brief Where the selection is drawn (CSS pixels in the window), for
+  ///        the floating toolbar to sit next to; nullopt when it is not
+  ///        drawn.
+  void set_anchor(std::optional<layout_box> anchor) {
+    const bool same = anchor.has_value() == anchor_.has_value() &&
+        (!anchor || (anchor->x == anchor_->x && anchor->y == anchor_->y && anchor->width == anchor_->width &&
+                     anchor->height == anchor_->height));
+    if (!same) {
+      anchor_ = anchor;
+      refresh();
+    }
+  }
+  /// @brief Whether the floating toolbar covers (`x`, `y`), CSS pixels in
+  ///        the window: the pointer there goes to the panel.
+  bool over_toolbar(float x, float y) const {
+    return toolbar_.contains(x, y);
+  }
+  edit_toolbar& toolbar() {
+    return toolbar_;
+  }
+
   /// @brief Whether a popup (the colour picker) is open: it may reach over
   ///        the figure, so the strip takes the pointer wherever it is.
   bool popup_open() const {
@@ -174,6 +196,8 @@ class editor_panel {
 
   editor_model model_;
   inspector inspector_;
+  edit_toolbar toolbar_;
+  std::optional<layout_box> anchor_; ///< The selection in the figure, for the toolbar.
   ImGuiContext* context_ = nullptr;
   float width_ = 0.0f;
   float height_ = 0.0f;

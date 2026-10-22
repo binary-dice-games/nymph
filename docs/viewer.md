@@ -140,12 +140,30 @@ for the default width).
 - **Click to select.** Click a title, an axis label or the legend of a plot, a
   `Label`, a node, group or link text of a diagram: the thing is outlined and
   the panel shows its field (a diagram node's `text`, a plot's `title`, ...)
-  first, then **All fields** of its element, each with a widget for its type:
+  first, then **All fields** of its element (a legend entry selects its
+  series, or the pie chart its slice belongs to; while editing, legend
+  entries select instead of hiding series), each with a widget for its type:
   text boxes, colour pickers (empty means automatic), choices, flags,
   numbers. A click on an empty part selects the element (the plot, the
   diagram); the **Elements** list reaches everything else (a series, a plot
   without a title yet, `legend_location`). Dragging still pans and the wheel
   still zooms.
+- **Toolbar.** A floating toolbar sits over the figure next to the
+  selection, with the fields changed most often, each shown when the element
+  has it: **shape** (a grid of shape pictures, in tabs by category for the
+  shape library), **fill**, **line** and **text colour** (a palette of 18
+  colours, **Automatic** and **Custom colour**), **font**, **text size**
+  (`auto` inherits it), the **colour scheme** of a plot (also offered on a
+  pie chart or heatmap, whose colours are their plot's) and, for lines,
+  links and series, thickness, line style, arrow heads, **marker** and
+  marker size. Then **copy style** (the next element you click takes the
+  colours, text style and, between elements of one type, shape and line
+  style), **clear style** (removes the colours and text style),
+  **Duplicate** and **Delete**.
+- **Numbers.** A number field is a box: click it to type a value (Enter,
+  Tab or a click elsewhere accepts it, `Esc` cancels), or drag sideways over
+  it to change the value (Shift: ten times finer, Ctrl: ten times coarser).
+  A drag is one undo step.
 - **The whole figure.** Clicking the background (the margin around the figure,
   away from every element) or choosing **Image** in the list selects the
   `image:` options: `width`, `height`, `scale`, `theme`, `padding`, and the

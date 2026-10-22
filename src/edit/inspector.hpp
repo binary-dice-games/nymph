@@ -11,6 +11,7 @@
 #include <string>
 #include <vector>
 #include "edit/editor_model.hpp"
+#include "edit/number_box.hpp"
 #include "edit/tree_menu.hpp"
 #include "schema/field_desc.hpp"
 #include "view/live_view.hpp"
@@ -143,6 +144,7 @@ class inspector {
   std::string list_key_; ///< Element and field of the list being typed into, "" when none.
   char list_buffer_[4096] = {}; ///< Its text.
   tree_menu menu_;
+  number_box numbers_; ///< The number fields' boxes.
 };
 
 } // namespace bdg::nymph

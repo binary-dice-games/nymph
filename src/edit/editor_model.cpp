@@ -4,6 +4,7 @@
 #include "edit/editor_model.hpp"
 #include <algorithm>
 #include <string>
+#include <variant>
 #include "core/error.hpp"
 #include "document/bind.hpp"
 #include "document/view.hpp"
@@ -205,6 +206,30 @@ commit_result editor_model::apply(std::string next, const std::string& key, bool
   r.ok = true;
   r.source = source_;
   return r;
+}
+
+double editor_model::inherited_font_size() const {
+  double size = figure_->image.font_size;
+  if (!selection_ || selection_->element == kImagePath) {
+    return size;
+  }
+  const auto paths = element_paths(figure_->root);
+  const std::string& path = selection_->element;
+  // Each ancestor from the root down: the nearest one with a size wins.
+  for (size_t slash = path.find('/'); slash != std::string::npos; slash = path.find('/', slash + 1)) {
+    const auto it = paths.find(std::string_view(path).substr(0, slash));
+    if (it == paths.end()) {
+      continue;
+    }
+    const node& n = *it->second;
+    if (const int i = n.cls->field_index("font_size"); i >= 0) {
+      const double* v = std::get_if<double>(&n.values[static_cast<size_t>(i)]);
+      if (v != nullptr && *v > 0.0) {
+        size = *v;
+      }
+    }
+  }
+  return size;
 }
 
 commit_result editor_model::commit(std::string_view field, std::string_view yaml_value, bool merge, bool replace_binding) {

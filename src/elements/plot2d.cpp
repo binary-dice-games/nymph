@@ -454,10 +454,13 @@ class plot_class : public element_class {
       }
       const int64_t location = n.get<int64_t>(legend_location);
       const int64_t lflags = n.get<int64_t>(legend_flags);
-      if (location >= 0 || lflags != 0) {
+      // In the editor a click on a legend entry selects its series instead
+      // of hiding it (the buttons draw the same either way).
+      const ImPlotLegendFlags edit_flags = dc.edit_mode() ? ImPlotLegendFlags_NoButtons : 0;
+      if (location >= 0 || lflags != 0 || edit_flags != 0) {
         ImPlot::SetupLegend(
             static_cast<ImPlotLocation>(location < 0 ? int64_t{ImPlotLocation_NorthWest} : location),
-            static_cast<ImPlotLegendFlags>(lflags));
+            static_cast<ImPlotLegendFlags>(lflags) | edit_flags);
       }
       dc.set_current_plot(&n);
       dc.draw_children(n);
