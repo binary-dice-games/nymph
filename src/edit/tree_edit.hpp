@@ -80,6 +80,16 @@ tree_edit_result remove_element(std::string_view source, std::string_view path);
 /// @throws nymph::error for an unknown path or `root`.
 tree_edit_result move_element(std::string_view source, std::string_view path, size_t index);
 
+/// @brief Moves the element at `path` into `new_parent`'s `children` at
+///        `index` (kAppend: last), counted after the element left its old
+///        place; within one parent this is move_element(). The text is kept
+///        as written when both lists are blocks (re-indented), else becomes
+///        one flow value. Paths of the element, its descendants and the
+///        siblings it passes are in the result's path_map.
+/// @throws nymph::error for an unknown path or parent, `root`, a parent that
+///         is the element or inside it, or an index past the end.
+tree_edit_result reparent_element(std::string_view source, std::string_view path, std::string_view new_parent, size_t index);
+
 /// @brief Copies the element at `path` after itself. Every `id` in the copy
 ///        gets a fresh value (not in `used_ids`), and the copy's own text
 ///        fields that named one of its old ids name the new one.

@@ -226,6 +226,61 @@ std::vector<std::string_view> segments(std::string_view path) {
   return split_path(path);
 }
 
+/// `n` as one flow value (`{k: v, ...}`, `[a, b]`), each scalar and flow
+/// value kept as written; block layout and comments are lost.
+std::string flat_text(const yaml_node& n, const text_index& t, std::string_view text) {
+  if (n.is_scalar() && is_block_scalar(n)) {
+    return encode_text(n.text);
+  }
+  if (n.is_scalar() || is_flow(n, t)) {
+    const size_t from = t.offset(n.line, n.column);
+    return std::string(text.substr(from, value_end(n, t) - from));
+  }
+  std::string out;
+  if (n.is_mapping()) {
+    out = "{";
+    for (size_t i = 0; i < n.keys.size(); ++i) {
+      out += (i ? ", " : "") + n.keys[i].text + ": " + flat_text(n.children[i], t, text);
+    }
+    return out + "}";
+  }
+  out = "[";
+  for (size_t i = 0; i < n.children.size(); ++i) {
+    out += (i ? ", " : "") + flat_text(n.children[i], t, text);
+  }
+  return out + "]";
+}
+
+/// `lines` (whole lines, `eol`-separated) with `delta` spaces added to (or,
+/// when negative, taken off) each non-blank line's indentation.
+std::string reindent(std::string_view lines, int delta, std::string_view eol) {
+  std::string out;
+  size_t at = 0;
+  while (at <= lines.size()) {
+    size_t end = lines.find('\n', at);
+    const bool last = end == std::string_view::npos;
+    std::string_view line = lines.substr(at, last ? std::string_view::npos : end - at);
+    const bool cr = !line.empty() && line.back() == '';
+    if (cr) {
+      line.remove_suffix(1);
+    }
+    const size_t spaces = std::min(line.find_first_not_of(' '), line.size());
+    if (spaces == line.size()) {
+      out += line;
+    } else if (delta >= 0) {
+      out += std::string(static_cast<size_t>(delta), ' ') + std::string(line);
+    } else {
+      out += line.substr(std::min(spaces, static_cast<size_t>(-delta)));
+    }
+    if (last) {
+      break;
+    }
+    out += eol;
+    at = end + 1;
+  }
+  return out;
+}
+
 } // namespace
 
 // ── path_map ─────────────────────────────────────────────────────────────────
@@ -259,9 +314,9 @@ std::optional<std::string> path_map::apply(std::string_view path) const {
 
 // ── Structural changes ───────────────────────────────────────────────────────
 
-tree_edit_result
-insert_child(std::string_view source, std::string_view parent_path, size_t index, std::string_view element_yaml) {
-  check_one_line(element_yaml);
+/// insert_child() for an element text that may span lines (a moved element).
+static tree_edit_result
+insert_child_text(std::string_view source, std::string_view parent_path, size_t index, std::string_view element_yaml) {
   const yaml_node doc = parse_yaml(source);
   const yaml_node& parent = element_at(doc, parent_path);
   const text_index t(source);
@@ -302,6 +357,12 @@ insert_child(std::string_view source, std::string_view parent_path, size_t index
   return r;
 }
 
+tree_edit_result
+insert_child(std::string_view source, std::string_view parent_path, size_t index, std::string_view element_yaml) {
+  check_one_line(element_yaml);
+  return insert_child_text(source, parent_path, index, element_yaml);
+}
+
 tree_edit_result remove_element(std::string_view source, std::string_view path) {
   const yaml_node doc = parse_yaml(source);
   const child_at c = locate_child(doc, path);
@@ -339,6 +400,63 @@ tree_edit_result move_element(std::string_view source, std::string_view path, si
   } else {
     shift(r.paths, c.parent_path, to, c.index, +1);
   }
+  return r;
+}
+
+tree_edit_result reparent_element(std::string_view source, std::string_view path, std::string_view new_parent, size_t index) {
+  const yaml_node doc = parse_yaml(source);
+  const child_at c = locate_child(doc, path);
+  (void)element_at(doc, new_parent); // an unknown parent throws
+  if (is_path_or_below(new_parent, path)) {
+    throw error(0, 0, "an element cannot be moved into itself");
+  }
+  if (new_parent == c.parent_path) {
+    return move_element(source, path, index);
+  }
+  const text_index t(source);
+
+  // Stage 1: the element leaves; its place is held by a marker path that its
+  // descendants carry, and its later siblings move up.
+  const std::string marker = "moved";
+  tree_edit_result r;
+  r.paths.add(std::string(path), marker);
+  shift(r.paths, c.parent_path, c.index + 1, c.list->children.size(), -1);
+  std::string removed(source);
+  erase_item(removed, *c.parent, *c.list, c.index, t, source);
+
+  // The new parent, as the removal left it.
+  const std::string target = *r.paths.apply(new_parent);
+  const yaml_node doc2 = parse_yaml(removed);
+  const yaml_node* list = children_of(element_at(doc2, target));
+  const size_t n = list == nullptr ? 0 : list->children.size();
+  const size_t at = index == kAppend ? n : index;
+  if (at > n) {
+    throw error(0, 0, "'" + target + "' has " + std::to_string(n) + " children; no place " + std::to_string(index));
+  }
+
+  // Stage 2: the element arrives, in block lines when both lists are blocks,
+  // else as one flow value.
+  const yaml_node& item = c.list->children[c.index];
+  const text_index t2(removed);
+  path_map arrival;
+  if (list != nullptr && n > 0 && !is_flow(*list, t2) && !is_flow(*c.list, t)) {
+    const int delta = static_cast<int>(item_indent(*list, t2, removed).size()) -
+        static_cast<int>(item_indent(*c.list, t, source).size());
+    r.source = removed;
+    insert_item(r.source, *list, at, reindent(item_text(*c.list, c.index, t, source), delta, t.eol()), t2, removed);
+    for (size_t j = n; j-- > at;) {
+      arrival.add(child_path(target, j), child_path(target, j + 1));
+    }
+    arrival.add(marker, child_path(target, at));
+    r.path = child_path(target, at);
+  } else {
+    tree_edit_result inserted = insert_child_text(removed, target, at, flat_text(item, t, source));
+    r.source = std::move(inserted.source);
+    arrival = std::move(inserted.paths);
+    arrival.add(marker, inserted.path);
+    r.path = inserted.path;
+  }
+  r.paths.then(arrival);
   return r;
 }
 

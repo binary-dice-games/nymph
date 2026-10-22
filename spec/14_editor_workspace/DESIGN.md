@@ -85,7 +85,7 @@ session, the bridge in `nymph mcp`), `src/schema/registry.*`
 
 - **`tree_edit`** (`src/edit/tree_edit.hpp`): pure functions on source text,
   like `source_edit`: `insert_child(source, parent, index, element_yaml)`,
-  `remove_element(source, path)`, `move_element(source, path, new_index)`,
+  `remove_element(source, path)`, `move_element(source, path, new_index)`, `reparent_element(source, path, new_parent, index)` (drag and drop in the tree: block text re-indented when both lists are blocks, else one flow value),
   `wrap_root(source, layout_type)`. Each returns the new source and a
   **`path_map`**: for every element path that changed, its new path, or
   none when it was removed. The splice keeps the list's style: a flow item

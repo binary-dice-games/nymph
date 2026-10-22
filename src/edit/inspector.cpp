@@ -467,6 +467,43 @@ void inspector::draw_field(editor_model& model, const editable_field& f, bool fo
   ImGui::PopID();
 }
 
+void inspector::drag_drop(editor_model& model, const edit_element& e, bool open, inspector_events& events) {
+  constexpr const char* kPayload = "nymph_element";
+  if (e.depth > 0 && ImGui::BeginDragDropSource(ImGuiDragDropFlags_SourceAllowNullID)) {
+    ImGui::SetDragDropPayload(kPayload, e.path.c_str(), e.path.size() + 1);
+    ImGui::TextUnformatted(e.type.c_str());
+    ImGui::EndDragDropSource();
+  }
+  if (!ImGui::BeginDragDropTarget()) {
+    return;
+  }
+  const ImGuiPayload* payload =
+      ImGui::AcceptDragDropPayload(kPayload, ImGuiDragDropFlags_AcceptBeforeDelivery | ImGuiDragDropFlags_AcceptNoDrawDefaultRect);
+  if (payload != nullptr) {
+    const std::string dragged(static_cast<const char*>(payload->Data));
+    const ImVec2 lo = ImGui::GetItemRectMin();
+    const ImVec2 hi = ImGui::GetItemRectMax();
+    const float fraction = (ImGui::GetMousePos().y - lo.y) / std::max(hi.y - lo.y, 1.0f);
+    if (const std::optional<drop_place> place = plan_drop(model, dragged, e, fraction, open)) {
+      // The line shows where it lands: above or below the row, or a frame round it.
+      const bool into = place->parent == e.path;
+      const bool above = fraction < 0.5f;
+      const ImU32 color = ImGui::GetColorU32(ImGuiCol_DragDropTarget);
+      ImDrawList* list = ImGui::GetWindowDrawList();
+      if (into) {
+        list->AddRect(lo, hi, color, 0.0f, 0, 2.0f);
+      } else {
+        const float y = above ? lo.y : hi.y;
+        list->AddLine(ImVec2(lo.x, y), ImVec2(hi.x, y), color, 2.0f);
+      }
+      if (payload->IsDelivery()) {
+        menu_.drop(model, dragged, *place, events);
+      }
+    }
+  }
+  ImGui::EndDragDropTarget();
+}
+
 void inspector::draw_tree(editor_model& model, const std::vector<edit_element>& tree, inspector_events& events) {
   const std::string selected = model.selection() ? model.selection()->element : "";
   // A selection made in the figure opens its ancestors and scrolls to it.
@@ -507,6 +544,8 @@ void inspector::draw_tree(editor_model& model, const std::vector<edit_element>& 
       events.select = edit_target_id{e.path, ""};
       revealed_ = e.path; // already in view
     }
+    const bool visible_children = !leaf && node_open;
+    drag_drop(model, e, visible_children, events);
     menu_.row(model, e, events);
     if (events.select && events.select->element == e.path) {
       revealed_ = e.path; // a right-click selects too: in view, no scroll

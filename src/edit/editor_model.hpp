@@ -140,6 +140,12 @@ class editor_model {
   /// @brief Moves the element at `path` to place `index` among its siblings.
   commit_result move_element(std::string_view path, size_t index);
 
+  /// @brief Moves the element at `path` into `parent`'s children at place
+  ///        `index` (kAppend: last; counted after it left its old place);
+  ///        refused when the result does not bind (the parent takes no such
+  ///        element). The selection follows the element.
+  commit_result reparent_element(std::string_view path, std::string_view parent, size_t index);
+
   /// @brief Copies the element at `path` after itself, with fresh ids.
   commit_result duplicate_element(std::string_view path);
 

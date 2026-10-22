@@ -186,5 +186,38 @@ TEST(tree_menu, TheDialogsDrawHeadless) {
   EXPECT_TRUE(new_open);
 }
 
+TEST(tree_menu, PlanDropFollowsThePointerAndWhatTheParentTakes) {
+  editor_model m(kChart);
+  const std::string link = "root/children/2";
+  const edit_element node0{"root/children/0", "FlowNode", "", 1};
+  const edit_element root{"root", "Flowchart", "", 0};
+  // Top of the first node: before it, in the chart.
+  const auto top = plan_drop(m, link, node0, 0.1f, false);
+  ASSERT_TRUE(top);
+  EXPECT_EQ(top->parent, "root");
+  EXPECT_EQ(top->index, 0u);
+  // Bottom of the second node: after it, which is where the link already is.
+  EXPECT_FALSE(plan_drop(m, link, edit_element{"root/children/1", "FlowNode", "", 1}, 0.9f, false));
+  // A node takes no children; the root takes the link as its last child.
+  const auto in_root = plan_drop(m, "root/children/0", root, 0.5f, true);
+  ASSERT_TRUE(in_root);
+  EXPECT_EQ(in_root->parent, "root");
+  EXPECT_EQ(in_root->index, 3u);
+  EXPECT_FALSE(plan_drop(m, link, node0, 0.5f, false) && plan_drop(m, link, node0, 0.5f, false)->parent == node0.path);
+  // The root cannot be dragged.
+  EXPECT_FALSE(plan_drop(m, "root", node0, 0.5f, false));
+}
+
+TEST(tree_menu, DropMovesTheElementAndKeepsItSelected) {
+  editor_model m(kChart);
+  m.select(edit_target_id{"root/children/2", ""});
+  tree_menu menu;
+  inspector_events events;
+  menu.drop(m, "root/children/2", drop_place{"root", 0}, events);
+  EXPECT_TRUE(events.error.empty()) << events.error;
+  EXPECT_EQ(m.selection()->element, "root/children/0");
+  EXPECT_LT(m.source().find("FlowLink"), m.source().find("id: cart"));
+}
+
 } // namespace
 } // namespace bdg::nymph

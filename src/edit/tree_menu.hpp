@@ -33,6 +33,24 @@ std::vector<type_group> child_types(const element_class& parent);
 /// @brief The chart types a root can get next to it (the `figure` slot).
 std::vector<const element_class*> chart_types();
 
+/// @brief Where a dragged tree row would land: `index` is the place in
+///        `parent`'s children before the dragged element leaves it.
+struct drop_place {
+  std::string parent;
+  size_t index = 0;
+};
+
+/// @brief Where dropping `dragged` on `row` puts it, by how far down the row
+///        the pointer is (`fraction`, 0 top to 1 bottom): before it (top),
+///        into it as the last child (middle), or after it (bottom; not for
+///        a row `open` with visible children). Falls back to the other
+///        places when the first does not take the element.
+/// @return nullopt when no place takes it or nothing would change: the
+///         parent does not accept the element's type, the place is the
+///         element or inside it, the root is dragged or dropped beside.
+std::optional<drop_place>
+plan_drop(const editor_model& model, const std::string& dragged, const edit_element& row, float fraction, bool open);
+
 /// @brief A new element being written in the New element dialog: its type,
 ///        where it goes, and each field's YAML text.
 struct element_draft {
@@ -87,6 +105,10 @@ class tree_menu {
 
   /// @brief Moves the element at `path` one place up (`delta` -1) or down (+1).
   void move(editor_model& model, const std::string& path, int delta, inspector_events& events);
+
+  /// @brief Moves the element at `path` to `place` (see plan_drop()), the
+  ///        selection following it.
+  void drop(editor_model& model, const std::string& path, const drop_place& place, inspector_events& events);
 
   /// @brief The New element dialog's draft while it is open.
   const std::optional<element_draft>& draft() const {

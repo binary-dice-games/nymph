@@ -117,6 +117,9 @@ class inspector {
   void draw_field(editor_model& model, const editable_field& f, bool focused, inspector_events& events);
   commit_result commit_pending(editor_model& model);
   void draw_tree(editor_model& model, const std::vector<edit_element>& tree, inspector_events& events);
+  /// Drag source and drop target of the tree row just drawn (`open`: its
+  /// children are listed below it): reorders and reparents elements.
+  void drag_drop(editor_model& model, const edit_element& e, bool open, inspector_events& events);
 
   std::string error_;
   std::optional<pending_text> pending_;

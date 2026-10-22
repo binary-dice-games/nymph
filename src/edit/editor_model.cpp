@@ -489,6 +489,23 @@ commit_result editor_model::move_element(std::string_view path, size_t index) {
   }
 }
 
+commit_result editor_model::reparent_element(std::string_view path, std::string_view parent, size_t index) {
+  try {
+    tree_edit_result r = bdg::nymph::reparent_element(source_, path, parent, index);
+    if (r.paths.empty()) {
+      commit_result same;
+      same.ok = true;
+      same.source = source_;
+      same.path = r.path;
+      return same;
+    }
+    const std::string moved = r.path;
+    return apply_structure(std::move(r), "move/" + moved, std::string()); // the selection follows by its path
+  } catch (const error& e) {
+    return fail(e.what(), e.line(), e.column());
+  }
+}
+
 commit_result editor_model::duplicate_element(std::string_view path) {
   try {
     tree_edit_result r = bdg::nymph::duplicate_element(source_, path, ids_in(figure_->root));

@@ -104,6 +104,50 @@ std::vector<type_group> child_types(const element_class& parent) {
   return out;
 }
 
+std::optional<drop_place>
+plan_drop(const editor_model& model, const std::string& dragged, const edit_element& row, float fraction, bool open) {
+  const node* moved = dragged == "root" ? nullptr : node_at(model, dragged);
+  if (moved == nullptr) {
+    return std::nullopt;
+  }
+  const size_t from = index_of(dragged);
+  const std::string from_parent = parent_of(dragged);
+  const auto place = [&](const std::string& parent, size_t index) -> std::optional<drop_place> {
+    const node* p = parent.empty() ? nullptr : node_at(model, parent);
+    if (p == nullptr || parent == dragged || parent.compare(0, dragged.size() + 1, dragged + "/") == 0) {
+      return std::nullopt;
+    }
+    const auto accepted = p->cls->accepts();
+    if (std::none_of(accepted.begin(), accepted.end(), [&](const std::string& slot) { return moved->cls->fills_slot(slot); })) {
+      return std::nullopt;
+    }
+    if (parent == from_parent && (index == from || index == from + 1)) {
+      return std::nullopt; // the element stays where it is
+    }
+    return drop_place{parent, index};
+  };
+  const auto before = [&] { return place(parent_of(row.path), index_of(row.path)); };
+  const auto after = [&] { return place(parent_of(row.path), index_of(row.path) + 1); };
+  const auto inside = [&] {
+    const node* r = node_at(model, row.path);
+    return r == nullptr ? std::nullopt : place(row.path, r->children.size());
+  };
+  const bool beside = row.path != "root";
+  const std::optional<drop_place> first = fraction < 0.25f ? (beside ? before() : std::nullopt)
+      : fraction > 0.75f && !open                          ? (beside ? after() : std::nullopt)
+                                                           : inside();
+  if (first) {
+    return first;
+  }
+  if (fraction < 0.25f || fraction > 0.75f) {
+    return inside();
+  }
+  if (!beside) {
+    return std::nullopt;
+  }
+  return fraction < 0.5f ? before() : (open ? std::nullopt : after());
+}
+
 std::vector<const element_class*> chart_types() {
   std::vector<const element_class*> out;
   for (const element_class* cls : builtin_registry().classes()) {
@@ -235,6 +279,14 @@ void tree_menu::move(editor_model& model, const std::string& path, int delta, in
     return;
   }
   report(model.move_element(path, delta < 0 ? index - 1 : index + 1), events);
+  events.select = model.selection();
+}
+
+void tree_menu::drop(editor_model& model, const std::string& path, const drop_place& place, inspector_events& events) {
+  // Within one parent the index counts the list without the element.
+  const size_t index =
+      place.parent == parent_of(path) && place.index > index_of(path) ? place.index - 1 : place.index;
+  report(model.reparent_element(path, place.parent, index), events);
   events.select = model.selection();
 }
 

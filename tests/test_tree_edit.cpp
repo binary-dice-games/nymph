@@ -339,5 +339,72 @@ TEST(tree_edit, FindsReferencesInTheExampleFlowchart) {
   EXPECT_EQ(group, (std::vector<std::string>{"root/children/11", "root/children/14"}));
 }
 
+// ── reparent_element ─────────────────────────────────────────────────────────
+
+const char* const kNested =
+    "root:\n"
+    "  type: VerticalLayout\n"
+    "  children:\n"
+    "    - type: Plot\n"
+    "      title: A\n"
+    "    - type: HorizontalLayout\n"
+    "      children:\n"
+    "        - {type: Plot, title: B}\n"
+    "    - {type: Plot, title: C}\n";
+
+TEST(tree_edit, ReparentMovesBlockTextIntoAnotherListReIndented) {
+  const tree_edit_result r = reparent_element(kNested, "root/children/0", "root/children/1", 0);
+  EXPECT_TRUE(binds(r.source));
+  EXPECT_EQ(r.path, "root/children/0/children/0");
+  EXPECT_NE(r.source.find("      children:\n"
+                          "        - type: Plot\n"
+                          "          title: A\n"
+                          "        - {type: Plot, title: B}\n"),
+            std::string::npos)
+      << r.source;
+  EXPECT_EQ(r.paths.apply("root/children/0"), "root/children/0/children/0");
+  EXPECT_EQ(r.paths.apply("root/children/1/children/0"), "root/children/0/children/1"); // B, one place down
+  EXPECT_EQ(r.paths.apply("root/children/2"), "root/children/1");
+}
+
+TEST(tree_edit, ReparentOutOfANestedListAndIntoAFlowList) {
+  const tree_edit_result out = reparent_element(kNested, "root/children/1/children/0", "root", 0);
+  EXPECT_TRUE(binds(out.source));
+  EXPECT_EQ(out.path, "root/children/0");
+  EXPECT_EQ(out.paths.apply("root/children/0"), "root/children/1");
+  EXPECT_NE(out.source.find("children: []"), std::string::npos) << out.source;
+
+  const char* const flow_source =
+      "root: {type: VerticalLayout, children: [{type: Plot, title: A}, {type: HorizontalLayout}]}\n";
+  const tree_edit_result flow = reparent_element(flow_source, "root/children/0", "root/children/1", kAppend);
+  EXPECT_TRUE(binds(flow.source));
+  EXPECT_EQ(flow.path, "root/children/0/children/0");
+}
+
+TEST(tree_edit, ReparentFlattensBlockTextForAnEmptyParent) {
+  const char* const source =
+      "root:\n"
+      "  type: VerticalLayout\n"
+      "  children:\n"
+      "    - type: Plot\n"
+      "      title: A\n"
+      "    - type: HorizontalLayout\n";
+  const tree_edit_result r = reparent_element(source, "root/children/0", "root/children/1", kAppend);
+  EXPECT_TRUE(binds(r.source));
+  EXPECT_EQ(r.path, "root/children/0/children/0");
+  EXPECT_NE(r.source.find("{type: Plot, title: A}"), std::string::npos) << r.source;
+}
+
+TEST(tree_edit, ReparentRefusesTheElementItselfAndItsDescendants) {
+  EXPECT_THROW(reparent_element(kNested, "root/children/1", "root/children/1", 0), error);
+  EXPECT_THROW(reparent_element(kNested, "root/children/1", "root/children/1/children/0", 0), error);
+  EXPECT_THROW(reparent_element(kNested, "root", "root/children/1", 0), error);
+}
+
+TEST(tree_edit, ReparentWithinOneParentIsAMove) {
+  const tree_edit_result r = reparent_element(kNested, "root/children/0", "root", 1);
+  EXPECT_EQ(r.source, move_element(kNested, "root/children/0", 1).source);
+}
+
 } // namespace
 } // namespace bdg::nymph
