@@ -21,6 +21,7 @@
 #include "edit/workspace_layout.hpp"
 
 struct ImUmlContext;
+struct ImPlotContext;
 
 namespace bdg::nymph {
 
@@ -30,11 +31,14 @@ enum class toolbar_tool {
   fill_color, ///< `fill_color`: a palette
   line_color, ///< `color`: a palette
   text_color, ///< `text_color`: a palette
+  colormap, ///< `colormap` of the element, or of the plot a series without colours is in
   font, ///< `font`: a list of the embedded fonts
   font_size, ///< `font_size`: a number box
   line_weight, ///< `line_weight`: a number box
   line, ///< `line` (solid, dotted, thick): a list
   arrow, ///< `arrow` (which ends have heads): a list
+  marker, ///< `marker`: a grid of marker pictures
+  marker_size, ///< `marker_size`: a number box
   copy_style, ///< copy the style, then paste it on the next element selected
   clear_style, ///< remove the colours and the text style
   duplicate, ///< copy the element after itself
@@ -48,8 +52,8 @@ const char* toolbar_field(toolbar_tool tool);
 ///        strong colours, pale colours), as "#RRGGBB".
 const std::array<const char*, 18>& toolbar_palette();
 
-/// @brief The fields a copied style carries (colours, text style, shape,
-///        line style).
+/// @brief The fields a copied style carries (colours, colour scheme, text
+///        style, shape, line style, markers).
 const std::vector<std::string>& style_fields();
 
 /// @brief The floating toolbar. Keep one alive across frames.
@@ -90,6 +94,15 @@ class edit_toolbar {
     return rect_;
   }
 
+  /// @brief The element whose `colormap` the colormap tool changes: the
+  ///        selected one when it has the field, else the plot a series
+  ///        without colours of its own is in (a pie chart); "" for none.
+  static std::string colormap_owner(const editor_model& model);
+
+  /// @brief Sets the colour scheme of colormap_owner() to `name` ("Deep",
+  ///        "Default", ...), as one undo step.
+  static commit_result set_colormap(editor_model& model, const std::string& name);
+
   /// @brief Copies the style of the selected element: the next element
   ///        selected takes it (paste_style()). False when nothing is
   ///        selected.
@@ -124,6 +137,11 @@ class edit_toolbar {
   void choice_tool(editor_model& model, const editable_field& f, float width, inspector_events& events);
   void font_tool(editor_model& model, const editable_field& f, inspector_events& events);
   void number_tool(editor_model& model, const editable_field& f, inspector_events& events);
+  void colormap_tool(editor_model& model, inspector_events& events);
+  void marker_tool(editor_model& model, const editable_field& f, inspector_events& events);
+  /// Draws colormap `value` (an ImPlot colormap, -1: the default) as
+  /// stripes in [lo, hi).
+  void draw_colormap(ImDrawList* dl, int64_t value, ImVec2 lo, ImVec2 hi);
   /// Draws shape `name` (an enumeration name) in [lo, hi); false when the
   /// library has no picture for it.
   bool draw_shape(ImDrawList* dl, const std::string& name, ImVec2 lo, ImVec2 hi, ImU32 line, ImU32 fill);
@@ -136,6 +154,7 @@ class edit_toolbar {
   std::string drag_key_; ///< The field being dragged (a number, a custom colour): one undo step.
   std::optional<copied_style> clip_;
   ImUmlContext* shapes_ = nullptr; ///< Shape pictures, made on first use.
+  ImPlotContext* colormaps_ = nullptr; ///< Colormap colours, made on first use.
   float custom_[4] = {0, 0, 0, 1}; ///< The custom colour being picked.
   std::string custom_key_; ///< Which field it is for.
 };

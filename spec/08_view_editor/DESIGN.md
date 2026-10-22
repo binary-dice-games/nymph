@@ -153,7 +153,11 @@ text style), `src/window/view_command.*` (`--edit`), `docs/format.md`.
   `ImUml::RenderShape` from a private ImUml context, tabs by category for
   the shape library; flowchart names map to library shapes), `fill_color`,
   `color`, `text_color` (a palette of 18 colours, Automatic, a custom
-  picker), `font`, `font_size`, `line_weight`, `line`, `arrow`; then copy
+  picker), `colormap` (rows of ImPlot colormap stripes from a private ImPlot
+  context; an element without colours of its own, such as a pie chart or a
+  heatmap, edits its plot's: `colormap_owner()`), `font`, `font_size`,
+  `line_weight`, `line`, `arrow`, `marker` (a grid of marker pictures),
+  `marker_size`; then copy
   style (a format painter: the next element selected takes the style as one
   `set_fields()` step; enumerations only between elements of one type),
   clear style, duplicate and delete (through `tree_menu`, so deleting a
@@ -189,8 +193,16 @@ Capture happens at three levels, coarse to fine:
    `CanvasRect`; an axis label sits inside the axis' `HoverRect` less
    `PlotPadding` (X at the bottom, Y turned a quarter round, so as wide as the
    text is high); the legend is `Items.Legend.Rect`, only when drawn. The
-   rectangles were checked against rendered output. Series (lines, bars) are
-   not text targets; the Elements list reaches them.
+   rectangles were checked against rendered output. Each legend entry is
+   also a target of the series it names (field `label`; a pie chart's slice
+   label selects the chart). ImPlot leaves `ImPlotItem::LegendHoverRect`
+   empty, so the entries are laid out from the legend rectangle as ImPlot
+   does (rows one text line high, `LegendInnerPadding` / `LegendSpacing`,
+   sorted with `ImPlotLegendFlags_Sort`, one row when horizontal). In edit
+   mode the plot adds `ImPlotLegendFlags_NoButtons`, so a click selects
+   instead of hiding the series (drawing is unchanged). The series' own
+   lines and bars are not targets; their legend entry and the Elements list
+   reach them.
 3. **Diagram texts.** ImUml draws text with its own `TextCentered` /
    `TextAt` helpers. With `ImUmlDiagramFlags_CaptureText` the diagram
    records every text it draws as an `ImUmlTextRun` (`Kind`: node, edge,

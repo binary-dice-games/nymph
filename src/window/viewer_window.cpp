@@ -771,6 +771,9 @@ class viewer : public window_events {
       t = view_.target_for(selection->element, selection->field);
     }
     if (!t) {
+      t = view_.target_for(selection->element, "label"); // a series: its legend entry
+    }
+    if (!t) {
       return std::nullopt;
     }
     const layout_box figure = panel_->figure_box();

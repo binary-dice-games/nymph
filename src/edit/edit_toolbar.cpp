@@ -2,6 +2,7 @@
 /// @file edit_toolbar.cpp
 /// @brief The editor's floating toolbar (see edit_toolbar.hpp).
 #include "edit/edit_toolbar.hpp"
+#include <implot.h>
 #include <imuml.h>
 #include <algorithm>
 #include <cctype>
@@ -11,6 +12,7 @@
 #include <cstdlib>
 #include <map>
 #include <variant>
+#include "document/view.hpp"
 #include "edit/field_value.hpp"
 #include "edit/image_fields.hpp"
 #include "fonts/embedded_fonts.hpp"
@@ -252,6 +254,8 @@ const char* tool_tooltip(toolbar_tool tool) {
       return "Line colour";
     case toolbar_tool::text_color:
       return "Text colour";
+    case toolbar_tool::colormap:
+      return "Colour scheme";
     case toolbar_tool::font:
       return "Font";
     case toolbar_tool::font_size:
@@ -262,6 +266,10 @@ const char* tool_tooltip(toolbar_tool tool) {
       return "Line style";
     case toolbar_tool::arrow:
       return "Arrow heads";
+    case toolbar_tool::marker:
+      return "Marker";
+    case toolbar_tool::marker_size:
+      return "Marker size (auto: automatic)\nClick to type, drag sideways to change";
     case toolbar_tool::copy_style:
       return "Copy style: then click another element to give it this style";
     case toolbar_tool::clear_style:
@@ -281,6 +289,7 @@ int tool_group(toolbar_tool tool) {
     case toolbar_tool::fill_color:
     case toolbar_tool::line_color:
     case toolbar_tool::text_color:
+    case toolbar_tool::colormap:
       return 0;
     case toolbar_tool::font:
     case toolbar_tool::font_size:
@@ -288,6 +297,8 @@ int tool_group(toolbar_tool tool) {
     case toolbar_tool::line_weight:
     case toolbar_tool::line:
     case toolbar_tool::arrow:
+    case toolbar_tool::marker:
+    case toolbar_tool::marker_size:
       return 2;
     case toolbar_tool::copy_style:
     case toolbar_tool::clear_style:
@@ -310,10 +321,13 @@ bool tool_fits(toolbar_tool tool, const field_desc& f) {
       return f.type == field_type::text;
     case toolbar_tool::font_size:
     case toolbar_tool::line_weight:
+    case toolbar_tool::marker_size:
       return f.type == field_type::number || f.type == field_type::integer;
     case toolbar_tool::shape:
     case toolbar_tool::line:
     case toolbar_tool::arrow:
+    case toolbar_tool::colormap:
+    case toolbar_tool::marker:
       return f.type == field_type::enumeration && f.names != nullptr;
     default:
       return false;
@@ -325,11 +339,14 @@ constexpr toolbar_tool kFieldTools[] = {
     toolbar_tool::fill_color,
     toolbar_tool::line_color,
     toolbar_tool::text_color,
+    toolbar_tool::colormap,
     toolbar_tool::font,
     toolbar_tool::font_size,
     toolbar_tool::line_weight,
     toolbar_tool::line,
     toolbar_tool::arrow,
+    toolbar_tool::marker,
+    toolbar_tool::marker_size,
 };
 
 /// The colours and text style: what "clear style" removes.
@@ -353,6 +370,12 @@ const char* toolbar_field(toolbar_tool tool) {
       return "color";
     case toolbar_tool::text_color:
       return "text_color";
+    case toolbar_tool::colormap:
+      return "colormap";
+    case toolbar_tool::marker:
+      return "marker";
+    case toolbar_tool::marker_size:
+      return "marker_size";
     case toolbar_tool::font:
       return "font";
     case toolbar_tool::font_size:
@@ -394,7 +417,18 @@ const std::array<const char*, 18>& toolbar_palette() {
 
 const std::vector<std::string>& style_fields() {
   static const std::vector<std::string> names = {
-      "shape", "fill_color", "color", "text_color", "font", "font_size", "line_weight", "line", "arrow"};
+      "shape",
+      "fill_color",
+      "color",
+      "text_color",
+      "colormap",
+      "font",
+      "font_size",
+      "line_weight",
+      "line",
+      "arrow",
+      "marker",
+      "marker_size"};
   return names;
 }
 
@@ -406,6 +440,51 @@ edit_toolbar::~edit_toolbar() {
     ImUml::DestroyContext(shapes_);
     ImUml::SetCurrentContext(previous == shapes_ ? nullptr : previous);
   }
+  if (colormaps_ != nullptr) {
+    ImPlotContext* const previous = ImPlot::GetCurrentContext();
+    ImPlot::DestroyContext(colormaps_);
+    ImPlot::SetCurrentContext(previous == colormaps_ ? nullptr : previous);
+  }
+}
+
+std::string edit_toolbar::colormap_owner(const editor_model& model) {
+  if (!model.selection() || model.selection()->element == kImagePath) {
+    return {};
+  }
+  const std::string& path = model.selection()->element;
+  const auto paths = element_paths(model.bound().root);
+  const auto self = paths.find(path);
+  if (self == paths.end()) {
+    return {};
+  }
+  const auto has = [](const node& n, const char* field) {
+    const int i = n.cls->field_index(field);
+    return i >= 0 && n.cls->fields()[static_cast<size_t>(i)].type == field_type::enumeration;
+  };
+  if (has(*self->second, "colormap")) {
+    return path;
+  }
+  // A series without colours of its own (a pie chart, a heatmap) takes them
+  // from its plot.
+  if (self->second->cls->field_index("color") >= 0) {
+    return {};
+  }
+  const size_t slash = path.rfind("/children/");
+  if (slash == std::string::npos) {
+    return {};
+  }
+  const auto parent = paths.find(std::string_view(path).substr(0, slash));
+  return parent != paths.end() && has(*parent->second, "colormap") ? parent->first : std::string();
+}
+
+commit_result edit_toolbar::set_colormap(editor_model& model, const std::string& name) {
+  const std::string owner = colormap_owner(model);
+  if (owner.empty()) {
+    commit_result r;
+    r.error = "the selection has no colour scheme";
+    return r;
+  }
+  return model.set_fields(owner, {{"colormap", std::optional<std::string>(name)}});
 }
 
 std::vector<toolbar_tool> edit_toolbar::tools_for(const editor_model& model) {
@@ -416,6 +495,14 @@ std::vector<toolbar_tool> edit_toolbar::tools_for(const editor_model& model) {
   const std::vector<editable_field> fields = model.fields();
   bool styled = false;
   for (const toolbar_tool tool : kFieldTools) {
+    if (tool == toolbar_tool::colormap) {
+      const std::string owner = colormap_owner(model);
+      if (!owner.empty()) {
+        tools.push_back(tool);
+        styled = styled || owner == model.selection()->element;
+      }
+      continue;
+    }
     const auto it = std::find_if(
         fields.begin(), fields.end(), [&](const editable_field& f) { return f.desc->name == toolbar_field(tool); });
     if (it != fields.end() && it->bound_to.empty() && tool_fits(tool, *it->desc)) {
@@ -794,14 +881,19 @@ void edit_toolbar::number_tool(editor_model& model, const editable_field& f, ins
     options.min = d.limits->min;
     options.max = d.limits->max;
   }
+  toolbar_tool tool = toolbar_tool::line_weight;
   if (d.name == "font_size") {
+    tool = toolbar_tool::font_size;
     options.zero_text = "auto";
     options.zero_start = model.inherited_font_size();
+  } else if (d.name == "marker_size") {
+    tool = toolbar_tool::marker_size;
+    options.zero_text = "auto";
+    options.zero_start = 4.0; // ImPlot's own marker size
   }
   const number_box_change changed = numbers_.draw(d.name.c_str(), v, options, ImGui::GetFrameHeight() * 2.1f);
   if (!numbers_.typing()) {
-    ImGui::SetItemTooltip(
-        "%s", d.name == "font_size" ? tool_tooltip(toolbar_tool::font_size) : tool_tooltip(toolbar_tool::line_weight));
+    ImGui::SetItemTooltip("%s", tool_tooltip(tool));
   }
   if (changed != number_box_change::none) {
     const std::string key = model.selection()->element + "/" + d.name;
@@ -809,6 +901,207 @@ void edit_toolbar::number_tool(editor_model& model, const editable_field& f, ins
     note(model.commit(d.name, is_int ? encode_int(static_cast<int64_t>(v)) : encode_number(v), merge), events);
     drag_key_ = changed == number_box_change::dragged ? key : std::string();
   }
+}
+
+void edit_toolbar::draw_colormap(ImDrawList* dl, int64_t value, ImVec2 lo, ImVec2 hi) {
+  ImPlotContext* const previous = ImPlot::GetCurrentContext();
+  if (colormaps_ == nullptr) {
+    colormaps_ = ImPlot::CreateContext();
+  }
+  ImPlot::SetCurrentContext(colormaps_);
+  const ImPlotColormap map = value < 0 ? ImPlotColormap_Deep : static_cast<ImPlotColormap>(value);
+  const int count = std::clamp(ImPlot::GetColormapSize(map), 1, 10);
+  const float w = (hi.x - lo.x) / static_cast<float>(count);
+  for (int i = 0; i < count; ++i) {
+    // Ten at most, spread over the whole map.
+    const int at = count == ImPlot::GetColormapSize(map) ? i : i * (ImPlot::GetColormapSize(map) - 1) / (count - 1);
+    const ImU32 c = ImGui::ColorConvertFloat4ToU32(ImPlot::GetColormapColor(at, map));
+    const ImDrawFlags corners = i == 0 ? ImDrawFlags_RoundCornersLeft
+        : i == count - 1               ? ImDrawFlags_RoundCornersRight
+                                       : ImDrawFlags_RoundCornersNone;
+    dl->AddRectFilled(
+        ImVec2(lo.x + w * static_cast<float>(i), lo.y),
+        ImVec2(lo.x + w * static_cast<float>(i + 1), hi.y),
+        c,
+        3.0f,
+        corners);
+  }
+  dl->AddRect(lo, hi, ImGui::GetColorU32(ImGuiCol_Border), 3.0f); // white ends stay visible
+  ImPlot::SetCurrentContext(previous);
+}
+
+void edit_toolbar::colormap_tool(editor_model& model, inspector_events& events) {
+  const std::string owner = colormap_owner(model);
+  const auto paths = element_paths(model.bound().root);
+  const auto it = paths.find(owner);
+  if (it == paths.end()) {
+    return;
+  }
+  const node& n = *it->second;
+  const field_desc& d = n.cls->fields()[static_cast<size_t>(n.cls->field_index("colormap"))];
+  const int64_t current = n.get<int64_t>(static_cast<size_t>(n.cls->field_index("colormap")));
+  const std::string tip = std::string(tool_tooltip(toolbar_tool::colormap)) + ": " + d.names->format_enum(current) +
+      (owner != model.selection()->element ? " (of the plot)" : "");
+  const bool clicked = icon_button(
+      "##colormap",
+      tip.c_str(),
+      false,
+      [&](ImDrawList* dl, ImVec2 lo, ImVec2 hi) {
+        const float s = hi.y - lo.y;
+        draw_colormap(dl, current, ImVec2(lo.x + s * 0.2f, lo.y + s * 0.3f), ImVec2(hi.x - s * 0.2f, hi.y - s * 0.3f));
+      },
+      ImGui::GetFrameHeight() * 1.4f);
+  if (clicked) {
+    open_below("##colormaps");
+  }
+  place_below_last_item();
+  ImGui::SetNextWindowSizeConstraints(ImVec2(0, 0), ImVec2(FLT_MAX, 300.0f));
+  if (!ImGui::BeginPopup("##colormaps")) {
+    return;
+  }
+  ImGui::TextDisabled("%s", tool_tooltip(toolbar_tool::colormap));
+  const float name_width = ImGui::CalcTextSize("Twilight  ").x;
+  const float strip = ImGui::GetFrameHeight() * 5.0f;
+  const float row = ImGui::GetTextLineHeight() + 4.0f;
+  for (const name_entry& e : d.names->entries()) {
+    ImGui::PushID(static_cast<int>(e.value));
+    const ImVec2 lo = ImGui::GetCursorScreenPos();
+    if (ImGui::Selectable("##map", e.value == current, 0, ImVec2(name_width + strip, row))) {
+      note(set_colormap(model, e.name), events);
+    }
+    ImDrawList* dl = ImGui::GetWindowDrawList();
+    dl->AddText(ImVec2(lo.x, lo.y + 2.0f), ImGui::GetColorU32(ImGuiCol_Text), e.name.c_str());
+    draw_colormap(
+        dl, e.value, ImVec2(lo.x + name_width, lo.y + 3.0f), ImVec2(lo.x + name_width + strip, lo.y + row - 3.0f));
+    ImGui::PopID();
+  }
+  ImGui::EndPopup();
+}
+
+namespace {
+
+/// Draws ImPlot marker `value` (0 circle ... 9 asterisk) centred at `c`.
+void draw_marker(ImDrawList* dl, ImVec2 c, float r, int64_t value, ImU32 color) {
+  const auto p = [&](float u, float v) { return ImVec2(c.x + r * u, c.y + r * v); };
+  switch (value) {
+    case 0:
+      dl->AddCircle(c, r, color, 0, 1.5f);
+      break;
+    case 1:
+      dl->AddRect(p(-0.8f, -0.8f), p(0.8f, 0.8f), color, 0.0f, 0, 1.5f);
+      break;
+    case 2:
+      dl->AddQuad(p(0, -1), p(1, 0), p(0, 1), p(-1, 0), color, 1.5f);
+      break;
+    case 3:
+      dl->AddTriangle(p(0, -1), p(0.9f, 0.7f), p(-0.9f, 0.7f), color, 1.5f);
+      break;
+    case 4:
+      dl->AddTriangle(p(0, 1), p(-0.9f, -0.7f), p(0.9f, -0.7f), color, 1.5f);
+      break;
+    case 5:
+      dl->AddTriangle(p(-1, 0), p(0.7f, -0.9f), p(0.7f, 0.9f), color, 1.5f);
+      break;
+    case 6:
+      dl->AddTriangle(p(1, 0), p(-0.7f, 0.9f), p(-0.7f, -0.9f), color, 1.5f);
+      break;
+    case 7:
+      dl->AddLine(p(-0.8f, -0.8f), p(0.8f, 0.8f), color, 1.5f);
+      dl->AddLine(p(-0.8f, 0.8f), p(0.8f, -0.8f), color, 1.5f);
+      break;
+    case 8:
+      dl->AddLine(p(-1, 0), p(1, 0), color, 1.5f);
+      dl->AddLine(p(0, -1), p(0, 1), color, 1.5f);
+      break;
+    case 9:
+      dl->AddLine(p(-0.8f, -0.8f), p(0.8f, 0.8f), color, 1.5f);
+      dl->AddLine(p(-0.8f, 0.8f), p(0.8f, -0.8f), color, 1.5f);
+      dl->AddLine(p(0, -1), p(0, 1), color, 1.5f);
+      break;
+    default:
+      break;
+  }
+}
+
+/// A word for the markers without a picture (Default, None, Auto).
+const char* marker_word(int64_t value) {
+  return value == -2 ? "none" : value == -1 ? "auto" : "default";
+}
+
+} // namespace
+
+void edit_toolbar::marker_tool(editor_model& model, const editable_field& f, inspector_events& events) {
+  const field_desc& d = *f.desc;
+  const int64_t current = std::get<int64_t>(f.current);
+  const ImU32 ink = ImGui::GetColorU32(ImGuiCol_Text);
+  const std::string tip = std::string("Marker: ") + d.names->format_enum(current);
+  const bool clicked = icon_button("##marker", tip.c_str(), false, [&](ImDrawList* dl, ImVec2 lo, ImVec2 hi) {
+    const ImVec2 c((lo.x + hi.x) * 0.5f, (lo.y + hi.y) * 0.5f);
+    const float s = hi.y - lo.y;
+    if (current >= 0) {
+      dl->AddLine(
+          ImVec2(lo.x + s * 0.15f, c.y),
+          ImVec2(hi.x - s * 0.15f, c.y),
+          ImGui::GetColorU32(ImGuiCol_TextDisabled),
+          1.0f);
+      draw_marker(dl, c, s * 0.22f, current, ink);
+    } else {
+      // A line with a dot: "a marker", the current one being a word.
+      dl->AddLine(ImVec2(lo.x + s * 0.15f, c.y), ImVec2(hi.x - s * 0.15f, c.y), ink, 1.2f);
+      dl->AddCircleFilled(c, s * 0.12f, current == -2 ? ImGui::GetColorU32(ImGuiCol_TextDisabled) : ink);
+    }
+  });
+  if (clicked) {
+    open_below("##markers");
+  }
+  place_below_last_item();
+  if (!ImGui::BeginPopup("##markers")) {
+    return;
+  }
+  ImGui::TextDisabled("Marker");
+  // The words first, then a grid of pictures.
+  for (const name_entry& e : d.names->entries()) {
+    if (e.value >= 0) {
+      continue;
+    }
+    ImGui::PushID(static_cast<int>(e.value));
+    if (e.value != d.names->entries().front().value) {
+      ImGui::SameLine();
+    }
+    ImGui::PushStyleColor(
+        ImGuiCol_Button, ImGui::GetStyleColorVec4(e.value == current ? ImGuiCol_Header : ImGuiCol_Button));
+    if (ImGui::Button(marker_word(e.value))) {
+      note(model.commit(d.name, encode_enum(d, e.value)), events);
+      ImGui::CloseCurrentPopup();
+    }
+    ImGui::PopStyleColor();
+    ImGui::SetItemTooltip(
+        "%s",
+        e.value == -3       ? "The series type's own choice"
+            : e.value == -2 ? "No markers"
+                            : "A different marker per series");
+    ImGui::PopID();
+  }
+  int column = 0;
+  for (const name_entry& e : d.names->entries()) {
+    if (e.value < 0) {
+      continue;
+    }
+    if (column++ % 5 != 0) {
+      ImGui::SameLine(0.0f, 4.0f);
+    }
+    ImGui::PushID(static_cast<int>(e.value));
+    const bool picked =
+        icon_button("##cell", e.name.c_str(), e.value == current, [&](ImDrawList* dl, ImVec2 lo, ImVec2 hi) {
+          draw_marker(dl, ImVec2((lo.x + hi.x) * 0.5f, (lo.y + hi.y) * 0.5f), (hi.y - lo.y) * 0.28f, e.value, ink);
+        });
+    if (picked) {
+      note(model.commit(d.name, encode_enum(d, e.value)), events);
+      ImGui::CloseCurrentPopup();
+    }
+    ImGui::PopID();
+  }
+  ImGui::EndPopup();
 }
 
 inspector_events edit_toolbar::draw(
@@ -891,7 +1184,14 @@ inspector_events edit_toolbar::draw(
         break;
       case toolbar_tool::font_size:
       case toolbar_tool::line_weight:
+      case toolbar_tool::marker_size:
         number_tool(model, *f, events);
+        break;
+      case toolbar_tool::colormap:
+        colormap_tool(model, events);
+        break;
+      case toolbar_tool::marker:
+        marker_tool(model, *f, events);
         break;
       case toolbar_tool::line:
       case toolbar_tool::arrow:

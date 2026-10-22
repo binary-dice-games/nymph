@@ -259,8 +259,11 @@ TEST(live_view_edit, PlotTextsAreTargetsWithTheirFields) {
   EXPECT_EQ(x_label.text, "month");
 
   // Each one is found by a click on its centre, before the plot itself.
+  // The legend by its frame: its entries select their series.
   for (const edit_target& t : {title, x_label, y_label, y2_label, legend}) {
-    const std::vector<edit_target> hit = d.v.targets_at(t.x + t.width / 2, t.y + t.height / 2);
+    const bool frame = t.field == "legend_location";
+    const std::vector<edit_target> hit =
+        d.v.targets_at(frame ? t.x + 1 : t.x + t.width / 2, frame ? t.y + 1 : t.y + t.height / 2);
     ASSERT_FALSE(hit.empty()) << t.field;
     EXPECT_EQ(hit.front().field, t.field);
     EXPECT_EQ(hit.front().element, "root");
@@ -277,6 +280,31 @@ TEST(live_view_edit, PlotTextsAreTargetsWithTheirFields) {
   const std::vector<edit_target> inside = d.v.targets_at(plot.x + plot.width / 2, plot.y + plot.height / 2);
   ASSERT_FALSE(inside.empty());
   EXPECT_EQ(inside.front().field, "");
+}
+
+TEST(live_view_edit, LegendEntriesSelectTheirSeries) {
+  driven_view d(kLabelled, 480, 320);
+  d.v.set_edit_mode(true);
+  d.run();
+  for (const char* path : {"root/children/0", "root/children/1"}) {
+    const std::optional<edit_target> entry = d.v.target_for(path, "label");
+    ASSERT_TRUE(entry) << path;
+    EXPECT_EQ(entry->type, "PlotLine");
+    const std::vector<edit_target> hit = d.v.targets_at(entry->x + entry->width / 2, entry->y + entry->height / 2);
+    ASSERT_FALSE(hit.empty());
+    EXPECT_EQ(hit.front().element, path);
+    EXPECT_EQ(hit.front().field, "label");
+  }
+  EXPECT_EQ(d.v.target_for("root/children/0", "label")->text, "revenue");
+
+  // A pie chart's slices select the chart.
+  driven_view pie(
+      "root: {type: Plot, title: P, children: [{type: PlotPieChart, values: [1, 2], labels: \"a\\nb\"}]}\n");
+  pie.v.set_edit_mode(true);
+  pie.run();
+  const std::optional<edit_target> slice = pie.v.target_for("root/children/0", "");
+  ASSERT_TRUE(slice);
+  EXPECT_EQ(slice->type, "PlotPieChart");
 }
 
 TEST(live_view_edit, APlotWithoutATitleOffersNoTitleTarget) {

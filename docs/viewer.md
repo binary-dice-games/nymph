@@ -140,7 +140,9 @@ for the default width).
 - **Click to select.** Click a title, an axis label or the legend of a plot, a
   `Label`, a node, group or link text of a diagram: the thing is outlined and
   the panel shows its field (a diagram node's `text`, a plot's `title`, ...)
-  first, then **All fields** of its element, each with a widget for its type:
+  first, then **All fields** of its element (a legend entry selects its
+  series, or the pie chart its slice belongs to; while editing, legend
+  entries select instead of hiding series), each with a widget for its type:
   text boxes, colour pickers (empty means automatic), choices, flags,
   numbers. A click on an empty part selects the element (the plot, the
   diagram); the **Elements** list reaches everything else (a series, a plot
@@ -151,8 +153,10 @@ for the default width).
   has it: **shape** (a grid of shape pictures, in tabs by category for the
   shape library), **fill**, **line** and **text colour** (a palette of 18
   colours, **Automatic** and **Custom colour**), **font**, **text size**
-  (`auto` inherits it) and, for lines and links, thickness, line style and
-  arrow heads. Then **copy style** (the next element you click takes the
+  (`auto` inherits it), the **colour scheme** of a plot (also offered on a
+  pie chart or heatmap, whose colours are their plot's) and, for lines,
+  links and series, thickness, line style, arrow heads, **marker** and
+  marker size. Then **copy style** (the next element you click takes the
   colours, text style and, between elements of one type, shape and line
   style), **clear style** (removes the colours and text style),
   **Duplicate** and **Delete**.

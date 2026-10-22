@@ -39,7 +39,12 @@ const char* const kSource =
     "        - {type: FlowNode, id: a, text: Start, shape: Stadium, fill_color: \"#BEF6AC\", text_color: \"#C0392B\"}\n"
     "        - {type: FlowNode, id: b, text: Stop}\n"
     "        - {type: FlowLink, from: a, to: b}\n"
-    "    - {type: Shape, shape: cloud, width: 80, height: 50}\n";
+    "    - {type: Shape, shape: cloud, width: 80, height: 50}\n"
+    "    - type: Plot\n"
+    "      children:\n"
+    "        - {type: PlotPieChart, values: [1, 2], labels: \"a\\nb\"}\n";
+
+constexpr const char* kPie = "root/children/3/children/0";
 
 constexpr const char* kNodeA = "root/children/1/children/0";
 constexpr const char* kNodeB = "root/children/1/children/1";
@@ -313,6 +318,41 @@ TEST(edit_toolbar, EachElementGetsTheToolsForItsFields) {
   EXPECT_EQ(std::find(image.begin(), image.end(), toolbar_tool::copy_style), image.end());
 }
 
+bool has(const std::vector<toolbar_tool>& tools, toolbar_tool tool) {
+  return std::find(tools.begin(), tools.end(), tool) != tools.end();
+}
+
+TEST(edit_toolbar, ChartsGetColourSchemesAndSeriesGetMarkers) {
+  editor_model model(kSource);
+  model.select(edit_target_id{"root/children/0/children/0", ""}); // a PlotLine
+  const std::vector<toolbar_tool> line = edit_toolbar::tools_for(model);
+  EXPECT_TRUE(has(line, toolbar_tool::marker));
+  EXPECT_TRUE(has(line, toolbar_tool::marker_size));
+  EXPECT_TRUE(has(line, toolbar_tool::line_weight));
+  EXPECT_FALSE(has(line, toolbar_tool::colormap)); // it has a colour of its own
+
+  model.select(edit_target_id{"root/children/0", ""}); // the Plot
+  EXPECT_TRUE(has(edit_toolbar::tools_for(model), toolbar_tool::colormap));
+  EXPECT_EQ(edit_toolbar::colormap_owner(model), "root/children/0");
+
+  // A pie chart's colours are its plot's scheme.
+  model.select(edit_target_id{kPie, ""});
+  const std::vector<toolbar_tool> pie = edit_toolbar::tools_for(model);
+  EXPECT_TRUE(has(pie, toolbar_tool::colormap));
+  EXPECT_FALSE(has(pie, toolbar_tool::copy_style)); // nothing of its own to copy
+  EXPECT_EQ(edit_toolbar::colormap_owner(model), "root/children/3");
+  const commit_result r = edit_toolbar::set_colormap(model, "Pastel");
+  ASSERT_TRUE(r.ok) << r.error;
+  EXPECT_NE(r.source.find("  - type: Plot\n      children:"), std::string::npos);
+  EXPECT_NE(r.source.find("colormap: Pastel"), std::string::npos) << r.source;
+  ASSERT_TRUE(model.selection());
+  EXPECT_EQ(model.selection()->element, kPie); // still the pie
+
+  // Nodes have colours of their own and no plot: no scheme.
+  model.select(edit_target_id{kNodeA, ""});
+  EXPECT_EQ(edit_toolbar::colormap_owner(model), "");
+}
+
 TEST(edit_toolbar, SitsAboveTheSelectionThenUnderItThenAtTheTop) {
   const layout_box area{0, 30, 600, 400};
   // Room above: centred over it, 10 px up.
@@ -495,6 +535,31 @@ TEST(edit_toolbar, DumpToolbarForInspection) {
   click(r.x + r.width + 100.0f); // away: the palette closes
   click(r.x + 6 + s * 0.5f);
   dump("toolbar_shape.png");
+  click(r.x + r.width + 100.0f);
+
+  // A series: its markers; a pie chart: the plot's colour schemes.
+  for (const auto& [path, name] :
+       {std::pair{"root/children/0/children/0", "toolbar_series.png"}, std::pair{kPie, "toolbar_pie.png"}}) {
+    model.select(edit_target_id{path, ""});
+    for (int i = 0; i < 3; ++i) {
+      gui.frame([&] { bar.draw(model, menu, area, anchor); }, false);
+    }
+    const layout_box b = bar.rect();
+    const std::vector<toolbar_tool> tools = edit_toolbar::tools_for(model);
+    const bool series = tools.front() != toolbar_tool::colormap;
+    // The marker is the fifth button (fill, line, weight box, marker); the
+    // scheme the first.
+    gui.input([&](ImGuiIO& io) { io.AddMousePosEvent(b.x + 8 + s * (series ? 5.7f : 0.6f), b.y + b.height * 0.5f); });
+    gui.frame([&] { bar.draw(model, menu, area, anchor); }, false);
+    gui.input([&](ImGuiIO& io) { io.AddMouseButtonEvent(0, true); });
+    gui.frame([&] { bar.draw(model, menu, area, anchor); }, false);
+    gui.input([&](ImGuiIO& io) { io.AddMouseButtonEvent(0, false); });
+    for (int i = 0; i < 3; ++i) {
+      gui.frame([&] { bar.draw(model, menu, area, anchor); }, false);
+    }
+    dump(name);
+    click(b.x + b.width + 100.0f);
+  }
 }
 
 } // namespace
