@@ -1,1 +1,1 @@
-{"mcpServers":{"nymph":{"command":"sh","args":["${CURSOR_PLUGIN_ROOT}/bin/nymph","mcp"]}}}
+{"mcpServers":{"nymph":{"command":"${CURSOR_PLUGIN_ROOT}/bin/nymph","args":["mcp"]}}}

@@ -36,10 +36,11 @@ names, checks it against the SHA-256 the plugin pins, and keeps it in
 use a nymph you built or installed yourself, set `NYMPH_BIN` to its path
 before starting Cursor.
 
-The launcher is a `sh` script, run as `sh ${CURSOR_PLUGIN_ROOT}/bin/nymph
-mcp`. On Windows that needs a `sh` on `PATH` (Git for Windows has one);
-whether Cursor finds it there is *unverified*. If the server does not
-start on Windows, use the next path.
+The launcher is a `sh` script, run as `${CURSOR_PLUGIN_ROOT}/bin/nymph
+mcp`. On Windows `bin\nymph.cmd` runs it with the `sh` of Git for Windows,
+found even when Git's `bin` folder is not on `PATH`; Git for Windows must
+be installed. Whether Cursor resolves the `.cmd` is *unverified*. If the
+server does not start on Windows, use the next path.
 
 ## Install script and mcp.json
 
