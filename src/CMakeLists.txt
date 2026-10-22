@@ -49,6 +49,19 @@ add_library(nymph STATIC
   document/bind.cpp
   edit/source_edit.hpp
   edit/source_edit.cpp
+  edit/yaml_text.hpp
+  edit/tree_edit.hpp
+  edit/tree_edit.cpp
+  edit/element_starter.hpp
+  edit/element_starter.cpp
+  edit/tree_menu.hpp
+  edit/tree_menu.cpp
+  edit/data_edit.hpp
+  edit/data_edit.cpp
+  edit/csv_file.hpp
+  edit/csv_file.cpp
+  edit/table_grid.hpp
+  edit/table_grid.cpp
   edit/field_value.hpp
   edit/field_value.cpp
   edit/editor_model.hpp
@@ -59,6 +72,7 @@ add_library(nymph STATIC
   edit/image_fields.cpp
   edit/inspector.hpp
   edit/inspector.cpp
+  edit/workspace_layout.hpp
   elements/plot_style.hpp
   elements/plot_style.cpp
   elements/plot2d.hpp
@@ -212,8 +226,23 @@ if(NYMPH_MCP)
     mcp/tools.cpp
     mcp/resources.hpp
     mcp/resources.cpp
+    # The running editor's MCP server and how nymph mcp reaches it
+    # (spec/14_editor_workspace/DESIGN.md section 3).
+    ipc/local_socket.hpp
+    ipc/local_socket.cpp
+    ipc/editor_registry.hpp
+    ipc/editor_registry.cpp
+    mcp/editor_tools.hpp
+    mcp/editor_tools.cpp
+    mcp/editor_server.hpp
+    mcp/editor_server.cpp
+    mcp/editor_bridge.hpp
+    mcp/editor_bridge.cpp
   )
   target_link_libraries(nymph_mcp PUBLIC nymph_cli nymph_json)
+  if(WIN32)
+    target_link_libraries(nymph_mcp PRIVATE ws2_32) # sockets: a system library
+  endif()
 
   # The agent text and the guides the server hands to clients
   # (spec/06_claude_integration/DESIGN.md sections 4.5 and 5.2).
@@ -295,6 +324,11 @@ if(NYMPH_VIEW)
   endif()
   target_include_directories(nymph_window PRIVATE "${NYMPH_EXTERN_DIR}/imgui/backends")
   target_link_libraries(nymph_window PUBLIC nymph_cli)
+  # The editor as an MCP server for agents (spec/14_editor_workspace).
+  if(NYMPH_MCP)
+    target_link_libraries(nymph_window PUBLIC nymph_mcp)
+    target_compile_definitions(nymph_window PRIVATE NYMPH_EDITOR_MCP=1)
+  endif()
 endif()
 
 # ── OpenGL rasterizer (optional; OpenGL itself is loaded at run time) ────────

@@ -16,12 +16,15 @@ namespace bdg::nymph {
 namespace {
 
 constexpr const char* kViewUsage =
-    "usage: nymph view <in> [--theme light|dark|classic] [--fit source|width|fill] [--edit]\n"
+    "usage: nymph view <in> [--theme light|dark|classic] [--fit source|width|fill] [--edit [--no-mcp]]\n"
     "  opens <in> (a YAML file or a nymph PNG) in a window: drag to pan, wheel to zoom,\n"
     "  hover for values, double-click to fit. Keys: R resets the view, S saves the image on\n"
     "  screen as <in>.view.png, Y saves its YAML as <in>.view.yaml, Esc or Q closes.\n"
     "  --edit (or the E key) opens the editor panel: click a text or an element in the\n"
-    "  figure, change its text, font, size, colour or any other field; Undo and Redo.\n";
+    "  figure, change its text, font, size, colour or any other field; Undo and Redo.\n"
+    "  Right-click an element (in the figure or the tree) to add, move or delete elements;\n"
+    "  the tabs over the figure edit the data tables. While editing, AI agents using\n"
+    "  `nymph mcp` can read and change the chart (editor_* tools); --no-mcp turns that off.\n";
 
 constexpr int kMinWindowWidth = 240;
 constexpr int kMinWindowHeight = 160;
@@ -48,6 +51,8 @@ view_args parse_view_args(std::span<const std::string_view> args) {
       o.theme = std::string(value);
     } else if (a == "--edit") {
       o.edit = true;
+    } else if (a == "--no-mcp") {
+      o.no_mcp = true;
     } else if (a == "--fit") {
       if (i + 1 >= args.size()) {
         throw view_usage_error{"--fit needs source, width or fill"};

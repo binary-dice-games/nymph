@@ -31,7 +31,8 @@ It also adds to the source format optional `font`, `font_size` and
 single node's or link's text can be styled; unset, they inherit.
 
 It does not cover: adding, removing or reordering elements; editing the
-`data` tables (a text bound to a `$column` is shown read-only, section 7);
+`data` tables (a text bound to a `$column` is shown read-only, section 7)
+(both added later by [14_editor_workspace](../14_editor_workspace/DESIGN.md));
 separate styles for a plot's title, labels and legend (a plot's text shares
 the plot's style); the web viewer and the Chrome
 extension (the editor is native only); live data feeds.

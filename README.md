@@ -15,7 +15,9 @@ shows the same charts live in a web page
 (WebAssembly and WebGL2), with pan, zoom and data-point values, for
 markdown viewers and chatbots: `<nymph-viewer src="chart.yaml"></nymph-viewer>`;
 `nymph view chart.yaml` opens it in a window; `--edit` adds a panel to
-click-select texts and elements and edit them.
+click-select texts and elements and edit them, add and remove elements,
+edit the data tables, and let an AI agent work on the open chart through
+`nymph mcp`.
 The [Chrome extension](docs/extension.md) does it on any page you read:
 nymph PNGs on GitHub or any site become live charts of the same size.
 
@@ -183,6 +185,8 @@ carries its source: `bdg::nymph::extract_source(png)` returns it.
 | [spec/10_gemini_extension/PLAN.md](spec/10_gemini_extension/PLAN.md) | Its implementation steps and tests |
 | [spec/11_cross_browser_extension/DESIGN.md](spec/11_cross_browser_extension/DESIGN.md) | The extension on Edge, Firefox and Safari (planned): one source tree, manifest per browser, host-access state, stores |
 | [spec/11_cross_browser_extension/PLAN.md](spec/11_cross_browser_extension/PLAN.md) | Its implementation steps and tests |
+| [spec/14_editor_workspace/DESIGN.md](spec/14_editor_workspace/DESIGN.md) | Editor workspace: resizable panel, adding and removing elements, data table tabs, the editor as an MCP server |
+| [spec/14_editor_workspace/PLAN.md](spec/14_editor_workspace/PLAN.md) | Its implementation steps and tests |
 | [CHANGELOG.md](CHANGELOG.md) | User-facing changes between releases |
 | [CLAUDE.md](CLAUDE.md) | Coding style and project rules for AI agents and contributors |
 

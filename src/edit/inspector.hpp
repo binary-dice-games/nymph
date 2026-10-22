@@ -11,6 +11,7 @@
 #include <string>
 #include <vector>
 #include "edit/editor_model.hpp"
+#include "edit/tree_menu.hpp"
 #include "schema/field_desc.hpp"
 #include "view/live_view.hpp"
 
@@ -37,11 +38,20 @@ widget_kind widget_for(const field_desc& f);
 struct inspector_events {
   /// A changed source, to show (the model already holds it).
   std::optional<std::string> source;
+  /// With a structural change: where element paths went, so the view state
+  /// follows them (live_view::set_source_moved()).
+  path_map paths;
   /// A tree item was chosen.
   std::optional<edit_target_id> select;
   bool undo = false; ///< The undo or redo button; `source` has the result.
   bool save = false; ///< The Save button: overwrite the input (after the viewer asks).
   bool reset_view = false;
+  /// A change from the tree's menu was refused: the message for the error
+  /// panel.
+  std::string error;
+  /// "Go to data": the table ("" for the single unnamed one) and column a
+  /// field takes its values from.
+  std::optional<std::pair<std::string, std::string>> show_data;
 };
 
 /// @brief Draws the editor's panel and applies its changes to a model.
@@ -73,6 +83,17 @@ class inspector {
     return pending_.has_value();
   }
 
+  /// @brief Shows `message` in the error panel ("" hides it): a change made
+  ///        elsewhere in the window (a table) was refused or accepted.
+  void set_error(std::string message) {
+    error_ = std::move(message);
+  }
+
+  /// @brief The tree's menu and dialogs (keyboard shortcuts reach it here).
+  tree_menu& menu() {
+    return menu_;
+  }
+
   /// @brief Pause after the last keystroke before a text is committed.
   static constexpr double kTypingPause = 0.15;
 
@@ -98,6 +119,7 @@ class inspector {
   std::string typing_key_; ///< Element and field being typed into, "" when none.
   std::string drag_key_; ///< Widget being dragged, "" when none.
   std::string revealed_; ///< The element the tree last scrolled to.
+  tree_menu menu_;
 };
 
 } // namespace bdg::nymph

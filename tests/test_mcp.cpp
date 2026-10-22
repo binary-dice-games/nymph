@@ -11,6 +11,7 @@
 #include <string_view>
 #include <vector>
 #include "mcp/json_rpc.hpp"
+#include "mcp/editor_tools.hpp"
 #include "mcp/mcp_server.hpp"
 #include "mcp/mcp_session.hpp"
 #include "nymph.hpp"
@@ -124,7 +125,8 @@ TEST(mcp_session, lists_answer_after_initialize) {
       initialize() + notification("notifications/initialized") + request(2, "tools/list") +
       request(3, "resources/list", {{"cursor", "x"}}));
   ASSERT_EQ(r.responses.size(), 3u);
-  EXPECT_EQ(r.responses[1]["result"]["tools"].size(), 7u);
+  // The chart tools, then the editor's (spec/14_editor_workspace).
+  EXPECT_EQ(r.responses[1]["result"]["tools"].size(), 7u + editor_tool_definitions().size());
   EXPECT_EQ(r.responses[2]["result"]["resources"].size(), 2u);
 }
 

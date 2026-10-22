@@ -129,6 +129,7 @@ void inspector::note(const commit_result& r, inspector_events& events) {
   if (r.ok) {
     error_.clear();
     events.source = r.source;
+    events.paths.then(r.paths);
     return;
   }
   error_ = r.error;
@@ -343,6 +344,14 @@ void inspector::draw_field(editor_model& model, const editable_field& f, bool fo
       if (!f.bound_to.empty()) {
         const std::string shown = std::holds_alternative<std::string>(f.current) ? std::get<std::string>(f.current) : "";
         ImGui::TextDisabled("%s", f.bound_to.c_str());
+        ImGui::SameLine();
+        if (ImGui::SmallButton("Go to data")) {
+          // "$t:col" or "$col": the table and the column to show.
+          const std::string ref = f.bound_to.substr(1);
+          const size_t colon = ref.find(':');
+          events.show_data = colon == std::string::npos ? std::make_pair(std::string(), ref)
+                                                        : std::make_pair(ref.substr(0, colon), ref.substr(colon + 1));
+        }
         ImGui::TextWrapped("%s", shown.c_str());
         if (d.type == field_type::text && ImGui::SmallButton("replace by this text")) {
           note(model.commit(d.name, encode_text(shown), false, true), events);
@@ -398,6 +407,10 @@ void inspector::draw_tree(editor_model& model, const std::vector<edit_element>& 
     if (ImGui::IsItemClicked() && !ImGui::IsItemToggledOpen()) {
       events.select = edit_target_id{e.path, ""};
       revealed_ = e.path; // already in view
+    }
+    menu_.row(model, e, events);
+    if (events.select && events.select->element == e.path) {
+      revealed_ = e.path; // a right-click selects too: in view, no scroll
     }
     if (is_selected && reveal) {
       ImGui::SetScrollHereY(0.5f);
@@ -531,6 +544,13 @@ inspector_events inspector::draw(editor_model& model, const std::vector<edit_ele
     }
   }
   ImGui::EndChild();
+
+  menu_.dialogs(model, events);
+  if (!events.error.empty()) {
+    error_ = events.error;
+  } else if (events.source && events.paths.empty() == false) {
+    error_.clear();
+  }
 
   // The error panel, below the fields.
   if (!error_.empty()) {

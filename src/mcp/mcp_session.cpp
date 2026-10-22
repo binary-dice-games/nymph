@@ -2,6 +2,7 @@
 /// @file mcp_session.cpp
 /// @brief The MCP lifecycle and method dispatch.
 #include "mcp/mcp_session.hpp"
+#include "mcp/editor_bridge.hpp"
 #include <algorithm>
 #include <array>
 #include <exception>
@@ -32,7 +33,14 @@ std::span<const std::string_view> supported_protocol_versions() {
 }
 
 session::session(server_options options) : tools_(std::make_unique<tool_registry>(options)) {
-  add_builtin_tools(*tools_);
+  if (options.builtin_tools) {
+    add_builtin_tools(*tools_);
+    // The chart open in a running editor (spec/14_editor_workspace).
+    add_editor_bridge(*tools_, std::make_shared<editor_bridge>(options.editors_dir));
+  }
+  if (options.extra_tools) {
+    options.extra_tools(*tools_);
+  }
 }
 
 session::~session() = default;
@@ -96,8 +104,11 @@ json session::initialize(const json& params) {
            {"tools", {{"listChanged", false}}},
            {"resources", {{"subscribe", false}, {"listChanged", false}}},
        }},
-      {"serverInfo", {{"name", "nymph"}, {"title", "nymph"}, {"version", std::string(version())}}},
-      {"instructions", server_instructions()},
+      {"serverInfo",
+       {{"name", tools_->options().server_name},
+        {"title", tools_->options().server_name},
+        {"version", std::string(version())}}},
+      {"instructions", tools_->options().instructions.empty() ? server_instructions() : tools_->options().instructions},
   };
 }
 

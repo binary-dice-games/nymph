@@ -4,6 +4,7 @@
 ///        runs frames on demand, sizes the layout to its box, and with no
 ///        input draws exactly what render_figure() draws.
 #include <gtest/gtest.h>
+#include <sstream>
 #include <imgui.h>
 #include <algorithm>
 #include <filesystem>
@@ -12,6 +13,8 @@
 #include <string>
 #include <vector>
 #include "core/error.hpp"
+#include "edit/source_edit.hpp"
+#include "edit/tree_edit.hpp"
 #include "document/bind.hpp"
 #include "elements/register_builtin.hpp"
 #include "fonts/embedded_fonts.hpp"
@@ -424,6 +427,26 @@ TEST(live_view_input, AnUpdateKeepsTheViewUnlessAskedToReset) {
   d.v.set_source(updated, true);
   d.run();
   EXPECT_DOUBLE_EQ(d.plot().x_min, 0.0);
+}
+
+TEST(live_view_input, AMovedElementKeepsItsViewUnderItsNewPath) {
+  // spec/14_editor_workspace plan step 3: the root wrapped in a layout.
+  driven_view d(kPan);
+  const plot_view p = d.plot();
+  d.drag(p.x + 100, p.y + 50, p.x + 50, p.y + 50);
+  const double moved = d.plot().x_min;
+  ASSERT_GT(moved, 0.5);
+  const std::string fixed = set_field(wrap_root(kPan, "VerticalLayout").source, "root/children/0", "height", "-1");
+  d.v.set_source_moved(fixed, [](std::string_view path) -> std::optional<std::string> {
+    return path == "root" ? std::optional<std::string>("root/children/0") : std::optional<std::string>(std::string(path));
+  });
+  d.run();
+  const std::vector<plot_view> views = d.v.view_state();
+  ASSERT_EQ(views.size(), 1u);
+  EXPECT_EQ(views[0].element, "root/children/0");
+  EXPECT_NEAR(views[0].x_min, moved, 1e-4);
+  // The pan is still the user's: a save keeps it, under the new path.
+  EXPECT_NE(d.v.source_with_view().find("root/children/0: {x: ["), std::string::npos) << d.v.source_with_view();
 }
 
 TEST(live_view_input, APlotWithNoInputsDoesNotMove) {

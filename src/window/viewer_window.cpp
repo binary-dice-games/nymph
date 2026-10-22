@@ -25,14 +25,23 @@
 #include "core/error.hpp"
 #include "nymph.hpp"
 #include "view/live_view.hpp"
+#include "edit/workspace_layout.hpp"
 #include "window/editor_panel.hpp"
 #include "window/window_host.hpp"
+#if defined(NYMPH_EDITOR_MCP)
+#include "ipc/editor_registry.hpp"
+#include "mcp/editor_server.hpp"
+#include "png/png_meta.hpp"
+#endif
 
 namespace bdg::nymph {
 
 namespace {
 
 constexpr unsigned kColorBufferBit = 0x00004000;
+constexpr unsigned kRgba = 0x1908; // GL_RGBA
+constexpr unsigned kUnsignedByte = 0x1401; // GL_UNSIGNED_BYTE
+constexpr unsigned kPackAlignment = 0x0D05; // GL_PACK_ALIGNMENT
 
 /// OpenGL's calling convention (APIENTRY): __stdcall on Windows, which
 /// matters on 32-bit builds; the default elsewhere.
@@ -61,6 +70,10 @@ class viewer : public window_events {
 
   ~viewer() override {
     ready_ = false;
+#if defined(NYMPH_EDITOR_MCP)
+    server_.reset(); // agents' calls fail before the editor goes
+    record_.reset();
+#endif
     window_->make_current(); // the backends' shutdown (panel_ and view_'s destruction) needs the context
   }
 
@@ -88,6 +101,7 @@ class viewer : public window_events {
       set_panel(true);
     }
     while (true) {
+      run_agent_jobs();
       const bool panel_wants = panel_ != nullptr && panel_->wants_frame();
       if (view_.wants_frame() || panel_wants) {
         if (!w.pump(false)) {
@@ -144,8 +158,15 @@ class viewer : public window_events {
       view_.input(e);
       return;
     }
-    // The strip takes the pointer while it is over it, and a drag that began in it.
-    const bool over_panel = e.x >= panel_->strip_x() || panel_->popup_open();
+    if (divider(type, e.x, button)) {
+      return;
+    }
+    // The panel (strip, tab bar, a data table) takes the pointer everywhere
+    // but over the figure, and a drag that began in it. The figure starts
+    // under the tab bar.
+    const layout_box figure = panel_->figure_box();
+    const bool over_panel = !figure.contains(e.x, e.y) || panel_->popup_open();
+    e.y -= figure.y;
     if (type == pointer_event::kind::down) {
       panel_drag_ = over_panel;
     }
@@ -155,13 +176,14 @@ class viewer : public window_events {
         view_.input({pointer_event::kind::leave, 0.0f, 0.0f, 0});
       }
       pointer_in_panel_ = true;
-      panel_->pointer(type, e.x, e.y, button, wheel_x, wheel_y);
+      panel_->pointer(type, e.x, e.y + figure.y, button, wheel_x, wheel_y);
     } else {
       if (pointer_in_panel_) {
         panel_->pointer(pointer_event::kind::leave, 0.0f, 0.0f, 0, 0.0f, 0.0f);
       }
       pointer_in_panel_ = false;
       view_.input(e);
+      figure_right_click(type, e.x, e.y, button, figure);
     }
     if (type == pointer_event::kind::up) {
       panel_drag_ = false;
@@ -173,7 +195,10 @@ class viewer : public window_events {
       return;
     }
     const key_event figure_key{imgui_key(key), down, mods.ctrl, mods.shift, mods.alt, false};
-    switch (route_key(panel_ != nullptr && (panel_->wants_keyboard() || panel_->modal_open()), view_.wants_keyboard())) {
+    // A popup of the panel (a menu, a colour picker) takes the keys too:
+    // Escape closes it, not the window.
+    const bool panel_keys = panel_ != nullptr && (panel_->wants_keyboard() || panel_->modal_open() || panel_->popup_open());
+    switch (route_key(panel_keys, view_.wants_keyboard())) {
       case key_route::panel:
         panel_->key(key, mods, down, repeat);
         return;
@@ -189,6 +214,13 @@ class viewer : public window_events {
     }
     if (repeat) {
       return;
+    }
+    if (panel_ != nullptr) {
+      const inspector_events tree = panel_->shortcut(key, mods);
+      if (tree.source || tree.select) {
+        apply(tree);
+        return;
+      }
     }
     if (panel_ != nullptr && mods.ctrl) {
       if (key == window_key::z && !mods.shift) {
@@ -222,6 +254,16 @@ class viewer : public window_events {
     }
   }
 
+  void on_focus(bool focused) override {
+#if defined(NYMPH_EDITOR_MCP)
+    if (focused && record_ != nullptr) {
+      record_->set_focused(ipc::now_epoch()); // agents pick the editor used last
+    }
+#else
+    (void)focused;
+#endif
+  }
+
   void on_text(char32_t codepoint) override {
     if (!ready_) {
       return;
@@ -246,6 +288,8 @@ class viewer : public window_events {
     if (!viewport_ || !clear_color_ || !clear_) {
       throw window_error("cannot open a window: the OpenGL driver lacks glViewport / glClear");
     }
+    assign(read_pixels_, window_->gl_proc("glReadPixels")); // the figure for agents; optional
+    assign(pixel_store_, window_->gl_proc("glPixelStorei"));
   }
 
   template <typename Fn>
@@ -256,7 +300,275 @@ class viewer : public window_events {
 
   /// Width of the editor strip in device pixels; 0 without the panel.
   int strip_pixels() const {
-    return panel_ != nullptr ? static_cast<int>(std::lround(editor_panel::kWidth * scale_)) : 0;
+    return panel_ != nullptr ? static_cast<int>(std::lround(panel_->strip_width() * scale_)) : 0;
+  }
+
+  /// Height of the tab bar over the figure in device pixels; 0 without the panel.
+  int tab_pixels() const {
+    return panel_ != nullptr ? static_cast<int>(std::lround(editor_panel::kTabBarHeight * scale_)) : 0;
+  }
+
+  /// The divider between the figure and the strip: its cursor, dragging it,
+  /// and a double-click putting it back. x in CSS pixels.
+  /// @return true when the event was the divider's (nothing else sees it).
+  bool divider(pointer_event::kind type, float x, int button) {
+    const float css_w = static_cast<float>(client_w_) / scale_;
+    if (divider_drag_) {
+      if (type == pointer_event::kind::move) {
+        panel_->set_strip_width(css_w - x);
+        strip_wanted_ = panel_->wanted_strip_width();
+        sync_size();
+      } else if (type == pointer_event::kind::up) {
+        divider_drag_ = false;
+      }
+      return true;
+    }
+    const bool over = !panel_drag_ && !panel_->popup_open() && !panel_->modal_open() && divider_hit(x, panel_->strip_x());
+    set_cursor(over ? cursor_shape::resize_horizontal : cursor_shape::arrow);
+    if (!over || type != pointer_event::kind::down || button != 0) {
+      return false;
+    }
+    const double now = now_seconds();
+    if (now - divider_clicked_at_ < kDoubleClick) {
+      panel_->set_strip_width(kDefaultStripWidth); // double-click: back to the default width
+      strip_wanted_ = kDefaultStripWidth;
+      divider_clicked_at_ = -1.0;
+      sync_size();
+    } else {
+      divider_clicked_at_ = now;
+      divider_drag_ = true;
+    }
+    // The figure and the strip see the pointer leave.
+    view_.input({pointer_event::kind::leave, 0.0f, 0.0f, 0});
+    panel_->pointer(pointer_event::kind::leave, 0.0f, 0.0f, 0, 0.0f, 0.0f);
+    pointer_in_panel_ = false;
+    return true;
+  }
+
+  /// The line under the panel's toolbar: what was saved or refused, and
+  /// whether an agent is attached.
+  std::string status_line() const {
+#if defined(NYMPH_EDITOR_MCP)
+    if (server_ != nullptr && server_->connections() > 0) {
+      return status_.empty() ? std::string("Agent connected") : status_ + "  -  agent connected";
+    }
+#endif
+    return status_;
+  }
+
+  // ── Agents (spec/14_editor_workspace/DESIGN.md sections 6 and 7) ─────────
+
+  /// Starts the MCP server agents reach through `nymph mcp`, once, unless
+  /// --no-mcp. A failure is a status line; the editor works without it.
+  void start_agent_server() {
+#if defined(NYMPH_EDITOR_MCP)
+    if (request_.args.no_mcp || server_ != nullptr) {
+      return;
+    }
+    try {
+      const std::filesystem::path dir = ipc::editors_dir();
+      const int64_t pid = ipc::current_pid();
+      const std::filesystem::path socket = ipc::socket_path(dir, pid);
+      native_window* w = window_.get();
+      server_ = std::make_unique<mcp::editor_server>(socket, [w] { w->wake(); });
+      std::error_code ec;
+      const std::filesystem::path file = std::filesystem::absolute(request_.args.input, ec);
+      record_ = std::make_unique<ipc::editor_record>(
+          dir, ipc::editor_entry{pid, socket.string(), (ec ? std::filesystem::path(request_.args.input) : file).string(),
+                                 std::string(version()), ipc::now_epoch(), {}});
+      host_ = std::make_unique<agent_host>(*this);
+    } catch (const std::exception& e) {
+      server_.reset();
+      record_.reset();
+      status_ = std::string("agents cannot connect: ") + e.what();
+    }
+#endif
+  }
+
+  /// Runs what agents asked for since the last time (UI thread).
+  void run_agent_jobs() {
+#if defined(NYMPH_EDITOR_MCP)
+    if (server_ == nullptr) {
+      return;
+    }
+    const int connections = server_->connections();
+    if (connections != last_connections_ && panel_ != nullptr) {
+      last_connections_ = connections;
+      panel_->refresh(); // "Agent connected" comes or goes
+    }
+    if (panel_ != nullptr && panel_->panel().pending()) {
+      apply(panel_->panel().flush(panel_->model())); // what the user typed goes first
+    }
+    server_->run_pending(*host_);
+#endif
+  }
+
+#if defined(NYMPH_EDITOR_MCP)
+  /// The editor as the agents' tools see it.
+  class agent_host : public mcp::editor_host {
+   public:
+    explicit agent_host(viewer& v) : v_(v) {}
+    editor_model* model() override {
+      return v_.panel_ != nullptr ? &v_.panel_->model() : nullptr;
+    }
+    std::string file() const override {
+      return v_.record_ != nullptr ? v_.record_->entry().file : v_.request_.args.input;
+    }
+    std::optional<std::string> data_tab() const override {
+      return v_.panel_ != nullptr ? v_.panel_->data_tab() : std::nullopt;
+    }
+    void show_tab(std::optional<std::string> table) override {
+      if (v_.panel_ != nullptr) {
+        v_.panel_->show_tab(std::move(table));
+      }
+    }
+    std::vector<edit_element> tree() const override {
+      return v_.view_.element_list();
+    }
+    std::string view_source() const override {
+      try {
+        return v_.view_.source_with_view();
+      } catch (const std::exception&) {
+        return std::string(v_.view_.source());
+      }
+    }
+    std::string panel_error() const override {
+      return v_.panel_ != nullptr ? v_.panel_->panel().error() : std::string();
+    }
+    void changed(const commit_result& r, const std::string& tool) override {
+      inspector_events events;
+      events.source = r.source;
+      events.paths = r.paths;
+      v_.apply(events);
+      v_.status_ = "changed by the agent: " + tool;
+      if (v_.panel_ != nullptr) {
+        v_.panel_->panel().set_error("");
+        v_.panel_->refresh();
+      }
+    }
+    void select(const edit_target_id& target) override {
+      if (v_.panel_ == nullptr) {
+        return;
+      }
+      v_.panel_->model().select(target);
+      v_.view_.set_selection(v_.panel_->model().selection());
+      v_.panel_->refresh();
+    }
+    std::vector<uint8_t> view_image(int max_width, int& width, int& height) override {
+      return v_.capture_figure(max_width, width, height);
+    }
+
+   private:
+    viewer& v_;
+  };
+
+  /// The figure as on screen, read back from the frame buffer; drawn from the
+  /// source when a data table hides it.
+  std::vector<uint8_t> capture_figure(int max_width, int& width, int& height) {
+    const bool shown = panel_ == nullptr || !panel_->figure_box().empty();
+    if (!shown || read_pixels_ == nullptr || client_w_ <= 0 || client_h_ <= 0) {
+      const std::vector<uint8_t> png = render_png(view_.source_with_view());
+      width = png.size() > 24 ? (png[16] << 24 | png[17] << 16 | png[18] << 8 | png[19]) : 0;
+      height = png.size() > 24 ? (png[20] << 24 | png[21] << 16 | png[22] << 8 | png[23]) : 0;
+      return png;
+    }
+    window_->make_current();
+    if (view_.wants_frame()) {
+      if (const ImDrawData* data = view_.frame(now_seconds())) {
+        last_ = data;
+      }
+    }
+    if (last_ == nullptr) {
+      return {};
+    }
+    // The figure alone, in the bottom-left of the back buffer (as present()
+    // draws it), read before anything else is drawn over it.
+    const layout_box box = panel_ != nullptr ? panel_->figure_box() : layout_box{0, 0, client_w_ / scale_, client_h_ / scale_};
+    const int w = std::max(1, static_cast<int>(std::lround(box.width * scale_)));
+    const int h = std::max(1, static_cast<int>(std::lround(box.height * scale_)));
+    viewport_(0, 0, client_w_, client_h_);
+    const ImVec4 bg = ImGui::ColorConvertU32ToFloat4(view_.clear_color());
+    clear_color_(bg.x, bg.y, bg.z, 1.0f);
+    clear_(kColorBufferBit);
+    view_.with_contexts([&] { ImGui_ImplOpenGL3_RenderDrawData(const_cast<ImDrawData*>(last_)); });
+    image img;
+    img.width = w;
+    img.height = h;
+    img.rgba.resize(static_cast<size_t>(w) * h * 4);
+    if (pixel_store_ != nullptr) {
+      pixel_store_(kPackAlignment, 1);
+    }
+    std::vector<uint8_t> flipped(img.rgba.size());
+    read_pixels_(0, 0, w, h, kRgba, kUnsignedByte, flipped.data());
+    for (int y = 0; y < h; ++y) { // OpenGL's rows go up
+      std::memcpy(img.at(0, y), flipped.data() + static_cast<size_t>(h - 1 - y) * w * 4, static_cast<size_t>(w) * 4);
+    }
+    for (size_t i = 3; i < img.rgba.size(); i += 4) {
+      img.rgba[i] = 255;
+    }
+    present(false); // the window as it was
+    // Smaller when asked: whole-pixel steps, each the average of its block.
+    const int step = max_width > 0 && w > max_width ? (w + max_width - 1) / max_width : 1;
+    if (step > 1) {
+      image small;
+      small.width = w / step;
+      small.height = h / step;
+      small.rgba.resize(static_cast<size_t>(small.width) * small.height * 4);
+      for (int y = 0; y < small.height; ++y) {
+        for (int x = 0; x < small.width; ++x) {
+          for (int c = 0; c < 4; ++c) {
+            int sum = 0;
+            for (int dy = 0; dy < step; ++dy) {
+              for (int dx = 0; dx < step; ++dx) {
+                sum += img.at(x * step + dx, y * step + dy)[c];
+              }
+            }
+            small.at(x, y)[c] = static_cast<uint8_t>(sum / (step * step));
+          }
+        }
+      }
+      img = std::move(small);
+    }
+    width = img.width;
+    height = img.height;
+    return encode_png(img, "", "");
+  }
+#endif
+
+  /// A right-click (press and release in place) on an element of the figure
+  /// selects it and opens its menu, as on its row in the tree. x, y in the
+  /// figure's CSS pixels.
+  void figure_right_click(pointer_event::kind type, float x, float y, int button, const layout_box& figure) {
+    if (button != 1) {
+      return;
+    }
+    if (type == pointer_event::kind::down) {
+      right_down_ = std::make_pair(x, y);
+      return;
+    }
+    if (type != pointer_event::kind::up || !right_down_) {
+      return;
+    }
+    const auto [x0, y0] = *right_down_;
+    right_down_.reset();
+    if (std::abs(x - x0) > 4.0f || std::abs(y - y0) > 4.0f) {
+      return; // a drag, not a click
+    }
+    const std::vector<edit_target> targets = view_.targets_at(x, y);
+    if (targets.empty() || targets.front().element == "image") {
+      return; // the image options have no menu
+    }
+    const std::string path = targets.front().element;
+    panel_->model().select(edit_target_id{path, ""});
+    view_.set_selection(panel_->model().selection());
+    panel_->open_element_menu(path, x + figure.x, y + figure.y);
+  }
+
+  void set_cursor(cursor_shape shape) {
+    if (shape != cursor_) {
+      cursor_ = shape;
+      window_->set_cursor(shape);
+    }
   }
 
   /// Sizes the window to the layout (CSS pixels times the display scale),
@@ -291,10 +603,12 @@ class viewer : public window_events {
     }
     const float css_w = static_cast<float>(client_w_) / scale_;
     const float css_h = static_cast<float>(client_h_) / scale_;
-    const float figure_w = panel_ != nullptr ? std::max(css_w - editor_panel::kWidth, 1.0f) : css_w;
-    view_.resize(view_size{figure_w, css_h, scale_});
     if (panel_ != nullptr) {
       panel_->resize(css_w, css_h, scale_);
+      const layout_box left = panel_->layout().left;
+      view_.resize(view_size{std::max(left.width, 1.0f), std::max(left.height, 1.0f), scale_});
+    } else {
+      view_.resize(view_size{css_w, css_h, scale_});
     }
   }
 
@@ -313,31 +627,40 @@ class viewer : public window_events {
         return;
       }
       panel_->model().set_original(saved_source_);
+      panel_->set_strip_width(strip_wanted_);
       image_w_ = panel_->model().image().width;
       image_h_ = panel_->model().image().height;
       view_.set_edit_mode(true);
       int avail_w = 0, avail_h = 0;
       window_->available_client_size(avail_w, avail_h);
       const int strip = strip_pixels();
+      const int tabs = tab_pixels();
       grown_ = client_w_ + strip <= avail_w;
-      if (grown_) {
-        resize_client(client_w_ + strip, client_h_);
+      grown_tabs_ = client_h_ + tabs <= avail_h;
+      if (grown_ || grown_tabs_) {
+        resize_client(client_w_ + (grown_ ? strip : 0), client_h_ + (grown_tabs_ ? tabs : 0));
       } else {
         sync_size();
       }
+      panel_->set_folder(std::filesystem::path(request_.args.input).parent_path());
+      start_agent_server();
     } else {
       const int strip = strip_pixels();
+      const int tabs = tab_pixels();
       panel_.reset();
       view_.set_edit_mode(false);
       view_.set_selection(std::nullopt);
-      if (grown_) {
-        resize_client(std::max(client_w_ - strip, 1), client_h_);
+      if (grown_ || grown_tabs_) {
+        resize_client(std::max(client_w_ - (grown_ ? strip : 0), 1), std::max(client_h_ - (grown_tabs_ ? tabs : 0), 1));
       } else {
         sync_size();
       }
       grown_ = false;
+      grown_tabs_ = false;
       pointer_in_panel_ = false;
       panel_drag_ = false;
+      divider_drag_ = false;
+      set_cursor(cursor_shape::arrow);
     }
     last_ = nullptr;
     present(true);
@@ -357,7 +680,12 @@ class viewer : public window_events {
     }
     if (events.source) {
       try {
-        view_.set_source(*events.source);
+        if (events.paths.empty()) {
+          view_.set_source(*events.source);
+        } else {
+          view_.set_source_moved(*events.source, [&](std::string_view p) { return events.paths.apply(p); });
+          last_ = nullptr; // the contexts were recreated
+        }
       } catch (const std::exception& e) {
         status_ = std::string("cannot show: ") + e.what();
       }
@@ -438,7 +766,7 @@ class viewer : public window_events {
     window_->available_client_size(avail_w, avail_h);
     const window_size client = initial_window_size(
         static_cast<int>(std::lround(static_cast<float>(image.width) * scale_)) + strip_pixels(),
-        static_cast<int>(std::lround(static_cast<float>(image.height) * scale_)),
+        static_cast<int>(std::lround(static_cast<float>(image.height) * scale_)) + tab_pixels(),
         avail_w,
         avail_h);
     resize_client(client.width, client.height);
@@ -469,7 +797,7 @@ class viewer : public window_events {
       }
       panel_->set_theme(view_.theme());
       if (panel_->wants_frame()) {
-        const inspector_events events = panel_->frame(now_seconds(), view_.element_list(), status_);
+        const inspector_events events = panel_->frame(now_seconds(), view_.element_list(), status_line());
         apply(events);
         act_on(panel_->take_decision());
         if (panel_ == nullptr) {
@@ -484,7 +812,10 @@ class viewer : public window_events {
     const ImVec4 bg = ImGui::ColorConvertU32ToFloat4(view_.clear_color());
     clear_color_(bg.x, bg.y, bg.z, 1.0f);
     clear_(kColorBufferBit);
-    if (last_ != nullptr) {
+    // The figure's draw data fills the bottom-left of the window (OpenGL
+    // counts from the bottom), which is the left side under the tab bar.
+    // A data tab hides it.
+    if (last_ != nullptr && (panel_ == nullptr || !panel_->figure_box().empty())) {
       view_.with_contexts([&] { ImGui_ImplOpenGL3_RenderDrawData(const_cast<ImDrawData*>(last_)); });
     }
     if (panel_ != nullptr) {
@@ -502,7 +833,7 @@ class viewer : public window_events {
       return;
     }
     const int want_w = static_cast<int>(std::lround(g.layout_width * scale_)) + strip_pixels();
-    const int want_h = static_cast<int>(std::lround(g.layout_height * scale_));
+    const int want_h = static_cast<int>(std::lround(g.layout_height * scale_)) + tab_pixels();
     if (want_w == asked_w_ && want_h == asked_h_) {
       return;
     }
@@ -552,12 +883,28 @@ class viewer : public window_events {
   int asked_w_ = 0; ///< The size last asked of the window for a layout that did not fit.
   int asked_h_ = 0;
   bool grown_ = false; ///< The window was made wider for the panel.
+  bool grown_tabs_ = false; ///< The window was made taller for the tab bar.
   bool panel_drag_ = false; ///< A button went down over the panel and is still held.
+  bool divider_drag_ = false; ///< The divider is being dragged.
+  std::optional<std::pair<float, float>> right_down_; ///< Where the right button went down in the figure.
+  double divider_clicked_at_ = -1.0; ///< When the divider was last pressed, for double-clicks.
+  float strip_wanted_ = kDefaultStripWidth; ///< The strip width asked for, kept while the panel is hidden.
+  cursor_shape cursor_ = cursor_shape::arrow;
+  static constexpr double kDoubleClick = 0.4; ///< Seconds between the presses of a double-click.
   bool pointer_in_panel_ = false;
   std::string status_; ///< What was saved or refused, for the panel.
   int image_w_ = 0; ///< The image size last shown, to see when the source changes it.
   int image_h_ = 0;
   std::string saved_source_; ///< The source the input file holds, to tell unsaved changes.
+  void(NYMPH_GL_CALL* read_pixels_)(int, int, int, int, unsigned, unsigned, void*) = nullptr;
+  void(NYMPH_GL_CALL* pixel_store_)(unsigned, int) = nullptr;
+#if defined(NYMPH_EDITOR_MCP)
+  // Last: destroyed first (the destructor stops the server even before).
+  std::unique_ptr<ipc::editor_record> record_;
+  std::unique_ptr<agent_host> host_;
+  std::unique_ptr<mcp::editor_server> server_;
+  int last_connections_ = 0;
+#endif
 };
 
 } // namespace

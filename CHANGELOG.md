@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `nymph view --edit`: the divider between the figure and the editor panel can be dragged.
+- `nymph view --edit`: right-click an element in the figure or the element tree to add a child, insert, duplicate, move or delete elements; only the types that fit are offered, and a chart can be added next to the root.
+- `nymph view --edit`: tabs over the figure show each `data` table as an editable grid, with CSV import, export and paste, and a `+` tab to add tables.
+- `nymph view --edit` is an MCP server for AI agents: `nymph mcp` has `editor_*` tools that read and change the chart open in the editor (elements, selection, tables, an image of the view); `--no-mcp` turns it off.
+
 ### Changed
 
 - `nymph view --edit`: the element list is a tree with collapsible nodes and an icon per element type; errors show in their own panel at the bottom of the editor.
