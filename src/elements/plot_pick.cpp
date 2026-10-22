@@ -2,6 +2,7 @@
 /// @file plot_pick.cpp
 /// @brief Picks inside an open ImPlot plot.
 #include "elements/plot_pick.hpp"
+#include <implot3d_internal.h> // forget_plot_items(): the 3D plots' items
 #include <implot_internal.h> // the current plot's axes, ticks and items
 #include <algorithm>
 #include <cmath>
@@ -222,6 +223,9 @@ void sync_hidden(draw_context& dc, const char* label) {
   if (item == nullptr) {
     return;
   }
+  if (dc.take_rehidden(item->ID)) {
+    item->Show = false;
+  }
   if (const node* plot = dc.current_plot(); plot != nullptr && dc.apply_view()) {
     if (const element_view* v = dc.view_of(*plot);
         v != nullptr && std::find(v->hidden.begin(), v->hidden.end(), label) != v->hidden.end()) {
@@ -231,6 +235,34 @@ void sync_hidden(draw_context& dc, const char* label) {
   if (!item->Show) {
     dc.record_hidden(label);
   }
+}
+
+std::vector<ImGuiID> forget_plot_items() {
+  std::vector<ImGuiID> hidden;
+  if (ImPlotContext* gp = ImPlot::GetCurrentContext(); gp != nullptr) {
+    for (int i = 0; i < gp->Plots.GetBufSize(); ++i) {
+      ImPlotItemGroup& items = gp->Plots.GetByIndex(i)->Items;
+      for (int k = 0; k < items.GetItemCount(); ++k) {
+        if (const ImPlotItem* item = items.GetItemByIndex(k); !item->Show) {
+          hidden.push_back(item->ID);
+        }
+      }
+      items.Reset();
+      items.MarkerIdx = 0;
+    }
+  }
+  if (ImPlot3DContext* gp = ImPlot3D::GetCurrentContext(); gp != nullptr) {
+    for (int i = 0; i < gp->Plots.GetBufSize(); ++i) {
+      ImPlot3DItemGroup& items = gp->Plots.GetByIndex(i)->Items;
+      for (int k = 0; k < items.GetItemCount(); ++k) {
+        if (const ImPlot3DItem* item = items.GetItemByIndex(k); !item->Show) {
+          hidden.push_back(item->ID);
+        }
+      }
+      items.Reset();
+    }
+  }
+  return hidden;
 }
 
 void finish_picks(draw_context& dc, ImDrawList* dl) {

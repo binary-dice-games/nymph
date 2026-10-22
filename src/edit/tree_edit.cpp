@@ -260,7 +260,7 @@ std::string reindent(std::string_view lines, int delta, std::string_view eol) {
     size_t end = lines.find('\n', at);
     const bool last = end == std::string_view::npos;
     std::string_view line = lines.substr(at, last ? std::string_view::npos : end - at);
-    const bool cr = !line.empty() && line.back() == '';
+    const bool cr = !line.empty() && line.back() == '\r';
     if (cr) {
       line.remove_suffix(1);
     }

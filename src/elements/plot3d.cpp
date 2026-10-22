@@ -67,9 +67,10 @@ const char* str(const node& n, size_t i) {
   return n.get<std::string>(i).c_str();
 }
 
+/// The ImPlot3DSpec of `n`, a series taking every style field.
 ImPlot3DSpec item_spec(const node& n) {
   ImPlot3DSpec spec;
-  apply_item_style(spec, n);
+  apply_item_style(spec, n, style::all);
   return spec;
 }
 
@@ -235,6 +236,9 @@ class plot3d_class : public element_class {
       // Hidden after plotting, as sync_hidden() does for 2D plots.
       ImPlot3DItemGroup& items = *ImPlot3D::GetCurrentContext()->CurrentItems;
       if (ImPlot3DItem* item = label == nullptr ? nullptr : items.GetItem(label)) {
+        if (dc.take_rehidden(item->ID)) {
+          item->Show = false;
+        }
         if (v != nullptr && dc.apply_view() &&
             std::find(v->hidden.begin(), v->hidden.end(), label) != v->hidden.end()) {
           item->Show = false;
@@ -272,18 +276,19 @@ class plot3d_class : public element_class {
 
 // ── Series ───────────────────────────────────────────────────────────────────
 
-constexpr size_t kXs = item_field::first_own;
+constexpr size_t kXs = first_own(style::all);
 constexpr size_t kYs = kXs + 1;
 constexpr size_t kZs = kXs + 2;
 
 class series3d_class : public element_class {
  public:
-  series3d_class(std::string name, std::vector<field_desc> own, std::string description)
+  /// A 3D series taking the shared fields in `style`.
+  series3d_class(std::string name, std::vector<field_desc> own, std::string description, series_style style = style::all)
       : element_class(
             std::move(name),
             kPlot3dItemSlot,
             {},
-            series_fields(std::move(own)),
+            series_fields(style, std::move(own)),
             std::move(description) + " Must be a child of a Plot3D element.") {}
 
  protected:
@@ -473,7 +478,7 @@ class mesh_class : public series3d_class {
 
 class text3d_class : public series3d_class {
  public:
-  static constexpr size_t text = item_field::first_own, x = text + 1, y = text + 2, z = text + 3, angle = text + 4,
+  static constexpr size_t text = 0, x = text + 1, y = text + 2, z = text + 3, angle = text + 4,
                           offset_x = text + 5, offset_y = text + 6;
 
   text3d_class()
@@ -491,7 +496,8 @@ class text3d_class : public series3d_class {
                 text_style_fields()[1],
                 text_style_fields()[2],
             },
-            "Renders a text string at a given 3-D plot coordinate.") {}
+            "Renders a text string at a given 3-D plot coordinate.",
+            /*style=*/0) {}
 
   void check(const node& n) const override {
     if (n.get<std::string>(text).empty()) {

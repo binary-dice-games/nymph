@@ -109,8 +109,8 @@ TEST(plot3d, SchemaIsPinned) {
       {"Plot3DSurface",
        with_item_fields({"xs=[]", "ys=[]", "zs=[]", "x_count=2", "y_count=2", "scale_min=0", "scale_max=0"})},
       {"Plot3DMesh", with_item_fields({"xs=[]", "ys=[]", "zs=[]", "indices=[]"})},
-      {"Plot3DText",
-       with_item_fields(
+      {"Plot3DText", // no series fields: ImPlot3D draws text with none of them
+       sorted(
            {"font=''",
             "font_size=0",
             "text_color=''",

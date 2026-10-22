@@ -5,6 +5,7 @@
 
 #include <imgui.h>
 #include <implot.h>
+#include <algorithm>
 #include <array>
 #include <cstdint>
 #include <map>
@@ -177,6 +178,25 @@ class draw_context {
   void set_current_plot(const node* n) {
     current_plot_ = n;
     pending_hidden_.clear();
+  }
+
+  /// @brief Item IDs (ImPlot and ImPlot3D) that were hidden when the live
+  ///        view dropped its plots' items for a new source
+  ///        (forget_plot_items()); each is hidden again the next time it
+  ///        is plotted.
+  void set_rehidden(std::vector<ImGuiID> ids) {
+    rehidden_ = std::move(ids);
+  }
+
+  /// @brief Whether item `id` was hidden before the items were dropped;
+  ///        true only the first time it is asked.
+  bool take_rehidden(ImGuiID id) {
+    const auto it = std::find(rehidden_.begin(), rehidden_.end(), id);
+    if (it == rehidden_.end()) {
+      return false;
+    }
+    rehidden_.erase(it);
+    return true;
   }
 
   /// @brief Notes that legend entry `label` of the current plot is hidden.
@@ -419,6 +439,7 @@ class draw_context {
   const std::unordered_map<const node*, std::string>* paths_ = nullptr;
   const node* current_plot_ = nullptr;
   std::vector<std::string> pending_hidden_;
+  std::vector<ImGuiID> rehidden_;
   bool tooltips_ = true;
   bool edit_mode_ = false;
   std::vector<edit_record> targets_;

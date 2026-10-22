@@ -24,9 +24,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - The Windows release executable is built with MSVC.
 - The Linux release executable links glibc dynamically (libstdc++ stays inside) so `nymph view` works; it needs glibc 2.39 or newer.
+- Plot series take only the style fields they are drawn with; a field that had no effect is now an error. `PlotHeatmap`, `PlotHistogram2D`, `PlotPieChart`, `PlotText` and `Plot3DText` take none, bars and digital traces have no `marker` / `marker_size`, `PlotShaded` has no `line_weight` or markers, `PlotErrorBars` and `PlotInfLines` take `color` and `line_weight`, `PlotAnnotation` and `PlotTag` take `color`, `PlotBarGroups` takes `fill_alpha`; `PlotText`, `PlotAnnotation`, `PlotTag`, `PlotPieChart`, `PlotBarGroups` and `Plot3DText` have no `label`.
+- `fill_color` also colours marker faces of lines, scatters, stairs and stems (2D and 3D).
+- `nymph view --edit`: choosing a colour for a field that was automatic opens the colour picker at once.
 
 ### Fixed
 - `nymph view --edit`: adding a child from an element's right-click menu no longer crashes.
+- `nymph view` and the web viewer: a series colour removed by an edit, an undo or a new source goes back to its automatic colour instead of keeping the old one; automatic colours and markers match a fresh render.
+- The library builds with GCC again (a stray carriage return in `src/edit/tree_edit.cpp`).
 - `nymph view --edit`: an edit that makes the layout overflow the image (such as adding an Image to a full layout) is refused with the layout error instead of leaving the editor out of sync.
 - `nymph mcp`: a failed `output_path` write names the absolute path and suggests giving one.
 

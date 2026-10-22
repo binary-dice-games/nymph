@@ -21,6 +21,7 @@
 #include "edit/image_fields.hpp"
 #include "edit/source_edit.hpp"
 #include "document/bind.hpp"
+#include "elements/plot_pick.hpp"
 #include "elements/register_builtin.hpp"
 #include "fonts/fonts_used.hpp"
 #include "layout/layout.hpp"
@@ -849,6 +850,8 @@ void live_view::set_source(std::string_view source, bool reset_view) {
     const context_switch on(*m.contexts);
     load_fonts(*m.ctx); // fonts registered since the last update
     m.apply_theme();
+    // Series colours as the new source gives them, not as they were.
+    m.ctx->set_rehidden(forget_plot_items());
   }
   m.update_geometry();
   m.pending_frames = kFigureFrames;

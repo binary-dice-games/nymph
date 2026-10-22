@@ -280,7 +280,9 @@ Several flags are joined with `|`: `flags: NoLegend|NoTitle`.
 ### 2D series (children of a `Plot`)
 
 Every series has a `label` (its legend name) and the style fields in
-"Colours and style".
+"Colours and style" that it is drawn with, except the ones that draw
+texts or several legend entries (`PlotText`, `PlotAnnotation`, `PlotTag`,
+`PlotPieChart`, `PlotBarGroups`), which have no `label`.
 
 | Type | Fields besides `label` | Draws |
 |---|---|---|
@@ -325,19 +327,19 @@ plot's second Y axis on the right (see the `y2_` fields of `Plot`).
 | `Plot3DTriangle` | `xs`, `ys`, `zs` | Filled triangles; every 3 points make one. |
 | `Plot3DQuad` | `xs`, `ys`, `zs` | Filled quads; every 4 points make one. |
 | `Plot3DMesh` | `xs`, `ys`, `zs`, `indices` | A triangle mesh; `indices` lists 3 point numbers (from 0) per triangle. |
-| `Plot3DText` | `text`, `x`, `y`, `z`, `angle`, `offset_x`, `offset_y` | A text label at a 3D coordinate. |
+| `Plot3DText` | `text`, `x`, `y`, `z`, `angle`, `offset_x`, `offset_y` (no `label`) | A text label at a 3D coordinate. |
 
 ### Colours and style
 
 Without any of these, series are coloured automatically in turn from the
 plot's `colormap`.
 
-Fields on every series, 2D and 3D:
+Fields of the series, 2D and 3D, that draw lines, fills or markers:
 
 | Field | Default | Meaning |
 |---|---|---|
 | `color` | automatic | The series colour, for its lines, fills and markers. |
-| `fill_color` | same as `color` | A different colour for filled areas (bar faces, shaded regions). |
+| `fill_color` | same as `color` | A different colour for filled areas (bar faces, shaded regions) and marker faces. |
 | `line_weight` | `1` | Line thickness in pixels. |
 | `fill_alpha` | automatic | Opacity of fills, from 0 (transparent) to 1 (solid). |
 | `marker` | none on lines, circles on scatters | `None`, `Circle`, `Square`, `Diamond`, `Up`, `Down`, `Left`, `Right`, `Cross`, `Plus`, `Asterisk`. |
@@ -346,8 +348,16 @@ Fields on every series, 2D and 3D:
 **Colours are written `"#RRGGBB"` or `"#RRGGBBAA"`, always in quotes.**
 Colour names such as `red` are not accepted.
 
-`PlotHeatmap`, `PlotHistogram2D`, `PlotPieChart`, `PlotBarGroups`,
-`PlotText` and `Plot3DText` ignore these fields. Heatmap cells, pie
+A series takes only the fields it is drawn with; any other is an error.
+`PlotLine`, `PlotScatter`, `PlotStairs`, `PlotStems` and every 3D series
+but `Plot3DText` take them all. `PlotBars`, `PlotBarsH`, `PlotHistogram`
+and `PlotDigital` take all but `marker` and `marker_size`; `PlotShaded`
+takes `color`, `fill_color` and `fill_alpha`; `PlotErrorBars` and
+`PlotInfLines` take `color` and `line_weight`; `PlotAnnotation` and
+`PlotTag` take `color`; `PlotBarGroups` takes `fill_alpha`.
+
+`PlotHeatmap`, `PlotHistogram2D`, `PlotPieChart`, `PlotText` and
+`Plot3DText` take none of them (`PlotText` has `text_color`). Heatmap cells, pie
 slices, bar groups and surfaces are coloured by the plot's `colormap`
 instead (a `ColorScale` shows what the colours of a heatmap mean):
 
