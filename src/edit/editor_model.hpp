@@ -100,6 +100,10 @@ class editor_model {
   ///        source or were asked for by name: for "Selection" lists.
   const field_desc* find_field(std::string_view name) const;
 
+  /// @brief The text size the selected element shows with `font_size` 0:
+  ///        its nearest ancestor's, else the image's.
+  double inherited_font_size() const;
+
   // ── Changes ──────────────────────────────────────────────────────────
 
   /// @brief Sets field `field` of the selected element to `yaml_value` (one

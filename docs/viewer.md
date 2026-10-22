@@ -146,6 +146,20 @@ for the default width).
   diagram); the **Elements** list reaches everything else (a series, a plot
   without a title yet, `legend_location`). Dragging still pans and the wheel
   still zooms.
+- **Toolbar.** A floating toolbar sits over the figure next to the
+  selection, with the fields changed most often, each shown when the element
+  has it: **shape** (a grid of shape pictures, in tabs by category for the
+  shape library), **fill**, **line** and **text colour** (a palette of 18
+  colours, **Automatic** and **Custom colour**), **font**, **text size**
+  (`auto` inherits it) and, for lines and links, thickness, line style and
+  arrow heads. Then **copy style** (the next element you click takes the
+  colours, text style and, between elements of one type, shape and line
+  style), **clear style** (removes the colours and text style),
+  **Duplicate** and **Delete**.
+- **Numbers.** A number field is a box: click it to type a value (Enter,
+  Tab or a click elsewhere accepts it, `Esc` cancels), or drag sideways over
+  it to change the value (Shift: ten times finer, Ctrl: ten times coarser).
+  A drag is one undo step.
 - **The whole figure.** Clicking the background (the margin around the figure,
   away from every element) or choosing **Image** in the list selects the
   `image:` options: `width`, `height`, `scale`, `theme`, `padding`, and the

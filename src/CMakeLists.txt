@@ -72,6 +72,10 @@ add_library(nymph STATIC
   edit/image_fields.cpp
   edit/inspector.hpp
   edit/inspector.cpp
+  edit/number_box.hpp
+  edit/number_box.cpp
+  edit/edit_toolbar.hpp
+  edit/edit_toolbar.cpp
   edit/workspace_layout.hpp
   elements/plot_style.hpp
   elements/plot_style.cpp

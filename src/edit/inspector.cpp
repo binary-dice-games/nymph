@@ -16,6 +16,8 @@
 #include <variant>
 #include "edit/element_icons.hpp"
 #include "edit/field_value.hpp"
+#include "edit/image_fields.hpp"
+#include "edit/number_box.hpp"
 #include "fonts/embedded_fonts.hpp"
 #include "schema/element_class.hpp"
 
@@ -276,23 +278,24 @@ void inspector::draw_field(editor_model& model, const editable_field& f, bool fo
     case widget_kind::number: {
       const bool is_int = kind == widget_kind::integer;
       double v = is_int ? static_cast<double>(std::get<int64_t>(f.current)) : std::get<double>(f.current);
-      double lo = d.limits ? d.limits->min : 0.0, hi = d.limits ? d.limits->max : 0.0;
-      const double span = d.limits ? hi - lo : 100.0;
-      const float speed = static_cast<float>(is_int ? std::max(1.0, span / 200.0) : std::max(span / 400.0, 0.01));
-      bool changed = false;
-      if (is_int) {
-        int64_t iv = static_cast<int64_t>(v);
-        int64_t ilo = static_cast<int64_t>(lo), ihi = static_cast<int64_t>(hi);
-        changed = ImGui::DragScalar("##v", ImGuiDataType_S64, &iv, speed, d.limits ? &ilo : nullptr, d.limits ? &ihi : nullptr);
-        v = static_cast<double>(iv);
-      } else {
-        changed = ImGui::DragScalar("##v", ImGuiDataType_Double, &v, speed, d.limits ? &lo : nullptr, d.limits ? &hi : nullptr, "%.6g");
+      number_box_options options;
+      options.integer = is_int;
+      if (d.limits) {
+        options.min = d.limits->min;
+        options.max = d.limits->max;
       }
-      if (changed) {
-        note(model.commit(d.name, is_int ? encode_int(static_cast<int64_t>(v)) : encode_number(v), drag_key_ == key), events);
-        drag_key_ = key;
+      if (d.name == "font_size" && element != kImagePath) {
+        options.zero_text = "auto (inherited)";
+        options.zero_start = model.inherited_font_size();
       }
-      if (ImGui::IsItemDeactivated() && drag_key_ == key) {
+      const number_box_change changed = numbers_.draw("##v", v, options);
+      if (changed != number_box_change::none) {
+        // A drag is one undo step however many values it goes through.
+        const bool merge = changed == number_box_change::dragged && drag_key_ == key;
+        note(model.commit(d.name, is_int ? encode_int(static_cast<int64_t>(v)) : encode_number(v), merge), events);
+        drag_key_ = changed == number_box_change::dragged ? key : std::string();
+      }
+      if (!ImGui::IsMouseDown(ImGuiMouseButton_Left) && drag_key_ == key) {
         drag_key_.clear();
       }
       break;

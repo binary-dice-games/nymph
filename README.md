@@ -14,8 +14,9 @@ The [web viewer](docs/viewer.md) ([live demo](https://binary-dice-games.github.i
 shows the same charts live in a web page
 (WebAssembly and WebGL2), with pan, zoom and data-point values, for
 markdown viewers and chatbots: `<nymph-viewer src="chart.yaml"></nymph-viewer>`;
-`nymph view chart.yaml` opens it in a window; `--edit` adds a panel to
-click-select texts and elements and edit them, add and remove elements,
+`nymph view chart.yaml` opens it in a window; `--edit` adds a panel and a
+floating toolbar to click-select texts and elements and edit them, add and
+remove elements,
 edit the data tables, and let an AI agent work on the open chart through
 `nymph mcp`.
 The [Chrome extension](docs/extension.md) does it on any page you read:

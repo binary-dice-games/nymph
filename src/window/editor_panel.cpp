@@ -245,10 +245,32 @@ inspector_events editor_panel::frame(double now_seconds, const std::vector<edit_
     grid_.draw(model_, *tab_, table_events);
     ImGui::End();
   }
+  // The floating toolbar over the figure, first: the fields below show
+  // what it changed.
+  const layout_box toolbar_before = toolbar_.rect();
+  const inspector_events tool_events = toolbar_.draw(model_, inspector_.menu(), figure_box(), anchor_);
+  const layout_box toolbar_after = toolbar_.rect();
+  if (toolbar_after.x != toolbar_before.x || toolbar_after.y != toolbar_before.y ||
+      toolbar_after.width != toolbar_before.width || toolbar_after.height != toolbar_before.height) {
+    refresh(); // it moved or changed size: place it again
+  }
   ImGui::SetNextWindowPos(ImVec2(regions.strip.x, 0.0f), ImGuiCond_Always);
   ImGui::SetNextWindowSize(ImVec2(regions.strip.width, height_), ImGuiCond_Always);
   ImGui::Begin("##nymph_editor", nullptr, kFixed);
   inspector_events events = inspector_.draw(model_, tree, status);
+  if (tool_events.source && !events.source) {
+    events.source = tool_events.source;
+    events.paths = tool_events.paths;
+  }
+  if (!events.select && tool_events.select) {
+    events.select = tool_events.select;
+  }
+  if (!tool_events.error.empty()) {
+    events.error = tool_events.error;
+    inspector_.set_error(tool_events.error);
+  } else if (tool_events.source) {
+    inspector_.set_error("");
+  }
   draw_dialogs();
   grid_.dialogs(model_, table_events);
   draw_table_dialogs(table_events);
