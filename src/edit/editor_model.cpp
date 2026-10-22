@@ -5,6 +5,7 @@
 #include <algorithm>
 #include <string>
 #include "core/error.hpp"
+#include "document/bind.hpp"
 #include "document/view.hpp"
 #include "edit/csv_file.hpp"
 #include "edit/element_starter.hpp"
@@ -531,6 +532,28 @@ commit_result editor_model::set_fields(
       next = value ? set_field(next, path, name, *value) : remove_field(next, path, name);
     }
     return apply(std::move(next), "fields/" + std::string(path), false);
+  } catch (const error& e) {
+    return fail(e.what(), e.line(), e.column());
+  }
+}
+
+std::string editor_model::top_level_text(std::string_view key) const {
+  try {
+    const yaml_node doc = parse_yaml(source_);
+    const yaml_node* v = doc.find(key);
+    return v != nullptr && v->is_scalar() ? v->text : std::string();
+  } catch (const error&) {
+    return {};
+  }
+}
+
+commit_result editor_model::set_top_level_text(std::string_view key, std::string_view text) {
+  if (key != "description" && key != "source") {
+    return fail("'" + std::string(key) + "' is not a text key of the source");
+  }
+  try {
+    const std::string value = text.empty() ? std::string() : encode_text(text);
+    return apply(replace_top_level(source_, key, value).source, "top/" + std::string(key), false);
   } catch (const error& e) {
     return fail(e.what(), e.line(), e.column());
   }

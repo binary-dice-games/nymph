@@ -156,6 +156,14 @@ class editor_model {
       std::string_view path,
       const std::vector<std::pair<std::string, std::optional<std::string>>>& fields);
 
+  /// @brief The text of the top-level `description` or `source` key ("" when
+  ///        absent or not a scalar).
+  std::string top_level_text(std::string_view key) const;
+
+  /// @brief Writes the top-level `description` or `source` key as `text`; an
+  ///        empty text removes the key.
+  commit_result set_top_level_text(std::string_view key, std::string_view text);
+
   /// @brief Replaces the whole source (an agent's rewrite); paths may change.
   commit_result set_source(std::string source);
 

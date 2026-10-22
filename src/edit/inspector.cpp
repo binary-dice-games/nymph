@@ -578,6 +578,89 @@ void inspector::draw_tree(editor_model& model, const std::vector<edit_element>& 
   }
 }
 
+void inspector::draw_info(editor_model& model, inspector_events& events) {
+  constexpr const char* kInfoDialog = "Description and source";
+  if (info_open_) {
+    ImGui::OpenPopup(kInfoDialog);
+    info_open_ = false;
+  }
+  // A modal dialog: it takes the pointer and keyboard from the figure.
+  const ImGuiViewport* vp = ImGui::GetMainViewport();
+  ImGui::SetNextWindowPos(
+      ImVec2(vp->Pos.x + vp->Size.x * 0.5f, vp->Pos.y + vp->Size.y * 0.5f), ImGuiCond_Appearing, ImVec2(0.5f, 0.5f));
+  ImGui::SetNextWindowSize(ImVec2(std::min(460.0f, vp->Size.x * 0.9f), std::min(400.0f, vp->Size.y * 0.9f)), ImGuiCond_Appearing);
+  if (ImGui::BeginPopupModal(kInfoDialog, nullptr, ImGuiWindowFlags_NoSavedSettings)) {
+    const ImGuiStyle& style = ImGui::GetStyle();
+    const struct {
+      const char* key;
+      const char* title;
+      const char* help;
+    } entries[] = {
+        {"description", "Description", "The alt text of the image: what the figure shows."},
+        {"source", "Source", "How the data was made (the prompt, query or code); kept in the file, not drawn."},
+    };
+    constexpr float kDividerHeight = 6.0f;
+    // The close button takes the bottom row; the two boxes share the rest,
+    // after the headings and the divider.
+    const float button_row = ImGui::GetFrameHeight() + style.ItemSpacing.y;
+    const float heading = (ImGui::GetTextLineHeight() + style.ItemSpacing.y) * 2.0f + style.ItemSpacing.y;
+    const float total = std::max(
+        ImGui::GetContentRegionAvail().y - button_row - heading * 2.0f - kDividerHeight - style.ItemSpacing.y * 3.0f, 40.0f);
+    const float first = std::clamp(total * info_split_, 20.0f, std::max(total - 20.0f, 20.0f));
+    for (size_t i = 0; i < 2; ++i) {
+      const auto& entry = entries[i];
+      const std::string key = entry.key;
+      ImGui::PushID(entry.key);
+      ImGui::SeparatorText(entry.title);
+      ImGui::TextDisabled("%s", entry.help);
+      const bool typing = info_key_ == key;
+      const std::string current = model.top_level_text(key);
+      char scratch[sizeof(info_buffer_)];
+      char* buffer = typing ? info_buffer_ : scratch;
+      if (!typing) {
+        std::snprintf(scratch, sizeof(scratch), "%s", current.c_str());
+      }
+      const float height = i == 0 ? first : total - first;
+      ImGui::InputTextMultiline(
+          "##text", buffer, sizeof(info_buffer_), ImVec2(-FLT_MIN, height), ImGuiInputTextFlags_WordWrap);
+      if (ImGui::IsItemActivated()) {
+        info_key_ = key;
+        std::snprintf(info_buffer_, sizeof(info_buffer_), "%s", current.c_str());
+      }
+      if (ImGui::IsItemDeactivated() && info_key_ == key) {
+        const std::string typed = info_buffer_;
+        info_key_.clear();
+        if (typed != current) {
+          note(model.set_top_level_text(key, typed), events);
+        }
+      }
+      if (i == 0) {
+        // The divider between the boxes: drag it to share the space.
+        ImGui::InvisibleButton("##split", ImVec2(-FLT_MIN, kDividerHeight));
+        const bool grabbed = ImGui::IsItemHovered() || ImGui::IsItemActive();
+        if (grabbed) {
+          ImGui::SetMouseCursor(ImGuiMouseCursor_ResizeNS);
+        }
+        if (ImGui::IsItemActive()) {
+          info_split_ = std::clamp((first + ImGui::GetIO().MouseDelta.y) / total, 0.1f, 0.9f);
+        }
+        const ImVec2 lo = ImGui::GetItemRectMin();
+        const ImVec2 hi = ImGui::GetItemRectMax();
+        ImGui::GetWindowDrawList()->AddLine(
+            ImVec2(lo.x, (lo.y + hi.y) * 0.5f),
+            ImVec2(hi.x, (lo.y + hi.y) * 0.5f),
+            ImGui::GetColorU32(grabbed ? ImGuiCol_SeparatorActive : ImGuiCol_Separator),
+            2.0f);
+      }
+      ImGui::PopID();
+    }
+    if (ImGui::Button("Close") || (info_key_.empty() && ImGui::IsKeyPressed(ImGuiKey_Escape, false))) {
+      ImGui::CloseCurrentPopup();
+    }
+    ImGui::EndPopup();
+  }
+}
+
 inspector_events inspector::draw(editor_model& model, const std::vector<edit_element>& tree, const std::string& status) {
   inspector_events events;
 
@@ -613,6 +696,11 @@ inspector_events inspector::draw(editor_model& model, const std::vector<edit_ele
   ImGui::EndDisabled();
   ImGui::SameLine();
   events.reset_view = ImGui::Button("Reset view");
+  ImGui::SameLine();
+  if (ImGui::Button("Info")) {
+    info_open_ = !info_open_;
+  }
+  ImGui::SetItemTooltip("Edit the description (alt text) and the source note of the figure.");
   ImGui::BeginDisabled(!model.modified());
   events.save = ImGui::Button("Save");
   ImGui::EndDisabled();
@@ -639,10 +727,25 @@ inspector_events inspector::draw(editor_model& model, const std::vector<edit_ele
 
   // The elements.
   if (ImGui::CollapsingHeader("Elements", ImGuiTreeNodeFlags_DefaultOpen)) {
-    const float rows = static_cast<float>(tree.size() + 1);
-    ImGui::BeginChild("##elements", ImVec2(0, std::min(220.0f, ImGui::GetTextLineHeightWithSpacing() * rows)), ImGuiChildFlags_Borders);
+    ImGui::BeginChild("##elements", ImVec2(0, elements_height_), ImGuiChildFlags_Borders);
     draw_tree(model, tree, events);
     ImGui::EndChild();
+    // The divider under the tree: drag it to resize the tree.
+    ImGui::InvisibleButton("##divider", ImVec2(-FLT_MIN, 6.0f));
+    if (ImGui::IsItemHovered() || ImGui::IsItemActive()) {
+      ImGui::SetMouseCursor(ImGuiMouseCursor_ResizeNS);
+    }
+    if (ImGui::IsItemActive()) {
+      elements_height_ = std::clamp(elements_height_ + ImGui::GetIO().MouseDelta.y, 40.0f, 4000.0f);
+    }
+    const ImVec2 lo = ImGui::GetItemRectMin();
+    const ImVec2 hi = ImGui::GetItemRectMax();
+    const float mid = (lo.y + hi.y) * 0.5f;
+    ImGui::GetWindowDrawList()->AddLine(
+        ImVec2(lo.x, mid),
+        ImVec2(hi.x, mid),
+        ImGui::GetColorU32(ImGui::IsItemHovered() || ImGui::IsItemActive() ? ImGuiCol_SeparatorActive : ImGuiCol_Separator),
+        2.0f);
   }
 
   // The selection.
@@ -684,6 +787,7 @@ inspector_events inspector::draw(editor_model& model, const std::vector<edit_ele
   ImGui::EndChild();
 
   menu_.dialogs(model, events);
+  draw_info(model, events);
   if (!events.error.empty()) {
     error_ = events.error;
   } else if (events.source && events.paths.empty() == false) {

@@ -480,4 +480,19 @@ TEST(editor_model, TablesAreAddedRenamedAndRemoved) {
 }
 
 } // namespace
+TEST(editor_model, TopLevelTextSetsAndRemovesDescriptionAndSource) {
+  editor_model m(kChart);
+  ASSERT_TRUE(m.top_level_text("description").empty());
+  const commit_result r = m.set_top_level_text("description", "Sales: by month");
+  ASSERT_TRUE(r.ok) << r.error;
+  EXPECT_EQ(m.top_level_text("description"), "Sales: by month");
+  EXPECT_EQ(m.bound().description, "Sales: by month");
+  ASSERT_TRUE(m.set_top_level_text("source", "line one\nline two").ok);
+  EXPECT_EQ(m.top_level_text("source"), "line one\nline two");
+  ASSERT_TRUE(m.set_top_level_text("description", "").ok);
+  EXPECT_TRUE(m.top_level_text("description").empty());
+  EXPECT_FALSE(m.set_top_level_text("root", "x").ok);
+  EXPECT_TRUE(m.undo());
+}
+
 } // namespace bdg::nymph

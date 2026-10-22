@@ -121,6 +121,14 @@ class inspector {
   /// children are listed below it): reorders and reparents elements.
   void drag_drop(editor_model& model, const edit_element& e, bool open, inspector_events& events);
 
+  /// The Description window: the figure's `description` and `source` keys.
+  void draw_info(editor_model& model, inspector_events& events);
+
+  bool info_open_ = false;
+  std::string info_key_; ///< The key being typed into, "" when none.
+  char info_buffer_[8192] = {}; ///< Its text.
+  float info_split_ = 0.5f; ///< Share of the dialog's height the description box takes.
+  float elements_height_ = 220.0f; ///< Height of the elements panel, dragged by the divider.
   std::string error_;
   std::optional<pending_text> pending_;
   pending_text last_attempt_; ///< The text commit_pending() tried last.
