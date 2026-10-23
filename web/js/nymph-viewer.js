@@ -147,6 +147,20 @@ class Core {
     return JSON.parse(this.string(this.m._nymph_last_error())) ?? { message: 'unknown error' };
   }
 
+  /**
+   * Converts a mermaid diagram to a nymph source (spec/16_mermaid_import).
+   * @param {string} text the mermaid diagram
+   * @returns {{source: string, kind: string, warnings: {line: number, column: number, message: string}[]}}
+   * @throws {NymphError} with the mermaid line and column
+   */
+  importMermaid(text) {
+    const json = this.withString(text, (ptr, size) => this.string(this.m._nymph_import_mermaid(ptr, size)));
+    if (json === '') {
+      throw new NymphError(this.lastError());
+    }
+    return JSON.parse(json);
+  }
+
   /** Fetches and registers the fonts `names`, each once per page. */
   async ensureFonts(names) {
     await Promise.all(
@@ -663,7 +677,7 @@ export class NymphViewer {
     }
     const src = this.options.src;
     const base = src ? decodeURIComponent(new URL(src, location.href).pathname.split('/').pop() || '') : '';
-    return base.replace(/\.(ya?ml|png)$/i, '') || 'chart';
+    return base.replace(/\.(ya?ml|png|mmd|mermaid)$/i, '') || 'chart';
   }
 
   /** Saves the chart as `kind`: "png" (what is on screen) or "yaml" (toYaml()). */
@@ -811,12 +825,20 @@ export class NymphViewer {
   /** What the viewer is showing and how. */
   info() {
     const s = this.handle === 0 ? null : this.state();
-    return {
+    const info = {
       rasterizer: this.webgl ? 'webgl' : 'software',
       hasFigure: s?.hasFigure ?? false,
       description: s?.description ?? '',
       size: s ? { width: s.geometry.layoutWidth * s.geometry.cssScale, height: s.geometry.layoutHeight * s.geometry.cssScale } : { width: 0, height: 0 },
     };
+    // A mermaid source was converted: its kind and what nymph dropped.
+    const imported = this.handle === 0 ? null : JSON.parse(this.core.string(this.core.m._nymph_viewer_imported(this.handle)));
+    if (imported) {
+      info.importedFrom = 'mermaid';
+      info.mermaidKind = imported.kind;
+      info.warnings = imported.warnings;
+    }
+    return info;
   }
 
   /** @private Runs `call` (returning a status) after earlier updates, fetching fonts as asked. */
@@ -883,8 +905,9 @@ export class NymphViewer {
   }
 
   /**
-   * Shows `yaml`.
-   * @param {string} yaml a nymph source
+   * Shows `yaml`. A mermaid diagram is converted to a nymph source first
+   * (source(), toYaml() and the saved files are then that YAML).
+   * @param {string} yaml a nymph source, or a mermaid diagram
    * @param {{resetView?: boolean}} [options] drop the zoom of the previous chart
    */
   setSource(yaml, { resetView = false } = {}) {
@@ -1144,6 +1167,18 @@ export async function createViewer(container, options = {}) {
   return viewer;
 }
 
+/**
+ * Converts a mermaid diagram to a nymph source without drawing it
+ * (spec/16_mermaid_import/DESIGN.md section 5.5).
+ * @param {string} text the mermaid diagram
+ * @param {object} [options] as loadNymph()
+ * @returns {Promise<{source: string, kind: string, warnings: {line: number, column: number, message: string}[]}>}
+ */
+export async function importMermaid(text, options = {}) {
+  const core = await loadNymph(options);
+  return core.importMermaid(text);
+}
+
 // ── <nymph-viewer> ────────────────────────────────────────────────────────────
 
 /** Removes the indentation all non-blank lines share (YAML written inside HTML). */
@@ -1160,7 +1195,7 @@ function isPng(bytes) {
 }
 
 /**
- * `<nymph-viewer src="chart.yaml|chart.png" fit theme tooltips>`, or with
+ * `<nymph-viewer src="chart.yaml|chart.png|diagram.mmd" fit theme tooltips>`, or with
  * the YAML as its text (what a markdown renderer can emit for a
  * ```nymph fenced block). Its `viewer` property is the NymphViewer; it
  * re-dispatches the viewer's events as `nymph-hover`, `nymph-click`,

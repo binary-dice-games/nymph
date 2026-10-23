@@ -1,0 +1,37 @@
+classDiagram
+    direction RL
+    classA <|-- classB
+    classC *-- classD
+    classE o-- classF
+    classG <-- classH
+    classI -- classJ
+    classK <.. classL
+    classM <|.. classN
+    classO .. classP
+    classQ --|> classR : extends
+    classS --* classT
+    classU --o classV
+    classW --> classX
+    classY ..> classZ
+    Customer "1" --> "*" Ticket : buys
+    Student "1..*" --o "1" Course
+    Animal <|--|> Zebra
+    Foo ()-- Bar
+    class Shape~T~
+    Shape~T~ <|.. Square
+    class Weird["A label"]
+    <<interface>> Flyer
+    class Color {
+      <<enumeration>>
+      RED
+      GREEN
+    }
+    class Service
+    <<service>> Service
+    namespace Shapes {
+      class Triangle
+    }
+    style Triangle fill:#f9f
+    cssClass "Square,Shape" hot
+    classDef hot fill:#f96
+    click Foo href "https://example.com"

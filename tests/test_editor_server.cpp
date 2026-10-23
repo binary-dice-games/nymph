@@ -249,6 +249,26 @@ TEST(editor_server, TablesAndCellsAreChangedAsOneStep) {
   EXPECT_EQ(f.host.m.tables().size(), 2u);
 }
 
+TEST(editor_server, SetSourceTakesMermaidAsOneUndoStep) {
+  // spec/16_mermaid_import/PLAN.md step 4: the agent iterates in mermaid
+  // while the user watches the editor.
+  fixture f;
+  client c(f.server->socket());
+  c.initialize();
+  const char* mermaid = "flowchart LR\n  A --> B\n";
+  const json r = call(f, c, "editor_set_source", {{"source", mermaid}});
+  ASSERT_FALSE(r.value("isError", false)) << r.dump();
+  EXPECT_EQ(f.host.m.source(), import_mermaid(mermaid).source);
+  EXPECT_EQ(f.host.changes, std::vector<std::string>{"editor_set_source"});
+  EXPECT_TRUE(f.host.m.undo());
+  EXPECT_EQ(f.host.m.source(), kChart);
+  const json bad = call(f, c, "editor_set_source", {{"source", "flowchart LR\n  A --> B@{shape: blob}\n"}});
+  EXPECT_TRUE(bad.value("isError", false));
+  EXPECT_NE(bad["content"][0]["text"].get<std::string>().find("mermaid:2:10: unknown mermaid shape"), std::string::npos)
+      << bad.dump();
+  EXPECT_EQ(f.host.m.source(), kChart);
+}
+
 TEST(editor_server, SelectShowsATabAndAnElement) {
   fixture f;
   client c(f.server->socket());

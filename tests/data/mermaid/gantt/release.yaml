@@ -1,0 +1,25 @@
+nymph: 1
+description: "Gantt chart converted from mermaid: A Gantt Diagram."
+image: {width: 800, height: 472}
+source: Converted from a mermaid gantt.
+root:
+  type: GanttChart
+  title: A Gantt Diagram
+  children:
+    - type: GanttSection
+      name: Section
+      children:
+        - {type: GanttTask, id: a1, name: A task, start: 2014-01-01, duration: 30}
+        - {type: GanttTask, name: Another task, after: [a1], duration: 20}
+    - type: GanttSection
+      name: Another
+      children:
+        - {type: GanttTask, name: Task in sec, start: 2014-01-12, duration: 12}
+        - {type: GanttTask, name: another task, start: 2014-01-24, duration: 24}
+        - {type: GanttTask, name: Done, start: 2014-01-06, end: 2014-01-08, status: Done}
+        - {type: GanttTask, id: des2, name: Active task, start: 2014-01-09, duration: 3, status: Active}
+        - {type: GanttTask, id: des3, name: Future task, after: [des2], duration: 5}
+        - {type: GanttTask, name: Future task2, after: [des3], duration: 5}
+        - {type: GanttTask, name: Crit and active, start: 2014-01-22, duration: 0.5, status: Critical}
+        - {type: GanttTask, name: Release, start: 2014-01-25, milestone: true}
+        - {type: GanttTask, name: Until release, start: 2014-01-20, end: 2014-01-25}

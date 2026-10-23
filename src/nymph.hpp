@@ -99,6 +99,39 @@ void check_source(std::string_view source);
 /// @throws std::runtime_error for a corrupt or truncated PNG.
 std::optional<std::string> extract_source(std::span<const uint8_t> png);
 
+// ── Mermaid import (spec/16_mermaid_import/DESIGN.md) ───────────────────────
+
+/// @brief One thing a mermaid import dropped or changed, at its mermaid
+///        position.
+struct import_warning {
+  int line = 0;   ///< 1-based
+  int column = 0; ///< 1-based, in characters
+  std::string message;
+};
+
+/// @brief A mermaid diagram converted to a nymph source.
+struct mermaid_import {
+  std::string source;                   ///< nymph YAML; check_source() accepts it
+  std::string kind;                     ///< mermaid's keyword: "flowchart", "sequenceDiagram", ...
+  std::vector<import_warning> warnings; ///< in mermaid line order
+};
+
+/// @brief Whether `text` is a mermaid diagram: its first significant line
+///        (after an optional ```mermaid fence, `---` front matter, `%%`
+///        comments and directives) starts with a mermaid diagram keyword.
+///        Never true for a nymph source. Reads only the start of the text.
+bool is_mermaid(std::string_view text) noexcept;
+
+/// @brief Converts a mermaid diagram to an equivalent nymph source, with
+///        an image sized to the diagram.
+/// @return The source (always valid for check_source()), the kind and the
+///         warnings: what nymph dropped or changed.
+/// @throws nymph::error positioned in `text` for a syntax error, an
+///         unsupported diagram kind or construct, or a problem nymph's own
+///         checks find in the result (the message then ends with the line of
+///         the nymph YAML).
+mermaid_import import_mermaid(std::string_view text);
+
 /// @brief Makes a font that this build does not embed (`NYMPH_EMBED_FONTS`)
 ///        available, by file name, to every later render in the process.
 ///        The bytes are copied. Registering a font that already has bytes

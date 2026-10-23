@@ -45,6 +45,7 @@ its text:
 
 <nymph-viewer src="/charts/revenue.yaml"></nymph-viewer>
 <nymph-viewer src="/charts/revenue.png" fit="width" theme="auto"></nymph-viewer>
+<nymph-viewer src="/charts/pipeline.mmd"></nymph-viewer>  <!-- mermaid, converted -->
 <nymph-viewer>
   root:
     type: Plot
@@ -78,7 +79,7 @@ setInterval(() => viewer.setData({ revenue: latestValues() }), 250);
 | Call | What |
 |------|------|
 | `createViewer(container, options)` | A viewer in `container` (a canvas is added to it). Options: `source` or `png`, `fit`, `theme`, `tooltips`, `menu` (`false` turns the right-click menu off), `fileName` (for saving; default from `src`, or `chart`), `rasterizer` (`auto`, `webgl`, `software`), and for the first viewer of the page `wasmUrl`, `fontBaseUrl`, `fetchFont(name)`. |
-| `setSource(yaml, {resetView})` | Shows a new source; the zoom of elements that did not change is kept unless `resetView`. |
+| `setSource(yaml, {resetView})` | Shows a new source; the zoom of elements that did not change is kept unless `resetView`. A [mermaid](mermaid.md) diagram is converted to nymph YAML first: `source()`, `toYaml()` and the saved files are that YAML, and `info()` adds `importedFrom: "mermaid"`, `mermaidKind` and `warnings`. |
 | `setData(tables)` | Replaces the source's `data` (an object, or YAML / JSON text); the view is kept. |
 | `setPng(bytes)` | Shows the source a nymph PNG carries; resolves `false` for a PNG without one (shown as a plain image). |
 | `setTheme(theme)`, `resetView()`, `resize(w, h, ratio)` | [Chart theme](themes.md) override (`''` for the source's; returns a promise, as the theme may fetch a font), back to the source's view, box size (the element and `createViewer` follow their container themselves). |
@@ -90,6 +91,7 @@ setInterval(() => viewer.setData({ revenue: latestValues() }), 250);
 | `toPng()` | The image on screen as a nymph PNG, `toYaml()` embedded. |
 | `save('png' \| 'yaml')` | Downloads `toPng()` or `toYaml()` (what the menu's items do). |
 | `destroy()` | Removes the canvas and frees the viewer. |
+| `importMermaid(text)` (module export) | Converts a mermaid diagram without drawing it: `{source, kind, warnings}`; rejects with a `NymphError` at the mermaid line and column. |
 
 Updates resolve once the chart is shown and reject with a `NymphError`
 (`line`, `column`, `kind`, `message`: the same text as the `nymph` CLI)

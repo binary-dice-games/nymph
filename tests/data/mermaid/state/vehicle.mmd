@@ -1,0 +1,23 @@
+stateDiagram-v2
+    title Vehicle
+    direction LR
+    [*] --> Still
+    Still --> [*]
+    Still --> Moving : push
+    Moving --> Still
+    Moving --> Crash
+    Crash --> [*]
+    state Moving {
+        [*] --> Slow
+        Slow --> Fast : speed up
+        Fast --> Slow
+        Fast --> [*]
+    }
+    state "Crashed hard" as Crash
+    Still : parked
+    Still : engine off
+    note right of Still : resting
+    note left of Crash
+        call the
+        insurance
+    end note

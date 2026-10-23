@@ -1,6 +1,6 @@
 ---
 name: nymph
-description: Make charts and diagrams as PNG images from a short YAML description with nymph - line, bar, scatter, pie, heatmap, histogram and 3D plots, dashboards of several charts, UML, ER, network and data-flow diagrams, flowcharts, Gantt and Sankey charts, and user-interface mockups (Dear ImGui windows and widgets, with arrows for the UI flow). Use whenever a chart, diagram or mockup would explain data, structure or a design better than text or a table.
+description: Make charts and diagrams as PNG images from a short YAML description with nymph - line, bar, scatter, pie, heatmap, histogram and 3D plots, dashboards of several charts, UML, ER, network and data-flow diagrams, flowcharts, Gantt and Sankey charts, and user-interface mockups (Dear ImGui windows and widgets, with arrows for the UI flow). Reads mermaid too: draft a diagram in mermaid, show it with nymph, then convert it to nymph YAML. Use whenever a chart, diagram or mockup would explain data, structure or a design better than text or a table.
 ---
 
 # nymph: charts from YAML
@@ -12,11 +12,14 @@ its source, so it can be read back and changed later.
 
 - With the nymph MCP tools: `render_chart` (returns the image; give
   `output_path` to also save a `.png`), `example_chart`, `chart_schema`,
-  `check_chart`, `extract_chart` (the source of a nymph PNG), `list_fonts`.
+  `check_chart`, `extract_chart` (the source of a nymph PNG), `list_fonts`,
+  `convert_chart` (mermaid to nymph YAML). `render_chart` and
+  `check_chart` take mermaid as well as nymph YAML in `source`.
 - Without them: the `nymph` command. `nymph chart.yaml` writes
   `chart.png`; `nymph example PlotLine` prints an example; `nymph schema
   PlotLine` lists fields; `nymph check chart.yaml` validates; `nymph
-  chart.png` prints the source back. Exit code 0 is success; on 1, one
+  chart.png` prints the source back; `nymph diagram.mmd` draws mermaid
+  and `nymph convert diagram.mmd -o diagram.yaml` converts it. Exit code 0 is success; on 1, one
   line on standard error says why. When `nymph` is not on `PATH`, it is
   `bin/nymph` in this skill's folder: run it by that path (once `chmod
   +x` if it is not executable), with `--rasterizer software`.
@@ -101,6 +104,38 @@ data: |
 Rules that cause most errors: indent with spaces; quote colours
 (`color: "#C0392B"`, an unquoted `#` starts a comment); never quote
 numbers; quote text containing `: `; CSV in `data: |`, never `>`.
+
+## Diagrams: draft in mermaid, finish in nymph
+
+For a diagram whose structure is still changing (flowchart, sequence,
+class, state, ER, Gantt, pie, mind map, Sankey, xychart), you may reason
+and write in mermaid, which you know well, instead of nymph YAML:
+
+1. Write mermaid as you normally would and pass it to `render_chart` as
+   `source` (or `input_path` to a `.mmd` file). nymph converts it and
+   draws it; the result names the mermaid kind and any **warnings**
+   (things nymph drops, such as `click` or icons). Errors give the
+   `<line>:<column>` in your mermaid.
+2. Revise the mermaid and render again until the user is satisfied. In an
+   open editor, `editor_set_source` takes mermaid too.
+3. **Convert**: `convert_chart` with the same mermaid (and `output_path`
+   ending in `.yaml` to save it) returns the nymph YAML. From then on edit
+   that YAML, not the mermaid: colours, fonts, `shape` / `symbol`, layout
+   hints (`rank`, `weight`, `min_length`), sizes, notes, and anything
+   mermaid cannot say. Look its fields up with `chart_schema` as usual.
+
+```mermaid
+flowchart LR
+  push([Push]) --> build[Build] --> ok{Tests pass?}
+  ok -->|yes| deploy[[Deploy]]
+  ok -->|no| fix(Fix) --> build
+```
+
+nymph writes only PNG and YAML: a PNG drawn from mermaid carries the
+converted YAML, never the mermaid, so `extract_chart` on it gives YAML.
+Write plots, dashboards and user interfaces in YAML directly; mermaid
+kinds nymph has no element for (`gitGraph`, `C4`, `timeline`, ...) are
+an error that lists the ones it reads.
 
 ## A good chart
 

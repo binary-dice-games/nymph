@@ -1,0 +1,29 @@
+nymph: 1
+description: State diagram converted from mermaid.
+image: {width: 320, height: 564}
+source: Converted from a mermaid stateDiagram.
+root:
+  type: StateDiagram
+  children:
+    - {type: State, id: start_2, kind: Initial}
+    - {type: State, id: if_state, kind: Choice}
+    - {type: State, id: fork_state, kind: Fork}
+    - {type: State, id: join_state, kind: Join}
+    - {type: State, id: IsPositive}
+    - {type: State, id: "False", fill_color: "#FF0000", text_color: "#FFFFFF"}
+    - {type: State, id: State2}
+    - {type: State, id: State3}
+    - {type: State, id: State4, fill_color: "#FF0000", text_color: "#FFFFFF"}
+    - {type: State, id: start}
+    - {type: State, id: end, kind: Final}
+    - {type: Transition, from: start_2, to: IsPositive}
+    - {type: Transition, from: IsPositive, to: if_state}
+    - {type: Transition, from: if_state, to: "False", label: if n < 0}
+    - {type: Transition, from: if_state, to: fork_state, label: if n >= 0}
+    - {type: Transition, from: fork_state, to: State2}
+    - {type: Transition, from: fork_state, to: State3}
+    - {type: Transition, from: State2, to: join_state}
+    - {type: Transition, from: State3, to: join_state}
+    - {type: Transition, from: join_state, to: State4}
+    - {type: Transition, from: State4, to: end}
+    - {type: Transition, from: start, to: State4}

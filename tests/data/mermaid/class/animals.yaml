@@ -1,0 +1,17 @@
+nymph: 1
+description: "Class diagram converted from mermaid: Animal example."
+image: {width: 682, height: 392}
+source: Converted from a mermaid classDiagram.
+root:
+  type: ClassDiagram
+  title: Animal example
+  children:
+    - {type: Class, id: Animal, kind: Abstract, attributes: [+int age, +String gender], methods: [+isMammal() bool, +mate()]}
+    - {type: Class, id: Duck, attributes: [+String beakColor], methods: [+swim(), +quack()]}
+    - {type: Class, id: Fish, attributes: ["-int sizeInFeet"], methods: ["-canEat()"]}
+    - {type: Class, id: Zebra, attributes: [+bool is_wild, +List<int> ids], methods: [+run()$]}
+    - {type: ClassRelation, from: Duck, to: Animal, kind: Inheritance}
+    - {type: ClassRelation, from: Fish, to: Animal, kind: Inheritance}
+    - {type: ClassRelation, from: Zebra, to: Animal, kind: Inheritance}
+    - {type: Note, text: From Duck till Zebra}
+    - {type: Note, attach: [Duck], text: "can fly\ncan swim"}

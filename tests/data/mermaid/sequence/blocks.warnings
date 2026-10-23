@@ -1,0 +1,3 @@
+2:5: box is dropped (its participants are kept)
+6:5: autonumber's start and step are ignored (nymph numbers from 1)
+31:5: link is ignored (a nymph figure has no menus or links)

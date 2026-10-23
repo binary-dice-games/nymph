@@ -1,0 +1,13 @@
+gantt
+    title Release 2.0
+    dateFormat YYYY-MM-DD
+    section Design
+    Write spec   :done, spec, 2026-03-02, 4d
+    Review       :done, review, after spec, 2d
+    section Build
+    API          :active, api, after review, 6d
+    UI           :crit, ui, after review, 8d
+    Code freeze  :milestone, freeze, after api ui, 0d
+    section Ship
+    QA           :qa, after freeze, 5d
+    Release      :milestone, after qa, 0d

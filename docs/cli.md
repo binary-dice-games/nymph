@@ -4,6 +4,8 @@
 nymph chart.yaml              # render: writes chart.png
 nymph chart.png               # extract: prints the YAML the image carries
 nymph check chart.yaml        # validate only; prints nothing when valid
+nymph diagram.mmd             # a mermaid diagram: writes diagram.png
+nymph convert diagram.mmd -o diagram.yaml   # its nymph YAML
 nymph schema PlotLine         # what PlotLine accepts
 nymph rasterizers             # can this machine draw with the GPU?
 ```
@@ -15,10 +17,11 @@ is available and on the CPU otherwise ([Rasterizers](#rasterizers)).
 
 | Command | What it does |
 |---|---|
-| `nymph <in> [-o <out>]` | If `<in>` is a PNG, prints its YAML (or writes it to `<out>`). Otherwise renders `<in>` to `<out>`, by default `<in>` with its extension replaced by `.png`. |
-| `nymph render <in> [-o <out>] [--theme <name>]` | Renders. `<in>` may be a nymph PNG (its YAML is rendered again, in place unless `-o`) or `-` for standard input, which needs `-o`. `--theme` renders with that [chart theme](themes.md) and writes `image.theme: <name>` into the PNG's YAML (the input file is not changed). |
+| `nymph <in> [-o <out>]` | If `<in>` is a PNG, prints its YAML (or writes it to `<out>`). Otherwise renders `<in>` (YAML or [mermaid](mermaid.md)) to `<out>`, by default `<in>` with its extension replaced by `.png`; an `<out>` ending in `.yaml` / `.yml` converts instead (`convert`). |
+| `nymph render <in> [-o <out>] [--theme <name>]` | Renders. `<in>` may be a nymph PNG (its YAML is rendered again, in place unless `-o`), a mermaid diagram, or `-` for standard input, which needs `-o`. `--theme` renders with that [chart theme](themes.md) and writes `image.theme: <name>` into the PNG's YAML (the input file is not changed). |
 | `nymph extract <in.png> [-o <out>]` | Prints the YAML a nymph PNG carries, or writes it to `<out>`. |
-| `nymph check <in> [--theme <name>]` | Validates a YAML file (or a nymph PNG's YAML): everything `render` checks, including whether a layout fits, without drawing; `--theme` checks it with that theme. |
+| `nymph convert <in> [-o <out>] [--theme <name>]` | Prints the nymph YAML of `<in>`, or writes it to `<out>` (which must end in `.yaml` or `.yml`): a mermaid diagram converted, a nymph PNG's source, or a YAML source checked and passed through; `--theme` writes that theme into it. See [mermaid.md](mermaid.md). |
+| `nymph check <in> [--theme <name>]` | Validates a YAML file, a mermaid diagram (converted) or a nymph PNG's YAML: everything `render` checks, including whether a layout fits, without drawing; `--theme` checks it with that theme. |
 | `nymph schema` | Prints every element type with its fields, types, defaults and allowed values. |
 | `nymph schema <Type>` | The same for one type. |
 | `nymph schema --markdown` | The reference as Markdown, in one piece. |
@@ -27,8 +30,8 @@ is available and on the CPU otherwise ([Rasterizers](#rasterizers)).
 | `nymph fonts --licenses` | The licence texts of the embedded fonts. |
 | `nymph themes` | The [chart themes](themes.md) `image.theme` accepts, one per line: name, display name, light or dark, description. |
 | `nymph themes <name>` | The YAML file of one theme. |
-| `nymph view <in> [--theme <t>] [--fit <f>] [--edit [--no-mcp]]` | Opens a YAML file or nymph PNG in a window with the [web viewer](viewer.md)'s interaction: drag to pan, wheel to zoom, hover for values, double-click to fit. Keys: `R` resets the view, `S` saves the image on screen as `<in>.view.png`, `Y` its YAML as `<in>.view.yaml` (the zoom and pan go in the `view` key; never over `<in>`), `Esc` / `Q` closes; while a text field of a [user interface](format.md#user-interfaces) has the keyboard, keys go to it. `--theme <name>` shows the chart in another [chart theme](themes.md) (the file keeps its own); `--fit source\|width\|fill` (default `fill`) says how the layout follows the window. `--edit` (or the `E` key) opens the [editor panel](viewer.md#editing-in-the-window): click a text or element and change its text, font, size, colour or any other field, right-click to add, move or delete elements, and edit the `data` tables in tabs; AI agents using `nymph mcp` can work on the chart through its `editor_*` tools (`--no-mcp` turns that off). Source errors are reported before any window opens; with `--edit` such a file opens instead with its YAML at the error (the source pane, also `Ctrl+U`), and the editor starts once it loads. Needs OpenGL 3.3 and, on Linux, an X display (XWayland is enough); both are the system's, loaded at run time. Windows and Linux; built with `NYMPH_VIEW` (on by default, off on macOS). |
-| `nymph mcp [--rasterizer <r>]` | Runs an MCP server for AI agents: JSON-RPC 2.0 messages, one per line, on standard input and output, until standard input closes (exit 0; 1 if standard output fails). Tools: `render_chart` (returns the PNG; `output_path` also writes it), `check_chart`, `extract_chart`, `chart_schema`, `list_fonts`, `list_shapes`, `list_themes`; source errors read as on the command line. Resources: `nymph://docs/agent-guide` and `nymph://docs/elements`. Logs go to standard error. Built with `NYMPH_MCP` (see [spec/06_claude_integration](../spec/06_claude_integration/DESIGN.md)). |
+| `nymph view <in> [--theme <t>] [--fit <f>] [--edit [--no-mcp]]` | Opens a YAML file, a mermaid diagram (converted; the editor saves it as `<name>.yaml` next to it, never over the mermaid) or a nymph PNG in a window with the [web viewer](viewer.md)'s interaction: drag to pan, wheel to zoom, hover for values, double-click to fit. Keys: `R` resets the view, `S` saves the image on screen as `<in>.view.png`, `Y` its YAML as `<in>.view.yaml` (the zoom and pan go in the `view` key; never over `<in>`), `Esc` / `Q` closes; while a text field of a [user interface](format.md#user-interfaces) has the keyboard, keys go to it. `--theme <name>` shows the chart in another [chart theme](themes.md) (the file keeps its own); `--fit source\|width\|fill` (default `fill`) says how the layout follows the window. `--edit` (or the `E` key) opens the [editor panel](viewer.md#editing-in-the-window): click a text or element and change its text, font, size, colour or any other field, right-click to add, move or delete elements, and edit the `data` tables in tabs; AI agents using `nymph mcp` can work on the chart through its `editor_*` tools (`--no-mcp` turns that off). Source errors are reported before any window opens; with `--edit` such a file opens instead with its YAML at the error (the source pane, also `Ctrl+U`), and the editor starts once it loads. Needs OpenGL 3.3 and, on Linux, an X display (XWayland is enough); both are the system's, loaded at run time. Windows and Linux; built with `NYMPH_VIEW` (on by default, off on macOS). |
+| `nymph mcp [--rasterizer <r>]` | Runs an MCP server for AI agents: JSON-RPC 2.0 messages, one per line, on standard input and output, until standard input closes (exit 0; 1 if standard output fails). Tools: `render_chart` (returns the PNG; `output_path` also writes it), `check_chart`, `convert_chart` (mermaid to nymph YAML), `extract_chart`, `chart_schema`, `list_fonts`, `list_shapes`, `list_themes`; `render_chart` and `check_chart` take mermaid too; source errors read as on the command line. Resources: `nymph://docs/agent-guide` and `nymph://docs/elements`. Logs go to standard error. Built with `NYMPH_MCP` (see [spec/06_claude_integration](../spec/06_claude_integration/DESIGN.md)). |
 | `nymph rasterizers` | Whether each rasterizer can be used here: `software: available`, then `opengl: available (<device>)` or `opengl: unavailable (<reason>)`. Exit 0 either way. |
 | `nymph --version`, `nymph --help` | Version, usage. |
 
@@ -88,6 +91,13 @@ On failure nothing is written: output goes to a temporary file that is
 renamed over the target only once it is complete, so an existing output
 file is left as it was. A symbolic link as `-o` is followed, and a
 device or pipe (`-o /dev/null`) is written directly.
+
+A mermaid input reports its problems at its own lines and columns, and
+prints one line per thing nymph dropped, without failing:
+
+```
+nymph: diagram.mmd:7:3: warning: click is ignored (a nymph figure has no links or callbacks)
+```
 
 ## Metadata survives only exact copies
 

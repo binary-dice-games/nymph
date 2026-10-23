@@ -1,0 +1,10 @@
+---
+title: Deploy pipeline
+---
+flowchart LR
+  push([Push to main]) ==> build[Build] --> ok{Tests pass?}
+  ok -->|yes| deploy[[Deploy]] --> db[(Migrate DB)]
+  ok -->|no| fix(Fix and<br>push again) -.-> build
+  db --> done((Done))
+  classDef good fill:#d4f4dd,stroke:#2e7d32
+  class done good

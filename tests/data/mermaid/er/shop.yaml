@@ -1,0 +1,17 @@
+nymph: 1
+description: Entity-relationship diagram converted from mermaid.
+image: {width: 689, height: 365}
+source: Converted from a mermaid erDiagram.
+root:
+  type: ERDiagram
+  children:
+    - {type: Entity, id: CUSTOMER, attributes: [string name, string custNumber PK "the customer's id", string sector]}
+    - {type: Entity, id: ORDER, attributes: [int orderNumber PK, string deliveryAddress FK]}
+    - {type: Entity, id: LINE-ITEM, attributes: [int quantity]}
+    - {type: Entity, id: DELIVERY-ADDRESS}
+    - {type: Entity, id: PRODUCT}
+    - {type: Entity, id: CATEGORY}
+    - {type: Relationship, from: CUSTOMER, to: ORDER, from_cardinality: ExactlyOne, to_cardinality: ZeroOrMore, label: places}
+    - {type: Relationship, from: ORDER, to: LINE-ITEM, from_cardinality: ExactlyOne, to_cardinality: OneOrMore, label: contains}
+    - {type: Relationship, from: CUSTOMER, to: DELIVERY-ADDRESS, from_cardinality: OneOrMore, to_cardinality: OneOrMore, label: uses, identifying: false}
+    - {type: Relationship, from: PRODUCT, to: CATEGORY, from_cardinality: ZeroOrOne, to_cardinality: ZeroOrOne, label: is filed in}

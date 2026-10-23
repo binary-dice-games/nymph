@@ -78,6 +78,20 @@ add_library(nymph STATIC
   edit/edit_toolbar.cpp
   edit/workspace_layout.hpp
   edit/panel_widgets.hpp
+  mermaid/mermaid_internal.hpp
+  mermaid/mermaid.cpp
+  mermaid/reader.cpp
+  mermaid/yaml_writer.cpp
+  mermaid/pie.cpp
+  mermaid/flowchart.cpp
+  mermaid/sequence.cpp
+  mermaid/class.cpp
+  mermaid/state.cpp
+  mermaid/er.cpp
+  mermaid/gantt.cpp
+  mermaid/mindmap.cpp
+  mermaid/charts.cpp
+  mermaid/style_sheet.cpp
   elements/plot_style.hpp
   elements/plot_style.cpp
   elements/plot2d.hpp

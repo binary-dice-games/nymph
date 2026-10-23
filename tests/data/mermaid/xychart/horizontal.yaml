@@ -1,0 +1,21 @@
+nymph: 1
+description: "Chart converted from mermaid: Votes."
+image: {width: 800, height: 450}
+source: Converted from a mermaid xychart-beta.
+root:
+  type: Plot
+  title: Votes
+  y_label: Fruit
+  x_label: Count
+  y_ticks: [0, 1, 2]
+  y_tick_labels: [apple, banana, cherry]
+  x_min: 0
+  x_max: 26.25
+  children:
+    - {type: PlotBarsH, label: This year, xs: $bar1, ys: $x1, bar_size: 0.335}
+    - {type: PlotBarsH, label: Last year, xs: $bar2, ys: $x2, bar_size: 0.335}
+data: |
+  x, x1, bar1, x2, bar2
+  0, -0.1675, 10, 0.1675, 12
+  1, 0.8325, 25, 1.1675, 20
+  2, 1.8325, 7, 2.1675, 9

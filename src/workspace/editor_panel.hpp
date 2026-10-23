@@ -220,6 +220,15 @@ class editor_panel {
 
   /// @brief Opens the "overwrite the input?" dialog (the Save button).
   void ask_save();
+  /// @brief The file the Save dialogs name, and an optional line under the
+  ///        question; empty `question` restores "Overwrite <file>?" (a
+  ///        mermaid input saves to a new YAML file:
+  ///        spec/16_mermaid_import/DESIGN.md section 5.3).
+  void set_save_target(std::string file_name, std::string question = {}, std::string note = {}) {
+    file_name_ = std::move(file_name);
+    save_question_ = std::move(question);
+    save_note_ = std::move(note);
+  }
   /// @brief Opens the "unsaved changes" dialog (the window is being closed).
   /// @return false, and no dialog, when there is nothing to lose.
   bool ask_close();
@@ -302,6 +311,8 @@ class editor_panel {
   bool popup_open_ = false;
   bool modal_open_ = false;
   std::string file_name_;
+  std::string save_question_; ///< replaces "Overwrite <file> with your changes?" when set
+  std::string save_note_;     ///< replaces "The file is replaced; ..." when set
   enum class ask { none, save, close } asked_ = ask::none; ///< A dialog to open at the next frame.
   decision decision_ = decision::none;
   std::string theme_;

@@ -155,6 +155,31 @@ TEST_F(view_command, PreparesANymphPngLikeItsSource) {
 
 // ── Window size and saves ────────────────────────────────────────────────────
 
+TEST_F(view_command, PreparesMermaidAsItsConvertedSource) {
+  // spec/16_mermaid_import/PLAN.md step 5.
+  const char* mermaid = "flowchart LR\n  A --> B\n";
+  const std::string path = write("flow.mmd", mermaid);
+  const view_request r = prepare_view(parse_view_args(views({path, "--edit"})));
+  EXPECT_EQ(r.source, import_mermaid(mermaid).source);
+  EXPECT_EQ(r.mermaid_kind, "flowchart");
+  EXPECT_GT(r.width, 0);
+  std::string err;
+  write("bad.mmd", "flowchart LR\n  A --> B@{shape: blob}\n");
+  EXPECT_EQ(run({(dir_ / "bad.mmd").string()}, err), 1);
+  EXPECT_NE(err.find("bad.mmd:2:10: unknown mermaid shape"), std::string::npos) << err;
+}
+
+TEST_F(view_command, TheEditorSavesMermaidAsYamlNextToIt) {
+  const fs::path dir("dir");
+  EXPECT_EQ(fs::path(edit_save_path((dir / "flow.mmd").string(), true)), dir / "flow.yaml");
+  EXPECT_EQ(fs::path(edit_save_path((dir / "flow.mermaid").string(), true)), dir / "flow.yaml");
+  // Mermaid in a .yaml file is never overwritten by its conversion.
+  EXPECT_EQ(fs::path(edit_save_path((dir / "flow.yaml").string(), true)), dir / "flow.nymph.yaml");
+  // YAML and PNG inputs save over themselves, as before.
+  EXPECT_EQ(edit_save_path("chart.yaml", false), "chart.yaml");
+  EXPECT_EQ(edit_save_path("chart.png", false), "chart.png");
+}
+
 TEST_F(view_command, TheWindowIsTheLayoutSizeWithinTheScreen) {
   const window_size roomy = initial_window_size(800, 600, 1920, 1000);
   EXPECT_EQ(roomy.width, 800);

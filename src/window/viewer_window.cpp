@@ -45,6 +45,8 @@ class viewer : public window_events, public workspace_host {
   explicit viewer(const view_request& request)
       : request_(request),
         name_(std::filesystem::path(request.args.input).filename().string()),
+        save_path_(edit_save_path(request.args.input, !request.mermaid_kind.empty())),
+        from_mermaid_(!request.mermaid_kind.empty()),
         window_(create_native_window(*this)) {
     ready_ = true;
   }
@@ -353,6 +355,12 @@ class viewer : public window_events, public workspace_host {
         sync_size();
       }
       ws_->panel()->set_folder(std::filesystem::path(request_.args.input).parent_path());
+      if (from_mermaid_) {
+        // A mermaid input has no YAML file yet: Save (the conversion) is
+        // offered at once, and saves next to it (spec/16_mermaid_import).
+        ws_->set_saved_source(std::string());
+        set_mermaid_save_target();
+      }
       start_agent_server();
     } else {
       const int strip = strip_pixels();
@@ -373,7 +381,7 @@ class viewer : public window_events, public workspace_host {
   /// saved in its `view` key): a PNG input becomes a PNG again, a YAML input
   /// stays YAML.
   bool save_input() {
-    const std::string& path = request_.args.input;
+    const std::string path = save_path_;
     try {
       const std::string source = ws_->view().source_with_view();
       std::ostringstream unused;
@@ -384,6 +392,15 @@ class viewer : public window_events, public workspace_host {
         write_output(path, source, unused);
       }
       ws_->mark_saved();
+      if (from_mermaid_) {
+        // From now on the window edits the YAML file it wrote.
+        from_mermaid_ = false;
+        name_ = std::filesystem::path(path).filename().string();
+        ws_->set_file_name(name_);
+        if (ws_->panel() != nullptr) {
+          ws_->panel()->set_save_target(name_);
+        }
+      }
       ws_->set_status("saved " + name_);
       set_title(ws_->status());
       return true;
@@ -392,6 +409,18 @@ class viewer : public window_events, public workspace_host {
       set_title(ws_->status());
       return false;
     }
+  }
+
+  /// The Save dialogs of a mermaid input: it is saved as YAML next to it.
+  void set_mermaid_save_target() {
+    const std::string target = std::filesystem::path(save_path_).filename().string();
+    std::error_code ec;
+    const bool exists = std::filesystem::exists(save_path_, ec);
+    ws_->panel()->set_save_target(
+        target,
+        "Save the converted chart as " + target + "?",
+        exists ? target + " exists and is replaced; " + name_ + " is not changed."
+               : name_ + " (mermaid) is not changed; nymph saves YAML.");
   }
 
   /// Whether the file starts with the PNG signature.
@@ -444,6 +473,8 @@ class viewer : public window_events, public workspace_host {
 
   const view_request& request_;
   std::string name_;
+  std::string save_path_; ///< Where the editor's Save writes (edit_save_path()).
+  bool from_mermaid_ = false; ///< The input is mermaid and has not been saved as YAML yet.
   bool ready_ = false; ///< Events sent while the window is created find no workspace yet.
   std::unique_ptr<native_window> window_;
   std::unique_ptr<editor_workspace> ws_; ///< After window_: destroyed first, with the context current.

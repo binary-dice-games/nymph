@@ -1,0 +1,23 @@
+nymph: 1
+description: "Sequence diagram converted from mermaid: Login."
+image: {width: 416, height: 470}
+source: Converted from a mermaid sequenceDiagram.
+root:
+  type: SequenceDiagram
+  title: Login
+  autonumber: true
+  children:
+    - {type: Participant, id: User, kind: Actor}
+    - {type: Participant, id: Web, name: Web app}
+    - {type: Participant, id: DB, kind: Database}
+    - {type: Message, from: User, to: Web, text: POST /login, activate: true}
+    - type: Fragment
+      kind: Alt
+      label: valid password
+      children:
+        - {type: Message, from: Web, to: DB, text: load user, activate: true}
+        - {type: Message, from: DB, to: Web, text: row, kind: Reply, deactivate: true}
+        - {type: Else, label: otherwise}
+        - {type: Message, from: Web, to: Web, text: log failure}
+    - {type: Message, from: Web, to: User, text: 200 OK, kind: Reply, deactivate: true}
+    - {type: Note, text: session cookie set, over: [User, Web]}

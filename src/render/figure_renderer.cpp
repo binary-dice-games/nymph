@@ -100,4 +100,18 @@ std::unordered_map<const node*, rect> layout_figure(const figure& f) {
   return ctx.rects();
 }
 
+ImVec2 measure_figure(const figure& f) {
+  check_options(f.image);
+  require_fonts(f);
+  context_scope scope;
+  configure(*find_theme(f.image.theme), "nymph_soft_rasterizer", kPngBackendFlags);
+  texture_store textures;
+  draw_context ctx(f.image);
+  load_fonts(ctx);
+  ImVec2 size(0.0f, 0.0f);
+  run_frames(
+      f.image, [&](draw_context& dc) { size = dc.measure_node(f.root, dc.content_rect().width()); }, 1, textures, ctx);
+  return size;
+}
+
 } // namespace bdg::nymph

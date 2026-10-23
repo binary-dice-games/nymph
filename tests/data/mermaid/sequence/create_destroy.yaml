@@ -1,0 +1,16 @@
+nymph: 1
+description: Sequence diagram converted from mermaid.
+image: {width: 530, height: 352}
+source: Converted from a mermaid sequenceDiagram.
+root:
+  type: SequenceDiagram
+  children:
+    - {type: Participant, id: Alice}
+    - {type: Participant, id: Bob}
+    - {type: Participant, id: Carl, created: true}
+    - {type: Participant, id: D, name: Donald, kind: Actor, created: true}
+    - {type: Message, from: Alice, to: Bob, text: "Hello Bob, how are you ?"}
+    - {type: Message, from: Alice, to: Carl, text: Hi Carl!, kind: Create}
+    - {type: Message, from: Carl, to: D, text: Hi!, kind: Create}
+    - {type: Message, from: Alice, to: Carl, text: We are too many, kind: Destroy}
+    - {type: Message, from: Bob, to: Alice, text: I agree}

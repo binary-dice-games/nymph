@@ -1,0 +1,33 @@
+nymph: 1
+description: State diagram converted from mermaid.
+image: {width: 320, height: 972}
+source: Converted from a mermaid stateDiagram-v2.
+root:
+  type: StateDiagram
+  children:
+    - {type: State, id: start, kind: Initial}
+    - type: State
+      id: First
+      children:
+        - {type: State, id: First_start, kind: Initial}
+        - type: State
+          id: second
+          children:
+            - {type: State, id: second_start, kind: Initial}
+            - type: State
+              id: third
+              children:
+                - {type: State, id: third_start, kind: Initial}
+                - {type: State, id: deep}
+                - {type: State, id: third_end, kind: Final}
+                - {type: Transition, from: third_start, to: deep}
+                - {type: Transition, from: deep, to: third_end}
+            - {type: State, id: second_end, kind: Final}
+            - {type: Transition, from: second_start, to: third}
+            - {type: Transition, from: third, to: second_end}
+        - {type: State, id: First_end, kind: Final}
+        - {type: Transition, from: First_start, to: second}
+        - {type: Transition, from: second, to: First_end}
+    - {type: State, id: end, kind: Final}
+    - {type: Transition, from: start, to: First}
+    - {type: Transition, from: First, to: end}
