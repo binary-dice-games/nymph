@@ -534,6 +534,18 @@ EMSCRIPTEN_KEEPALIVE const char* nymph_editor_source() {
   return scratch().c_str();
 }
 
+/// @brief The source pane's text (it differs from nymph_editor_source()
+///        while typing waits for its pause, or does not bind).
+EMSCRIPTEN_KEEPALIVE const char* nymph_editor_pane_text() {
+  scratch().clear();
+  guarded([&] {
+    editor& e = get();
+    scratch() = e.ws->panel() != nullptr ? e.ws->panel()->pane().text() : std::string();
+    return kOk;
+  });
+  return scratch().c_str();
+}
+
 /// @brief The source with the view on screen in its `view` key.
 EMSCRIPTEN_KEEPALIVE const char* nymph_editor_yaml() {
   scratch().clear();
@@ -571,6 +583,8 @@ EMSCRIPTEN_KEEPALIVE const char* nymph_editor_state() {
            {"stripWidth", e.ws->strip_width()},
            {"tabHeight", e.ws->tab_height()},
            {"repairing", e.ws->repairing()},
+           {"viewWantsFrame", e.ws->view().wants_frame()},
+           {"panelWantsFrame", e.ws->panel() != nullptr && e.ws->panel()->wants_frame()},
            {"sourceShown", e.ws->panel() != nullptr && e.ws->panel()->source_shown()},
            {"locked", e.ws->panel() != nullptr ? e.ws->panel()->locked_reason() : std::string()},
            {"wantsKeyboard", e.ws->wants_keyboard()}};

@@ -235,6 +235,11 @@ export class NymphEditor {
     return this.core.string(this.m._nymph_editor_source());
   }
 
+  /** The source pane's text: ahead of source() while it waits or does not load. */
+  paneText() {
+    return this.core.string(this.m._nymph_editor_pane_text());
+  }
+
   /** The YAML with the view on screen in its `view` key: what a save writes. */
   toYaml() {
     return this.core.string(this.m._nymph_editor_yaml());
@@ -520,6 +525,14 @@ export class NymphEditor {
       },
       { passive: false },
     );
+    // The keyboard belongs to the hidden text area: a click must not move
+    // the focus to the canvas (mousedown's default), and a canvas reached
+    // with Tab hands it on.
+    add(canvas, 'mousedown', (e) => {
+      e.preventDefault();
+      this.keys.focus({ preventScroll: true });
+    });
+    add(canvas, 'focus', () => this.keys.focus({ preventScroll: true }));
     add(canvas, 'contextmenu', (e) => e.preventDefault());
     add(canvas, 'dblclick', (e) => e.preventDefault());
 

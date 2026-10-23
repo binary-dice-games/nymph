@@ -236,6 +236,10 @@ class editor_panel {
   table_grid& grid() {
     return grid_;
   }
+  /// @brief The panel's ImGui context (tests, diagnostics).
+  ImGuiContext* imgui_context() const {
+    return context_;
+  }
   inspector& panel() {
     return inspector_;
   }

@@ -85,6 +85,7 @@ struct pane_fixture : ::testing::Test {
     TextEditor& e = ws->panel()->pane().editor();
     e.SelectAll();
     e.ReplaceTextInCurrentCursor(text);
+    ws->panel()->refresh(); // typing reaches the panel as keys, which ask for frames
     run(1);
     run(1, source_pane::kApplyDelay + 0.05);
     run(1);
@@ -112,6 +113,7 @@ TEST_F(pane_fixture, TypingIsAppliedAfterThePauseAsOneUndoStep) {
   TextEditor& e = ws->panel()->pane().editor();
   e.SelectAll();
   e.ReplaceTextInCurrentCursor(changed);
+  ws->panel()->refresh();
   run(1);
   EXPECT_EQ(model().source(), kSource) << "not before the pause";
   EXPECT_TRUE(ws->pending());
@@ -184,11 +186,56 @@ TEST_F(pane_fixture, SelectionMovesTheCursorAndTheCursorSelects) {
   EXPECT_EQ(ws->panel()->pane().editor().GetMainCursorPosition().line, 5u);
   // The user puts the cursor on the link's line.
   ws->panel()->pane().editor().SetCursor(TextEditor::DocPos(6, 2));
+  ws->panel()->refresh();
   run(2);
   run(1, source_pane::kApplyDelay + 0.05);
   run(1);
   ASSERT_TRUE(model().selection());
   EXPECT_EQ(model().selection()->element, "root/children/2");
+}
+
+struct clipboard_host : recording_host {
+  bool has_clipboard() const override {
+    return true;
+  }
+  std::string clipboard() override {
+    return "# pasted\n";
+  }
+};
+
+TEST(SourcePaneKeys, CtrlVPastesTheHostsClipboardIntoThePane) {
+  clipboard_host host;
+  editor_workspace ws(host, view_options{view_fit::fill, true, true}, "", workspace_gl{});
+  ws.resize(1200.0f, 600.0f, 1.0f);
+  ws.open(kSource, true, true);
+  ws.show_source(true, 1);
+  double now = 1.0;
+  for (int i = 0; i < 4; ++i) {
+    ws.frame(now += 0.02);
+  }
+  ASSERT_TRUE(ws.panel()->source_focused());
+  ws.key(window_key::other, key_mods{true, false, false}, true, false); // Control
+  ws.key(window_key::v, key_mods{true, false, false}, true, false);
+  ws.key(window_key::v, key_mods{true, false, false}, false, false);
+  ws.key(window_key::other, key_mods{}, false, false);
+  for (int i = 0; i < 4; ++i) {
+    ws.frame(now += 0.02);
+  }
+  EXPECT_EQ(ws.panel()->pane().text().rfind("# pasted\n", 0), 0u) << ws.panel()->pane().text().substr(0, 40);
+}
+
+TEST_F(pane_fixture, AClickInThePaneGivesItTheKeyboard) {
+  const layout_box src = ws->panel()->layout().source;
+  const float x = src.x + 150.0f, y = src.y + 20.0f;
+  ws->pointer({pointer_event::kind::move, x, y, 0});
+  ws->pointer({pointer_event::kind::down, x, y, 0});
+  run(1);
+  ws->pointer({pointer_event::kind::up, x, y, 0});
+  run(2);
+  ASSERT_TRUE(ws->wants_keyboard());
+  ws->text(U'Q');
+  run(2);
+  EXPECT_NE(ws->panel()->pane().text().find('Q'), std::string::npos) << ws->panel()->pane().text().substr(0, 60);
 }
 
 TEST_F(pane_fixture, CtrlUTogglesThePane) {
@@ -213,6 +260,7 @@ TEST(SourcePaneRepair, ABrokenSourceOpensInRepairStateUntilItBinds) {
   TextEditor& e = ws.panel()->pane().editor();
   e.SelectAll();
   e.ReplaceTextInCurrentCursor("root:\n  type: Plot\n  children:\n    - {type: PlotLine, ys: [1, 2]}\n");
+  ws.panel()->refresh();
   ws.frame(now += 0.02);
   ws.frame(now += 0.4);
   ws.frame(now += 0.02);

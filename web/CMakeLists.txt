@@ -156,6 +156,10 @@ if(NYMPH_NODE)
   add_test(NAME nymph_web_browser
     COMMAND "${NYMPH_NODE}" "${CMAKE_CURRENT_SOURCE_DIR}/tests/browser/run.mjs" "${NYMPH_WEB_OUT}" "${PROJECT_SOURCE_DIR}")
   set_tests_properties(nymph_web_browser PROPERTIES SKIP_RETURN_CODE 77 TIMEOUT 600)
+  # The editor module in Chromium (spec/15_web_app plan step 6).
+  add_test(NAME nymph_web_editor_browser
+    COMMAND "${NYMPH_NODE}" "${CMAKE_CURRENT_SOURCE_DIR}/tests/browser/editor.mjs" "${NYMPH_WEB_OUT}" "${PROJECT_SOURCE_DIR}")
+  set_tests_properties(nymph_web_editor_browser PROPERTIES SKIP_RETURN_CODE 77 TIMEOUT 600)
 else()
   message(STATUS "nymph: node not found; skipping the web viewer's Node and browser tests")
 endif()

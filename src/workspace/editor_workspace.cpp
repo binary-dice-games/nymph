@@ -537,7 +537,10 @@ void editor_workspace::apply(const inspector_events& events) {
   if (events.save) {
     host_.request_save();
   }
-  if (panel_ != nullptr) {
+  // Frames only when something happened: every panel frame ends here.
+  const bool happened = events.source || events.select || events.reset_view || events.save || events.undo ||
+      !events.error.empty() || events.show_data;
+  if (panel_ != nullptr && happened) {
     panel_->refresh();
   }
 }

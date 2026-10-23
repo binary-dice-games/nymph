@@ -83,6 +83,18 @@ TEST_F(workspace_fixture, LaysOutTheFigureLeftOfTheStripUnderTheTabs) {
   EXPECT_FLOAT_EQ(figure.y, editor_panel::kTabBarHeight);
 }
 
+TEST_F(workspace_fixture, GoesIdleWhenNothingHappens) {
+  run_frames(12);
+  EXPECT_FALSE(ws->view().wants_frame());
+  EXPECT_FALSE(ws->panel()->wants_frame());
+  // Also with a selection (the toolbar is shown) and the source pane.
+  ws->panel()->model().select(edit_target_id{"root", ""});
+  ws->panel()->refresh();
+  ws->show_source(true);
+  run_frames(30);
+  EXPECT_FALSE(ws->wants_frame());
+}
+
 TEST_F(workspace_fixture, AClickOnTheTitleSelectsIt) {
   const std::optional<edit_target> title = ws->view().target_for("root", "title");
   ASSERT_TRUE(title);
