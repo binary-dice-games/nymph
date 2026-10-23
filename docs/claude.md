@@ -98,14 +98,15 @@ download menu, since chat frames usually cannot save files.
 
 | Tool | What it does |
 |---|---|
-| `render_chart` | YAML (text or a file) to a PNG, returned to Claude; `output_path` also writes it |
-| `check_chart` | Validates a source without drawing it |
+| `render_chart` | YAML or [mermaid](mermaid.md) (text or a file) to a PNG, returned to Claude; `output_path` also writes it |
+| `check_chart` | Validates a source (YAML or mermaid) without drawing it |
+| `convert_chart` | The nymph YAML of a mermaid diagram (or of a nymph PNG, or a checked YAML); `output_path` (`.yaml`) also writes it |
 | `extract_chart` | The YAML a nymph PNG carries |
 | `chart_schema` | The fields of one element type, or of all |
 | `example_chart` | A complete, working source using an element type (or an example by name), to copy and adapt; without `type`, the list of examples |
 | `list_fonts` | The names a chart's `font` accepts |
 | `list_shapes` | The shape library (the names a node's `shape` accepts); with `name`, the details of one shape |
-| `editor_state`, `editor_add_element`, `editor_set_fields`, ... | The chart open in the user's editor (`nymph view --edit`): read its elements, selection, tables and view image, and change them (sixteen `editor_*` tools; [viewer.md](viewer.md#editing-in-the-window), [agent-guide.md](agent-guide.md#the-chart-open-in-the-editor)) |
+| `editor_state`, `editor_add_element`, `editor_set_fields`, ... | The chart open in the user's editor (`nymph view --edit`): read its elements, selection, tables and view image, and change them (sixteen `editor_*` tools; `editor_set_source` takes mermaid too; [viewer.md](viewer.md#editing-in-the-window), [agent-guide.md](agent-guide.md#the-chart-open-in-the-editor)) |
 
 Errors name the line and column of the source, as on the command line
 ([cli.md](cli.md)). The server also offers [agent-guide.md](agent-guide.md)

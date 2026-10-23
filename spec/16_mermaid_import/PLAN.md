@@ -42,6 +42,8 @@ an error at its column; a remap test: a converter stub whose YAML fails
 `check_source()` reports the mermaid line and `(nymph YAML line N)`;
 converting twice gives identical bytes.
 
+**Result (done):** `src/mermaid/{reader,yaml_writer,mermaid,pie}.cpp`, the API in `nymph.hpp`, `test_mermaid` with golden files in `tests/data/mermaid/{reader,pie}`. The remap test uses a sankey cycle (found only by nymph's checks) instead of a stub converter.
+
 ## 2. `flowchart`
 
 **Goal:** mermaid flowcharts (DESIGN.md section 4.1, styling included)
@@ -70,6 +72,8 @@ written as mermaid converts to a source that renders; the written `image`
 fits (rendering the converted source never fails the `min_zoom` check)
 for a 3-node and a 120-node chart.
 
+**Result (done):** `flowchart.cpp`, `measure_figure()` added to `figure_renderer` (no natural-size helper existed), `tests/data/mermaid/flowchart`. The limit and sizing tests are in `test_mermaid` (the limit is checked by the converter; oversized diagrams get a lower `min_zoom`).
+
 ## 3. Command line
 
 **Goal:** the `nymph` command reads mermaid everywhere it reads YAML and
@@ -89,6 +93,8 @@ and positioned on invalid; warnings on stderr with exit 0; `convert` of a
 YAML passes it through, of a PNG extracts, of a bad YAML fails positioned;
 `convert -o x.png` and `convert -o x.mmd` are usage errors (exit 2);
 nothing is written on failure.
+
+**Result (done):** `load_source()` / `load_source_text()` / `warning_text()` in `cli_support`, `convert` and the `-o .yaml` rule in `cli.cpp`, `docs/cli.md`; six `test_cli` tests.
 
 ## 4. MCP tools
 
@@ -118,6 +124,8 @@ PNG inputs; `tools/list` includes `convert_chart` with annotations;
 in one undo step. By hand: Claude Code renders a mermaid flowchart and the
 App shows it live.
 
+**Result (done):** `tools.cpp` (`convert_chart`, mermaid notes), `editor_tools.cpp`; tests in `test_mcp_tools` (4) and `test_editor_server` (1); tool-count expectations updated. Checked over standard input with `nymph mcp`. The agent text was already right; `docs/agent-guide.md` now also points to `docs/mermaid.md`.
+
 ## 5. `nymph view`
 
 **Goal:** `nymph view x.mmd [--edit]` shows the converted chart and saves
@@ -136,6 +144,8 @@ path of a mermaid input is `<stem>.yaml` and of YAML / PNG inputs is
 unchanged (a pure function, tested without a window); an existing
 `<stem>.yaml` asks. By hand on Linux (Xvfb) and Windows: open, edit a
 field, save, check that the `.mmd` is unchanged and the `.yaml` renders.
+
+**Result (done):** `view_command` (`mermaid_kind`, `edit_save_path()`), `viewer_window` (save target, Save enabled at once), `editor_panel::set_save_target()`; two `test_view_command` tests. Driven on Xvfb: `nymph view flow.mmd --edit`, Save, `flow.yaml` written and valid, `flow.mmd` unchanged.
 
 ## 6. WebAssembly and JavaScript
 
@@ -157,6 +167,8 @@ give YAML; an error has the mermaid position. (`web/tests/browser`):
 `importedFrom`. The Claude App test page draws a `render_chart` result made
 from mermaid.
 
+**Result (written, not run here):** `nymph_web.cpp` (conversion in `set_source`, `nymph_import_mermaid`, `nymph_viewer_imported`), `nymph-viewer.js` (`importMermaid`, `info()` fields, `.mmd` file names), `docs/viewer.md`, two Node tests comparing the module with the golden files. No Emscripten in this environment: the C++ was syntax-checked against stub headers; CI's web job runs the tests. The browser test of `<nymph-viewer src="x.mmd">` was not added (the element only forwards to `setSource()`).
+
 ## 7. `sequenceDiagram`
 
 **Goal:** sequence diagrams convert per DESIGN.md section 4.2.
@@ -170,6 +182,8 @@ every fragment with `else` / `and` / `option`, `rect`, `autonumber`, `box`
 and `link` warnings, participant types; `examples/uml_sequence.yaml` as
 mermaid converts and renders.
 
+**Result (done):** `sequence.cpp`, `tests/data/mermaid/sequence`.
+
 ## 8. `classDiagram`
 
 **Goal:** class diagrams convert per DESIGN.md section 4.3.
@@ -181,6 +195,8 @@ mermaid converts and renders.
 every relation in both directions with the `from` / `to` that nymph
 expects, cardinalities and labels, notes, `namespace` and lollipop
 warnings; `examples/uml_class.yaml` as mermaid converts and renders.
+
+**Result (done):** `class.cpp`, `style_sheet.cpp`, `tests/data/mermaid/class`.
 
 ## 9. `stateDiagram`
 
@@ -195,6 +211,8 @@ join, notes; `--` is an error at its line; a transition into `[*]` as a
 target written as a source (`[*]` both sides) behaves as mermaid;
 `examples/uml_state.yaml` as mermaid converts and renders.
 
+**Result (done):** `state.cpp`, `tests/data/mermaid/state`; composites claim states named above them (DESIGN.md section 11).
+
 ## 10. `erDiagram`
 
 **Goal:** ER diagrams convert per DESIGN.md section 4.5.
@@ -205,6 +223,8 @@ target written as a source (`[*]` both sides) behaves as mermaid;
 and word form on both ends, identifying and non-identifying, aliases,
 attribute blocks with keys and comments, entities named only in
 relationships; `examples/uml_er.yaml` as mermaid converts and renders.
+
+**Result (done):** `er.cpp`, `tests/data/mermaid/er`; an unquoted entity name with spaces is an error.
 
 ## 11. `gantt`
 
@@ -221,6 +241,8 @@ ids only where needed; an unsupported date token is an error;
 `excludes weekends` is a warning; no `today` key is ever written;
 `examples/gantt.yaml` as mermaid converts and renders.
 
+**Result (done):** `gantt.cpp`, `tests/data/mermaid/gantt`.
+
 ## 12. `mindmap`, `sankey-beta`, `xychart-beta`
 
 **Goal:** the remaining kinds convert per DESIGN.md sections 4.7 and 4.8.
@@ -233,6 +255,8 @@ form, irregular indentation (mermaid's rule: deeper than the parent),
 icon / class warnings, 33 levels an error; sankey with quoted CSV cells
 and a cycle reported at the mermaid row; xychart with categories and a
 numeric x range, bars and lines, horizontal, axis ranges.
+
+**Result (done):** `mindmap.cpp`, `charts.cpp`, `tests/data/mermaid/{mindmap,sankey,xychart}`; several bar series stand side by side.
 
 ## 13. Documentation and examples
 
@@ -254,6 +278,8 @@ page if it checks links; every `examples/mermaid/*.mmd` converts with no
 warnings and renders (added to the examples test); the skill size check
 still passes.
 
+**Result (done):** `docs/mermaid.md`, `examples/mermaid/` (ten `.mmd` with PNGs), a "From mermaid" section in `docs/examples.md` checked by `test_docs`, README, `docs/cli.md`, `docs/viewer.md`, `docs/claude.md`, `docs/agent-guide.md`, CHANGELOG, `spec/INDEX.md`. No MCP resource was added for `docs/mermaid.md`. Mermaid's own documentation examples were not copied into the repository (licence); the corpus is written for these tests, modelled on them.
+
 ## Completion Criteria
 
 - Every test above passes in CI on Linux, macOS, MSVC and MSYS2, and the
@@ -272,3 +298,5 @@ still passes.
 - `spec/INDEX.md`, `README.md`, `docs/cli.md`, `docs/viewer.md`,
   `docs/claude.md`, `docs/agent-guide.md`, `docs/mermaid.md`, the skill and
   `CHANGELOG.md` describe what was built.
+
+**Status:** every test passes on Linux (native, 900+ tests); macOS, MSVC, MSYS2 and the web job are CI's to confirm.

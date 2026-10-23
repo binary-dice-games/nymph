@@ -9,6 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Mermaid input: `nymph`, `render`, `check`, `nymph view` and the MCP tools `render_chart` / `check_chart` / `editor_set_source` read mermaid diagrams (flowchart, sequence, class, state, ER, gantt, pie, mindmap, sankey, xychart) and convert them to nymph YAML; errors and warnings point at the mermaid lines. Outputs stay PNG or YAML.
+- `nymph convert` and the MCP tool `convert_chart`: the nymph YAML of a mermaid diagram, a nymph PNG or a YAML source; `nymph diagram.mmd -o diagram.yaml` converts too.
+- `nymph view --edit` on a mermaid file saves the converted chart as `<name>.yaml` next to it.
+- Web viewer: `setSource()` and `<nymph-viewer src="x.mmd">` take mermaid; `importMermaid()` converts without drawing.
+
 - `nymph view --edit`: a floating toolbar next to the selected element changes its shape, fill, line and text colours, font, text size and line style, copies its style to the next element clicked, clears its style, duplicates and deletes it; plots get a colour scheme picker (pie charts and heatmaps change their plot's), series a marker picker and marker size.
 - `nymph view --edit`: clicking a legend entry selects its series (a pie chart's slice selects the chart) instead of hiding it.
 - `nymph view --edit`: the divider between the figure and the editor panel can be dragged.

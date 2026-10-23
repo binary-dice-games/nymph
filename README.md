@@ -9,7 +9,9 @@ ImGui), and rasterizes them with
 OpenGL when a GPU is available, or on the CPU with its own software
 rasterizer: no GPU, window or display needed, and no OpenGL library
 linked.
-It is meant for AI agents that need to show information as a chart.
+It is meant for AI agents that need to show information as a chart; they
+can also draft diagrams in [mermaid](docs/mermaid.md), which nymph reads,
+draws and converts to its YAML.
 The [web viewer](docs/viewer.md) ([live demo](https://binary-dice-games.github.io/nymph/demo/))
 shows the same charts live in a web page
 (WebAssembly and WebGL2), with pan, zoom and data-point values, for
@@ -81,6 +83,8 @@ YAML
 nymph chart.yaml        # writes chart.png (no display or GPU needed)
 nymph chart.yaml --rasterizer software   # always the CPU: same bytes on every machine
 nymph chart.png         # prints the YAML back
+nymph diagram.mmd       # a mermaid diagram: writes diagram.png
+nymph convert diagram.mmd -o diagram.yaml   # converts it to nymph YAML
 ```
 
 The YAML travels inside the PNG only while the file is copied byte for
@@ -159,6 +163,7 @@ carries its source: `bdg::nymph::extract_source(png)` returns it.
 | [docs/claude.md](docs/claude.md) | nymph in Claude: the Claude Code plugin, the Claude Desktop extension, the claude.ai skill, `nymph mcp` |
 | [docs/shapes.md](docs/shapes.md) | The shape library: every shape, how to use and add one |
 | [docs/examples.md](docs/examples.md) | The example charts with their sources and images |
+| [docs/mermaid.md](docs/mermaid.md) | Mermaid import: the workflow, what each mermaid kind becomes, what is dropped |
 | [docs/viewer.md](docs/viewer.md) | The web viewer: files, embedding, JavaScript API, events, interaction |
 | [docs/extension.md](docs/extension.md) | The Chrome extension: install, the toolbar button, sites, privacy, limits |
 | [docs/releasing.md](docs/releasing.md) | Publishing a release from a tag: the workflow, the release files, one-time setup of each channel |
@@ -188,7 +193,7 @@ carries its source: `bdg::nymph::extract_source(png)` returns it.
 | [spec/11_cross_browser_extension/PLAN.md](spec/11_cross_browser_extension/PLAN.md) | Its implementation steps and tests |
 | [spec/14_editor_workspace/DESIGN.md](spec/14_editor_workspace/DESIGN.md) | Editor workspace: resizable panel, adding and removing elements, data table tabs, the editor as an MCP server |
 | [spec/14_editor_workspace/PLAN.md](spec/14_editor_workspace/PLAN.md) | Its implementation steps and tests |
-| [spec/16_mermaid_import/DESIGN.md](spec/16_mermaid_import/DESIGN.md) | Mermaid import (planned): mermaid read on every entry point, converted to nymph YAML; outputs stay PNG or YAML |
+| [spec/16_mermaid_import/DESIGN.md](spec/16_mermaid_import/DESIGN.md) | Mermaid import: mermaid read on every entry point, converted to nymph YAML; outputs stay PNG or YAML |
 | [spec/16_mermaid_import/PLAN.md](spec/16_mermaid_import/PLAN.md) | Its implementation steps and tests |
 | [CHANGELOG.md](CHANGELOG.md) | User-facing changes between releases |
 | [CLAUDE.md](CLAUDE.md) | Coding style and project rules for AI agents and contributors |

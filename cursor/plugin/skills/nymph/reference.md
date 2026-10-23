@@ -86,6 +86,8 @@ draws the result. It never writes mermaid.
 
 A PNG drawn from mermaid carries the converted YAML. Plots, dashboards
 and user interfaces have no mermaid form: write them in YAML.
+[mermaid.md](mermaid.md) lists what each mermaid kind becomes and what is
+dropped.
 
 ## The chart open in the editor
 

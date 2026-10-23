@@ -1,6 +1,10 @@
 # nymph — Mermaid Import: Design
 
-**Status: designed and planned; nothing built** (see [PLAN.md](PLAN.md)).
+**Status: built** (plan steps 1-13, see [PLAN.md](PLAN.md)). Built and
+tested on Linux: the native suite, `nymph mcp` over standard input, the
+editor window on Xvfb. The WebAssembly module was syntax-checked only (no
+Emscripten here): its Node tests run in CI's web job. Section 11 lists
+where the build differs from the text above.
 
 ## 1. Purpose / Scope
 
@@ -164,7 +168,8 @@ diagram kind, YAML writer), `src/nymph.hpp` (public API), `src/cli/`
   line map gives for the error's YAML line, its message ending with
   `(nymph YAML line L)`. So a successful import is always a valid source,
   and no caller has to map positions.
-- **`load_source()`** (`src/cli/cli_support.*`, replacing `source_of()`):
+- **`load_source()`** (`src/cli/cli_support.*`, next to `source_of()`, which
+  stays for PNG-only uses):
   bytes in, nymph YAML out for every front end: a PNG gives the source it
   carries, mermaid is imported, anything else is returned as is. It
   returns the warnings and the kind alongside, for the front end to show.
@@ -302,8 +307,8 @@ which would make the output depend on the clock (goal 5).
 Indentation gives the tree; the first node is the root `MindNode`.
 `id[text]`, `id(text)`, `id((text))`, `id))text((`, `id)text(`,
 `id{{text}}` and plain text all become `MindNode {text}` (approximation:
-nymph's mind map has one node look); an `id` is written only when it is
-not the text. `::icon(...)` and `:::class` are warnings.
+nymph's mind map has one node look); no `id` is written (nothing links
+mind map nodes in mermaid). `::icon(...)` and `:::class` are warnings.
 
 ## 5. Front Ends
 
@@ -525,3 +530,46 @@ deterministic: the same text and nymph build give the same `source` bytes.
 - **Mermaid in chat pages**: the Gemini chat mode (10) could detect
   ` ```mermaid ` blocks too and show them as nymph charts with the same
   `importMermaid()`.
+
+## 11. As Built
+
+Where the code differs from, or adds to, the sections above:
+
+- **One element model for every kind.** The converters fill a generic
+  tree (`mermaid::element`: a type, fields already written as YAML, children,
+  the mermaid position) rather than per-kind structs; each converter keeps
+  its own small structs while parsing. `src/mermaid/` holds `reader.cpp`
+  (detection, the reader, text and colour helpers), `yaml_writer.cpp`,
+  `style_sheet.cpp` (classDef / class / style for class, state and ER),
+  `mermaid.cpp` (`import_mermaid()`), and one file per kind (`pie`,
+  `flowchart`, `sequence`, `class`, `state`, `er`, `gantt`, `mindmap`,
+  `charts` for sankey and xychart).
+- **Sizing** uses a new `measure_figure()` (`src/render/figure_renderer.*`):
+  the root's `measure()` in one layout frame. Gantt charts keep a width of
+  800 and take their height from it; pie, sankey and xychart sources get a
+  fixed size (560 x 440, 800 x 500, 800 x 450). A diagram too large for a
+  4096-pixel image even at 50% gets a lower `min_zoom` on its root.
+- **Limits** (nodes, links, classes, states, entities, participants, gantt
+  tasks) are checked by the converters, so the error names the line where
+  the first element over the limit is written. Errors only nymph's checks
+  find name the line of the element they concern, which is often the
+  diagram itself (a sankey cycle is reported at the `sankey-beta` line).
+- **Description**: `accTitle: accDescr` when both are given.
+- **Flowchart**: an indexed `linkStyle` wins over `linkStyle default`
+  whatever their order; `rgb(r,g,b)` colours are read whole.
+- **State diagram**: a composite block claims a state first named outside
+  any composite (`Stopped --> Playing` above `state Active { Playing }`), as
+  mermaid draws it; `[*]` states get their ids last, so they never take an
+  id written later (`start_2` when the diagram has a `start`).
+- **XY chart**: several bar series stand side by side (each gets its own
+  positions column and a narrower `bar_size`) instead of overlapping with a
+  warning; a legend is drawn only when a series is named.
+- **`nymph view`**: for a mermaid input the editor's Save is enabled at once
+  (the YAML file does not exist yet), and its dialogs say "Save the
+  converted chart as `<name>.yaml`?"; mermaid in a `.yaml` file saves as
+  `<name>.nymph.yaml` (`edit_save_path()`).
+- **Web**: the module also exports `nymph_viewer_imported()` (what the last
+  `setSource()` converted), behind `info().importedFrom`, `mermaidKind` and
+  `warnings`; `importMermaid()` is both a module export and a method of the
+  loaded core.
+
