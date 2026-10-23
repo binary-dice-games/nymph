@@ -271,24 +271,30 @@ banner and does not reload by itself; URL fetches are not cached by the
 service worker; `launchQueue` with a stubbed file opens it. By hand:
 install on Chrome desktop and open a `.yaml` from the file manager.
 
-## 13. Narrow screens, keyboard, accessibility
+## 13. Mobile view-only, keyboard, accessibility
 
-**Goal:** the app is usable on a phone (viewing fully, editing in a basic
-form) and by keyboard.
+**Goal:** on a phone or tablet the app is a complete viewer with no way
+into the editor, and on every device it works by keyboard.
 
-**Deliverables:** responsive shell (menus collapse under 720 px); in Edit
-under 720 px the strip is an overlay toggled by a Panel button
-(`workspace_layout` overlay mode, native unchanged); Keyboard shortcuts
-dialog; labels and focus order for every control; the editor canvas'
-label saying it is not readable by screen readers and pointing to
+**Deliverables:** `app/device.js` `isMobile()` (DESIGN.md section 3.10);
+the shell hides Edit, Source, "Fix in source", New chart, Save in place
+and Save to Drive on mobile, ignores `&mode=edit`, skips draft offers,
+and never fetches, prefetches or precaches the editor module there;
+responsive top bar (one ⋯ menu under 720 px of window width); Keyboard
+shortcuts dialog; labels and focus order for every control; the editor
+canvas' label saying it is not readable by screen readers and pointing to
 Download YAML.
 
-**Tests**: native `test_editor_layout` cases for the overlay mode;
-browser at 390 x 844 with touch: a pinch zooms the viewer, Edit shows the
-figure with the Panel button, the panel overlay edits a title; an axe-core
-scan of the start and document screens has no serious violations; every
-menu works with the keyboard alone. By hand: a real phone (iOS Safari,
-Android Chrome).
+**Tests** (browser): emulated phone (390 x 844, touch, no fine pointer):
+no Edit or Source control exists; `?example=line&mode=edit` opens in View;
+a broken file shows the "open it on a computer" message with no action;
+a pinch zooms the viewer; Share and Download work; no request for
+`nymph-editor-core` is made (request log, service worker included). A
+desktop page resized to 390 px wide keeps Edit (the top bar collapses)
+and an open editor keeps running. An axe-core scan of the start and
+document screens has no serious violations; every menu works with the
+keyboard alone. By hand: a real phone (iOS Safari, Android Chrome) and a
+tablet: view only.
 
 ## 14. Documentation and release
 
@@ -314,8 +320,8 @@ hand); a deploy from `main` serves the app at the site root.
   (select, toolbar, add a node, edit a table, the source pane) and save in place
   (Chrome) and as a download (Firefox); reload with unsaved changes and
   restore; with the owner's Google keys, open and save a Drive file;
-  install the PWA and open a file offline; view and edit a title on a
-  phone.
+  install the PWA and open a file offline; on a phone, open, view, share
+  and download a chart, with no edit control anywhere.
 - `nymph view --edit` behaves as before on Linux and Windows, plus the
   source pane and repair state.
 - `spec/INDEX.md`, `README.md`, `docs/web-app.md`, `docs/viewer.md` and

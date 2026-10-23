@@ -150,9 +150,10 @@ https://binary-dice-games.github.io/nymph/
 - Title: the file name (renamable for documents without a file), a dot
   while there are unsaved changes, an icon for where it came from.
 - **View | Edit**: switches modules (section 4). Edit is disabled, with the
-  reason as tooltip, when the browser has no WebGL2.
+  reason as tooltip, when the browser has no WebGL2. On a mobile device it
+  is not shown at all (section 3.10).
 - **Source**: shows the editor's source pane (section 3.7); in View mode
-  it switches to Edit first.
+  it switches to Edit first. Not shown on mobile.
 - **Save ▾**: Save (back to where it came from, when possible, else the
   same as Download YAML), Download YAML, Download PNG, Save to Drive.
   `Ctrl+S` is Save.
@@ -165,7 +166,7 @@ https://binary-dice-games.github.io/nymph/
 
 | Case | Message and action |
 |---|---|
-| Source does not bind | the loader's message with line and column; "Fix in source" opens Edit in repair state (section 5.4) at that line |
+| Source does not bind | the loader's message with line and column; "Fix in source" opens Edit in repair state (section 5.4) at that line. On mobile: "Open it on a computer to fix it", no action |
 | PNG without a nymph chart | "This image has no nymph chart in it (it may have been re-encoded by the site it came from). Ask for the YAML, or the original PNG." |
 | URL refused by CORS / network | "That server does not let other sites read the file. Download it and open it here." with the URL |
 | HTTP error, too large, not a nymph file | status code / size limit / what was found |
@@ -234,7 +235,7 @@ Kept in IndexedDB (`nymph-app` database), in this browser only, with a
 | `?example=<name>` | an example |
 | `?drive=<fileId>` | a Drive file (asks the user to sign in) |
 | `#y=<data>` | a shared source: `deflate-raw` (`CompressionStream`), base64url. In the fragment, so it never reaches a server |
-| `&mode=edit` | with any of the above: open in Edit |
+| `&mode=edit` | with any of the above: open in Edit (ignored on mobile: the chart opens in View) |
 
 After opening, the address bar is replaced (`history.replaceState`) with
 the route that reopens the document, or `/` for a local file. **Copy link**
@@ -287,6 +288,31 @@ bypass it. GitHub Pages' fixed `max-age=600` is why module URLs carry
 `?v=<commit>`: a deploy is picked up at once, without stale `.wasm` next to
 a new loader.
 
+### 3.10 Mobile: view only
+
+On a mobile device the app is a viewer: it opens, views, shares and
+downloads charts, and never offers editing. The editor is built for a
+mouse and a hardware keyboard (small ImGui targets, hover, right-click
+menus, the divider, text input through a hidden `textarea`, which phone
+keyboards handle poorly); a half-working editor is worse than none
+(goal 1).
+
+- **Mobile** is decided once, at load, by `isMobile()` in
+  `app/device.js`: no fine pointer anywhere (`not (any-pointer: fine)`), or
+  a screen (not window) narrower than 720 CSS px on its short side. It
+  does not change when a desktop window is made narrow, so a user is never
+  thrown out of an edit by resizing.
+- Not shown on mobile: View | Edit, Source, "Fix in source", New chart
+  (templates open in View, as examples), Save in place and Save to Drive
+  (nothing is ever modified). Kept: every open source, Recent, Share,
+  Download YAML and PNG, theme, About.
+- `&mode=edit` is ignored; a draft found on mobile (made on a desktop in
+  the same browser profile, rare) is not offered there.
+- `nymph-editor-core.wasm` is never fetched or prefetched on mobile, and
+  the service worker does not precache it there.
+- The document screen's top bar collapses into a single ⋯ menu under
+  720 px of window width (on desktop too), but only mobile hides Edit.
+
 ## 4. Two Modules
 
 ```
@@ -303,7 +329,7 @@ a new loader.
   editor. It does not load the viewer module or share code with it.
 - **View → Edit**: the app shows a progress line while `nymph-editor-core`
   loads (it is prefetched with `<link rel=prefetch>` once the viewer has
-  drawn and the browser is idle, on screens at least 720 px wide), creates
+  drawn and the browser is idle, never on mobile), creates
   the editor with the viewer's source and view, then destroys the viewer.
   Zoom and pan carry over through the `view` key (viewer DESIGN, "Saved
   view"); the editor treats them as the starting view, not as an edit.
@@ -439,8 +465,8 @@ class NymphEditor {
   key mapping; `preventDefault()` only when the workspace consumed the key
   (so `Ctrl+D` duplicates instead of bookmarking, but the browser keeps
   `Ctrl+T`). While a text field has the keyboard, a hidden `textarea`
-  takes focus, placed at the field, so IME composition and phone keyboards
-  work; its `input` events become `text()`.
+  takes focus, placed at the field, so IME composition works; its `input`
+  events become `text()`.
 - **Clipboard.** Copy: `set_clipboard` calls
   `navigator.clipboard.writeText` (inside the key event's user gesture).
   Paste: the `paste` event's text is stored as the clipboard before the
@@ -579,8 +605,8 @@ source.
   model, one clipboard path and one undo history, and the same pane works
   in `nymph view --edit`, where there is no DOM. A DOM editor would also
   need npm and a bundler in the site build, and a second sync path for the
-  native host. Costs: no screen-reader access to the text, IME and phone
-  keyboards through the hidden `textarea` like every other field, and about
+  native host. Costs: no screen-reader access to the text, IME through
+  the hidden `textarea` like every other field, and about
   14,000 lines of C++ in the editor module (never in the viewer). Chosen
   over ImGui's `InputTextMultiline`, which has no highlighting, line
   numbers, markers, folding or search. The goossens version is maintained,
@@ -660,7 +686,7 @@ source.
    locally; the service worker serves the shell offline.
 4. **Size budget** test (section 6).
 5. **By hand**, recorded in the plan: real Google Drive with the owner's
-   keys, Firefox and Safari, a phone.
+   keys, Firefox and Safari, a phone (view only).
 
 ## 10. Integration Boundaries
 
@@ -685,7 +711,7 @@ Risks, checked first in the plan (step 1): the editor module's size with
 JSON linked in; two ImGui contexts drawn into one WebGL2 context per frame
 (native does it with desktop GL); ImGuiColorTextEdit under Emscripten and
 its size. Later: ImGui text input (source pane included) through a hidden
-`textarea` on Safari and phones (step 6).
+`textarea` on Safari (step 6).
 
 ## 11. Extension Points
 
@@ -703,6 +729,7 @@ its size. Later: ImGui text input (source pane included) through a hidden
   descriptions, a diff against the saved file (`TextDiff`).
 - **A screen-reader path to the text**: a DOM mirror of the pane in the
   app, read-only or editable, fed by the `change` event.
-- **Phone editing beyond the basics**: plan step 13 makes the strip an
-  overlay under 720 px; a touch-first panel layout (larger targets, a
-  bottom sheet) is later work.
+- **Editing on phones and tablets**: a touch-first layout of the editor
+  (the strip as an overlay or bottom sheet, larger targets, the phone
+  keyboard through the `textarea`), after which `isMobile()` stops hiding
+  Edit (section 3.10).
