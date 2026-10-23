@@ -35,6 +35,8 @@ figure's and the panel's pixels non-blank in their regions, and a
 node (position from `live_view::targets_at` via a test export) changes the
 panel's pixels.
 
+**Result (done):** the real editor module was built at once instead of a throwaway (`web/editor/`). Sizes (gzip -9): viewer 824,330 bytes before and after (byte-identical `.wasm`), editor 1,077,431 without the source pane and 1,157,017 with ImGuiColorTextEdit (about 80 KB); the editor tools and JSON were kept (the editor's total is under the 1.5 MB the viewer was once held to), their own share was not measured apart. `web/size_budget.json` counts as Node's zlib at level 9 does: viewer 844,917 (+2 %), editor 1,279,233 (+10 %); `nymph_web_size` checks them. Two ImGui contexts in one WebGL2 context draw correctly in Chromium (checked by screenshot and the browser tests of step 6).
+
 ## 2. `editor_workspace`
 
 **Goal:** the native editor runs on `editor_workspace`, with behaviour
@@ -57,6 +59,8 @@ existing tests pass. By hand on Xvfb: `nymph view --edit
 examples/flowchart.yaml` selects, edits, drags the divider, adds and
 deletes a node, as before.
 
+**Result (done):** `src/workspace/editor_workspace.*`, `workspace_input.hpp` (keys, modifiers, cursor shapes, `route_key`), `workspace_tools.*` (the editor tools' host over a workspace); `editor_panel.*` moved to `src/workspace/`; `viewer_window.cpp` is the native host (about 480 lines, from 946). `test_editor_workspace` (13 tests, headless: an empty GLSL version runs frames without GL). Found and fixed: `apply()` asked for panel frames after every panel frame, so the editor never went idle (natively too). By sight on Xvfb: `nymph view --edit examples/flowchart.yaml` draws the figure, the tabs and the panel as before; clicks and keys on Xvfb were not driven (no xdotool here).
+
 ## 3. Save and CSV as host requests
 
 **Goal:** the panel asks its host to save and to import or export CSV
@@ -75,6 +79,8 @@ text; `import_csv` replaces the table as one undo step and a bad CSV sets
 the panel error; the existing `table_grid` tests adjusted to the request
 form. By hand on Xvfb: Save asks and overwrites; Import / Export CSV work
 as before.
+
+**Result (done, changed):** the native host answers `request_save()` with the panel's existing "overwrite?" modal and keeps `table_grid`'s ImGui CSV dialogs (they need a file system); only the web host takes CSV as requests (`table_grid::set_host_files`, `editor_workspace::import_csv`). No `src/window/csv_dialog.*`. Tests in `test_editor_workspace` (requests with the table's CSV, import as one undo step, a bad CSV refused).
 
 ## 4. Editor tools without the MCP server, attributed changes
 
@@ -98,6 +104,8 @@ label and origin are on its undo entry; three commits inside a group are
 one undo step and one redo step; an empty group adds nothing; a refused
 commit inside a group leaves the others; the existing
 `test_editor_server` tests pass.
+
+**Result (done):** `src/mcp/tool.*`, `nymph_editor_tools` library, `make_editor_tools()` / `call_editor_tool()`; `editor_model` undo entries `{source, label, origin}`, `begin_group()` / `end_group()`, `last_label()` / `last_origin()`, undo / redo tooltips. `test_editor_attribution` (10 tests).
 
 ## 5. Source pane
 
@@ -133,6 +141,8 @@ the pane shown is untouched (existing tests pass). By hand on Xvfb:
 `nymph view --edit` on a broken file opens, is fixed and saved; drag the
 pane's divider.
 
+**Result (done, changed):** the pane sits between the figure and the strip, not left of the figure (DESIGN.md section 5.4: the figure must stay at x = 0). `src/workspace/source_pane.*` and `yaml_language.*` (not `src/edit/`: they need the text editor); `nymph_text_editor` library; repair state in `editor_model` (`repair_t`), `editor_panel` (`repair`) and `editor_workspace::open()`; `nymph view --edit` opens a broken file in repair state (`view_request::repair`). `test_source_pane` (13 tests: tokens, apply after the pause, refused text marked and locking agents, span patching keeping the cursor, undo routing, selection and cursor, repair, a click giving the pane the keyboard, Ctrl+V from the host's clipboard, Ctrl+U). Not driven by hand on Xvfb.
+
 ## 6. Web editor module and `nymph-editor.js`
 
 **Goal:** a page can embed the editor with `createEditor()`, with the full
@@ -166,6 +176,8 @@ inside `beginGroup` / `endGroup` two calls undo at once;
 outline. By hand: Firefox and
 Safari typing in a field and in the source pane (IME on one of them).
 
+**Result (done):** `web/editor/nymph_editor_web.cpp`, `web/js/nymph-editor.js` (also `paneText()`, `targetRect()`, `importCsv()`); `nymph_web_editor_node` (11 tests, headless) and `nymph_web_editor_browser` (7 tests: draws, click and typing, Ctrl+D with the default prevented, Ctrl+S and CSV events, typing in the source pane, paste through the page's clipboard, tool definitions, agent changes in a group, the view image). Found and fixed: a mouse click moved the focus from the hidden text area to the canvas. Firefox and Safari typing and IME not tried.
+
 ## 7. Site and app shell: open and view
 
 **Goal:** the site's root is the app; a user opens a local file and sees
@@ -198,6 +210,8 @@ the canvas and the chart redraws; the old URLs (`nymph-viewer.js`,
 `.wasm`, `fonts/…`, `demo/`) answer 200; no request leaves the local
 server.
 
+**Result (done):** `web/app/` (index.html, app.css, `app/` modules: main, commands, device, document, open, share, store, ui, icons, providers/drive), `cmake/NymphSite.cmake` and the `nymph-site` target, examples at the site root, `pages.yml` builds, tests and deploys `build-web/web/site/`. Browser tests in `web/tests/browser/app.mjs` (23 tests for steps 7 to 13) and Node tests in `web/tests/node/app.mjs`.
+
 ## 8. Edit mode and saving
 
 **Goal:** the user switches to Edit, edits, and saves to the same file
@@ -229,6 +243,8 @@ are listed only in Edit; Edit → View shows the edited chart; the viewer
 module was not
 re-downloaded and the editor module was fetched only on Edit.
 
+**Result (done):** as planned. "The editor module was fetched only on Edit" is not asserted: after the first chart the page prefetches it on idle (desktop only), which the mobile test checks never happens there.
+
 ## 9. URLs and share links
 
 **Goal:** files open from a URL or a shared link, and the user can share
@@ -248,6 +264,8 @@ Node); `#y=` from Copy link reopens the same source byte for byte;
 `?example=line&mode=edit` opens the editor; Copy embed code gives a snippet
 that, on a blank page, draws the chart.
 
+**Result (done).**
+
 ## 10. Start screen: recent, drafts, templates
 
 **Goal:** the user gets back to recent work, recovers unsaved changes, and
@@ -263,6 +281,8 @@ local file opened through a stubbed handle reopens after a reload; an
 edit, then a reload, offers the draft and Restore brings it back; saving
 removes the draft; every template binds and draws (also a native test that
 each template binds, `test_web_templates`); Clear empties both stores.
+
+**Result (done):** templates in `web/app/templates/` with their PNGs (rendered with `--rasterizer software`, committed); `test_web_templates` (native) and the browser test open every template.
 
 ## 11. Google Drive
 
@@ -284,6 +304,8 @@ through sign-in, Picker and download and draws; Save sends the PATCH with
 Google URL is requested before a Drive action. By hand (needs the
 owner's keys): open, edit and save a real Drive file; open by `?drive=`.
 
+**Result (done, stubs only):** tested with Google's scripts and the Drive API replaced by stubs (open, `?drive=` address, save with the revision check, the conflict dialog). The real Drive (the owner's keys) is not tried.
+
 ## 12. Installable and offline
 
 **Goal:** the app installs as a PWA, opens `.yaml` files from the
@@ -298,6 +320,8 @@ app reloads and opens an example; a new `version.json` shows the update
 banner and does not reload by itself; URL fetches are not cached by the
 service worker; `launchQueue` with a stubbed file opens it. By hand:
 install on Chrome desktop and open a `.yaml` from the file manager.
+
+**Result (partly done):** manifest (with a 192 px icon), service worker, `launchQueue`, update banner. Tested: offline reload after one visit. Not tested: the update banner with a new `version.json`, `launchQueue` with a stubbed file, installing on a desktop.
 
 ## 13. Mobile view-only, keyboard, accessibility
 
@@ -324,6 +348,8 @@ document screens has no serious violations; every menu works with the
 keyboard alone. By hand: a real phone (iOS Safari, Android Chrome) and a
 tablet: view only.
 
+**Result (partly done):** `app/device.js` capabilities, mobile view-only, the narrow top bar (Source and Share in the ⋯ menu under 720 px), Keyboard shortcuts dialog, labels. Tested on an emulated phone and a narrow desktop window. The axe-core scan and real phones and tablets are not done.
+
 ## 14. Documentation and release
 
 **Goal:** users and the owner can find, use and configure the app.
@@ -337,6 +363,8 @@ the skill text: agents may give users a `#y=` link to the app;
 
 **Tests:** the docs' links resolve (existing link check, if any, else by
 hand); a deploy from `main` serves the app at the site root.
+
+**Result (done):** `docs/web-app.md`, README, `docs/viewer.md` (the editor module), `docs/building.md`, `docs/cli.md`, `docs/agent-guide.md`, CHANGELOG, `spec/INDEX.md`. The first deploy from `main` is not done yet.
 
 ## Completion Criteria
 

@@ -1,7 +1,13 @@
 # nymph — Web App: Design
 
-**Status: design in review.** Nothing is built. [PLAN.md](PLAN.md) is the
-ordered implementation plan. This document describes only what this project
+**Status: built** (plan steps 1-14; see [PLAN.md](PLAN.md) for each
+step's result). Tested on Linux: native GoogleTest (the workspace and the
+source pane headless, the window on Xvfb by sight), the editor module in
+Node, the editor and the app in Chromium through Playwright (WebGL2 through
+SwiftShader). Not yet run: Firefox, Safari, a phone, a real Google Drive,
+the installed app opening a file from the system, MSVC / MSYS2 / macOS
+builds of the new code (CI first). [PLAN.md](PLAN.md) is the
+implementation plan. This document describes only what this project
 adds or changes; the viewer it builds on is
 [04_web_viewer](../04_web_viewer/DESIGN.md) (*viewer DESIGN*), the editor is
 [08_view_editor](../08_view_editor/DESIGN.md) and
@@ -72,8 +78,7 @@ Files owned or changed:
 | `extern/ImGuiColorTextEdit` | new submodule (MIT), pinned |
 | `src/window/view_command.cpp` | `--edit` opens a source that does not bind in repair state |
 | `src/window/viewer_window.cpp` | becomes a thin native host over `editor_workspace` |
-| `src/window/csv_dialog.*` | new: the native CSV file dialogs, moved out of `table_grid` |
-| `src/edit/table_grid.*`, `inspector.*` | CSV import / export and Save become host requests |
+| `src/edit/table_grid.*`, `inspector.*` | CSV import / export can be host requests (`set_host_files`); undo / redo tooltips |
 | `src/mcp/editor_tools.*` | built in a library the web editor links without `nymph_cli` |
 | `src/CMakeLists.txt` | `nymph_workspace` and `nymph_editor_tools` libraries |
 | `.github/workflows/pages.yml` | builds `nymph-site`, runs the web tests, deploys |
@@ -285,9 +290,12 @@ install, and fonts and examples as they are fetched, keyed by
 `version.json`'s commit. A new version installs in the background; the app
 offers to reload, never reloads by itself (it could lose an open edit). The
 service worker serves only same-origin GET requests; URL and Drive fetches
-bypass it. GitHub Pages' fixed `max-age=600` is why module URLs carry
-`?v=<commit>`: a deploy is picked up at once, without stale `.wasm` next to
-a new loader.
+bypass it. GitHub Pages' fixed `max-age=600` is why the `.wasm` URLs
+carry `?v=<commit>`: a deploy is picked up at once. The JavaScript module
+URLs do not: `nymph-editor.js` imports `../nymph-viewer.js`, and a second
+URL for it would load a second copy (and a second `NymphError` class).
+The worker is registered as `sw.js?editor=0|1`, so the mobile page never
+precaches the editor.
 
 ### 3.10 Mobile: view only
 
@@ -338,13 +346,21 @@ command is an MCP tool: a `name`, a `description`, a JSON Schema
   `document_source`, `document_set_source` (validated by binding in
   whichever module is loaded, refused whole with the loader's error),
   `document_check` (binds without applying), `document_image` (PNG of what
-  is on screen: `toPng()` or `editor_view_image`), `document_select`.
+  is on screen: `toPng()` or `editor_view_image`); `document_select` is
+  an `editor` command (selection means nothing in View).
 - `editor` commands are the editor tools (14 section 6), registered from
   `editor.toolDefinitions()` when the editor module loads and removed when
   it is destroyed.
 - `app` commands: `app_new_document` (from a source or a template),
   `app_open_url`, `app_open_example`, `app_list_templates`, `app_save`,
-  `app_download`, `app_copy_link`, `app_set_mode`, `app_set_theme`.
+  `app_download`, `app_copy_link`, `app_set_mode`, `app_set_theme`, and
+  the ones only the shell's controls use: `app_open_file`,
+  `app_open_url_dialog`, `app_open_drive`, `app_new_dialog`,
+  `app_show_source`, `app_save_as`, `app_save_drive`, `app_copy_embed`,
+  `app_reset_view`, `app_set_chart_theme`, `app_close`, `app_about`,
+  `app_shortcuts`. `document_check` is an `app` command (it binds in a
+  throwaway viewer). The registry and the open document are
+  `window.nymphApp` (tests, and later the connectors).
 - `commands.call(name, args, origin)` dispatches; `origin` is `user` for
   the shell's own calls. `commands.list(filter)` returns the definitions
   in `tools/list` form, filtered by what is available now (mode, device
@@ -393,36 +409,46 @@ OpenGL3 backend into the current GL context.
 ```cpp
 namespace bdg::nymph {
 
-/// What the workspace asks of its host. Every call is on the UI thread.
+/// What the workspace asks of its host. Every call is on the UI thread;
+/// every method has a default, so a host overrides what it needs.
 class workspace_host {
  public:
-  virtual ~workspace_host() = default;
-  virtual void set_cursor(cursor_shape shape) = 0;
-  virtual void set_clipboard(std::string_view text) = 0;
-  virtual std::string clipboard() = 0;                 ///< last known text; may be stale on the web
-  virtual void request_save() = 0;                     ///< Save button, Ctrl+S
-  virtual void request_csv_import(const std::string& table) = 0;   ///< answer with import_csv()
-  virtual void request_csv_export(const std::string& table, std::string file_name, std::string csv) = 0;
-  virtual void request_size(float css_width, float css_height) {}  ///< native: grow the window
-  virtual void changed(const commit_result& r) {}      ///< after any accepted change
+  virtual void set_cursor(cursor_shape shape);
+  virtual void request_save();                         ///< Save button, Ctrl+S
+  virtual void request_csv_import(const std::string& table);   ///< host files only; answer with import_csv()
+  virtual void request_csv_export(const std::string& table, const std::string& file_name, const std::string& csv);
+  virtual void request_size(float css_width, float css_height);  ///< native: grow the window
+  virtual void decided(editor_panel::decision decision);        ///< a native dialog's answer
+  virtual void changed(const commit_result& r);       ///< after any accepted change: label, origin
+  virtual std::string status_line(const std::string& status) const;  ///< native: "agent connected"
+  virtual void need_fonts(const std::vector<std::string>& fonts);    ///< web: fetch, then retry_view()
+  virtual void make_current();                         ///< before a read-back
+  virtual bool has_clipboard() const;                  ///< the page's clipboard instead of ImGui's
+  virtual void set_clipboard(std::string_view text);
+  virtual std::string clipboard();
 };
 
 class editor_workspace {
  public:
-  editor_workspace(view_options options, workspace_host& host, const char* glsl_version);
-  void open(std::string source, bool reset_view);  // a source that does not bind opens in repair state
-  void show_panel(bool on);            // creates / destroys the editor_panel
-  void show_source(bool on, std::optional<int> line = {});  // the source pane, cursor at `line`
-  bool repairing() const;              // the text does not bind (section 5.4)
+  editor_workspace(workspace_host& host, view_options options, std::string glsl_version, workspace_gl gl);
+  void init_view();                    // ImGui's OpenGL3 backend in the view; "" GLSL: headless (tests)
+  void open(const std::string& source, bool reset_view, bool edit);  // edit: a source that does not bind opens in repair state
+  std::string show_panel(bool on, bool repair = false);  // "" or why the source cannot be edited
+  void show_source(bool on, std::optional<int> line = {});
+  bool repairing() const;
+  bool pending() const;                // typed text waits for its pause
+  void set_host_files(bool on);        // CSV import / export as host requests (web)
   void resize(float css_width, float css_height, float scale);
   void pointer(const pointer_event& e);
-  bool key(window_key key, key_mods mods, bool down, bool repeat);   // true: consumed
+  key_outcome key(window_key key, key_mods mods, bool down, bool repeat);  // consumed / unhandled
   void text(char32_t codepoint);
-  void import_csv(const std::string& table, std::string_view csv);  // answer to request_csv_import
+  std::string import_csv(const std::string& table, std::string_view csv);
   bool wants_frame() const;
-  bool frame(double now_seconds);      // runs the view's and the panel's frames; false: nothing to draw
-  void render();                       // GL context current
-  bool wants_keyboard() const;         // a panel or figure text field has the keyboard
+  void frame(double now_seconds);      // the view's and the panel's frames when due
+  void render(int pixel_width, int pixel_height);  // GL context current; the host swaps
+  void apply_change(const commit_result& r, const std::string& status);  // an agent's change
+  void retry_view();                   // after need_fonts()
+  std::vector<uint8_t> capture_figure(int max_width, int& width, int& height, double now);
   live_view& view();
   editor_panel* panel();               // nullptr while hidden
 };
@@ -452,12 +478,17 @@ agent change by its connector, as 14 does for `nymph mcp` agents.
 undo entry (an agent's turn of several tool calls is undone at once); the
 panel never opens a group, so nothing changes for the user's own edits.
 
-Save in the panel stops opening the panel's own "overwrite?" modal; it
-calls `request_save()`, and the native host opens the same modal (moved
-next to the close dialog), the web host fires `save`. CSV Import / Export
-become `request_csv_*`: the native host opens the existing ImGui file
-dialogs (moved to `src/window/csv_dialog.*`), the web host opens the
-browser's file picker or downloads the file.
+The panel's Save button and `Ctrl+S` call `request_save()`: the native
+host answers by opening the panel's own "overwrite?" modal (which stays in
+`editor_panel`, as does the close dialog), the web host fires `save`. CSV
+Import / Export become `request_csv_*` when the host turns on host files
+(the web editor: the browser's file picker, a download); the native host
+keeps `table_grid`'s ImGui file dialogs, which need a file system.
+
+`apply()` asks the panel for more frames only when something happened (a
+change, a selection, a save, an error). Before, every panel frame ended in
+a refresh, so `nymph view --edit` never went idle; this was found when the
+web editor did not either.
 
 ### 5.2 JavaScript API (`web/js/nymph-editor.js`)
 
@@ -536,7 +567,7 @@ class NymphEditor {
   loads no wasm by being imported). The source pane's monospace font is
   fetched the same way the first time the pane opens.
 
-### 5.4 Source pane (`src/edit/source_pane.*`)
+### 5.4 Source pane (`src/workspace/source_pane.*`)
 
 The YAML text beside the figure, in both hosts. A `TextEditor` from
 ImGuiColorTextEdit drawn in the panel's ImGui context (which already covers
@@ -544,12 +575,14 @@ the whole window), so its keys, clipboard, popups and theme are the
 panel's.
 
 **Place.** The **Source** button at the right end of the tab bar, or
-`Ctrl+U`, splits the left side: the pane on the left, the figure (or the
-data table) on the right, with a divider that works as the strip's (6 px
-hit zone, at least 240 px each side, double-click restores 40 % of the
-left side). The pane stays while the user changes tabs, so a table edit
-shows its YAML. `workspace_layout` gains the region; `figure_box()` is
-what remains.
+`Ctrl+U`, puts the pane between the figure (or the data table) and the
+strip, with a divider that works as the strip's (6 px hit zone, at least
+200 px for the pane and 240 px for the figure, double-click restores 40 %
+of the space left of the strip). Not left of the figure: the figure's
+draw data fills the bottom-left of the drawable (the OpenGL3 backend's
+viewport starts at x = 0), so the figure must stay at x = 0. The pane stays
+while the user changes tabs, so a table edit shows its YAML.
+`workspace_layout` gains the region; `figure_box()` is what remains.
 
 **Look.** `FiraMono-Regular.ttf` from the font catalog, added to the
 panel's atlas (embedded natively; fetched on demand in the web build, the
@@ -558,9 +591,11 @@ figure theme. Line numbers, two-space tabs inserted as spaces,
 indentation folding, matching brackets for flow mappings, find and
 replace (`Ctrl+F`, `Ctrl+H`). `yaml_language()` is a
 `TextEditor::Language` with a custom tokenizer: comments, mapping keys,
-strings, numbers, `true` / `false` / `null`, element type names after
-`type:` (from the registry), and `$column` references in their own colour;
-the lines of a `|` block (CSV data) are left plain.
+strings, numbers, `true` / `false` / `null` / `yes` / `no`, element type
+names (from the registry, wherever they appear), and `$column` references in
+their own colour. The lines of a `|` block (CSV data) are coloured as
+ordinary tokens: the editor's colorizer works line by line and cannot tell
+them apart.
 
 **Text to model.** The editor's change callback, 300 ms after the last
 keystroke, calls `editor_model::set_source(text)`: one undo step of the
@@ -608,18 +643,23 @@ source.
 - ImGuiColorTextEdit is a submodule, `extern/ImGuiColorTextEdit`, pinned
   to a commit that matches the ImGui submodule (1.92.9), initialized with
   `nymph_ensure_submodules()` when `NYMPH_VIEW` or `NYMPH_WEB` is on; it
-  builds into `nymph_workspace` (`TextEditor.cpp` only; not `TextDiff`, not
-  the example or extras). Its licence joins `nymph fonts --licenses`' list
-  of third-party notices and the About panel.
+  builds into a `nymph_text_editor` library (`TextEditor.cpp` only; not
+  `TextDiff`, not the example or extras, which the source tarball leaves
+  out). The app's About dialog names it; its MIT licence travels in
+  `extern/` with the source.
 - `NYMPH_WEB` builds both modules. New target `nymph-editor` from
   `web/editor/` linking `nymph`, `nymph_workspace` and
   `nymph_editor_tools`, with the viewer's link flags; output in
   `<build>/web/editor/`. No single-file build of the editor.
 - New libraries in `src/CMakeLists.txt`: `nymph_workspace`
   (`src/workspace/`, ImGui's OpenGL3 backend; built when `NYMPH_VIEW` or
-  `NYMPH_WEB`) and `nymph_editor_tools` (`editor_tools` and the tool
-  types it needs, over `nymph` and `nymph_json`, without `nymph_cli`).
-  `nymph_window` and `nymph_mcp` link them.
+  `NYMPH_WEB`) and `nymph_editor_tools` (`editor_tools`, `mcp/tool.hpp`
+  (the tool type, `tool_error`, `text_result()`) and `base64`, over
+  `nymph` and `nymph_json`, without `nymph_cli`; built with `NYMPH_MCP`,
+  `NYMPH_VIEW` or `NYMPH_WEB`). `nymph_window` and `nymph_mcp` link them.
+  `call_editor_tool(host, name, args, origin)` runs a tool in process;
+  `editor_host::locked_reason()` refuses writes while the source pane is
+  ahead.
 - `nymph-site` target: assembles `<build>/web/site/` (section 3.1) from the
   module outputs, `web/app/`, `examples/`, and
   `config.json` from CMake cache variables `NYMPH_GOOGLE_CLIENT_ID`,
