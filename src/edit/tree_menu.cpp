@@ -12,6 +12,7 @@
 #include "edit/field_value.hpp"
 #include "edit/image_fields.hpp"
 #include "edit/inspector.hpp"
+#include "edit/panel_widgets.hpp"
 #include "edit/source_edit.hpp"
 #include "edit/tree_edit.hpp"
 #include "edit/yaml_text.hpp"
@@ -458,7 +459,7 @@ void tree_menu::dialogs(editor_model& model, inspector_events& events) {
         const bool starter = i < d.starter_count;
         if (!starter && !others_header) {
           others_header = true;
-          others_open = ImGui::CollapsingHeader("Other fields");
+          others_open = section_header("Other fields");
         }
         if (!starter && !others_open) {
           continue;

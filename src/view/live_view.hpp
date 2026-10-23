@@ -302,6 +302,10 @@ class live_view {
   void set_selection(std::optional<edit_target_id> selection);
   const std::optional<edit_target_id>& selection() const;
 
+  /// @brief The colour of the selection and hover outlines in edit mode,
+  ///        0xRRGGBB (the editor's accent; blue by default).
+  void set_outline_color(unsigned rgb);
+
   /// @brief The image options ("image", type "Image"), then every element of
   ///        the figure in drawing order with its depth, for a tree list. A
   ///        click away from every element targets the image options too.

@@ -126,6 +126,8 @@ test('draws the figure and the panel', async () => {
 
 test('a click selects; typing in the field changes the source', async () => {
   const page = await open('line');
+  // The dark look: fields are lighter than the panel (findFieldY).
+  await page.evaluate(() => window.ed.setAppearance({ dark: true, accentDark: '#2bc6a8' }));
   await clickTarget(page, 'root', 'title');
   const s = await page.evaluate(() => window.ed.state());
   assert(s.selection?.path === 'root', `selected root, got ${JSON.stringify(s.selection)}`);
@@ -150,23 +152,31 @@ test('a click selects; typing in the field changes the source', async () => {
 
 /** The y of the first text field in the strip's selection section (a light row). */
 async function findFieldY(page, stripX) {
-  // The inspector puts the focused field right under "Selection": scan for
-  // the field background, lighter than the strip's.
-  return page.evaluate(async (x0) => {
-    const bitmap = await createImageBitmap(window.ed.canvas);
+  // The inspector puts the focused field right under the selection's title:
+  // scan the right part of the strip (no text there) of a screenshot (the
+  // WebGL canvas keeps no buffer to read back) for rows in the dark look's
+  // field colour (#262c36).
+  const png = (await page.screenshot()).toString('base64');
+  return page.evaluate(async ([data, x0]) => {
+    const bytes = Uint8Array.from(atob(data), (ch) => ch.charCodeAt(0));
+    const bitmap = await createImageBitmap(new Blob([bytes], { type: 'image/png' }));
     const c = new OffscreenCanvas(bitmap.width, bitmap.height);
     const g = c.getContext('2d');
     g.drawImage(bitmap, 0, 0);
-    const d = g.getImageData(x0 + 40, 300, 1, 400).data;
-    const bg = d[0] + d[1] + d[2];
-    for (let i = 0; i < 400; ++i) {
-      const v = d[i * 4] + d[i * 4 + 1] + d[i * 4 + 2];
-      if (v > bg + 20) {
-        return 300 + i + 8;
+    const x = Math.max(x0 + 40, bitmap.width - 40);
+    const d = g.getImageData(x, 0, 1, bitmap.height).data;
+    const field = (i) => Math.abs(d[i * 4] - 0x26) + Math.abs(d[i * 4 + 1] - 0x2c) + Math.abs(d[i * 4 + 2] - 0x36) < 8;
+    for (let y = 150; y + 10 < bitmap.height; ++y) {
+      let run = 0;
+      while (run < 10 && field(y + run)) {
+        ++run;
+      }
+      if (run === 10) {
+        return y + 8;
       }
     }
-    return 420;
-  }, stripX);
+    throw new Error('no field found in the strip');
+  }, [png, stripX]);
 }
 
 test('Ctrl+D duplicates the selected node and the browser default is prevented', async () => {

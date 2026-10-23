@@ -437,6 +437,7 @@ async function showEditor(source, { sourceLine } = {}) {
         repair: true,
         fileName: app.doc.name,
         theme: app.chartTheme,
+        appearance: pageAppearance(),
         wasmUrl: wasmUrl('editor/nymph-editor-core.wasm'),
         fontBaseUrl: new URL('fonts/', appBase()).href,
       }),
@@ -1014,7 +1015,19 @@ function applyAppTheme(theme) {
   } else {
     document.documentElement.dataset.theme = theme;
   }
+  app.editor?.setAppearance(pageAppearance());
 }
+
+/** The page's look for the editor panel: light or dark as shown, and its accent. */
+function pageAppearance() {
+  const chosen = document.documentElement.dataset.theme;
+  const dark = chosen ? chosen === 'dark' : matchMedia('(prefers-color-scheme: dark)').matches;
+  const accent = getComputedStyle(document.documentElement).getPropertyValue('--accent').trim();
+  return { dark, accent, accentDark: accent };
+}
+
+// "auto" follows the system as it changes.
+matchMedia('(prefers-color-scheme: dark)').addEventListener?.('change', () => app.editor?.setAppearance(pageAppearance()));
 
 // ── Controls ──────────────────────────────────────────────────────────────────
 

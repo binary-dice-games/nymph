@@ -444,6 +444,24 @@ EMSCRIPTEN_KEEPALIVE int nymph_editor_set_theme(const char* theme) {
   });
 }
 
+/// @brief The panel's look, the page's: `dark` 0 or 1, `accent` and
+///        `accent_dark` 0xRRGGBB (the page's accent in its light and dark
+///        palettes; negative: nymph's green).
+EMSCRIPTEN_KEEPALIVE int nymph_editor_set_appearance(int dark, int accent, int accent_dark) {
+  return guarded([&] {
+    panel_appearance a;
+    a.dark = dark != 0;
+    if (accent >= 0) {
+      a.accent = static_cast<unsigned>(accent);
+    }
+    if (accent_dark >= 0) {
+      a.accent_dark = static_cast<unsigned>(accent_dark);
+    }
+    get().ws->set_appearance(a);
+    return kOk;
+  });
+}
+
 EMSCRIPTEN_KEEPALIVE int nymph_editor_resize(float width, float height, float pixel_ratio) {
   return guarded([&] {
     editor& e = get();

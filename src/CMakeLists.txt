@@ -77,6 +77,7 @@ add_library(nymph STATIC
   edit/edit_toolbar.hpp
   edit/edit_toolbar.cpp
   edit/workspace_layout.hpp
+  edit/panel_widgets.hpp
   elements/plot_style.hpp
   elements/plot_style.cpp
   elements/plot2d.hpp
@@ -246,6 +247,8 @@ if(NYMPH_VIEW OR NYMPH_WEB)
     workspace/workspace_input.hpp
     workspace/editor_panel.hpp
     workspace/editor_panel.cpp
+    workspace/panel_style.hpp
+    workspace/panel_style.cpp
     workspace/editor_workspace.hpp
     workspace/editor_workspace.cpp
     workspace/workspace_tools.hpp

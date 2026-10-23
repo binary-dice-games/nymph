@@ -638,6 +638,33 @@ The MCP tools see the pane: `editor_state` reports whether it is shown,
 ahead of the model, and its error; `editor_source` returns the model's
 source.
 
+### 5.5 Look (`src/workspace/panel_style.*`, `src/edit/panel_widgets.hpp`)
+
+The panel, its tabs, tables, dialogs, the floating toolbar and the source
+pane share one flat palette taken from the app's CSS (`web/app/app.css`:
+background, surfaces, border, text, muted, accent), light or dark, in both
+hosts. Sizes follow the floating toolbar, which already looked like a web
+app: rounded frames (7 px) and popups (10 px), thin 1 px borders, roomy
+padding, thin transparent scrollbars, no window rounding for the docked
+windows. The text font is Fira Sans (ImGui's bitmap font until its bytes
+arrive), the pane's Fira Mono; the web page fetches both at `createEditor()`, so they reach the atlas together (Fira Mono added later, when the pane opens, showed stale glyphs in WebGL).
+Save is a primary button in the accent; section headers (Elements, All
+fields) are titles, not filled bars; the figure's selection and hover
+outlines use the accent.
+
+**Who decides.** `editor_panel::set_theme()` follows the figure's theme
+(dark panel only for `dark`) until `set_appearance()` pins a
+`panel_appearance` {dark, accent, accent_dark}; the workspace keeps the
+pinned look across panel re-creation. The web app pins it from the page:
+`data-theme` or `prefers-color-scheme`, and the CSS `--accent`, again on
+each theme change. The chart itself keeps its own theme (the app's
+**Chart:** menu overrides it): a diagram canvas stays as authored, as in
+Lucidchart or Mermaid's editor.
+
+**Rejected.** Deriving the panel's colours from the figure's ImGui theme
+(the previous look): classic and light themes are ImGui's desktop palettes,
+blue and grey, and a dark page then framed a light panel.
+
 ## 6. Build
 
 - ImGuiColorTextEdit is a submodule, `extern/ImGuiColorTextEdit`, pinned

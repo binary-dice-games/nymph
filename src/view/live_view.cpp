@@ -186,6 +186,7 @@ struct live_view::impl {
   view_options options;
   view_size size;
   std::string theme_override;
+  unsigned outline_rgb = 0x288cff; ///< set_outline_color()
 
   std::unique_ptr<figure> fig;
   std::string source;
@@ -657,8 +658,11 @@ struct live_view::impl {
     const auto to_logical = [&](const edit_target& t) {
       return std::pair<ImVec2, ImVec2>{ImVec2(t.x / s, t.y / s), ImVec2((t.x + t.width) / s, (t.y + t.height) / s)};
     };
-    const ImU32 hover_color = IM_COL32(40, 140, 255, 200);
-    const ImU32 select_color = IM_COL32(40, 140, 255, 255);
+    const auto outline = [&](int alpha) {
+      return IM_COL32((outline_rgb >> 16) & 0xff, (outline_rgb >> 8) & 0xff, outline_rgb & 0xff, alpha);
+    };
+    const ImU32 hover_color = outline(200);
+    const ImU32 select_color = outline(255);
     if (io.MousePos.x > -FLT_MAX / 2) {
       const std::vector<edit_target> under = targets_at_css(io.MousePos.x * s, io.MousePos.y * s);
       if (!under.empty()) {
@@ -1041,6 +1045,15 @@ std::vector<edit_target> live_view::targets_at(float x, float y) const {
 
 std::optional<edit_target> live_view::target_for(std::string_view element, std::string_view field) const {
   return impl_->edit_mode ? impl_->find_target(element, field) : std::nullopt;
+}
+
+void live_view::set_outline_color(unsigned rgb) {
+  impl& m = *impl_;
+  if (m.outline_rgb == rgb) {
+    return;
+  }
+  m.outline_rgb = rgb;
+  m.pending_frames = std::max(m.pending_frames, 1);
 }
 
 void live_view::set_selection(std::optional<edit_target_id> selection) {

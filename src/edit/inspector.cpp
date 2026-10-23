@@ -18,6 +18,7 @@
 #include "edit/field_value.hpp"
 #include "edit/image_fields.hpp"
 #include "edit/number_box.hpp"
+#include "edit/panel_widgets.hpp"
 #include "fonts/embedded_fonts.hpp"
 #include "schema/element_class.hpp"
 
@@ -724,7 +725,17 @@ inspector_events inspector::draw(editor_model& model, const std::vector<edit_ele
   }
   ImGui::SetItemTooltip("Edit the description (alt text) and the source note of the figure.");
   ImGui::BeginDisabled(!model.modified());
-  events.save = ImGui::Button("Save");
+  // Save at the row's right end when it fits, else on its own line.
+  {
+    const float save_w = ImGui::CalcTextSize("Save").x + ImGui::GetStyle().FramePadding.x * 2.0f;
+    const float row_end = ImGui::GetItemRectMax().x + ImGui::GetStyle().ItemSpacing.x;
+    const float right = ImGui::GetCursorScreenPos().x + ImGui::GetContentRegionAvail().x; // the next line's start + width
+    if (row_end + save_w <= right) {
+      ImGui::SameLine(0.0f, 0.0f);
+      ImGui::SetCursorScreenPos(ImVec2(right - save_w, ImGui::GetCursorScreenPos().y));
+    }
+  }
+  events.save = primary_button("Save");
   ImGui::EndDisabled();
   if (!status.empty()) {
     ImGui::TextDisabled("%s", status.c_str());
@@ -748,7 +759,7 @@ inspector_events inspector::draw(editor_model& model, const std::vector<edit_ele
   ImGui::BeginChild("##body", ImVec2(0, reserved > 0.0f ? -(reserved + style.ItemSpacing.y) : 0.0f));
 
   // The elements.
-  if (ImGui::CollapsingHeader("Elements", ImGuiTreeNodeFlags_DefaultOpen)) {
+  if (section_header("Elements", ImGuiTreeNodeFlags_DefaultOpen)) {
     ImGui::BeginChild("##elements", ImVec2(0, elements_height_), ImGuiChildFlags_Borders);
     draw_tree(model, tree, events);
     ImGui::EndChild();
@@ -789,7 +800,7 @@ inspector_events inspector::draw(editor_model& model, const std::vector<edit_ele
       draw_field(model, *first, true, events);
       ImGui::Separator();
     }
-    if (ImGui::CollapsingHeader("All fields", first != nullptr ? 0 : ImGuiTreeNodeFlags_DefaultOpen)) {
+    if (section_header("All fields", first != nullptr ? 0 : ImGuiTreeNodeFlags_DefaultOpen)) {
       for (const editable_field& f : fields) {
         if (&f != first) {
           draw_field(model, f, false, events);

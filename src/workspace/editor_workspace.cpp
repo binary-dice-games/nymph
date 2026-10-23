@@ -433,6 +433,14 @@ void editor_workspace::frame(double now_seconds) {
     panel_->refresh();
   }
   panel_->set_theme(view_.theme());
+  panel_->check_fonts();
+  if (appearance_) {
+    panel_->set_appearance(*appearance_);
+  }
+  {
+    const panel_appearance& a = panel_->appearance();
+    view_.set_outline_color(a.dark ? a.accent_dark : a.accent);
+  }
   panel_->set_anchor(selection_box());
   if (panel_->wants_frame()) {
     const inspector_events events = panel_->frame(now_seconds, view_.element_list(), host_.status_line(status_));

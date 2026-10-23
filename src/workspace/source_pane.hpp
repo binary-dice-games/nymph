@@ -35,8 +35,8 @@ class source_pane {
   ///        ahead or has text waiting to be applied.
   void follow(const std::string& source);
 
-  /// @brief The editor's dark or light palette.
-  void set_dark(bool dark);
+  /// @brief The editor's colours (panel_style.hpp source_palette()).
+  void set_palette(const TextEditor::Palette& palette);
 
   /// @brief Draws the editor into the current window, filling the space
   ///        left (`font` the monospace font, or nullptr for the current one).

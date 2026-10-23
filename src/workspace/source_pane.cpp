@@ -110,8 +110,8 @@ void source_pane::follow(const std::string& source) {
   undo_index_ = editor_.GetUndoIndex();
 }
 
-void source_pane::set_dark(bool dark) {
-  editor_.SetPalette(dark ? TextEditor::GetDarkPalette() : TextEditor::GetLightPalette());
+void source_pane::set_palette(const TextEditor::Palette& palette) {
+  editor_.SetPalette(palette);
 }
 
 std::optional<std::string> source_pane::draw(double now_seconds, ImFont* font, float font_size) {

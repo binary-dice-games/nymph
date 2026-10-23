@@ -142,6 +142,16 @@ class editor_workspace {
   const live_view& view() const {
     return view_;
   }
+  /// @brief Pins the panel's look (light or dark, the accent), now and for
+  ///        a panel shown later; std::nullopt: it follows the figure's theme
+  ///        (editor_panel::set_theme()).
+  void set_appearance(std::optional<panel_appearance> appearance) {
+    appearance_ = appearance;
+    if (panel_ != nullptr && appearance_) {
+      panel_->set_appearance(*appearance_);
+    }
+  }
+
   /// @brief The panel, or nullptr while it is hidden.
   editor_panel* panel() {
     return panel_.get();
@@ -296,6 +306,7 @@ class editor_workspace {
   workspace_gl gl_;
   live_view view_; ///< Before panel_: destroyed after it.
   std::unique_ptr<editor_panel> panel_;
+  std::optional<panel_appearance> appearance_; ///< set_appearance()
   const ImDrawData* last_ = nullptr; ///< The figure's last frame, valid until the next one.
   std::string file_name_;
   std::string saved_source_;

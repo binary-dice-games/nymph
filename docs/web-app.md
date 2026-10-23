@@ -42,6 +42,10 @@ in step both ways; `Ctrl+F` / `Ctrl+H` find and replace in it. `Ctrl+Z` /
 `Ctrl+Y` undo and redo; going back to View keeps the chart and its zoom but
 not the undo history.
 
+The editor takes the app's light or dark theme (the **⋯** menu, or the
+system's) and its green accent; the chart keeps its own theme unless you
+pick one under **Chart:**.
+
 The editor needs a mouse, a keyboard and WebGL2: on phones and tablets the
 app is a viewer only (open, view, share, download).
 

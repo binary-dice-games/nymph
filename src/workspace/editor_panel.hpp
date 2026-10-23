@@ -20,6 +20,7 @@
 #include "edit/table_grid.hpp"
 #include "edit/workspace_layout.hpp"
 #include "view/live_view.hpp"
+#include "workspace/panel_style.hpp"
 #include "workspace/source_pane.hpp"
 #include "workspace/workspace_input.hpp"
 
@@ -57,9 +58,23 @@ class editor_panel {
   ///        editor: the page's clipboard). `get` returns the text to paste.
   void set_clipboard(std::function<void(std::string_view)> set, std::function<std::string()> get);
 
-  /// @brief Colours the strip like the figure: "light", "dark" or
-  ///        "classic". Does nothing when it is the theme already in use.
+  /// @brief The figure's theme ("light", "dark", "classic"): the panel is
+  ///        dark for "dark", light otherwise, until set_appearance() pins
+  ///        its look.
   void set_theme(const std::string& theme);
+
+  /// @brief Asks for a frame when a font the panel waits for (its sans
+  ///        text font, the source pane's monospace one) has become
+  ///        available since the last frame (the web page fetches them).
+  void check_fonts();
+
+  /// @brief Pins the panel's look (light or dark, the accent) whatever the
+  ///        figure's theme: the web editor takes its page's.
+  void set_appearance(const panel_appearance& appearance);
+  /// @brief The look in use.
+  const panel_appearance& appearance() const {
+    return appearance_;
+  }
 
   /// @brief The window's client area (CSS pixels) and display scale: the
   ///        strip is its right-hand strip_width().
@@ -269,6 +284,11 @@ class editor_panel {
   std::optional<edit_target_id> synced_selection_; ///< The selection the pane's cursor last followed.
   std::string synced_source_; ///< The model source the pane last followed.
   ImFont* mono_ = nullptr; ///< FiraMono, once its bytes are there.
+  ImFont* ui_font_ = nullptr; ///< FiraSans, once its bytes are there.
+  panel_appearance appearance_;
+  bool appearance_pinned_ = false; ///< set_appearance() was called.
+  void apply_appearance(const panel_appearance& appearance);
+  static constexpr float kUiFontSize = 14.5f;
   std::function<void(std::string_view)> clipboard_set_;
   std::function<std::string()> clipboard_get_;
   std::string clipboard_text_; ///< What clipboard_get_ returned last, kept for ImGui.

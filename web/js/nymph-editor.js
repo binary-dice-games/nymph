@@ -183,6 +183,12 @@ export class NymphEditor {
     if (this.options.theme) {
       this.setTheme(this.options.theme);
     }
+    if (this.options.appearance) {
+      this.setAppearance(this.options.appearance);
+    }
+    // The panel's text and source fonts; ImGui's built-in font shows until
+    // they are here.
+    this.core.ensureFonts(['FiraSans-Regular.ttf', 'FiraMono-Regular.ttf']).then(() => this.schedule(), () => {});
     if (!this.headless) {
       this.attachInput();
       this.observer = new ResizeObserver(() => this.resize());
@@ -295,6 +301,21 @@ export class NymphEditor {
   /** "light", "dark", "classic", or "" for the source's own. */
   setTheme(theme) {
     this.core.check(this.core.withCStrings([theme === 'source' ? '' : theme], (t) => this.m._nymph_editor_set_theme(t)));
+    this.schedule();
+  }
+
+  /**
+   * The panel's look, to match the page: `dark` (boolean) and the accent
+   * colours as `#rrggbb` (`accent` for the light palette, `accentDark` for
+   * the dark one; nymph's green when left out). Without a call the panel
+   * follows the chart's theme.
+   */
+  setAppearance({ dark = false, accent, accentDark } = {}) {
+    const hex = (c) => {
+      const m = /^#?([0-9a-f]{6})$/i.exec(String(c ?? '').trim());
+      return m ? parseInt(m[1], 16) : -1;
+    };
+    this.core.check(this.m._nymph_editor_set_appearance(dark ? 1 : 0, hex(accent), hex(accentDark)));
     this.schedule();
   }
 
@@ -639,6 +660,8 @@ export class NymphEditor {
  * @param {Uint8Array} [options.png] or a nymph PNG
  * @param {string} [options.fileName] shown in the panel's dialogs
  * @param {string} [options.theme] "source", "light", "dark", "classic"
+ * @param {{dark: boolean, accent?: string, accentDark?: string}} [options.appearance]
+ *        the panel's look, the page's (setAppearance())
  * @param {boolean} [options.panel] the editor panel (default true)
  * @param {boolean} [options.sourcePane] show the YAML source pane (default false)
  * @param {boolean} [options.repair] open a source that does not bind in repair

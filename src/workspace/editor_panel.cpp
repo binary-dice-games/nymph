@@ -12,6 +12,7 @@
 #include "edit/image_fields.hpp"
 #include "fonts/embedded_fonts.hpp"
 #include "render/frame_setup.hpp"
+#include "workspace/panel_style.hpp"
 
 namespace bdg::nymph {
 
@@ -36,44 +37,6 @@ class panel_context_scope {
  private:
   ImGuiContext* previous_;
 };
-
-/// The panel's look beyond the figure theme's colours: rounder, roomier
-/// controls and softer borders. Only the panel's own context uses it; the
-/// figure and rendered images keep the theme as is.
-void apply_panel_style(ImGuiStyle& style) {
-  style.WindowRounding = 8.0f;
-  style.ChildRounding = 6.0f;
-  style.FrameRounding = 6.0f;
-  style.PopupRounding = 8.0f;
-  style.GrabRounding = 6.0f;
-  style.ScrollbarRounding = 8.0f;
-  style.TabRounding = 6.0f;
-  style.WindowPadding = ImVec2(10.0f, 8.0f);
-  style.FramePadding = ImVec2(10.0f, 6.0f);
-  style.ItemSpacing = ImVec2(8.0f, 7.0f);
-  style.ItemInnerSpacing = ImVec2(6.0f, 5.0f);
-  style.IndentSpacing = 18.0f;
-  style.ScrollbarSize = 14.0f;
-  style.GrabMinSize = 12.0f;
-  style.WindowBorderSize = 0.0f;
-  style.ChildBorderSize = 1.0f;
-  style.PopupBorderSize = 1.0f;
-  style.FrameBorderSize = 0.0f;
-  style.TabBarBorderSize = 1.0f;
-  style.SeparatorTextBorderSize = 2.0f;
-  style.SeparatorTextPadding = ImVec2(16.0f, 4.0f);
-  style.WindowMenuButtonPosition = ImGuiDir_Right;
-  style.ButtonTextAlign = ImVec2(0.5f, 0.5f);
-}
-
-/// Softens the theme's frame borders and gives hovered/pressed buttons a
-/// clear step, whatever the theme.
-void soften_colors(ImGuiStyle& style) {
-  ImVec4* c = style.Colors;
-  c[ImGuiCol_Border].w = std::min(c[ImGuiCol_Border].w, 0.45f);
-  c[ImGuiCol_Separator].w = std::min(c[ImGuiCol_Separator].w, 0.5f);
-  c[ImGuiCol_PopupBg].w = 1.0f;
-}
 
 } // namespace
 
@@ -124,9 +87,8 @@ editor_panel::editor_panel(std::string source, std::string file_name, const char
   ImGuiIO& io = ImGui::GetIO();
   io.IniFilename = nullptr;
   io.LogFilename = nullptr;
-  ImGui::GetStyle().FontSizeBase = 15.0f;
-  apply_panel_style(ImGui::GetStyle());
-  set_theme("light");
+  ImGui::GetStyle().FontSizeBase = kUiFontSize;
+  apply_appearance(appearance_);
   headless_ = glsl_version == nullptr || *glsl_version == '\0';
   if (!headless_) {
     ImGui_ImplOpenGL3_Init(glsl_version);
@@ -166,15 +128,34 @@ void editor_panel::set_theme(const std::string& name) {
   if (name == theme_) {
     return;
   }
-  const theme* t = find_theme(name);
-  if (t == nullptr) {
+  theme_ = name;
+  if (!appearance_pinned_) {
+    panel_appearance a = appearance_;
+    a.dark = name == "dark";
+    apply_appearance(a);
+  }
+}
+
+void editor_panel::check_fonts() {
+  if ((ui_font_ == nullptr && !font_data("FiraSans-Regular.ttf").empty()) ||
+      (mono_ == nullptr && !font_data("FiraMono-Regular.ttf").empty())) {
+    refresh();
+  }
+}
+
+void editor_panel::set_appearance(const panel_appearance& appearance) {
+  if (appearance_pinned_ && appearance == appearance_) {
     return;
   }
-  theme_ = name;
-  pane_.set_dark(name == "dark");
+  appearance_pinned_ = true;
+  apply_appearance(appearance);
+}
+
+void editor_panel::apply_appearance(const panel_appearance& appearance) {
+  appearance_ = appearance;
+  pane_.set_palette(source_palette(appearance));
   const panel_context_scope scope(context_);
-  t->imgui(&ImGui::GetStyle()); // the colours of the figure's theme
-  soften_colors(ImGui::GetStyle());
+  apply_panel_style(ImGui::GetStyle(), appearance);
   refresh();
 }
 
@@ -354,7 +335,19 @@ inspector_events editor_panel::frame(double now_seconds, const std::vector<edit_
   last_time_ = now_seconds;
   ImGui::GetStyle().FontScaleDpi = scale_;
 
-  if (mono_ == nullptr && source_shown_) {
+  if (ui_font_ == nullptr) {
+    // The panel's text in the figures' sans font (Fira Sans), once its
+    // bytes are there; ImGui's bitmap font until then.
+    const std::span<const uint8_t> sans = font_data("FiraSans-Regular.ttf");
+    if (!sans.empty()) {
+      ImFontConfig config;
+      config.FontDataOwnedByAtlas = false;
+      ui_font_ = io.Fonts->AddFontFromMemoryTTF(const_cast<uint8_t*>(sans.data()), static_cast<int>(sans.size()), kUiFontSize, &config);
+      io.FontDefault = ui_font_;
+      refresh(); // a few frames more, drawn with it
+    }
+  }
+  if (mono_ == nullptr) {
     // The pane's monospace font, once its bytes are there (embedded
     // natively; fetched on demand by the web page).
     const std::span<const uint8_t> mono = font_data("FiraMono-Regular.ttf");
@@ -362,6 +355,7 @@ inspector_events editor_panel::frame(double now_seconds, const std::vector<edit_
       ImFontConfig config;
       config.FontDataOwnedByAtlas = false;
       mono_ = io.Fonts->AddFontFromMemoryTTF(const_cast<uint8_t*>(mono.data()), static_cast<int>(mono.size()), 14.0f, &config);
+      refresh();
     }
   }
   if (!headless_) {

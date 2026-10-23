@@ -152,11 +152,12 @@ editor.on('save', () => save(editor.toYaml()));
 
 | Method / event | What |
 |----------------|------|
-| `createEditor(container, {source \| png, fileName, theme, panel, sourcePane, repair})` | The editor, or a `NymphError` (no WebGL2, a source that does not load; with `repair: true` such a source opens with only the source pane editing). |
+| `createEditor(container, {source \| png, fileName, theme, appearance, panel, sourcePane, repair})` | The editor, or a `NymphError` (no WebGL2, a source that does not load; with `repair: true` such a source opens with only the source pane editing). |
 | `open(yamlOrPng)`, `setSource(yaml, {asChange, label, origin})` | A new document; with `asChange`, one undo step. |
 | `source()`, `toYaml()`, `toPng()`, `paneText()` | The YAML, with the view on screen, as a PNG; the pane's text. |
 | `modified()`, `markSaved()`, `version()`, `state()` | Unsaved changes, the change counter, labels of undo / redo, the selection. |
 | `undo()`, `redo()`, `resetView()`, `setTheme(t)`, `showPanel(on)`, `showSource(on, line)` | |
+| `setAppearance({dark, accent, accentDark})` | The panel's look, to match the page: light or dark, accent colours as `#rrggbb` (nymph's green when left out). Without it the panel is dark only for a chart in the `dark` theme. |
 | `tool(name, args, {origin})`, `toolDefinitions()` | The editor tools of `nymph mcp` (`editor_state`, `editor_set_fields`, `editor_add_element`, ...), run in the page; changes are attributed to `origin`. |
 | `beginGroup(label, origin)`, `endGroup()` | Several changes as one undo step. |
 | `importCsv(table, csv)`, `targetRect(path, field)`, `focus()`, `destroy()` | |

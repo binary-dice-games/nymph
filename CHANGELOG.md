@@ -26,7 +26,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 - `nymph view --edit`: number fields are boxes that take a typed value after a click, or change by dragging sideways (Shift finer, Ctrl coarser); a text size of 0 shows as "auto".
-- `nymph view --edit`: the editor panel has rounder windows, buttons and fields, larger buttons and spacing, and softer borders.
+- `nymph view --edit` and the web editor: a flat, web-app style panel (Fira Sans text, light or dark palette, green accent, primary Save button, section headers, thin scrollbars); the selection outline uses the accent. The web editor follows the page's light / dark theme and accent (`setAppearance()`, `appearance` option of `createEditor()`).
 
 - `nymph view --edit`: the element list is a tree with collapsible nodes and an icon per element type; errors show in their own panel at the bottom of the editor.
 
