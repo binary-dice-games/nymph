@@ -551,8 +551,35 @@ json editor_undo_redo(editor_host& host, bool undo) {
   commit_result r;
   r.ok = true;
   r.source = *s;
+  r.label = m.last_label();
+  r.origin = m.last_origin();
   return change_result(host, r, undo ? "editor_undo" : "editor_redo");
 }
+
+/// Attributes the model's changes during one tool call to `origin`, labelled
+/// with the tool's title, and puts the previous attribution back after.
+class attribution {
+ public:
+  attribution(editor_host& host, const std::string& label, const std::string& origin) : model_(host.model()) {
+    if (model_ != nullptr) {
+      previous_ = model_->origin();
+      model_->set_origin(origin);
+      model_->set_label(label);
+    }
+  }
+  ~attribution() {
+    if (model_ != nullptr) {
+      model_->set_origin(previous_);
+      model_->set_label("");
+    }
+  }
+  attribution(const attribution&) = delete;
+  attribution& operator=(const attribution&) = delete;
+
+ private:
+  editor_model* model_;
+  std::string previous_;
+};
 
 // ── Definitions ──────────────────────────────────────────────────────────────
 
@@ -712,16 +739,44 @@ json editor_tool_definitions() {
   return out;
 }
 
-void add_editor_tools(tool_registry& registry, editor_runner run) {
+std::vector<tool> make_editor_tools(editor_runner run) {
+  std::vector<tool> out;
   for (const definition& d : definitions()) {
     auto handler = d.handler;
-    registry.add(
+    const std::string title = d.title;
+    out.push_back(
         {{{"name", d.name},
           {"title", d.title},
           {"description", d.description},
           {"inputSchema", d.input},
           {"annotations", annotations(d.title, d.read_only)}},
-         [run, handler](const json& args) { return run([handler, args](editor_host& host) { return handler(host, args); }); }});
+         [run, handler, title](const json& args) {
+           return run([handler, args, title](editor_host& host) {
+             const attribution scope(host, title, "agent:mcp");
+             return handler(host, args);
+           });
+         }});
+  }
+  return out;
+}
+
+json call_editor_tool(editor_host& host, const std::string& name, const json& arguments, const std::string& origin) {
+  const std::vector<definition> all = definitions();
+  const auto it = std::find_if(all.begin(), all.end(), [&](const definition& d) { return name == d.name; });
+  if (it == all.end()) {
+    throw tool_error("unknown editor tool '" + name + "'");
+  }
+  const json args = arguments.is_null() ? json::object() : arguments;
+  try {
+    if (!args.is_object()) {
+      throw tool_error("the arguments must be an object");
+    }
+    const attribution scope(host, it->title, origin);
+    return it->handler(host, args);
+  } catch (const tool_error& e) {
+    return text_result(e.what(), true);
+  } catch (const std::exception& e) {
+    return text_result(e.what(), true);
   }
 }
 

@@ -18,7 +18,7 @@
 #include "edit/table_grid.hpp"
 #include "edit/workspace_layout.hpp"
 #include "view/live_view.hpp"
-#include "window/window_host.hpp"
+#include "workspace/workspace_input.hpp"
 
 namespace bdg::nymph {
 
@@ -36,7 +36,9 @@ class editor_panel {
     discard_and_close, ///< Close the window, dropping the changes.
   };
 
-  /// @param glsl_version The window's GLSL version line.
+  /// @param glsl_version The window's GLSL version line; nullptr or "" for
+  ///        a panel that runs its frames without drawing them (tests, the
+  ///        web editor's headless mode).
   /// @param file_name The input's name, shown in the dialogs.
   /// @throws nymph::error if `source` is not a valid source.
   editor_panel(std::string source, std::string file_name, const char* glsl_version);
@@ -180,6 +182,9 @@ class editor_panel {
   editor_model& model() {
     return model_;
   }
+  table_grid& grid() {
+    return grid_;
+  }
   inspector& panel() {
     return inspector_;
   }
@@ -199,6 +204,7 @@ class editor_panel {
   edit_toolbar toolbar_;
   std::optional<layout_box> anchor_; ///< The selection in the figure, for the toolbar.
   ImGuiContext* context_ = nullptr;
+  bool headless_ = false; ///< No OpenGL backend: frames run, nothing is drawn.
   float width_ = 0.0f;
   float height_ = 0.0f;
   float scale_ = 1.0f;

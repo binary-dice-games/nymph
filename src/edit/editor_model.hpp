@@ -51,6 +51,11 @@ struct commit_result {
   path_map paths;
   /// A structural change: the element it made, moved or duplicated.
   std::string path;
+  /// What the change was ("Set title", "Add element") and who made it
+  /// ("user", or "agent:<connector>"), as its undo entry records them
+  /// (spec/15_web_app/DESIGN.md section 5.1). Empty when not ok.
+  std::string label;
+  std::string origin;
 };
 
 /// @brief Where a chart added at the root goes when the root is not a
@@ -247,6 +252,49 @@ class editor_model {
   bool can_redo() const {
     return !redo_.empty();
   }
+  /// @brief The label of the change undo() would undo / redo() would redo,
+  ///        or "" (for the buttons' tooltips).
+  std::string undo_label() const {
+    return undo_.empty() ? std::string() : undo_.back().label;
+  }
+  std::string redo_label() const {
+    return redo_.empty() ? std::string() : redo_.back().label;
+  }
+
+  // ── Attribution (spec/15_web_app/DESIGN.md section 5.1) ─────────────
+
+  /// @brief Who makes the next changes: "user" (the default) or
+  ///        "agent:<connector>"; recorded on each undo entry.
+  void set_origin(std::string origin) {
+    origin_ = origin.empty() ? std::string("user") : std::move(origin);
+  }
+  const std::string& origin() const {
+    return origin_;
+  }
+  /// @brief Names the next changes; "" goes back to the default labels
+  ///        ("Set title", from the field).
+  void set_label(std::string label) {
+    label_ = std::move(label);
+  }
+
+  /// @brief Makes the changes until end_group() one undo entry, labelled
+  ///        `label` and attributed to `origin` (an agent's turn). Groups do
+  ///        not nest: a begin_group() while one is open continues it.
+  void begin_group(std::string label, std::string origin);
+  /// @brief Closes the open group; does nothing without one.
+  void end_group();
+  bool in_group() const {
+    return group_.has_value();
+  }
+
+  /// @brief The label and origin of the last accepted change, undo and redo
+  ///        included ("Undo Set title"), for the hosts' change events.
+  const std::string& last_label() const {
+    return last_label_;
+  }
+  const std::string& last_origin() const {
+    return last_origin_;
+  }
   /// @return The restored source, or nullopt when there is nothing to undo.
   std::optional<std::string> undo();
   std::optional<std::string> redo();
@@ -294,8 +342,26 @@ class editor_model {
   std::string original_;
   std::unique_ptr<figure> figure_;
   std::optional<edit_target_id> selection_;
-  std::deque<std::string> undo_;
-  std::deque<std::string> redo_;
+  /// A source the history can go back (or forward) to, and the change that
+  /// leads away from it.
+  struct undo_entry {
+    std::string source;
+    std::string label;
+    std::string origin;
+  };
+  /// The open group: its label, origin, and whether its entry was pushed.
+  struct open_group {
+    std::string label;
+    std::string origin;
+    bool pushed = false;
+  };
+  std::deque<undo_entry> undo_;
+  std::deque<undo_entry> redo_;
+  std::string origin_ = "user";
+  std::string label_;
+  std::optional<open_group> group_;
+  std::string last_label_;
+  std::string last_origin_ = "user";
   std::string last_key_; ///< Element, field and undo generation of the last change, for merging.
   uint64_t version_ = 0;
 };

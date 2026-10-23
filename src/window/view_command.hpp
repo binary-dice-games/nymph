@@ -9,6 +9,7 @@
 #include <string>
 #include <string_view>
 #include "view/live_view.hpp"
+#include "workspace/workspace_input.hpp"
 
 namespace bdg::nymph {
 
@@ -73,18 +74,6 @@ std::string view_save_path(const std::string& input, std::string_view extension)
 ///         the source's line and column included); 2 for bad arguments
 ///         (message and usage on `err`).
 int run_view_cli(std::span<const std::string_view> args, std::ostream& err);
-
-/// @brief Who gets a key in `nymph view`.
-enum class key_route {
-  panel, ///< The editor panel's text field or dialog.
-  figure, ///< A text field of the figure (UI mockups, spec/09_ui_mockups).
-  viewer, ///< The viewer's shortcuts (Esc, Q, R, S, Y, E).
-};
-
-/// @brief The panel first while it has the keyboard, then the figure while
-///        one of its text fields does, else the viewer's shortcuts: typing
-///        "q" in a field never closes the window.
-key_route route_key(bool panel_has_keyboard, bool figure_has_keyboard);
 
 /// @brief The usage text of `nymph view`.
 const char* view_usage();

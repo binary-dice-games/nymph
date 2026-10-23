@@ -14,7 +14,7 @@
 #include <vector>
 #include "edit/editor_model.hpp"
 #include "mcp/json_rpc.hpp"
-#include "mcp/tools.hpp"
+#include "mcp/tool.hpp"
 #include "view/live_view.hpp"
 
 namespace bdg::nymph::mcp {
@@ -58,8 +58,19 @@ using editor_runner = std::function<json(const editor_job&)>;
 /// @brief The editor tools' `tools/list` entries, in order.
 json editor_tool_definitions();
 
-/// @brief Adds the editor tools to `registry`, each running through `run`.
-void add_editor_tools(tool_registry& registry, editor_runner run);
+/// @brief The editor tools, each running its job through `run` (the
+///        socket server's UI-thread queue). tools.hpp add_editor_tools()
+///        adds them to a registry.
+std::vector<tool> make_editor_tools(editor_runner run);
+
+/// @brief Runs the editor tool `name` on `host` at once, on the calling
+///        (UI) thread: the web editor's `tool()` (spec/15_web_app/DESIGN.md
+///        section 5.2). The model's changes are attributed to `origin`
+///        ("user", "agent:<connector>") and labelled with the tool's title.
+/// @return A CallToolResult; a problem (bad arguments, a refused change, a
+///         hidden panel) is a result with `isError`.
+/// @throws tool_error for an unknown tool name.
+json call_editor_tool(editor_host& host, const std::string& name, const json& arguments, const std::string& origin = "user");
 
 /// @brief The `instructions` of the editor's own MCP session.
 std::string editor_instructions();

@@ -11,35 +11,10 @@
 #include <memory>
 #include <string>
 #include "view/live_view.hpp"
+#include "workspace/workspace_input.hpp"
 
 namespace bdg::nymph {
 
-/// @brief The keys `nymph view` reacts to: its own shortcuts, and what a
-///        text field of the editor panel needs.
-enum class window_key {
-  escape, q, r, s, y, e,
-  enter, tab, backspace, del, left, right, up, down, home, end, page_up, page_down,
-  a, c, d, v, x, z,
-  other
-};
-
-/// @brief The pointer's look over the window (native_window::set_cursor()).
-enum class cursor_shape {
-  arrow,
-  resize_horizontal, ///< Over the divider between figure and editor strip.
-  text, ///< Over a text field.
-};
-
-/// @brief ImGui's key for `key` (ImGuiKey_None for keys ImGui does not
-///        need: the viewer's own letters).
-ImGuiKey imgui_key(window_key key);
-
-/// @brief The modifier keys held with a key.
-struct key_mods {
-  bool ctrl = false;
-  bool shift = false;
-  bool alt = false;
-};
 
 /// @brief What a native_window reports; implemented by the viewer. Called
 ///        from native_window::pump() (and, on Windows, while the window is

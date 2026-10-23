@@ -690,6 +690,7 @@ inspector_events inspector::draw(editor_model& model, const std::vector<edit_ele
 
   // Toolbar.
   ImGui::BeginDisabled(!model.can_undo());
+  const std::string undo_tip = model.undo_label();
   if (ImGui::Button("Undo")) {
     if (const std::optional<std::string> s = model.undo()) {
       events.source = *s;
@@ -697,15 +698,22 @@ inspector_events inspector::draw(editor_model& model, const std::vector<edit_ele
       error_.clear();
     }
   }
+  if (!undo_tip.empty()) {
+    ImGui::SetItemTooltip("Undo: %s", undo_tip.c_str());
+  }
   ImGui::EndDisabled();
   ImGui::SameLine();
   ImGui::BeginDisabled(!model.can_redo());
+  const std::string redo_tip = model.redo_label();
   if (ImGui::Button("Redo")) {
     if (const std::optional<std::string> s = model.redo()) {
       events.source = *s;
       events.undo = true;
       error_.clear();
     }
+  }
+  if (!redo_tip.empty()) {
+    ImGui::SetItemTooltip("Redo: %s", redo_tip.c_str());
   }
   ImGui::EndDisabled();
   ImGui::SameLine();

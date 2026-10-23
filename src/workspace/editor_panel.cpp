@@ -1,7 +1,7 @@
 // MIT License © 2026 Binary Dice Games
 /// @file editor_panel.cpp
 /// @brief The editor panel's ImGui context and its frames.
-#include "window/editor_panel.hpp"
+#include "workspace/editor_panel.hpp"
 #include <imgui_impl_opengl3.h>
 #include <algorithm>
 #include <cfloat>
@@ -97,6 +97,9 @@ ImGuiKey imgui_key(window_key key) {
     case window_key::x: return ImGuiKey_X;
     case window_key::y: return ImGuiKey_Y;
     case window_key::z: return ImGuiKey_Z;
+    case window_key::f: return ImGuiKey_F;
+    case window_key::h: return ImGuiKey_H;
+    case window_key::u: return ImGuiKey_U;
     default: return ImGuiKey_None;
   }
 }
@@ -112,12 +115,19 @@ editor_panel::editor_panel(std::string source, std::string file_name, const char
   ImGui::GetStyle().FontSizeBase = 15.0f;
   apply_panel_style(ImGui::GetStyle());
   set_theme("light");
-  ImGui_ImplOpenGL3_Init(glsl_version);
+  headless_ = glsl_version == nullptr || *glsl_version == '\0';
+  if (!headless_) {
+    ImGui_ImplOpenGL3_Init(glsl_version);
+  } else {
+    io.BackendFlags |= ImGuiBackendFlags_RendererHasTextures; // texture requests stay pending: nothing draws
+  }
 }
 
 editor_panel::~editor_panel() {
   const panel_context_scope scope(context_);
-  ImGui_ImplOpenGL3_Shutdown();
+  if (!headless_) {
+    ImGui_ImplOpenGL3_Shutdown();
+  }
   ImGui::DestroyContext(context_);
 }
 
@@ -229,7 +239,9 @@ inspector_events editor_panel::frame(double now_seconds, const std::vector<edit_
   last_time_ = now_seconds;
   ImGui::GetStyle().FontScaleDpi = scale_;
 
-  ImGui_ImplOpenGL3_NewFrame();
+  if (!headless_) {
+    ImGui_ImplOpenGL3_NewFrame();
+  }
   ImGui::NewFrame();
   const workspace_layout regions = layout();
   constexpr ImGuiWindowFlags kFixed = ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize |
@@ -511,6 +523,9 @@ void editor_panel::draw_dialogs() {
 
 void editor_panel::render() {
   const panel_context_scope scope(context_);
+  if (headless_) {
+    return;
+  }
   if (ImDrawData* data = ImGui::GetDrawData()) {
     ImGui_ImplOpenGL3_RenderDrawData(data);
   }

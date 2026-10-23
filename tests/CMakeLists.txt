@@ -167,6 +167,12 @@ if(NYMPH_VIEW)
   target_link_libraries(test_window_icon PRIVATE nymph_window)
   nymph_add_test(test_window_wake test_window_wake.cpp)
   target_link_libraries(test_window_wake PRIVATE nymph_window)
+  nymph_add_test(test_editor_workspace test_editor_workspace.cpp)
+  target_link_libraries(test_editor_workspace PRIVATE nymph_workspace)
+endif()
+if(NYMPH_MCP OR NYMPH_VIEW)
+  nymph_add_test(test_editor_attribution test_editor_attribution.cpp)
+  target_link_libraries(test_editor_attribution PRIVATE nymph_editor_tools)
 endif()
 
 # Script tests run a cross-built nymph through the toolchain's emulator,

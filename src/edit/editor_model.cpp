@@ -52,6 +52,46 @@ std::string written_text(const std::string& source, const yaml_node& doc, std::s
   return value->is_scalar() ? encode_text(value->text) : std::string();
 }
 
+/// A change's default label, from the key apply() merges by:
+/// "root/children/1/title" -> "Set title", ".../title/clear" -> "Clear
+/// title", "add/<path>" -> "Add element", "data/cell" -> "Edit data".
+std::string change_label(const std::string& key) {
+  const auto starts = [&](std::string_view prefix) { return key.rfind(prefix, 0) == 0; };
+  if (starts("add/")) {
+    return "Add element";
+  }
+  if (starts("remove/")) {
+    return "Delete element";
+  }
+  if (starts("move/")) {
+    return "Move element";
+  }
+  if (starts("duplicate/")) {
+    return "Duplicate element";
+  }
+  if (starts("fields/")) {
+    return "Set fields";
+  }
+  if (starts("top/")) {
+    return "Set " + key.substr(4);
+  }
+  if (starts("data/")) {
+    return "Edit data";
+  }
+  if (key == "source") {
+    return "Edit source";
+  }
+  std::string_view k = key;
+  bool clear = false;
+  if (k.size() > 6 && k.substr(k.size() - 6) == "/clear") {
+    clear = true;
+    k.remove_suffix(6);
+  }
+  const size_t slash = k.rfind('/');
+  const std::string field(slash == std::string_view::npos ? k : k.substr(slash + 1));
+  return (clear ? "Clear " : "Set ") + field;
+}
+
 } // namespace
 
 editor_model::editor_model(std::string source) : source_(std::move(source)), original_(source_) {
@@ -191,10 +231,18 @@ commit_result editor_model::apply(std::string next, const std::string& key, bool
       return fail(e.what(), e.line(), e.column());
     }
   }
-  if (!(merge && key == last_key_ && !undo_.empty())) {
-    undo_.push_back(source_);
+  const std::string label = group_ ? group_->label : !label_.empty() ? label_ : change_label(key);
+  const std::string origin = group_ ? group_->origin : origin_;
+  const bool merged = merge && key == last_key_ && !undo_.empty();
+  if (group_ && group_->pushed) {
+    // One entry for the whole group: its first change pushed it.
+  } else if (!merged) {
+    undo_.push_back(undo_entry{source_, label, origin});
     if (undo_.size() > kMaxUndo) {
       undo_.pop_front();
+    }
+    if (group_) {
+      group_->pushed = true;
     }
   }
   redo_.clear();
@@ -205,6 +253,10 @@ commit_result editor_model::apply(std::string next, const std::string& key, bool
   commit_result r;
   r.ok = true;
   r.source = source_;
+  r.label = label;
+  r.origin = origin;
+  last_label_ = label;
+  last_origin_ = origin;
   return r;
 }
 
@@ -278,13 +330,30 @@ commit_result editor_model::clear(std::string_view field) {
   }
 }
 
+void editor_model::begin_group(std::string label, std::string origin) {
+  if (group_) {
+    return;
+  }
+  group_ = open_group{std::move(label), origin.empty() ? std::string("user") : std::move(origin), false};
+  last_key_.clear(); // the group's first change never merges into an earlier one
+}
+
+void editor_model::end_group() {
+  group_.reset();
+  last_key_.clear();
+}
+
 std::optional<std::string> editor_model::undo() {
   if (undo_.empty()) {
     return std::nullopt;
   }
-  redo_.push_back(source_);
-  source_ = std::move(undo_.back());
+  group_.reset();
+  undo_entry back = std::move(undo_.back());
   undo_.pop_back();
+  redo_.push_back(undo_entry{source_, back.label, back.origin});
+  last_label_ = "Undo " + back.label;
+  last_origin_ = origin_;
+  source_ = std::move(back.source);
   last_key_.clear();
   ++version_;
   refresh();
@@ -298,9 +367,13 @@ std::optional<std::string> editor_model::redo() {
   if (redo_.empty()) {
     return std::nullopt;
   }
-  undo_.push_back(source_);
-  source_ = std::move(redo_.back());
+  group_.reset();
+  undo_entry back = std::move(redo_.back());
   redo_.pop_back();
+  undo_.push_back(undo_entry{source_, back.label, back.origin});
+  last_label_ = "Redo " + back.label;
+  last_origin_ = origin_;
+  source_ = std::move(back.source);
   last_key_.clear();
   ++version_;
   refresh();

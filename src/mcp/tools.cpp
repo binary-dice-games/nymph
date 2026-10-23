@@ -18,6 +18,7 @@
 #include "elements/register_builtin.hpp"
 #include "fonts/embedded_fonts.hpp"
 #include "mcp/base64.hpp"
+#include "mcp/editor_tools.hpp"
 #include "mcp/resources.hpp"
 #include "png/png_meta.hpp"
 
@@ -319,12 +320,10 @@ json annotations(const char* title, bool read_only) {
 
 // ── Registry ────────────────────────────────────────────────────────────────
 
-json text_result(const std::string& text, bool error) {
-  json result = {{"content", json::array({{{"type", "text"}, {"text", text}}})}};
-  if (error) {
-    result["isError"] = true;
+void add_editor_tools(tool_registry& registry, editor_runner run) {
+  for (tool& t : make_editor_tools(std::move(run))) {
+    registry.add(std::move(t));
   }
-  return result;
 }
 
 tool_registry::tool_registry(const server_options& options) : options_(options) {}
