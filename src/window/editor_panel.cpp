@@ -471,8 +471,9 @@ void editor_panel::draw_dialogs() {
 
   ImGui::SetNextWindowPos(middle, ImGuiCond_Appearing, ImVec2(0.5f, 0.5f));
   if (ImGui::BeginPopupModal(kSaveDialog, nullptr, flags)) {
-    ImGui::TextUnformatted(("Overwrite " + file_name_ + " with your changes?").c_str());
-    ImGui::TextDisabled("The file is replaced; this cannot be undone.");
+    ImGui::TextUnformatted(
+        (save_question_.empty() ? "Overwrite " + file_name_ + " with your changes?" : save_question_).c_str());
+    ImGui::TextDisabled("%s", save_note_.empty() ? "The file is replaced; this cannot be undone." : save_note_.c_str());
     ImGui::Spacing();
     if (ImGui::Button("Save", ImVec2(110, 0)) || enter) {
       decision_ = decision::save;
@@ -489,7 +490,8 @@ void editor_panel::draw_dialogs() {
   ImGui::SetNextWindowPos(middle, ImGuiCond_Appearing, ImVec2(0.5f, 0.5f));
   if (ImGui::BeginPopupModal(kCloseDialog, nullptr, flags)) {
     ImGui::TextUnformatted((file_name_ + " has changes that are not saved.").c_str());
-    ImGui::TextDisabled("Save them over the file before closing?");
+    ImGui::TextDisabled("%s", save_question_.empty() ? "Save them over the file before closing?"
+                                                     : ("Save them as " + file_name_ + " before closing?").c_str());
     ImGui::Spacing();
     if (ImGui::Button("Save", ImVec2(100, 0)) || enter) {
       decision_ = decision::save_and_close;

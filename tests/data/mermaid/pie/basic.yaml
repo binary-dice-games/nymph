@@ -1,0 +1,22 @@
+nymph: 1
+description: "Pie chart converted from mermaid: Key elements in Product X."
+image: {width: 560, height: 440}
+source: Converted from a mermaid pie.
+root:
+  type: Plot
+  title: Key elements in Product X
+  flags: Equal
+  legend_location: East
+  legend_flags: Outside
+  x_flags: NoDecorations
+  y_flags: NoDecorations
+  x_min: 0
+  x_max: 1
+  children:
+    - {type: PlotPieChart, labels: $label, values: $value, normalize: true}
+data: |
+  label, value
+  Calcium, 42.96
+  Potassium, 50.05
+  Magnesium, 10.01
+  Iron, 5

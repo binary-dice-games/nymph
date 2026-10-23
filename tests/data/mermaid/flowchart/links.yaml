@@ -1,0 +1,53 @@
+nymph: 1
+description: Flowchart converted from mermaid.
+image: {width: 1152, height: 508}
+source: Converted from a mermaid graph.
+root:
+  type: Flowchart
+  children:
+    - {type: FlowNode, id: A}
+    - {type: FlowNode, id: B}
+    - {type: FlowNode, id: C}
+    - {type: FlowNode, id: D}
+    - {type: FlowNode, id: E}
+    - {type: FlowNode, id: F}
+    - {type: FlowNode, id: G}
+    - {type: FlowNode, id: H}
+    - {type: FlowNode, id: I}
+    - {type: FlowNode, id: J}
+    - {type: FlowNode, id: K}
+    - {type: FlowNode, id: L}
+    - {type: FlowNode, id: M}
+    - {type: FlowNode, id: N}
+    - {type: FlowNode, id: O}
+    - {type: FlowNode, id: P}
+    - {type: FlowNode, id: Q}
+    - {type: FlowNode, id: R}
+    - {type: FlowNode, id: S}
+    - {type: FlowNode, id: T}
+    - {type: FlowNode, id: U}
+    - {type: FlowNode, id: V}
+    - {type: FlowNode, id: W}
+    - {type: FlowNode, id: X}
+    - {type: FlowLink, from: A, to: B}
+    - {type: FlowLink, from: A, to: C, arrow: None}
+    - {type: FlowLink, from: A, to: D, line: Dotted}
+    - {type: FlowLink, from: A, to: E, line: Dotted, arrow: None}
+    - {type: FlowLink, from: A, to: F, line: Thick}
+    - {type: FlowLink, from: A, to: G, line: Thick, arrow: None}
+    - {type: FlowLink, from: A, to: H, arrow: Both}
+    - {type: FlowLink, from: A, to: I}
+    - {type: FlowLink, from: A, to: J}
+    - {type: FlowLink, from: A, to: K, label: "yes"}
+    - {type: FlowLink, from: A, to: L, label: "no"}
+    - {type: FlowLink, from: A, to: M, label: maybe, line: Dotted}
+    - {type: FlowLink, from: A, to: N, label: sure, line: Thick}
+    - {type: FlowLink, from: A, to: O, min_length: 3}
+    - {type: FlowLink, from: A, to: P, line: Dotted, min_length: 2}
+    - {type: FlowLink, from: R, to: T}
+    - {type: FlowLink, from: R, to: U}
+    - {type: FlowLink, from: S, to: T}
+    - {type: FlowLink, from: S, to: U}
+    - {type: FlowLink, from: T, to: V}
+    - {type: FlowLink, from: U, to: V}
+    - {type: FlowLink, from: X, to: W}

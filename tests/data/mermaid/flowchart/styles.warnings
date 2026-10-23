@@ -1,0 +1,4 @@
+4:3: style property 'stroke-width' is ignored (nymph sets colours: fill, stroke, color)
+8:3: style property 'stroke-dasharray' is ignored (nymph sets colours: fill, stroke, color)
+11:3: click is ignored (a nymph figure has no links or callbacks)
+12:3: class names unknown node 'Z'; ignored

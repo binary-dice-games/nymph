@@ -1,0 +1,11 @@
+nymph: 1
+description: "Two steps: The first step leads to the second."
+image: {width: 320, height: 320}
+source: Converted from a mermaid flowchart.
+root:
+  type: Flowchart
+  title: With front matter
+  children:
+    - {type: FlowNode, id: one}
+    - {type: FlowNode, id: two}
+    - {type: FlowLink, from: one, to: two}

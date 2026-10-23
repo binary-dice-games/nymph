@@ -1,0 +1,15 @@
+stateDiagram-v2
+    [*] --> First
+    state First {
+        [*] --> second
+        second --> [*]
+        state second {
+            [*] --> third
+            third --> [*]
+            state third {
+                [*] --> deep
+                deep --> [*]
+            }
+        }
+    }
+    First --> [*]

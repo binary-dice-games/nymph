@@ -1,0 +1,19 @@
+nymph: 1
+description: Sequence diagram converted from mermaid.
+image: {width: 320, height: 424}
+source: Converted from a mermaid sequenceDiagram.
+root:
+  type: SequenceDiagram
+  children:
+    - {type: Participant, id: A}
+    - {type: Participant, id: B}
+    - {type: Message, from: A, to: B, text: solid line}
+    - {type: Message, from: A, to: B, text: dotted line, kind: Reply}
+    - {type: Message, from: A, to: B, text: solid arrow}
+    - {type: Message, from: A, to: B, text: dotted arrow, kind: Reply}
+    - {type: Message, from: A, to: B, text: cross}
+    - {type: Message, from: A, to: B, text: dotted cross, kind: Reply}
+    - {type: Message, from: A, to: B, text: async, kind: Async}
+    - {type: Message, from: A, to: B, text: dotted async, kind: Async}
+    - {type: Message, from: A, to: B, text: both ways}
+    - {type: Message, from: A, to: A, text: self}

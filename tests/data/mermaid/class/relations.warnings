@@ -1,0 +1,4 @@
+19:5: lollipop interfaces are dropped (draw them with a ComponentDiagram after converting)
+30:5: stereotype <<service>> is ignored (nymph shows interface, abstract and enumeration)
+31:5: namespace is dropped (its classes are kept)
+37:5: click is ignored (a nymph figure has no links or callbacks)

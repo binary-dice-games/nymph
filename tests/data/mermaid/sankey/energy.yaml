@@ -1,0 +1,17 @@
+nymph: 1
+description: Sankey diagram converted from mermaid.
+image: {width: 800, height: 500}
+source: Converted from a mermaid sankey-beta.
+root:
+  type: SankeyDiagram
+  from: $source
+  to: $target
+  values: $value
+data: |
+  source, target, value
+  Agricultural 'waste', Bio-conversion, 124.729
+  Bio-conversion, Liquid, 0.597
+  Bio-conversion, Losses, 26.862
+  Bio-conversion, Solid, 280.322
+  Bio-conversion, "Gas, mostly", 81.144
+  "A ""quoted"" source", Liquid, 3

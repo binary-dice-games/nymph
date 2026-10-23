@@ -1,0 +1,17 @@
+sequenceDiagram
+    title Login
+    autonumber
+    actor User
+    participant Web as Web app
+    participant DB@{ "type" : "database" }
+    User->>+Web: POST /login
+    alt valid password
+        Web->>DB: load user
+        activate DB
+        DB-->>Web: row
+        deactivate DB
+    else otherwise
+        Web->>Web: log failure
+    end
+    Web-->>-User: 200 OK
+    Note over User,Web: session cookie set

@@ -89,7 +89,12 @@ view_request prepare_view(const view_args& args) {
   const bytes_t input = read_input(args.input, no_stdin);
   view_request r;
   r.args = args;
-  r.source = source_of(input, args.input);
+  loaded_source loaded = load_source(input, args.input);
+  r.source = std::move(loaded.source);
+  r.mermaid_kind = std::move(loaded.mermaid_kind);
+  for (const import_warning& w : loaded.warnings) {
+    std::cerr << "nymph: " << warning_text(label_of(args.input), w) << "\n";
+  }
   // Bind and lay the source out the way the window will, so that every
   // problem is reported before a window opens; the same view says how big
   // the layout is.
@@ -121,6 +126,19 @@ std::string view_save_path(const std::string& input, std::string_view extension)
   const fs::path in(input);
   fs::path out = in;
   out.replace_filename(in.stem().string() + ".view." + std::string(extension));
+  return out.string();
+}
+
+std::string edit_save_path(const std::string& input, bool from_mermaid) {
+  if (!from_mermaid) {
+    return input;
+  }
+  namespace fs = std::filesystem;
+  fs::path out(input);
+  out.replace_extension(".yaml");
+  if (out == fs::path(input)) {
+    out.replace_extension(".nymph.yaml"); // mermaid in a .yaml file: never over it
+  }
   return out.string();
 }
 

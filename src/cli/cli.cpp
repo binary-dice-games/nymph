@@ -3,6 +3,7 @@
 /// @brief run_cli(): argument parsing, file I/O and error reporting around
 ///        the library API.
 #include "cli/cli.hpp"
+#include <cctype>
 #include <filesystem>
 #include <fstream>
 #include <iostream>
@@ -29,8 +30,10 @@ namespace {
 namespace fs = std::filesystem;
 
 constexpr const char* kUsage =
-    "usage: nymph <in> [-o <out>]                 render YAML to PNG, or print the YAML a nymph PNG carries\n"
-    "       nymph render <in> [-o <out>]          render; <in> may be a nymph PNG, or - for stdin (needs -o)\n"
+    "usage: nymph <in> [-o <out>]                 render YAML or mermaid to PNG (or -o x.yaml: convert), or print\n"
+    "                                             the YAML a nymph PNG carries\n"
+    "       nymph render <in> [-o <out>]          render; <in> may be a nymph PNG, mermaid, or - for stdin (needs -o)\n"
+    "       nymph convert <in> [-o <out.yaml>]    print (or write) the nymph YAML of a mermaid diagram, a PNG or a YAML\n"
     "       nymph extract <in.png> [-o <out>]     print (or write) the YAML a nymph PNG carries\n"
     "       nymph check <in>                      validate without rendering; silent when valid\n"
     "       nymph schema [<Type>] [--markdown]    element reference\n"
@@ -52,7 +55,7 @@ struct usage_error {
 };
 
 struct options {
-  std::string command; ///< "", render, extract, check, schema, example, fonts, shapes, rasterizers
+  std::string command; ///< "", render, convert, extract, check, schema, example, fonts, shapes, rasterizers
   std::vector<std::string> positional;
   std::optional<std::string> output;
   bool markdown = false;
@@ -65,7 +68,7 @@ options parse(std::span<const std::string_view> args) {
   options o;
   size_t i = 0;
   if (!args.empty() &&
-      (args[0] == "render" || args[0] == "extract" || args[0] == "check" || args[0] == "schema" || args[0] == "example" ||
+      (args[0] == "render" || args[0] == "convert" || args[0] == "extract" || args[0] == "check" || args[0] == "schema" || args[0] == "example" ||
        args[0] == "fonts" ||
        args[0] == "shapes" || args[0] == "rasterizers")) {
     o.command = std::string(args[0]);
@@ -108,6 +111,22 @@ options parse(std::span<const std::string_view> args) {
   return o;
 }
 
+/// Whether `path` names a YAML file (`.yaml` / `.yml`, any case).
+bool is_yaml_name(const std::string& path) {
+  std::string ext = fs::path(path).extension().string();
+  for (char& c : ext) {
+    c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+  }
+  return ext == ".yaml" || ext == ".yml";
+}
+
+/// The warnings of a mermaid import, one line each on `err`.
+void print_warnings(const loaded_source& loaded, const std::string& path, std::ostream& err) {
+  for (const import_warning& w : loaded.warnings) {
+    err << "nymph: " << warning_text(label_of(path), w) << "\n";
+  }
+}
+
 std::string png_name_for(const std::string& in) {
   fs::path p(in);
   p.replace_extension(".png");
@@ -125,7 +144,9 @@ int do_render(
     std::ostream& out,
     std::ostream& err,
     const renderer_test_options& gl_options) {
-  const std::string source = source_of(input, path);
+  const loaded_source loaded = load_source(input, path);
+  print_warnings(loaded, path, err);
+  const std::string& source = loaded.source;
   std::vector<uint8_t> png;
   try {
     renderer r = make_renderer(o.raster.value_or(rasterizer::opengl), gl_options);
@@ -151,9 +172,24 @@ int do_extract(const options& o, const std::string& path, const bytes_t& input, 
   return 0;
 }
 
-/// `check`: bind and lay out, print nothing.
-int do_check(const std::string& path, const bytes_t& input) {
-  check_source(source_of(input, path));
+/// `check`: bind and lay out, print nothing (but a mermaid import's
+/// warnings).
+int do_check(const std::string& path, const bytes_t& input, std::ostream& err) {
+  const loaded_source loaded = load_source(input, path);
+  print_warnings(loaded, path, err);
+  check_source(loaded.source);
+  return 0;
+}
+
+/// `convert`: the nymph YAML of any input (mermaid converted, a PNG's
+/// source, YAML checked and passed through) to `-o` or stdout.
+int do_convert(const options& o, const std::string& path, const bytes_t& input, std::ostream& out, std::ostream& err) {
+  const loaded_source loaded = load_source(input, path);
+  print_warnings(loaded, path, err);
+  if (loaded.mermaid_kind.empty() && !is_png(input)) {
+    check_source(loaded.source);
+  }
+  write_output(o.output.value_or("-"), loaded.source, out);
   return 0;
 }
 
@@ -336,15 +372,21 @@ int run_cli(
     if (o.command == "check" && o.output) {
       throw usage_error{"check takes no -o"};
     }
+    if (o.command == "convert" && o.output && *o.output != "-" && !is_yaml_name(*o.output)) {
+      throw usage_error{"convert writes YAML: -o must end in .yaml or .yml (" + *o.output + ")"};
+    }
     const bytes_t input = read_input(path, in);
     if (o.command.empty()) {
       // `nymph <in>`: extract from a PNG, render anything else.
       if (!is_png(input) && path == "-" && !o.output) {
         throw usage_error{"rendering from stdin needs -o <out.png> (or -o - for stdout)"};
       }
-      o.command = is_png(input) ? "extract" : "render";
-      if (o.raster && o.command != "render") {
+      o.command = is_png(input) ? "extract" : o.output && is_yaml_name(*o.output) ? "convert" : "render";
+      if (o.raster && o.command == "extract") {
         throw usage_error{"--rasterizer applies only to rendering (the input is a PNG: use nymph render)"};
+      }
+      if (o.raster && o.command == "convert") {
+        throw usage_error{"--rasterizer applies only to rendering (-o names a YAML file: this converts)"};
       }
     }
     if (o.command == "render") {
@@ -353,7 +395,10 @@ int run_cli(
     if (o.command == "extract") {
       return do_extract(o, path, input, out);
     }
-    return do_check(path, input);
+    if (o.command == "convert") {
+      return do_convert(o, path, input, out, err);
+    }
+    return do_check(path, input, err);
   } catch (const usage_error& e) {
     err << "nymph: " << e.message << "\n" << kUsage;
     return 2;

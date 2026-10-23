@@ -120,23 +120,6 @@ void write_file(const std::string& path, std::string_view data) {
 
 // ── Charts ──────────────────────────────────────────────────────────────────
 
-/// The YAML a tool works on and its name in messages.
-struct chart_input {
-  std::string source;
-  std::string label; ///< the input path, or "source" for inline text
-};
-
-chart_input load_chart(const json& args) {
-  check_one_of(args, "source", "input_path");
-  if (const std::optional<std::string> source = optional_string(args, "source")) {
-    return {*source, "source"};
-  }
-  const std::string path = checked_input_path(*optional_string(args, "input_path"));
-  std::istringstream unused; // read_input() reads it only for "-"
-  const bytes_t bytes = read_input(path, unused);
-  return {source_of(bytes, path), path};
-}
-
 /// `<label>:<line>:<column>: <message>`, as the CLI prints it.
 std::string describe(const error& e, const std::string& label) {
   std::string text = label;
@@ -144,6 +127,55 @@ std::string describe(const error& e, const std::string& label) {
     text += ":" + std::to_string(e.line()) + ":" + std::to_string(e.column());
   }
   return text + ": " + e.what();
+}
+
+/// The YAML a tool works on, its name in messages, and what a mermaid
+/// import said (spec/16_mermaid_import/DESIGN.md section 5.2).
+struct chart_input {
+  std::string source;
+  std::string label;        ///< the input path, or "source" for inline text
+  std::string mermaid_kind; ///< set when the input was mermaid
+  std::vector<import_warning> warnings;
+  bool png = false; ///< read from a nymph PNG
+};
+
+chart_input load_chart(const json& args) {
+  check_one_of(args, "source", "input_path");
+  chart_input input;
+  try {
+    if (const std::optional<std::string> source = optional_string(args, "source")) {
+      input.label = "source";
+      loaded_source loaded = load_source_text(*source);
+      input.source = std::move(loaded.source);
+      input.mermaid_kind = std::move(loaded.mermaid_kind);
+      input.warnings = std::move(loaded.warnings);
+      return input;
+    }
+    input.label = checked_input_path(*optional_string(args, "input_path"));
+    std::istringstream unused; // read_input() reads it only for "-"
+    const bytes_t bytes = read_input(input.label, unused);
+    input.png = is_png(bytes);
+    loaded_source loaded = load_source(bytes, input.label);
+    input.source = std::move(loaded.source);
+    input.mermaid_kind = std::move(loaded.mermaid_kind);
+    input.warnings = std::move(loaded.warnings);
+  } catch (const error& e) {
+    throw tool_error(describe(e, input.label)); // a problem in the mermaid
+  }
+  return input;
+}
+
+/// The note a result carries about a mermaid import: the kind and each
+/// warning, one per line; empty for YAML.
+std::string mermaid_note(const chart_input& input, const char* next) {
+  if (input.mermaid_kind.empty()) {
+    return {};
+  }
+  std::string text = "Converted from mermaid (" + input.mermaid_kind + ")" + next;
+  for (const import_warning& w : input.warnings) {
+    text += "\n" + warning_text(input.label, w);
+  }
+  return text;
 }
 
 /// Width and height from a PNG's IHDR chunk.
@@ -173,12 +205,16 @@ rasterizer rasterizer_of(const json& args, const server_options& options, bool& 
 
 json chart_input_properties() {
   return {
-      {"source", {{"type", "string"}, {"description", "The chart's YAML source (nymph format)."}}},
+      {"source",
+       {{"type", "string"},
+        {"description",
+         "The chart's YAML source (nymph format), or a mermaid diagram (flowchart, sequenceDiagram, classDiagram, "
+         "stateDiagram, erDiagram, gantt, pie, mindmap, sankey-beta, xychart-beta), converted to nymph YAML."}}},
       {"input_path",
        {{"type", "string"},
         {"description",
-         "Instead of source: a .yaml file, or a nymph .png (its embedded source is used). Relative to the server's "
-         "working directory."}}},
+         "Instead of source: a .yaml or mermaid (.mmd) file, or a nymph .png (its embedded source is used). Relative "
+         "to the server's working directory."}}},
   };
 }
 
@@ -221,6 +257,9 @@ json render_chart(tool_registry& registry, const json& args) {
     content.insert(content.begin(), json{{"type", "image"}, {"data", std::move(image)}, {"mimeType", "image/png"}});
   }
   content.push_back(json{{"type", "text"}, {"text", summary}});
+  if (const std::string note = mermaid_note(input, "; convert_chart gives the nymph YAML."); !note.empty()) {
+    content.push_back(json{{"type", "text"}, {"text", note}});
+  }
   return {{"content", std::move(content)}, {"structuredContent", std::move(structured)}};
 }
 
@@ -232,7 +271,31 @@ json check_chart(const json& args) {
   } catch (const error& e) {
     throw tool_error(describe(e, input.label));
   }
-  return text_result("valid");
+  const std::string note = mermaid_note(input, ".");
+  return text_result(note.empty() ? "valid" : "valid\n" + note);
+}
+
+/// The nymph YAML of a mermaid diagram, a nymph PNG or a YAML source.
+json convert_chart(const json& args) {
+  check_known(args, {"source", "input_path", "output_path"});
+  const std::optional<std::string> output = checked_output_path(args, {".yaml", ".yml"});
+  const chart_input input = load_chart(args);
+  if (input.mermaid_kind.empty() && !input.png) {
+    try {
+      check_source(input.source);
+    } catch (const error& e) {
+      throw tool_error(describe(e, input.label));
+    }
+  }
+  json result = text_result(input.source);
+  if (const std::string note = mermaid_note(input, "."); !note.empty()) {
+    result["content"].push_back(json{{"type", "text"}, {"text", note}});
+  }
+  if (output) {
+    write_file(*output, input.source);
+    result["content"].push_back(json{{"type", "text"}, {"text", "written to " + absolute_of(*output)}});
+  }
+  return result;
 }
 
 json extract_chart(const json& args) {
@@ -419,7 +482,9 @@ void add_builtin_tools(tool_registry& registry) {
          "$revenue}\ndata: {revenue: [12, 15, 11, 18]}\n"
          "On an error the result says <line>:<column> in the source: fix that spot and call again. Use "
          "chart_schema for an element's fields and example_chart for a working source to start from. The PNG "
-         "carries its source (extract_chart reads it back)."},
+         "carries its source (extract_chart reads it back). A diagram may be written in mermaid instead: it is "
+         "converted to nymph YAML and drawn (the PNG carries the YAML); revise the mermaid until the user is "
+         "satisfied, then convert_chart gives the YAML to keep and refine."},
         {"inputSchema",
          {{"type", "object"}, {"properties", std::move(render_properties)}, {"additionalProperties", false}}},
         {"outputSchema",
@@ -443,6 +508,23 @@ void add_builtin_tools(tool_registry& registry) {
          {{"type", "object"}, {"properties", chart_input_properties()}, {"additionalProperties", false}}},
         {"annotations", annotations("Check chart", true)}},
        check_chart});
+
+  json convert_properties = chart_input_properties();
+  convert_properties["output_path"] = {
+      {"type", "string"},
+      {"description",
+       "Also write the YAML to this file (must end in .yaml or .yml); relative to the server's working directory."}};
+  registry.add(
+      {{{"name", "convert_chart"},
+        {"title", "Convert chart to nymph YAML"},
+        {"description",
+         "Convert a mermaid diagram to nymph YAML (also returns the YAML of a nymph PNG, or checks a YAML source and "
+         "returns it). Use it when the user is satisfied with a diagram drafted in mermaid: from then on edit the "
+         "YAML (colours, fonts, shapes, layout hints, sizes), not the mermaid. Warnings name what nymph dropped."},
+        {"inputSchema",
+         {{"type", "object"}, {"properties", std::move(convert_properties)}, {"additionalProperties", false}}},
+        {"annotations", annotations("Convert chart to nymph YAML", false)}},
+       convert_chart});
 
   registry.add(
       {{{"name", "extract_chart"},

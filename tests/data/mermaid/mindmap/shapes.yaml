@@ -1,0 +1,17 @@
+nymph: 1
+description: Mind map converted from mermaid.
+image: {width: 440, height: 320}
+source: Converted from a mermaid mindmap.
+root:
+  type: MindMap
+  children:
+    - type: MindNode
+      text: Square
+      children:
+        - {type: MindNode, text: Rounded}
+        - {type: MindNode, text: Circle}
+        - {type: MindNode, text: Cloud}
+        - {type: MindNode, text: Bang}
+        - {type: MindNode, text: Hexagon}
+        - {type: MindNode, text: A plain node}
+        - {type: MindNode, text: Tabbed}

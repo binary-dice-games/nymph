@@ -1,0 +1,18 @@
+nymph: 1
+description: Flowchart converted from mermaid.
+image: {width: 320, height: 434}
+source: Converted from a mermaid flowchart.
+root:
+  type: Flowchart
+  children:
+    - {type: FlowNode, id: a, text: Bold start}
+    - {type: FlowNode, id: b, text: "Line one\nline two"}
+    - {type: FlowNode, id: c, text: "A \"quoted\" word and #hash"}
+    - {type: FlowNode, id: d, text: "yes"}
+    - {type: FlowNode, id: e, text: "key: value"}
+    - {type: FlowNode, id: f, text: $$5 per unit}
+    - {type: FlowLink, from: a, to: b}
+    - {type: FlowLink, from: b, to: c}
+    - {type: FlowLink, from: c, to: d}
+    - {type: FlowLink, from: d, to: e}
+    - {type: FlowLink, from: e, to: f}

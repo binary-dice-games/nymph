@@ -170,7 +170,8 @@ TEST_F(mcp_tools, list_names_every_tool_with_its_schemas) {
   }
   // The chart tools, then the tools of a running editor (spec/14_editor_workspace).
   std::vector<std::string> expected{
-      "render_chart", "check_chart", "extract_chart", "chart_schema", "example_chart", "list_fonts", "list_shapes"};
+      "render_chart", "check_chart", "convert_chart", "extract_chart", "chart_schema", "example_chart", "list_fonts",
+      "list_shapes"};
   for (const json& t : editor_tool_definitions()) {
     expected.push_back(t["name"]);
   }

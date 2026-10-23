@@ -220,6 +220,34 @@ std::string source_of(const bytes_t& input, const std::string& path) {
   return *source;
 }
 
+loaded_source load_source_text(std::string_view text) {
+  loaded_source loaded;
+  if (is_mermaid(text)) {
+    mermaid_import imported = import_mermaid(text);
+    loaded.source = std::move(imported.source);
+    loaded.mermaid_kind = std::move(imported.kind);
+    loaded.warnings = std::move(imported.warnings);
+  } else {
+    loaded.source = std::string(text);
+  }
+  return loaded;
+}
+
+loaded_source load_source(const bytes_t& input, const std::string& path) {
+  if (is_png(input)) {
+    return {source_of(input, path), {}, {}};
+  }
+  return load_source_text(as_text(input));
+}
+
+std::string warning_text(const std::string& label, const import_warning& w) {
+  std::string text = label;
+  if (w.line > 0) {
+    text += ":" + std::to_string(w.line) + ":" + std::to_string(w.column);
+  }
+  return text + ": warning: " + w.message;
+}
+
 std::string fonts_text() {
   std::string text = std::string(kDefaultFontName) + "\n";
   for (const font_entry& f : font_catalog()) {

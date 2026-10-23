@@ -5,6 +5,7 @@
 #include <algorithm>
 #include <cmath>
 #include "core/error.hpp"
+#include "nymph.hpp"
 #include "document/view.hpp"
 #include "document/yaml_doc.hpp"
 #include "edit/data_edit.hpp"
@@ -539,7 +540,16 @@ json editor_remove_table(editor_host& host, const json& args) {
 json editor_set_source(editor_host& host, const json& args) {
   editor_model& m = model_of(host);
   check_version(m, args);
-  return change_result(host, m.set_source(string_arg(args, "source")), "editor_set_source");
+  std::string source = string_arg(args, "source");
+  // Mermaid is converted first (spec/16_mermaid_import/DESIGN.md section 5.2).
+  if (is_mermaid(source)) {
+    try {
+      source = import_mermaid(source).source;
+    } catch (const error& e) {
+      throw tool_error("mermaid:" + std::to_string(e.line()) + ":" + std::to_string(e.column()) + ": " + e.what());
+    }
+  }
+  return change_result(host, m.set_source(source), "editor_set_source");
 }
 
 json editor_undo_redo(editor_host& host, bool undo) {
@@ -687,8 +697,9 @@ std::vector<definition> definitions() {
        schema({{"table", prop("string", "Table name.")}, {"expected_version", prop("integer", kVersion)}}), false,
        editor_remove_table},
       {"editor_set_source", "Editor set source",
-       "Replaces the whole source (one undo step). Prefer the smaller tools; element paths may change.",
-       schema({{"source", prop("string", "The new YAML source.")}, {"expected_version", prop("integer", kVersion)}}, {"source"}),
+       "Replaces the whole source (one undo step). Prefer the smaller tools; element paths may change. Takes a "
+       "mermaid diagram too: it is converted to nymph YAML first.",
+       schema({{"source", prop("string", "The new YAML source, or a mermaid diagram.")}, {"expected_version", prop("integer", kVersion)}}, {"source"}),
        false, editor_set_source},
       {"editor_undo", "Editor undo", "Undoes the last change in the editor (the user's or yours).",
        schema(json::object()), false, [](editor_host& h, const json&) { return editor_undo_redo(h, true); }},

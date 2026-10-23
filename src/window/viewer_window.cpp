@@ -64,6 +64,8 @@ class viewer : public window_events {
   explicit viewer(const view_request& request)
       : request_(request),
         name_(std::filesystem::path(request.args.input).filename().string()),
+        save_path_(edit_save_path(request.args.input, !request.mermaid_kind.empty())),
+        from_mermaid_(!request.mermaid_kind.empty()),
         window_(create_native_window(*this)),
         view_(view_options{request.args.fit, /*cpu_textures=*/false, /*tooltips=*/true}) {
     ready_ = true;
@@ -632,6 +634,9 @@ class viewer : public window_events {
       }
       panel_->model().set_original(saved_source_);
       panel_->set_strip_width(strip_wanted_);
+      if (from_mermaid_) {
+        set_mermaid_save_target();
+      }
       image_w_ = panel_->model().image().width;
       image_h_ = panel_->model().image().height;
       view_.set_edit_mode(true);
@@ -710,6 +715,18 @@ class viewer : public window_events {
     panel_->refresh();
   }
 
+  /// The Save dialogs of a mermaid input: it is saved as YAML next to it.
+  void set_mermaid_save_target() {
+    const std::string target = std::filesystem::path(save_path_).filename().string();
+    std::error_code ec;
+    const bool exists = std::filesystem::exists(save_path_, ec);
+    panel_->set_save_target(
+        target,
+        "Save the converted chart as " + target + "?",
+        exists ? target + " exists and is replaced; " + name_ + " is not changed."
+               : name_ + " (mermaid) is not changed; nymph saves YAML.");
+  }
+
   /// Does what a confirmation dialog decided.
   void act_on(editor_panel::decision decision) {
     using decision_t = editor_panel::decision;
@@ -727,7 +744,7 @@ class viewer : public window_events {
   /// saved in its `view` key): a PNG input becomes a PNG again, a YAML input
   /// stays YAML.
   bool save_input() {
-    const std::string& path = request_.args.input;
+    const std::string path = save_path_;
     try {
       const std::string source = view_.source_with_view();
       std::ostringstream unused;
@@ -739,6 +756,12 @@ class viewer : public window_events {
       }
       panel_->model().mark_saved();
       saved_source_ = std::string(view_.source());
+      if (from_mermaid_) {
+        // From now on the window edits the YAML file it wrote.
+        from_mermaid_ = false;
+        name_ = std::filesystem::path(path).filename().string();
+        panel_->set_save_target(name_);
+      }
       status_ = "saved " + name_;
       set_title(status_);
       return true;
@@ -896,6 +919,8 @@ class viewer : public window_events {
 
   const view_request& request_;
   std::string name_;
+  std::string save_path_; ///< Where the editor's Save writes (edit_save_path()).
+  bool from_mermaid_ = false; ///< The input is mermaid and has not been saved as YAML yet.
   bool ready_ = false; ///< Events sent while the window is created find no view yet.
   std::unique_ptr<native_window> window_;
   live_view view_; ///< After window_: destroyed after panel_, before the window.

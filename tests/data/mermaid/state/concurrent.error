@@ -1,0 +1,1 @@
+6:9: concurrent regions (--) are not supported by nymph; split them into separate composite states

@@ -1,0 +1,47 @@
+nymph: 1
+description: Sequence diagram converted from mermaid.
+image: {width: 477, height: 760}
+source: Converted from a mermaid sequenceDiagram.
+root:
+  type: SequenceDiagram
+  autonumber: true
+  children:
+    - {type: Participant, id: Alice}
+    - {type: Participant, id: John}
+    - {type: Participant, id: Bob}
+    - type: Fragment
+      kind: Loop
+      label: Every minute
+      children:
+        - {type: Message, from: John, to: Alice, text: Great!, kind: Reply}
+    - type: Fragment
+      kind: Opt
+      label: Extra response
+      children:
+        - {type: Message, from: Alice, to: John, text: Thanks}
+    - type: Fragment
+      kind: Par
+      label: Alice to Bob
+      children:
+        - {type: Message, from: Alice, to: Bob, text: Hello guys!}
+        - {type: Else, label: Alice to John}
+        - {type: Message, from: Alice, to: John, text: Hello guys!}
+    - type: Fragment
+      kind: Critical
+      label: Establish a connection
+      children:
+        - {type: Message, from: Alice, to: Bob, text: connect, kind: Reply}
+        - {type: Else, label: Network timeout}
+        - {type: Message, from: Alice, to: Alice, text: Log error, kind: Reply}
+    - type: Fragment
+      kind: Break
+      label: when the booking process fails
+      children:
+        - {type: Message, from: Alice, to: Bob, text: show failure, kind: Reply}
+    - type: Fragment
+      kind: Group
+      fill_color: "#BFDFFF"
+      children:
+        - {type: Message, from: Alice, to: John, text: in a box}
+    - {type: Note, text: left, attach: [Alice], side: Left}
+    - {type: Note, text: right, attach: [John]}

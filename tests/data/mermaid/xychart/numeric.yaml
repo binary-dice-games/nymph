@@ -1,0 +1,17 @@
+nymph: 1
+description: Chart converted from mermaid.
+image: {width: 800, height: 450}
+source: Converted from a mermaid xychart-beta.
+root:
+  type: Plot
+  x_label: Time (s)
+  children:
+    - {type: PlotLine, label: speed, xs: $x, ys: $line1}
+data: |
+  x, line1
+  0, 0
+  2, 2
+  4, 5
+  6, 9
+  8, 10
+  10, 12

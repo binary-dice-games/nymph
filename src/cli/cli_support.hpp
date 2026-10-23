@@ -10,6 +10,7 @@
 #include <string>
 #include <string_view>
 #include <vector>
+#include "nymph.hpp"
 
 namespace bdg::nymph {
 
@@ -44,6 +45,26 @@ std::string_view as_text(const bytes_t& bytes);
 /// @param path The input's name, for messages.
 /// @throws cli_failure for a corrupt PNG or a PNG without a nymph source.
 std::string source_of(const bytes_t& input, const std::string& path);
+
+/// @brief The nymph source of an input and how it was obtained
+///        (spec/16_mermaid_import/DESIGN.md section 3, `load_source()`).
+struct loaded_source {
+  std::string source;                   ///< nymph YAML
+  std::string mermaid_kind;             ///< the mermaid keyword when converted, else empty
+  std::vector<import_warning> warnings; ///< what the mermaid import dropped
+};
+
+/// @brief The nymph source of `input`: the source a nymph PNG carries,
+///        mermaid converted (import_mermaid()), or the text itself.
+/// @throws cli_failure as source_of(); nymph::error positioned in the
+///         mermaid for a mermaid problem.
+loaded_source load_source(const bytes_t& input, const std::string& path);
+
+/// @brief The same for text (no PNG): mermaid converted, else as is.
+loaded_source load_source_text(std::string_view text);
+
+/// @brief One warning as `<label>:<line>:<column>: warning: <message>`.
+std::string warning_text(const std::string& label, const import_warning& w);
 
 /// @brief `nymph fonts`: `default` and every catalog font, one per line,
 ///        those this build does not embed marked `(not embedded)`.
