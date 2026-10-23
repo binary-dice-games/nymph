@@ -76,20 +76,28 @@ the panel error; the existing `table_grid` tests adjusted to the request
 form. By hand on Xvfb: Save asks and overwrites; Import / Export CSV work
 as before.
 
-## 4. Editor tools without the MCP server
+## 4. Editor tools without the MCP server, attributed changes
 
 **Goal:** `editor_tools` runs in-process against an `editor_host`, in a
-library without `nymph_cli` or sockets.
+library without `nymph_cli` or sockets, and every change records who made
+it and what it was.
 
 **Deliverables:** `nymph_editor_tools` library (`editor_tools.*`, the tool
 types it needs from `mcp/tools.hpp`, `nymph_json`); a direct
-`call_editor_tool(host, name, args) -> json` used by both the socket
-server and the web module; `nymph_mcp` links it.
+`call_editor_tool(host, name, args, origin) -> json` used by both the
+socket server and the web module; `nymph_mcp` links it. `editor_model`
+undo entries `{source, label, origin}`, `commit_result` carrying both,
+`begin_group()` / `end_group()` (DESIGN.md section 5.1); undo / redo
+tooltips with the label; `nymph mcp`'s agent edits get origin
+`agent:mcp`.
 
 **Tests:** `test_editor_tools` calls `editor_state`, `editor_set_fields`
 (with a stale `expected_version`: refused), `editor_add_element` and
-`editor_undo` directly on a fake host; the existing `test_editor_server`
-tests pass.
+`editor_undo` directly on a fake host; `test_editor_model`: a commit's
+label and origin are on its undo entry; three commits inside a group are
+one undo step and one redo step; an empty group adds nothing; a refused
+commit inside a group leaves the others; the existing
+`test_editor_server` tests pass.
 
 ## 5. Source pane
 
@@ -150,7 +158,12 @@ the figure and `source()`; `createEditor` with a broken source rejects,
 and with `repair: true` opens with `repairing()` true; `Ctrl+D`
 duplicates the selected node and the page sees
 `defaultPrevented`; `csv-export` fires with the table's CSV and
-`importCsv` replaces it; `save` fires on `Ctrl+S`. By hand: Firefox and
+`importCsv` replaces it; `save` fires on `Ctrl+S`; `toolDefinitions()`
+equals the native `editor_tool_definitions()`; a `tool()` call with
+`origin: "agent:test"` fires `change` with that origin and its label, and
+inside `beginGroup` / `endGroup` two calls undo at once;
+`editor_view_image` returns a PNG of the figure box with the selection
+outline. By hand: Firefox and
 Safari typing in a field and in the source pane (IME on one of them).
 
 ## 7. Site and app shell: open and view
@@ -164,7 +177,12 @@ zone, Open file, Paste), document screen with title, View mode, ⋯ menu
 (theme, Reset view, About), the message banners of DESIGN.md section 3.2
 for this step's cases; `nymph-site` target assembling
 `<build>/web/site/` (section 3.1, examples moved to `examples/`, demo
-reading them there, `version.json`, `config.json`); `pages.yml` building
+reading them there, `version.json`, `config.json` with an empty `agents`
+section, `agent/` with the agent guide and element pages); the command
+registry `app/commands.js` (DESIGN.md section 3.11) with this step's
+commands, every control calling it, origin checks and the confirmation
+dialog for `external` commands from non-user origins; `app/device.js`
+capabilities; the document screen's empty right-hand dock; `pages.yml` building
 `nymph-site`, running the web tests and deploying it; `?v=<commit>` on
 module URLs.
 
@@ -172,14 +190,19 @@ module URLs.
 chosen with the file chooser draws (`rendered()`), its name in the title;
 a nymph PNG dropped (synthetic `DataTransfer`) draws; pasted YAML draws; a
 source with an error shows its line and column; a PNG without a chunk
-shows the "no nymph chart" message; the old URLs (`nymph-viewer.js`,
+shows the "no nymph chart" message; each button and shortcut logs a
+`commands.call` and `commands.list()` validates as JSON Schema;
+`app_download` called with origin `agent:test` opens the confirmation
+dialog and Cancel downloads nothing; a test that fills the dock shrinks
+the canvas and the chart redraws; the old URLs (`nymph-viewer.js`,
 `.wasm`, `fonts/…`, `demo/`) answer 200; no request leaves the local
 server.
 
 ## 8. Edit mode and saving
 
 **Goal:** the user switches to Edit, edits, and saves to the same file
-or as a download, without ever losing changes silently.
+or as a download, without ever losing changes silently; every action is a
+command.
 
 **Deliverables:** View | Edit toggle with lazy load, progress line and idle
 prefetch; hand-over both ways keeping the view (DESIGN.md section 4);
@@ -187,7 +210,9 @@ modified tracking ignoring the `view` key; Save ▾ (Save, Download YAML,
 Download PNG) and `Ctrl+S`; save in place through `FileSystemFileHandle`
 where available; PNG inputs saved as PNG; the Source button (switching
 to Edit in View mode) and "Fix in source" (Edit in repair state at the
-error line); unsaved-changes dialog on open,
+error line); the `document_*`, `editor` and remaining `app_*` commands
+(editor tools registered on load, removed on destroy); unsaved-changes
+dialog on open,
 close and `beforeunload`; Edit disabled without WebGL2, with the reason.
 
 **Tests** (browser): View → Edit after a zoom keeps the plot's x range
@@ -198,7 +223,10 @@ place with a stubbed `showOpenFilePicker` writes the new bytes; opening
 another file while modified shows the dialog and Cancel keeps the
 document; Source in View mode opens Edit with the pane; a broken file's
 "Fix in source" opens repair state, and once fixed the file can be saved
-and viewed; Edit → View shows the edited chart; the viewer module was not
+and viewed; `document_set_source` with origin `agent:test` works in View
+mode (viewer only) and in Edit mode (one undo step); `editor_*` commands
+are listed only in Edit; Edit → View shows the edited chart; the viewer
+module was not
 re-downloaded and the editor module was fetched only on Edit.
 
 ## 9. URLs and share links
@@ -323,6 +351,10 @@ hand); a deploy from `main` serves the app at the site root.
   install the PWA and open a file offline; on a phone, open, view, share
   and download a chart, with no edit control anywhere.
 - `nymph view --edit` behaves as before on Linux and Windows, plus the
-  source pane and repair state.
+  source pane, repair state and labelled undo.
+- Agent readiness (DESIGN.md section 11.2): every action is a command with
+  a schema; agent-origin calls are attributed, undoable in groups, and
+  confirmed when `external`; the dock and `agent/` files exist; nothing in
+  this project calls a model API.
 - `spec/INDEX.md`, `README.md`, `docs/web-app.md`, `docs/viewer.md` and
   `CHANGELOG.md` describe what was built.

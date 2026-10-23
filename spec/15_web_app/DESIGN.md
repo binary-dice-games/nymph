@@ -53,21 +53,22 @@ Not in scope: accounts or server-side storage (files stay in the browser
 and the user's own storage); real-time collaboration; the editor's MCP
 server in the browser (the JavaScript API exposes the same tools, section
 5.2, but no agent connects to it here); changes to the Chrome extension or
-the MCP App (section 11 lists the hooks); Dropbox and OneDrive (same
-interface, section 11); the viewer's public API, which stays as it is.
+the MCP App (section 12 lists the hooks); Dropbox and OneDrive (same
+interface, section 12); AI agent connectors (a later project; section 11
+says what this one prepares for them); the viewer's public API, which stays as it is.
 
 Files owned or changed:
 
 | Path | What |
 |---|---|
-| `web/app/` | new: the app (HTML, CSS, ES modules, manifest, service worker, icons, templates) |
+| `web/app/` | new: the app (HTML, CSS, ES modules, command registry, manifest, service worker, icons, templates) |
 | `web/editor/` | new: `nymph_editor_web.cpp` (C exports), its CMake |
 | `web/js/nymph-editor.js` | new: the editor's JavaScript API |
 | `web/js/nymph-viewer.js` | exports its font loader and key mapping for `nymph-editor.js`; no API change |
 | `web/CMakeLists.txt` | editor targets, `nymph-site` target, size checks |
 | `src/workspace/` | new: `editor_workspace`, `workspace_host`; `editor_panel` moves here from `src/window/` |
 | `src/edit/source_pane.*`, `src/edit/yaml_language.*` | new: the source pane and its YAML highlighting |
-| `src/edit/editor_model.*`, `src/edit/workspace_layout.hpp` | repair state, source-pane region and its divider |
+| `src/edit/editor_model.*`, `src/edit/workspace_layout.hpp` | repair state, labelled and attributed undo entries, undo groups, source-pane region and its divider |
 | `extern/ImGuiColorTextEdit` | new submodule (MIT), pinned |
 | `src/window/view_command.cpp` | `--edit` opens a source that does not bind in repair state |
 | `src/window/viewer_window.cpp` | becomes a thin native host over `editor_workspace` |
@@ -302,6 +303,11 @@ keyboards handle poorly); a half-working editor is worse than none
   a screen (not window) narrower than 720 CSS px on its short side. It
   does not change when a desktop window is made narrow, so a user is never
   thrown out of an edit by resizing.
+- The shell never tests `isMobile()` directly: `device.js` turns it into
+  capabilities (`directEditing: false` on mobile), and each control asks
+  for the capability it needs. Agent-assisted editing (section 11) is a
+  separate capability, so it can later be offered on phones, where it
+  needs only the viewer module, without bringing back the editor.
 - Not shown on mobile: View | Edit, Source, "Fix in source", New chart
   (templates open in View, as examples), Save in place and Save to Drive
   (nothing is ever modified). Kept: every open source, Recent, Share,
@@ -312,6 +318,42 @@ keyboards handle poorly); a half-working editor is worse than none
   the service worker does not precache it there.
 - The document screen's top bar collapses into a single ⋯ menu under
   720 px of window width (on desktop too), but only mobile hides Edit.
+
+### 3.11 Commands
+
+Every action of the app is a **command** in one registry
+(`app/commands.js`), and every button, menu item, keyboard shortcut and
+route calls it there; no control changes the document any other way. A
+command is an MCP tool: a `name`, a `description`, a JSON Schema
+`inputSchema`, a handler returning an MCP tool result (`content`,
+`structuredContent`, `isError`), and two app fields:
+
+| Field | Values |
+|---|---|
+| `scope` | `app` (always), `document` (a document is open; works with either module), `editor` (Edit mode only) |
+| `effect` | `read`, `edit` (changes the document, undoable), `external` (reaches outside the browser tab: opens a URL or Drive file, saves, downloads, copies to the clipboard) |
+
+- `document` commands work on the source text and need only the viewer:
+  `document_state` (name, origin, mode, modified, version, error),
+  `document_source`, `document_set_source` (validated by binding in
+  whichever module is loaded, refused whole with the loader's error),
+  `document_check` (binds without applying), `document_image` (PNG of what
+  is on screen: `toPng()` or `editor_view_image`), `document_select`.
+- `editor` commands are the editor tools (14 section 6), registered from
+  `editor.toolDefinitions()` when the editor module loads and removed when
+  it is destroyed.
+- `app` commands: `app_new_document` (from a source or a template),
+  `app_open_url`, `app_open_example`, `app_list_templates`, `app_save`,
+  `app_download`, `app_copy_link`, `app_set_mode`, `app_set_theme`.
+- `commands.call(name, args, origin)` dispatches; `origin` is `user` for
+  the shell's own calls. `commands.list(filter)` returns the definitions
+  in `tools/list` form, filtered by what is available now (mode, device
+  capabilities, configured providers).
+
+Built now, for three reasons: the shell has one path for every action
+(tests drive it the same way), the commands are already the tool list an
+agent will be given (section 11), and their `effect` is where the
+confirmation rule for agents lives.
 
 ## 4. Two Modules
 
@@ -400,6 +442,16 @@ the native window, the event loop, the window size, file writes (Save over
 the input, `S` / `Y` copies), the "unsaved changes" dialog on close, and
 the MCP server and discovery file.
 
+**Change attribution.** `editor_model`'s undo entries become `{source,
+label, origin}` instead of bare sources: `label` names the change ("Set
+title", "Add FlowNode", "Edit source"), `origin` says who made it (`user`,
+or `agent:<connector>`). The panel's undo and redo buttons show the label
+as tooltip; `commit_result` carries both, and the status line names an
+agent change by its connector, as 14 does for `nymph mcp` agents.
+`begin_group(label, origin)` / `end_group()` turn several commits into one
+undo entry (an agent's turn of several tool calls is undone at once); the
+panel never opens a group, so nothing changes for the user's own edits.
+
 Save in the panel stops opening the panel's own "overwrite?" modal; it
 calls `request_save()`, and the native host opens the same modal (moved
 next to the close dialog), the web host fires `save`. CSV Import / Export
@@ -430,7 +482,10 @@ class NymphEditor {
   undo(): void;  redo(): void;  resetView(): void;
   setTheme(theme: string): void;  showPanel(on: boolean): void;  focus(): void;
   showSource(on: boolean, line?: number): void;  repairing(): boolean;
-  tool(name: string, args?: object): object;   // the editor tools of 14 section 6, synchronous
+  tool(name: string, args?: object, opts?: { origin?: string }): object;
+                                      // the editor tools of 14 section 6, synchronous; origin default "user"
+  toolDefinitions(): object[];        // their tools/list entries
+  beginGroup(label: string, origin: string): void;  endGroup(): void;
   importCsv(table: string, csv: string): void; // answer to "csv-import"
   on(event: "change" | "selection" | "save" | "csv-import" | "csv-export" | "error",
      cb: (detail) => void): () => void;
@@ -442,8 +497,10 @@ class NymphEditor {
   `editor_element`, `editor_set_fields`, `editor_add_element`, ... with the
   same JSON arguments and results, and `expected_version`. It is the
   scripting surface for the app (e.g. selecting what an error names), for
-  tests, and for a later agent connection (section 11). A tool's error is
+  tests, and for agents later (section 11). A tool's error is
   a thrown `NymphError` with the tool's message.
+- The `change` event's detail is `{version, label, origin}`, so the shell
+  (and a later assistant) knows who changed what.
 - `asChange: true` is one undo step (`editor_model::set_source`); without
   it the source replaces the document (new undo history, not modified).
 - The module needs WebGL2: `createEditor` rejects with a clear error
@@ -472,6 +529,9 @@ class NymphEditor {
   Paste: the `paste` event's text is stored as the clipboard before the
   `Ctrl+V` key reaches ImGui, as the viewer does for mockups.
 - **Cursor**: `set_cursor` sets the canvas' CSS cursor.
+- **`editor_view_image`**: the browser `editor_host` reads the figure box
+  back with `glReadPixels` right after drawing it, as the native host does,
+  so the tool returns what the user sees.
 - **Fonts**: the viewer's loader (exported by `nymph-viewer.js`, which
   loads no wasm by being imported). The source pane's monospace font is
   fetched the same way the first time the pane opens.
@@ -613,6 +673,13 @@ source.
   follows ImGui 1.92, and has the marker, squiggle, section-replace and
   change-callback APIs the pane needs; it has no YAML mode, so nymph
   writes one (`yaml_language`).
+- **Commands shaped as MCP tools from the start**, not plain JS
+  functions later wrapped for agents. Agent connectors (section 11) need a
+  complete, described, validated tool list; building the shell on it now
+  costs a schema per action and avoids a second path that agents would
+  use and buttons would not (or the reverse). Rejected: letting agents edit
+  only by replacing the whole source, which loses attribution, undo by
+  step and the editor's checks.
 - **`drive.file` scope.** Full Drive scopes need Google's security review
   and show a frightening consent screen; `drive.file` limits the app to
   files the user hands it, which is all it needs.
@@ -643,6 +710,11 @@ source.
   `index.html` allows `'self'`, `'wasm-unsafe-eval'`, and the Google origins
   only for the Drive provider; `connect-src` must allow any https origin for
   URL opening.
+- A command whose `effect` is `external` runs for a non-`user` origin only
+  after the user confirms it in a dialog naming the command and its
+  arguments; `edit` commands from any origin are validated, undoable and
+  attributed like the user's own. The registry enforces this, not each
+  caller.
 - The app never navigates away or reloads with unsaved changes without
   asking, and writes a draft before the page can be discarded.
 - One editor per page; any number of viewers (the demo page).
@@ -653,7 +725,7 @@ source.
   and keyboard access; the viewer canvas keeps its `aria-label`; the editor
   canvas, source pane included, is not reachable by a screen reader. Its
   label says so and points to Download YAML for editing elsewhere
-  (section 11).
+  (section 12).
 - `extern/ImGuiColorTextEdit` is not edited (CLAUDE.md, Dependencies).
   Everything nymph-specific (language, key interception, sync) is in
   `source_pane`; a needed upstream change is proposed upstream and the
@@ -684,8 +756,13 @@ source.
    state and is fixed there; the draft
    is restored after a reload; Drive with a stub of Google's scripts served
    locally; the service worker serves the shell offline.
-4. **Size budget** test (section 6).
-5. **By hand**, recorded in the plan: real Google Drive with the owner's
+4. **Commands**: in the browser, every shell control and shortcut calls a
+   registered command (a test hook logs `commands.call`); `commands.list()`
+   gives valid JSON Schemas; an `external` command called with an `agent:`
+   origin waits for the confirmation dialog and does nothing on Cancel; an
+   `edit` command from an agent origin is one undo step labelled with it.
+5. **Size budget** test (section 6).
+6. **By hand**, recorded in the plan: real Google Drive with the owner's
    keys, Firefox and Safari, a phone (view only).
 
 ## 10. Integration Boundaries
@@ -713,7 +790,77 @@ JSON linked in; two ImGui contexts drawn into one WebGL2 context per frame
 its size. Later: ImGui text input (source pane included) through a hidden
 `textarea` on Safari (step 6).
 
-## 11. Extension Points
+## 11. Prepared for Agents
+
+A later project adds **agent connectors**: Claude, Cursor and Gemini help
+the user create and edit charts in the app ("add a node for billing and
+connect it to orders", "make a Gantt chart from this table"). This project
+builds nothing an agent uses directly, but fixes the parts the connectors
+will stand on, so they add a chat panel and the connectors, and change no
+existing code path.
+
+### 11.1 Two kinds of connector
+
+| Kind | How it works | Claude | Gemini | Cursor |
+|---|---|---|---|---|
+| **In-app** | The app calls the model's API from the page, gives it `commands.list()` as tools, and runs the tool calls it returns through `commands.call(…, "agent:<id>")` | Messages API with the user's API key (browser access header) or a later OAuth sign-in | Gemini API with the user's API key | none: Cursor has no public model API |
+| **External** | An agent the user already runs reaches the open app through MCP | Claude Desktop / Claude Code through `nymph mcp`; Claude in Chrome through WebMCP | Gemini CLI through `nymph mcp`; Gemini in Chrome through WebMCP | Cursor through `nymph mcp` (12_cursor_integration) |
+
+External connectors reach the page by one of two routes, both of which
+just forward MCP `tools/list` and `tools/call` to the registry:
+
+- **WebMCP** (`navigator.modelContext`, where the browser has it): the app
+  registers `commands.list()` as the page's tools. No bridge, no setup.
+- **`nymph mcp` bridge**: `nymph mcp` already forwards editor tools to a
+  running `nymph view --edit` (14 section 3, `editor_bridge`). A page cannot
+  accept connections, so the page connects out to a loopback WebSocket
+  opened by `nymph mcp`, after the user pairs them (a code shown by the
+  app and typed into, or confirmed by, the agent side), with an `Origin`
+  check. The bridge then lists the app as one more editor. Its security
+  design (pairing, Chrome's local network access prompt, Safari) belongs to
+  the later project.
+
+### 11.2 What this project fixes for them
+
+1. **One tool surface.** The command registry (section 3.11) is MCP-shaped
+   and complete: an agent can do anything a user can through it, and
+   nothing the user cannot. The editor's own tools (14 section 6) are part
+   of it, unchanged, so an agent sees the same tools in the app, in `nymph
+   view --edit` and through `nymph mcp`.
+2. **Agents without the editor.** `document` commands need only the viewer,
+   so an assistant can create and edit charts as text (set source, check,
+   look at the image) on a phone or in View mode, where the editor module
+   is never loaded (section 3.10's capabilities keep that open).
+3. **Attribution and undo.** Every change carries `origin` and `label`
+   (section 5.1); an agent's turn is one undo group; the `change` event
+   says who changed what. The user can always see and undo what an agent
+   did.
+4. **Concurrency.** Agents write with `expected_version` (14 section 6); a
+   user typing in the source pane locks agent writes (section 5.4); the
+   user's edits always win.
+5. **Consent.** `external` commands from an agent need the user's
+   confirmation (section 8). Sending the chart to a model provider is
+   itself a user decision made when connecting, in line with goal 4.
+6. **A place for the chat.** The document screen has a right-hand **dock**
+   (DOM, beside the canvas, hidden while empty; the canvas follows it
+   through its `ResizeObserver`), so a chat panel needs no layout change.
+   The chat is DOM, not ImGui: it must work in View mode and on phones,
+   where there is no ImGui editor, and it shows streamed, formatted text and
+   links. The editor's own panels stay ImGui.
+7. **What agents read.** The agent guide and the element reference
+   (`docs/agent-guide.md`, `docs/elements/`) are copied into the site as
+   `agent/` by `nymph-site`, so an in-app connector can give them to the
+   model without growing either module; `config.json` has an `agents`
+   section, empty here, for connector settings.
+
+### 11.3 Left to the later project
+
+The chat panel; each connector (API keys or sign-in, streaming, the tool
+loop, model choice); the WebMCP registration; the `nymph mcp` WebSocket
+bridge and pairing; prompts and the use of the agent guide; whether
+assistant editing is offered on mobile.
+
+## 12. Extension Points
 
 - **Dropbox and OneDrive** providers (Chooser / Saver; File Picker v8),
   each enabled by its app key in `config.json`.
@@ -721,9 +868,7 @@ its size. Later: ImGui text input (source pane included) through a hidden
   Marketplace SDK so Drive's own menu opens files in it (`?state=`).
 - **"Open in the app"** from the Chrome extension's viewer menu and from
   the MCP App, as a `#y=` link.
-- **Agents in the browser**: the `tool()` API behind a `postMessage` or
-  WebMCP bridge, so a chat app can drive the open editor as `nymph mcp`
-  drives `nymph view --edit`.
+- **Agent connectors** for Claude, Cursor and Gemini: section 11.
 - **More in the source pane**: completion of field and type names from
   the schema (the editor's autocomplete API), hover help from field
   descriptions, a diff against the saved file (`TextDiff`).
