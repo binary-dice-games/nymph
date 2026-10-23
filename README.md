@@ -188,6 +188,8 @@ carries its source: `bdg::nymph::extract_source(png)` returns it.
 | [spec/11_cross_browser_extension/PLAN.md](spec/11_cross_browser_extension/PLAN.md) | Its implementation steps and tests |
 | [spec/14_editor_workspace/DESIGN.md](spec/14_editor_workspace/DESIGN.md) | Editor workspace: resizable panel, adding and removing elements, data table tabs, the editor as an MCP server |
 | [spec/14_editor_workspace/PLAN.md](spec/14_editor_workspace/PLAN.md) | Its implementation steps and tests |
+| [spec/16_mermaid_import/DESIGN.md](spec/16_mermaid_import/DESIGN.md) | Mermaid import (planned): mermaid read on every entry point, converted to nymph YAML; outputs stay PNG or YAML |
+| [spec/16_mermaid_import/PLAN.md](spec/16_mermaid_import/PLAN.md) | Its implementation steps and tests |
 | [CHANGELOG.md](CHANGELOG.md) | User-facing changes between releases |
 | [CLAUDE.md](CLAUDE.md) | Coding style and project rules for AI agents and contributors |
 
