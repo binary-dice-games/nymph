@@ -144,6 +144,8 @@ nymph_add_test(test_uml_dfd_network test_uml_dfd_network.cpp)
 
 nymph_add_test(test_live_view test_live_view.cpp)
 target_compile_definitions(test_live_view PRIVATE NYMPH_SOURCE_DIR="${PROJECT_SOURCE_DIR}")
+nymph_add_test(test_web_templates test_web_templates.cpp)
+target_compile_definitions(test_web_templates PRIVATE NYMPH_SOURCE_DIR="${PROJECT_SOURCE_DIR}")
 nymph_add_test(test_live_view_edit test_live_view_edit.cpp)
 target_compile_definitions(test_live_view_edit PRIVATE NYMPH_SOURCE_DIR="${PROJECT_SOURCE_DIR}")
 nymph_add_test(test_pick test_pick.cpp)

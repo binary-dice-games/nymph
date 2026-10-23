@@ -20,7 +20,7 @@ export function withoutView(source) {
     skipping = false;
     out.push(line);
   }
-  return out.join('\n').replace(/\n+$/, '\n');
+  return out.join('\n').replace(/\n*$/, '\n');
 }
 
 /** A short, stable id for text (FNV-1a, hex). */

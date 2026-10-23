@@ -181,6 +181,8 @@ if(NYMPH_NODE)
   # modules' sizes against web/size_budget.json (plan step 1).
   add_test(NAME nymph_web_editor_node
     COMMAND "${NYMPH_NODE}" "${CMAKE_CURRENT_SOURCE_DIR}/tests/node/editor.mjs" "${NYMPH_WEB_OUT}" "${PROJECT_SOURCE_DIR}")
+  add_test(NAME nymph_web_app_node
+    COMMAND "${NYMPH_NODE}" "${CMAKE_CURRENT_SOURCE_DIR}/tests/node/app.mjs" "${NYMPH_WEB_OUT}" "${PROJECT_SOURCE_DIR}")
   add_test(NAME nymph_web_size
     COMMAND "${NYMPH_NODE}" "${CMAKE_CURRENT_SOURCE_DIR}/tests/node/size.mjs" "${NYMPH_WEB_OUT}" "${PROJECT_SOURCE_DIR}")
   # In Chromium through Playwright (WebGL2 through SwiftShader without a
@@ -192,6 +194,10 @@ if(NYMPH_NODE)
   add_test(NAME nymph_web_editor_browser
     COMMAND "${NYMPH_NODE}" "${CMAKE_CURRENT_SOURCE_DIR}/tests/browser/editor.mjs" "${NYMPH_WEB_OUT}" "${PROJECT_SOURCE_DIR}")
   set_tests_properties(nymph_web_editor_browser PROPERTIES SKIP_RETURN_CODE 77 TIMEOUT 600)
+  # The web app on the built site (spec/15_web_app plan steps 7 to 13).
+  add_test(NAME nymph_web_app_browser
+    COMMAND "${NYMPH_NODE}" "${CMAKE_CURRENT_SOURCE_DIR}/tests/browser/app.mjs" "${NYMPH_WEB_OUT}" "${PROJECT_SOURCE_DIR}")
+  set_tests_properties(nymph_web_app_browser PROPERTIES SKIP_RETURN_CODE 77 TIMEOUT 900)
 else()
   message(STATUS "nymph: node not found; skipping the web viewer's Node and browser tests")
 endif()

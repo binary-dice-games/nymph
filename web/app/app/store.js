@@ -83,13 +83,20 @@ export async function remember(doc, thumb) {
   if (!['url', 'drive', 'example'].includes(o.kind) && !o.handle && doc.savedSource.length < MAX_KEPT) {
     entry.source = doc.savedSource;
   }
-  await tx('recent', 'readwrite', async (s) => {
-    const old = await req(s.get(entry.id));
-    if (old && !thumb) {
-      entry.thumb = old.thumb;
-    }
-    s.put(entry);
-  });
+  const put = (e) =>
+    tx('recent', 'readwrite', async (s) => {
+      const old = await req(s.get(e.id));
+      if (old && !thumb) {
+        e.thumb = old.thumb;
+      }
+      s.put(e);
+    });
+  try {
+    structuredClone(entry); // a handle some browsers cannot store
+  } catch {
+    delete entry.handle;
+  }
+  await put(entry);
   const all = await recent();
   if (all.length > MAX_RECENT) {
     await tx('recent', 'readwrite', (s) => all.slice(MAX_RECENT).forEach((e) => s.delete(e.id)));
