@@ -927,6 +927,8 @@ loop, model choice); the WebMCP registration; the `nymph mcp` WebSocket
 bridge and pairing; prompts and the use of the agent guide; whether
 assistant editing is offered on mobile.
 
+That project is [17_agent_connectors](../17_agent_connectors/DESIGN.md).
+
 ## 12. Extension Points
 
 - **Dropbox and OneDrive** providers (Chooser / Saver; File Picker v8),
