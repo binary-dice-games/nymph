@@ -39,7 +39,7 @@ Files owned or changed: `src/edit/` (new `tree_edit`, `data_edit`,
 `element_starter`, `csv_file`, `table_grid`, `tree_menu`, `workspace_layout`,
 and `yaml_text` (the text-position helpers `source_edit` had, now shared);
 `source_edit`, `editor_model` and `inspector` extended),
-`src/window/editor_panel.*`, `src/window/viewer_window.cpp`,
+`src/window/editor_panel.*` (now `src/workspace/editor_panel.*`, [15_web_app](../15_web_app/DESIGN.md) section 5.1), `src/window/viewer_window.cpp`,
 `src/window/window_host.hpp` and the two platform files (cursor shape,
 focus, cross-thread wake, the D key), `src/view/live_view.*`
 (`set_source_moved`), new `src/ipc/` (local socket, discovery files), new

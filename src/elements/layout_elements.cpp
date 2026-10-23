@@ -174,10 +174,10 @@ class label_class : public element_class {
                     color_field("text_color", "Optional \"#RRGGBBAA\"/\"#RRGGBB\" text color; empty uses the theme's."),
                     color_field(
                         "text_color_light",
-                        "Text color used instead of text_color when image.theme is light. Ignored when empty."),
+                        "Text color used instead of text_color when the theme's colours are light. Ignored when empty."),
                     color_field(
                         "text_color_dark",
-                        "Text color used instead of text_color when image.theme is dark or classic. Ignored when empty."),
+                        "Text color used instead of text_color when the theme's colours are dark or classic. Ignored when empty."),
                     bool_field(
                         "wrap",
                         false,
@@ -194,7 +194,7 @@ class label_class : public element_class {
 
   void draw(const node& n, draw_context& dc) const override {
     const rect r = dc.rect_of(n);
-    const std::string& color = text_color(n, dc.options().theme);
+    const std::string& color = text_color(n, dc.options().base);
     ImGui::PushClipRect(r.min, r.max, true);
     if (!color.empty()) {
       ImGui::PushStyleColor(ImGuiCol_Text, to_u32(color));

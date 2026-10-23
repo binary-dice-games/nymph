@@ -1,0 +1,4 @@
+# The default: ImGui, ImPlot and ImUml's light colours, nothing else.
+name: Light
+description: Dark text on white, ImPlot's Deep series colours. The default.
+base: light

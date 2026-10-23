@@ -1,0 +1,69 @@
+// MIT License © 2026 Binary Dice Games
+// The nymph web app's service worker (spec/15_web_app/DESIGN.md section
+// 3.9): the app shell and both modules cached per build, fonts, examples
+// and templates as they are fetched. Same-origin GET requests only: URLs
+// the user opens and Google Drive never go through it. A new version waits
+// until the page asks it to take over (the user chose Reload).
+
+const VERSION = '@NYMPH_COMMIT@';
+const CACHE = `nymph-${VERSION}`;
+const SHELL = [
+  './',
+  'index.html',
+  'app.css',
+  'icon.png',
+  'manifest.webmanifest',
+  'version.json',
+  'config.json',
+@NYMPH_APP_FILES@
+  'nymph-viewer.js',
+  'nymph-viewer-core.js',
+  `nymph-viewer-core.wasm?v=${VERSION}`,
+  'templates/index.json',
+  'examples/index.json',
+];
+const EDITOR = ['editor/nymph-editor.js', 'editor/nymph-editor-core.js', `editor/nymph-editor-core.wasm?v=${VERSION}`];
+
+const withEditor = new URL(self.location.href).searchParams.get('editor') !== '0';
+
+self.addEventListener('install', (event) => {
+  event.waitUntil(caches.open(CACHE).then((c) => c.addAll(withEditor ? [...SHELL, ...EDITOR] : SHELL)));
+});
+
+self.addEventListener('activate', (event) => {
+  event.waitUntil(
+    caches
+      .keys()
+      .then((keys) => Promise.all(keys.filter((k) => k.startsWith('nymph-') && k !== CACHE).map((k) => caches.delete(k))))
+      .then(() => self.clients.claim()),
+  );
+});
+
+self.addEventListener('message', (event) => {
+  if (event.data === 'skipWaiting') {
+    self.skipWaiting();
+  }
+});
+
+self.addEventListener('fetch', (event) => {
+  const request = event.request;
+  const url = new URL(request.url);
+  if (request.method !== 'GET' || url.origin !== self.location.origin) {
+    return; // the network, untouched
+  }
+  // The app's pages answer from the shell, whatever the query (?url=, ?example=).
+  const key = request.mode === 'navigate' ? 'index.html' : request;
+  event.respondWith(
+    caches.open(CACHE).then(async (cache) => {
+      const hit = await cache.match(key, { ignoreSearch: request.mode === 'navigate' });
+      if (hit) {
+        return hit;
+      }
+      const response = await fetch(request);
+      if (response.ok && /\/(fonts|examples|templates|editor|demo)\//.test(url.pathname)) {
+        cache.put(request, response.clone());
+      }
+      return response;
+    }),
+  );
+});

@@ -18,6 +18,7 @@
 #include "elements/register_builtin.hpp"
 #include "fonts/embedded_fonts.hpp"
 #include "mcp/base64.hpp"
+#include "mcp/editor_tools.hpp"
 #include "mcp/resources.hpp"
 #include "png/png_meta.hpp"
 
@@ -349,6 +350,12 @@ json list_shapes(const json& args) {
   return text_result(shapes_listing(name.value_or("")));
 }
 
+json list_themes(const json& args) {
+  check_known(args, {"name"});
+  const std::optional<std::string> name = optional_string(args, "name");
+  return text_result(themes_listing(name.value_or("")));
+}
+
 /// The App's fonts: the bytes of an embedded catalog font, by file name.
 json viewer_font(const json& args) {
   check_known(args, {"name"});
@@ -382,12 +389,10 @@ json annotations(const char* title, bool read_only) {
 
 // ── Registry ────────────────────────────────────────────────────────────────
 
-json text_result(const std::string& text, bool error) {
-  json result = {{"content", json::array({{{"type", "text"}, {"text", text}}})}};
-  if (error) {
-    result["isError"] = true;
+void add_editor_tools(tool_registry& registry, editor_runner run) {
+  for (tool& t : make_editor_tools(std::move(run))) {
+    registry.add(std::move(t));
   }
-  return result;
 }
 
 tool_registry::tool_registry(const server_options& options) : options_(options) {}
@@ -595,6 +600,20 @@ void add_builtin_tools(tool_registry& registry) {
           {"additionalProperties", false}}},
         {"annotations", annotations("List shapes", true)}},
        list_shapes});
+
+  registry.add(
+      {{{"name", "list_themes"},
+        {"title", "List themes"},
+        {"description",
+         "The chart themes image.theme accepts, one per line (name, display name, light or dark, look). A theme "
+         "fills every field the chart leaves out: background, fonts, series palette, diagram colours. With 'name', "
+         "the theme's YAML file (its rules)."},
+        {"inputSchema",
+         {{"type", "object"},
+          {"properties", {{"name", {{"type", "string"}, {"description", "One theme name, e.g. ocean."}}}}},
+          {"additionalProperties", false}}},
+        {"annotations", annotations("List themes", true)}},
+       list_themes});
 
   if (registry.options().viewer_html.empty()) {
     return;

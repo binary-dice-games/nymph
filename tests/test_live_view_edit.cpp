@@ -597,6 +597,14 @@ TEST(live_view_edit, TheThemeIsTheOneTheFigureIsDrawnWith) {
   EXPECT_EQ(v.theme(), "classic"); // the override wins
   v.set_theme("");
   EXPECT_EQ(v.theme(), "dark");
+  // A chart theme binds the source again: its base colours draw it.
+  v.set_theme("sunset");
+  EXPECT_EQ(v.theme(), "sunset");
+  EXPECT_EQ(v.theme_base(), "light");
+  v.set_theme("midnight");
+  EXPECT_EQ(v.theme_base(), "dark");
+  EXPECT_THROW(v.set_theme("neon"), std::invalid_argument);
+  EXPECT_EQ(v.theme(), "midnight");
 }
 
 /// Set NYMPH_EDIT_DUMP to a directory to look at the outlines by eye.

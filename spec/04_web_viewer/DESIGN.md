@@ -179,10 +179,11 @@ by the 8192 px limit of `render_frames()`.
 
 ### Theme
 
-`theme` is `source` (default: `image.theme`), `light`, `dark`, `classic`,
-or `auto` (light or dark from the page's `prefers-color-scheme`, followed
-live). It overrides `image.theme` only; colours written in the source
-stay.
+`theme` is `source` (default: `image.theme`), any chart theme id
+(`light`, `dark`, `ocean`, ...; spec/01_core_features/DESIGN.md section 3,
+"Themes"), or `auto` (light or dark from the page's `prefers-color-scheme`,
+followed live). It overrides `image.theme` only (the source is bound again
+with it); values written in the source stay.
 
 ### Updates
 
@@ -528,7 +529,7 @@ createViewer(container: HTMLElement, options?: {
   source?: string;            // YAML text
   png?: Uint8Array;           // or a nymph PNG
   fit?: "source" | "width" | "fill" | "scale";
-  theme?: "source" | "light" | "dark" | "classic" | "auto";
+  theme?: "source" | "auto" | string; // a chart theme id (docs/themes.md)
   tooltips?: boolean;         // default true
   rasterizer?: "auto" | "webgl" | "software"; // default auto
   menu?: boolean;             // the right-click menu, default true
@@ -545,7 +546,8 @@ class NymphViewer {
   setData(tables: object): Promise<void>;
   resetView(): void;
   on(event: "hover" | "click" | "view" | "error", cb: (detail) => void): () => void;
-  setTheme(theme: "light" | "dark" | "classic" | ""): void;
+  setTheme(theme: string): Promise<void>; // a chart theme id, "" = the source's; fetches its fonts
+  themes(): ThemeInfo[];
   rendered(): Promise<void>;  // every update so far applied and drawn, nothing due
   state(): object;            // geometry, hovered, plot views (as the events report them)
   source(): string;           // with setData applied

@@ -6,6 +6,7 @@
 #include <cstdio>
 #include <stdexcept>
 #include <string>
+#include <vector>
 #include "fonts/embedded_fonts.hpp"
 #include "render/figure_renderer.hpp"
 #include "render/soft_rasterizer.hpp"
@@ -55,8 +56,8 @@ void check_options(const image_options& o) {
   if (o.padding < 0 || o.padding * 2 >= o.width || o.padding * 2 >= o.height) {
     throw std::invalid_argument("image padding does not fit the image size");
   }
-  if (find_theme(o.theme) == nullptr) {
-    throw std::invalid_argument("unknown theme '" + o.theme + "' (themes: light, dark, classic)");
+  if (find_theme(o.base) == nullptr) {
+    throw std::invalid_argument("unknown base colours '" + o.base + "' (light, dark or classic)");
   }
   if (const std::string problem = check_font_name(o.font); !problem.empty()) {
     throw std::invalid_argument(problem);
@@ -130,6 +131,11 @@ void configure(const theme& t, const char* renderer_name, ImGuiBackendFlags back
   configure_style(t);
 }
 
+void configure(const image_options& o, const char* renderer_name, ImGuiBackendFlags backend_flags) {
+  configure_backend(renderer_name, backend_flags);
+  configure_style(o);
+}
+
 void configure_backend(const char* renderer_name, ImGuiBackendFlags backend_flags, bool own_textures) {
   ImGuiIO& io = ImGui::GetIO();
   io.IniFilename = nullptr;
@@ -168,6 +174,63 @@ void configure_style(const theme& t) {
   style.WindowRounding = 0.0f;
   style.WindowBorderSize = 0.0f;
   style.WindowPadding = ImVec2(0.0f, 0.0f);
+}
+
+namespace {
+
+/// "#RRGGBB[AA]" (checked by bind) as ImGui's floats.
+ImVec4 hex_color(const std::string& text) {
+  const auto byte = [&](size_t i) { return static_cast<float>(std::stoi(text.substr(i, 2), nullptr, 16)) / 255.0f; };
+  return ImVec4(byte(1), byte(3), byte(5), text.size() >= 9 ? byte(7) : 1.0f);
+}
+
+} // namespace
+
+void configure_style(const image_options& o) {
+  configure_style(*find_theme(o.base));
+  if (!o.background.empty()) {
+    const ImVec4 bg = hex_color(o.background);
+    ImGui::GetStyle().Colors[ImGuiCol_WindowBg] = bg;
+    // Plot frames show the figure's background, not the base's frame
+    // colour, and plot areas a faint step from it toward the text colour
+    // (the base's tint would clash with the theme's background).
+    const ImVec4 text = o.text_color.empty() ? ImGui::GetStyle().Colors[ImGuiCol_Text] : hex_color(o.text_color);
+    const float k = 0.05f;
+    const ImVec4 area(bg.x + (text.x - bg.x) * k, bg.y + (text.y - bg.y) * k, bg.z + (text.z - bg.z) * k, 1.0f);
+    ImPlot::GetStyle().Colors[ImPlotCol_FrameBg] = ImVec4(0.0f, 0.0f, 0.0f, 0.0f);
+    ImPlot::GetStyle().Colors[ImPlotCol_PlotBg] = area;
+    ImPlot3D::GetStyle().Colors[ImPlot3DCol_FrameBg] = ImVec4(0.0f, 0.0f, 0.0f, 0.0f);
+    ImPlot3D::GetStyle().Colors[ImPlot3DCol_PlotBg] = area;
+    const ImVec4 legend(bg.x, bg.y, bg.z, 0.92f);
+    ImPlot::GetStyle().Colors[ImPlotCol_LegendBg] = legend;
+    ImPlot3D::GetStyle().Colors[ImPlot3DCol_LegendBg] = legend;
+    // Diagrams: edge labels and hollow markers sit on the background.
+    ImUml::GetStyle().Colors[ImUmlCol_EdgeLabelBg] = legend;
+    ImUml::GetStyle().Colors[ImUmlCol_Bg] = bg;
+  }
+  ImPlot::GetStyle().Colormap = ImPlotColormap_Deep; // the defaults, when switching themes
+  ImPlot3D::GetStyle().Colormap = ImPlot3DColormap_Deep;
+  if (!o.palette.empty()) {
+    // One colormap per palette, added once per context (ImPlot cannot
+    // remove one), named after its colours.
+    std::string name = "nymph";
+    std::vector<ImVec4> colors;
+    for (const std::string& c : o.palette) {
+      name += c;
+      colors.push_back(hex_color(c));
+    }
+    const int count = static_cast<int>(colors.size());
+    ImPlotColormap map = ImPlot::GetColormapIndex(name.c_str());
+    if (map < 0) {
+      map = ImPlot::AddColormap(name.c_str(), colors.data(), count);
+    }
+    ImPlot::GetStyle().Colormap = map;
+    ImPlot3DColormap map3d = ImPlot3D::GetColormapIndex(name.c_str());
+    if (map3d < 0) {
+      map3d = ImPlot3D::AddColormap(name.c_str(), colors.data(), count);
+    }
+    ImPlot3D::GetStyle().Colormap = map3d;
+  }
 }
 
 void load_fonts(draw_context& ctx) {

@@ -26,3 +26,6 @@
 	path = extern/json
 	url = https://github.com/nlohmann/json.git
 	branch = v3.12.0
+[submodule "extern/ImGuiColorTextEdit"]
+	path = extern/ImGuiColorTextEdit
+	url = https://github.com/goossens/ImGuiColorTextEdit

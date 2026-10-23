@@ -22,6 +22,7 @@
 #include "nymph.hpp"
 #include "render/image.hpp"
 #include "render/soft_rasterizer.hpp"
+#include "themes/theme_catalog.hpp"
 #include "view/live_view.hpp"
 #include "webgl_presenter.hpp"
 
@@ -278,6 +279,12 @@ EMSCRIPTEN_KEEPALIVE const char* nymph_version() {
 }
 
 /// @brief Every catalog font as JSON: [{name, size, embedded}].
+/// @brief The chart themes as JSON (chart_themes_json()), for pickers.
+EMSCRIPTEN_KEEPALIVE const char* nymph_themes() {
+  scratch() = chart_themes_json();
+  return scratch().c_str();
+}
+
 EMSCRIPTEN_KEEPALIVE const char* nymph_font_catalog() {
   std::string& j = scratch();
   j = "[";

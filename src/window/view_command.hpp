@@ -9,6 +9,7 @@
 #include <string>
 #include <string_view>
 #include "view/live_view.hpp"
+#include "workspace/workspace_input.hpp"
 
 namespace bdg::nymph {
 
@@ -35,6 +36,9 @@ struct view_request {
   std::string mermaid_kind; ///< The mermaid keyword when the input was mermaid, else empty.
   int width = 0; ///< The layout size of the source (`image`), CSS pixels.
   int height = 0;
+  /// With --edit, a source that does not bind opens in repair state
+  /// (spec/15_web_app/DESIGN.md section 5.4): why it does not, else "".
+  std::string repair;
 };
 
 /// @brief A window size in screen coordinates.
@@ -79,18 +83,6 @@ std::string edit_save_path(const std::string& input, bool from_mermaid);
 ///         the source's line and column included); 2 for bad arguments
 ///         (message and usage on `err`).
 int run_view_cli(std::span<const std::string_view> args, std::ostream& err);
-
-/// @brief Who gets a key in `nymph view`.
-enum class key_route {
-  panel, ///< The editor panel's text field or dialog.
-  figure, ///< A text field of the figure (UI mockups, spec/09_ui_mockups).
-  viewer, ///< The viewer's shortcuts (Esc, Q, R, S, Y, E).
-};
-
-/// @brief The panel first while it has the keyboard, then the figure while
-///        one of its text fields does, else the viewer's shortcuts: typing
-///        "q" in a field never closes the window.
-key_route route_key(bool panel_has_keyboard, bool figure_has_keyboard);
 
 /// @brief The usage text of `nymph view`.
 const char* view_usage();

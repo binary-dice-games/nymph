@@ -9,6 +9,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- The web app at https://binary-dice-games.github.io/nymph/: open nymph YAML and PNG files from the computer (file picker, drag and drop, paste), a URL, Google Drive (when the site is set up for it), a shared link, Recent or a template; view them live; edit them with the editor of `nymph view --edit`; save back to the file (Chrome, Edge) or Drive, or download YAML or PNG; copy a link that reopens the chart or HTML that embeds it. Unsaved changes are kept as drafts; the app installs, opens `.yaml` files from the system and works offline. Phones and tablets get the viewer only.
+- The editor module for web pages: `editor/nymph-editor.js` (`createEditor()`), a second WebAssembly module next to the viewer's, with the editor tools as a JavaScript API (`tool()`), attributed changes and undo groups.
+- `nymph view --edit` and the web editor: a source pane (`Ctrl+U`, or the **Source** tab button) shows the YAML beside the figure, highlighted, with line numbers, folding and find / replace, in step with the panel both ways; a file that does not load opens at its error there instead of failing.
+- `nymph view --edit`: the undo and redo buttons name the change they undo or redo; `Ctrl+S` asks to save.
+- Chart themes: `image.theme` picks one of ten built-in themes (`light`, `dark`, `classic`, `forest`, `midnight`, `ocean`, `paper`, `pastel`, `slate`, `sunset`) that fills every field the chart leaves out, by element type (`FlowNode:fill_color`), slot (`uml:color`) or field name; values the chart writes, on an element or an enclosing one, win.
+- `image.background` and `image.palette` (the colours series take in turn).
+- `nymph themes [<name>]`; `--theme <name>` on `nymph render` and `nymph check` (render writes it into the PNG's source).
+- Editor (`nymph view --edit`, web app): a **Theme** picker with swatches that writes `image.theme`; the web app's **Theme…** dialog previews themes in View.
+- Web viewer and editor modules: `themes()`; `setTheme()` takes any chart theme and fetches its fonts.
 - Mermaid input: `nymph`, `render`, `check`, `nymph view` and the MCP tools `render_chart` / `check_chart` / `editor_set_source` read mermaid diagrams (flowchart, sequence, class, state, ER, gantt, pie, mindmap, sankey, xychart) and convert them to nymph YAML; errors and warnings point at the mermaid lines. Outputs stay PNG or YAML.
 - `nymph convert` and the MCP tool `convert_chart`: the nymph YAML of a mermaid diagram, a nymph PNG or a YAML source; `nymph diagram.mmd -o diagram.yaml` converts too.
 - `nymph view --edit` on a mermaid file saves the converted chart as `<name>.yaml` next to it.
@@ -25,8 +34,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `nymph view --edit` is an MCP server for AI agents: `nymph mcp` has `editor_*` tools that read and change the chart open in the editor (elements, selection, tables, an image of the view); `--no-mcp` turns it off.
 
 ### Changed
+- `nymph view --theme`, the viewer element's `theme` attribute and `setTheme()` accept every chart theme, not only `light`, `dark` and `classic`.
 - `nymph view --edit`: number fields are boxes that take a typed value after a click, or change by dragging sideways (Shift finer, Ctrl coarser); a text size of 0 shows as "auto".
-- `nymph view --edit`: the editor panel has rounder windows, buttons and fields, larger buttons and spacing, and softer borders.
+- `nymph view --edit` and the web editor: a flat, web-app style panel (Fira Sans text, light or dark palette, green accent, primary Save button, section headers, thin scrollbars); the selection outline uses the accent. The web editor follows the page's light / dark theme and accent (`setAppearance()`, `appearance` option of `createEditor()`).
 
 - `nymph view --edit`: the element list is a tree with collapsible nodes and an icon per element type; errors show in their own panel at the bottom of the editor.
 
@@ -37,6 +47,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `nymph view --edit`: choosing a colour for a field that was automatic opens the colour picker at once.
 
 ### Fixed
+- `nymph view --edit` no longer redraws the editor panel continuously while nothing changes.
 - `nymph view --edit`: adding a child from an element's right-click menu no longer crashes.
 - `nymph view` and the web viewer: a series colour removed by an edit, an undo or a new source goes back to its automatic colour instead of keeping the old one; automatic colours and markers match a fresh render.
 - The library builds with GCC again (a stray carriage return in `src/edit/tree_edit.cpp`).

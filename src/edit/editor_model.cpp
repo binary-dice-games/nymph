@@ -52,13 +52,91 @@ std::string written_text(const std::string& source, const yaml_node& doc, std::s
   return value->is_scalar() ? encode_text(value->text) : std::string();
 }
 
+/// A change's default label, from the key apply() merges by:
+/// "root/children/1/title" -> "Set title", ".../title/clear" -> "Clear
+/// title", "add/<path>" -> "Add element", "data/cell" -> "Edit data".
+std::string change_label(const std::string& key) {
+  const auto starts = [&](std::string_view prefix) { return key.rfind(prefix, 0) == 0; };
+  if (starts("add/")) {
+    return "Add element";
+  }
+  if (starts("remove/")) {
+    return "Delete element";
+  }
+  if (starts("move/")) {
+    return "Move element";
+  }
+  if (starts("duplicate/")) {
+    return "Duplicate element";
+  }
+  if (starts("fields/")) {
+    return "Set fields";
+  }
+  if (starts("top/")) {
+    return "Set " + key.substr(4);
+  }
+  if (starts("data/")) {
+    return "Edit data";
+  }
+  if (key == "source") {
+    return "Edit source";
+  }
+  std::string_view k = key;
+  bool clear = false;
+  if (k.size() > 6 && k.substr(k.size() - 6) == "/clear") {
+    clear = true;
+    k.remove_suffix(6);
+  }
+  const size_t slash = k.rfind('/');
+  const std::string field(slash == std::string_view::npos ? k : k.substr(slash + 1));
+  return (clear ? "Clear " : "Set ") + field;
+}
+
 } // namespace
 
 editor_model::editor_model(std::string source) : source_(std::move(source)), original_(source_) {
   refresh();
 }
 
+editor_model::editor_model(std::string source, repair_t) : source_(std::move(source)), original_(source_) {
+  try {
+    refresh();
+  } catch (const error& e) {
+    repairing_ = true;
+    repair_error_ = e.what();
+    repair_line_ = e.line();
+    repair_column_ = e.column();
+    // Something to stand on until the text binds; nothing reads it.
+    figure_ = std::make_unique<figure>(bind_source("root: {type: Label, text: \"\"}\n", builtin_registry()));
+  }
+}
+
 editor_model::~editor_model() = default;
+
+int editor_model::element_line(std::string_view path) const {
+  if (repairing_) {
+    return 0;
+  }
+  const auto paths = element_paths(figure_->root);
+  const auto it = paths.find(path);
+  return it != paths.end() ? it->second->line : 0;
+}
+
+std::string editor_model::element_at_line(int line) const {
+  if (repairing_) {
+    return {};
+  }
+  std::string best;
+  int best_line = 0;
+  for (const auto& [path, n] : element_paths(figure_->root)) {
+    // The latest start at or before the line; on a tie the deeper path.
+    if (n->line > 0 && n->line <= line && (n->line > best_line || (n->line == best_line && path.size() > best.size()))) {
+      best = path;
+      best_line = n->line;
+    }
+  }
+  return best;
+}
 
 void editor_model::refresh() {
   figure_ = std::make_unique<figure>(bind_source(source_, builtin_registry()));
@@ -174,6 +252,9 @@ commit_result editor_model::fail(const std::string& message, int line, int colum
 }
 
 commit_result editor_model::apply(std::string next, const std::string& key, bool merge) {
+  if (repairing_ && key != "source") {
+    return fail("fix the source first: " + repair_error_, repair_line_, repair_column_);
+  }
   if (const std::optional<source_problem> problem = find_source_problem(next)) {
     return fail(problem->message, problem->line, problem->column);
   }
@@ -191,10 +272,23 @@ commit_result editor_model::apply(std::string next, const std::string& key, bool
       return fail(e.what(), e.line(), e.column());
     }
   }
-  if (!(merge && key == last_key_ && !undo_.empty())) {
-    undo_.push_back(source_);
+  const std::string label = group_ ? group_->label : !label_.empty() ? label_ : change_label(key);
+  const std::string origin = group_ ? group_->origin : origin_;
+  const bool merged = merge && key == last_key_ && !undo_.empty();
+  if (repairing_) {
+    // The text that did not bind is no state to go back to: the history
+    // starts here.
+    repairing_ = false;
+    repair_error_.clear();
+  } else if (group_ && group_->pushed) {
+    // One entry for the whole group: its first change pushed it.
+  } else if (!merged) {
+    undo_.push_back(undo_entry{source_, label, origin});
     if (undo_.size() > kMaxUndo) {
       undo_.pop_front();
+    }
+    if (group_) {
+      group_->pushed = true;
     }
   }
   redo_.clear();
@@ -205,6 +299,10 @@ commit_result editor_model::apply(std::string next, const std::string& key, bool
   commit_result r;
   r.ok = true;
   r.source = source_;
+  r.label = label;
+  r.origin = origin;
+  last_label_ = label;
+  last_origin_ = origin;
   return r;
 }
 
@@ -278,13 +376,30 @@ commit_result editor_model::clear(std::string_view field) {
   }
 }
 
+void editor_model::begin_group(std::string label, std::string origin) {
+  if (group_) {
+    return;
+  }
+  group_ = open_group{std::move(label), origin.empty() ? std::string("user") : std::move(origin), false};
+  last_key_.clear(); // the group's first change never merges into an earlier one
+}
+
+void editor_model::end_group() {
+  group_.reset();
+  last_key_.clear();
+}
+
 std::optional<std::string> editor_model::undo() {
   if (undo_.empty()) {
     return std::nullopt;
   }
-  redo_.push_back(source_);
-  source_ = std::move(undo_.back());
+  group_.reset();
+  undo_entry back = std::move(undo_.back());
   undo_.pop_back();
+  redo_.push_back(undo_entry{source_, back.label, back.origin});
+  last_label_ = "Undo " + back.label;
+  last_origin_ = origin_;
+  source_ = std::move(back.source);
   last_key_.clear();
   ++version_;
   refresh();
@@ -298,9 +413,13 @@ std::optional<std::string> editor_model::redo() {
   if (redo_.empty()) {
     return std::nullopt;
   }
-  undo_.push_back(source_);
-  source_ = std::move(redo_.back());
+  group_.reset();
+  undo_entry back = std::move(redo_.back());
   redo_.pop_back();
+  undo_.push_back(undo_entry{source_, back.label, back.origin});
+  last_label_ = "Redo " + back.label;
+  last_origin_ = origin_;
+  source_ = std::move(back.source);
   last_key_.clear();
   ++version_;
   refresh();
@@ -599,7 +718,12 @@ commit_result editor_model::set_top_level_text(std::string_view key, std::string
 }
 
 commit_result editor_model::set_source(std::string source) {
-  commit_result r = apply(std::move(source), "source", false);
+  commit_result r;
+  try {
+    r = apply(std::move(source), "source", false);
+  } catch (const error& e) {
+    return fail(e.what(), e.line(), e.column());
+  }
   if (r.ok) {
     select(selection_); // dropped when its element is gone
   }

@@ -113,6 +113,12 @@ once and can be undone in the editor.
 A refused change names the problem as the loader does and changes nothing.
 With several editors open, `editor` (a file name or process id) chooses
 one; without an open editor the tools say so: use `render_chart` instead.
+While the user is fixing source text that does not load, changes are
+refused ("the user is editing the source"): wait and read the state again.
+
+To let a user look at or edit a chart in the browser without installing
+anything, give them a link to the web app: `https://binary-dice-games.github.io/nymph/?url=<the raw URL of the YAML or PNG>`
+(add `&mode=edit` to open the editor).
 
 ## Source format
 
@@ -173,11 +179,13 @@ Rules that cause most errors:
 | `width` | `800` | Width in pixels, 16 to 4096. |
 | `height` | `500` | Height in pixels, 16 to 4096. |
 | `scale` | `1` | 1 to 4. The PNG has `width*scale` by `height*scale` pixels with the same layout, only sharper. Use `2` for images shown large. |
-| `theme` | `light` | `light`, `dark` or `classic`. |
+| `theme` | `light` | Chart theme: `light`, `dark`, `classic`, `forest`, `midnight`, `ocean`, `paper`, `pastel`, `slate`, `sunset`. It sets background, fonts, series colours and diagram colours for every field the chart leaves out; values the chart writes win. |
 | `padding` | `8` | Empty pixels around the chart. |
 | `font` | `default` | Font of all text, by file name; see "Fonts and text style". |
 | `font_size` | `16` | Text size in pixels, 1 to 96. |
 | `text_color` | theme | Colour of all text, `"#RRGGBB"` in quotes. |
+| `background` | theme | Background colour of the image, `"#RRGGBB"` in quotes. |
+| `palette` | theme | Series colours taken in turn, `["#RRGGBB", ...]` (each in quotes). |
 
 ### `root`
 

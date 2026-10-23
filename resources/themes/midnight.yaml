@@ -1,0 +1,13 @@
+name: Midnight
+description: Ink-blue night, bright neon series and violet diagram lines.
+base: dark
+image:
+  background: "#12121c"
+  text_color: "#e8e8f4"
+  font: FiraSans-Regular.ttf
+  palette: ["#7c5cff", "#00d4ff", "#ff4fa3", "#ffd166", "#06d6a0", "#ff7b54"]
+fields:
+  figure:line_color: "#8f7bff"
+  figure:fill_color: "#1e1e33"
+  Note:fill_color: "#2a2540"
+  plot2d.item:line_weight: 2.5

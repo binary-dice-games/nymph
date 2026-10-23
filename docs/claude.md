@@ -106,6 +106,7 @@ download menu, since chat frames usually cannot save files.
 | `example_chart` | A complete, working source using an element type (or an example by name), to copy and adapt; without `type`, the list of examples |
 | `list_fonts` | The names a chart's `font` accepts |
 | `list_shapes` | The shape library (the names a node's `shape` accepts); with `name`, the details of one shape |
+| `list_themes` | The chart themes `image.theme` accepts; with `name`, one theme's file |
 | `editor_state`, `editor_add_element`, `editor_set_fields`, ... | The chart open in the user's editor (`nymph view --edit`): read its elements, selection, tables and view image, and change them (sixteen `editor_*` tools; `editor_set_source` takes mermaid too; [viewer.md](viewer.md#editing-in-the-window), [agent-guide.md](agent-guide.md#the-chart-open-in-the-editor)) |
 
 Errors name the line and column of the source, as on the command line

@@ -1,8 +1,13 @@
 # MIT License © 2026 Binary Dice Games
 #
-# Publishes the web viewer and its demo page to GitHub Pages:
-# https://binary-dice-games.github.io/nymph/demo/
-# One-time setup: Settings > Pages > Source: GitHub Actions.
+# Publishes the nymph web app, the web viewer and its demo page to GitHub
+# Pages (spec/15_web_app/DESIGN.md section 6):
+#   https://binary-dice-games.github.io/nymph/        the app
+#   https://binary-dice-games.github.io/nymph/demo/   the demo page
+# One-time setup: Settings > Pages > Source: GitHub Actions. Google Drive in
+# the app: the repository variables NYMPH_GOOGLE_CLIENT_ID,
+# NYMPH_GOOGLE_API_KEY and NYMPH_GOOGLE_APP_ID (docs/web-app.md); without
+# them the app shows no Drive control.
 
 name: pages
 
@@ -34,6 +39,9 @@ jobs:
         with:
           submodules: recursive
           persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 22
       - name: Tools
         run: |
           sudo apt-get update
@@ -41,20 +49,25 @@ jobs:
           git clone --depth 1 https://github.com/emscripten-core/emsdk.git "$RUNNER_TEMP/emsdk"
           "$RUNNER_TEMP/emsdk/emsdk" install "$EMSDK_VERSION"
           "$RUNNER_TEMP/emsdk/emsdk" activate "$EMSDK_VERSION"
-      - name: Build the web viewer
+          npm install --no-save --prefix "$GITHUB_WORKSPACE" playwright@1.56
+          npx --prefix "$GITHUB_WORKSPACE" playwright install --with-deps chromium
+      - name: Build the site
+        env:
+          GOOGLE_CLIENT_ID: ${{ vars.NYMPH_GOOGLE_CLIENT_ID }}
+          GOOGLE_API_KEY: ${{ vars.NYMPH_GOOGLE_API_KEY }}
+          GOOGLE_APP_ID: ${{ vars.NYMPH_GOOGLE_APP_ID }}
         run: |
           . "$RUNNER_TEMP/emsdk/emsdk_env.sh"
-          emcmake cmake -S . -B build-web -G Ninja -DNYMPH_WEB=ON -DCMAKE_BUILD_TYPE=MinSizeRel
+          emcmake cmake -S . -B build-web -G Ninja -DNYMPH_WEB=ON -DCMAKE_BUILD_TYPE=MinSizeRel \
+            -DNYMPH_SITE_COMMIT="$GITHUB_SHA" \
+            -DNYMPH_GOOGLE_CLIENT_ID="$GOOGLE_CLIENT_ID" -DNYMPH_GOOGLE_API_KEY="$GOOGLE_API_KEY" \
+            -DNYMPH_GOOGLE_APP_ID="$GOOGLE_APP_ID"
           cmake --build build-web --parallel
-      - name: Assemble the site
-        run: |
-          mkdir site
-          cp -r build-web/web/demo build-web/web/fonts site/
-          cp build-web/web/nymph-viewer*.js build-web/web/nymph-viewer-core.wasm site/
-          echo '<meta http-equiv="refresh" content="0; url=demo/">' > site/index.html
+      - name: Test the site
+        run: ctest --test-dir build-web --output-on-failure -j2
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:
-          path: site
+          path: build-web/web/site
       - id: deployment
         uses: actions/deploy-pages@v4

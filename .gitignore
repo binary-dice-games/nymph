@@ -12,3 +12,5 @@ __pycache__/
 # The Claude Code and Cursor plugins ship their launcher in bin/.
 !claude/plugin/bin/
 !cursor/plugin/bin/
+node_modules/
+/build-web/

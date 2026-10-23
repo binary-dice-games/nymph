@@ -74,6 +74,7 @@ image_options options(int width, int height, int scale = 1, const char* theme = 
   o.height = height;
   o.scale = scale;
   o.theme = theme;
+  o.base = theme; // render_frames() takes bound options: the base colours draw
   return o;
 }
 

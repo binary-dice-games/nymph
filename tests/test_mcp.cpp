@@ -126,7 +126,7 @@ TEST(mcp_session, lists_answer_after_initialize) {
       request(3, "resources/list", {{"cursor", "x"}}));
   ASSERT_EQ(r.responses.size(), 3u);
   // The chart tools, then the editor's (spec/14_editor_workspace).
-  EXPECT_EQ(r.responses[1]["result"]["tools"].size(), 8u + editor_tool_definitions().size());
+  EXPECT_EQ(r.responses[1]["result"]["tools"].size(), 9u + editor_tool_definitions().size());
   EXPECT_EQ(r.responses[2]["result"]["resources"].size(), 2u);
 }
 

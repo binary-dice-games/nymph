@@ -20,6 +20,9 @@ find_program(GIT git REQUIRED)
 # Submodule folders a build never reads (documentation, tests, examples,
 # tools): about 18 MB of the 46 MB the submodules archive to.
 set(EXCLUDE
+  extern/ImGuiColorTextEdit/docs
+  extern/ImGuiColorTextEdit/example
+  extern/ImGuiColorTextEdit/extras
   extern/googletest/docs
   extern/imgui/docs
   extern/imgui/examples

@@ -171,7 +171,7 @@ TEST_F(mcp_tools, list_names_every_tool_with_its_schemas) {
   // The chart tools, then the tools of a running editor (spec/14_editor_workspace).
   std::vector<std::string> expected{
       "render_chart", "check_chart", "convert_chart", "extract_chart", "chart_schema", "example_chart", "list_fonts",
-      "list_shapes"};
+      "list_shapes", "list_themes"};
   for (const json& t : editor_tool_definitions()) {
     expected.push_back(t["name"]);
   }
@@ -383,6 +383,12 @@ TEST_F(mcp_tools, shapes_match_the_cli) {
   const std::string unknown = error_text(call("list_shapes", {{"name", "clod"}}));
   EXPECT_NE(unknown.find("unknown shape 'clod' (did you mean 'cloud'?)"), std::string::npos) << unknown;
   EXPECT_NE(error_text(call("list_shapes", {{"all", true}})).find("unknown"), std::string::npos);
+}
+
+TEST_F(mcp_tools, themes_match_the_cli) {
+  EXPECT_EQ(text_of(call("list_themes")), cli_output({"themes"}));
+  EXPECT_EQ(text_of(call("list_themes", {{"name", "ocean"}})), cli_output({"themes", "ocean"}));
+  EXPECT_NE(error_text(call("list_themes", {{"name", "oceans"}})).find("did you mean 'ocean'"), std::string::npos);
 }
 
 // ── The MCP App (step 5) ────────────────────────────────────────────────────

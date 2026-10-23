@@ -547,6 +547,15 @@ class x11_window : public native_window {
       case 'z':
       case 'Z':
         return window_key::z;
+      case 'f':
+      case 'F':
+        return window_key::f;
+      case 'h':
+      case 'H':
+        return window_key::h;
+      case 'u':
+      case 'U':
+        return window_key::u;
       case kKeysymReturn:
       case kKeysymKpEnter:
         return window_key::enter;

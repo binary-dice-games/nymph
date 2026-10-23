@@ -10,6 +10,7 @@
 #include <filesystem>
 #include <optional>
 #include <string>
+#include <utility>
 #include <vector>
 #include "edit/editor_model.hpp"
 
@@ -33,9 +34,27 @@ class table_grid {
     folder_ = std::move(folder);
   }
 
-  /// @brief Opens the Import CSV / Export CSV dialog for table `name`.
+  /// @brief Opens the Import CSV / Export CSV dialog for table `name`, or
+  ///        with set_host_files() records a request for the host instead.
   void ask_import(const std::string& name);
   void ask_export(const std::string& name);
+
+  /// @brief A CSV import or export the host does with its own file picker
+  ///        (the browser's), instead of the ImGui file dialog
+  ///        (spec/15_web_app/DESIGN.md section 5.1).
+  struct file_request {
+    bool import_csv = true; ///< false: export.
+    std::string table;
+  };
+  /// @brief Whether Import / Export CSV go to the host (take_requests())
+  ///        rather than to the ImGui file dialog (the default).
+  void set_host_files(bool on) {
+    host_files_ = on;
+  }
+  /// @brief The requests made since the last call.
+  std::vector<file_request> take_requests() {
+    return std::exchange(requests_, {});
+  }
 
   /// @brief Highlights `column` of table `name` and scrolls to it ("Go to data").
   void show_column(const std::string& name, const std::string& column);
@@ -80,6 +99,8 @@ class table_grid {
   std::optional<std::pair<std::string, std::string>> highlight_; ///< Table and column to show.
   bool scroll_to_highlight_ = false;
 
+  bool host_files_ = false;
+  std::vector<file_request> requests_;
   std::filesystem::path folder_;
   dialog dialog_ = dialog::none;
   bool open_dialog_ = false;
