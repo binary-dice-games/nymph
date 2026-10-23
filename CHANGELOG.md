@@ -13,6 +13,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The editor module for web pages: `editor/nymph-editor.js` (`createEditor()`), a second WebAssembly module next to the viewer's, with the editor tools as a JavaScript API (`tool()`), attributed changes and undo groups.
 - `nymph view --edit` and the web editor: a source pane (`Ctrl+U`, or the **Source** tab button) shows the YAML beside the figure, highlighted, with line numbers, folding and find / replace, in step with the panel both ways; a file that does not load opens at its error there instead of failing.
 - `nymph view --edit`: the undo and redo buttons name the change they undo or redo; `Ctrl+S` asks to save.
+- Chart themes: `image.theme` picks one of ten built-in themes (`light`, `dark`, `classic`, `forest`, `midnight`, `ocean`, `paper`, `pastel`, `slate`, `sunset`) that fills every field the chart leaves out, by element type (`FlowNode:fill_color`), slot (`uml:color`) or field name; values the chart writes, on an element or an enclosing one, win.
+- `image.background` and `image.palette` (the colours series take in turn).
+- `nymph themes [<name>]`; `--theme <name>` on `nymph render` and `nymph check` (render writes it into the PNG's source).
+- Editor (`nymph view --edit`, web app): a **Theme** picker with swatches that writes `image.theme`; the web app's **Theme…** dialog previews themes in View.
+- Web viewer and editor modules: `themes()`; `setTheme()` takes any chart theme and fetches its fonts.
 
 - `nymph view --edit`: a floating toolbar next to the selected element changes its shape, fill, line and text colours, font, text size and line style, copies its style to the next element clicked, clears its style, duplicates and deletes it; plots get a colour scheme picker (pie charts and heatmaps change their plot's), series a marker picker and marker size.
 - `nymph view --edit`: clicking a legend entry selects its series (a pie chart's slice selects the chart) instead of hiding it.
@@ -25,6 +30,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `nymph view --edit` is an MCP server for AI agents: `nymph mcp` has `editor_*` tools that read and change the chart open in the editor (elements, selection, tables, an image of the view); `--no-mcp` turns it off.
 
 ### Changed
+- `nymph view --theme`, the viewer element's `theme` attribute and `setTheme()` accept every chart theme, not only `light`, `dark` and `classic`.
 - `nymph view --edit`: number fields are boxes that take a typed value after a click, or change by dragging sideways (Shift finer, Ctrl coarser); a text size of 0 shows as "auto".
 - `nymph view --edit` and the web editor: a flat, web-app style panel (Fira Sans text, light or dark palette, green accent, primary Save button, section headers, thin scrollbars); the selection outline uses the accent. The web editor follows the page's light / dark theme and accent (`setAppearance()`, `appearance` option of `createEditor()`).
 

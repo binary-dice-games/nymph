@@ -1,0 +1,13 @@
+name: Forest
+description: Pale sage paper, greens and earth tones, moss-green diagram lines.
+base: light
+image:
+  background: "#f3f1e7"
+  text_color: "#2d3a2b"
+  font: FiraSans-Regular.ttf
+  palette: ["#3a7d44", "#b5838d", "#d4a373", "#588157", "#6d597a", "#a3b18a"]
+fields:
+  figure:line_color: "#4a6b3a"
+  figure:fill_color: "#e1ead3"
+  Note:fill_color: "#f6edc9"
+  plot2d.item:line_weight: 2

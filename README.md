@@ -142,6 +142,7 @@ carries its source: `bdg::nymph::extract_source(png)` returns it.
 | **User interfaces** | A `Screen` of Dear ImGui `Window`s holding ImGui widgets by their ImGui names (`Button`, `SliderFloat`, `TreeNode`, `Table`, menus, popups), built-in placeholder `Image`s and `WindowTransition` arrows for the UI flow: a mockup in a PNG, usable in the viewers. See [docs/format.md](docs/format.md#user-interfaces). |
 | **Data** | `data` holds one table, or several named tables, as CSV text or columns. |
 | **Column references** | `$name` / `$2` in a field takes data from a column; `$table:name` from a named table. |
+| **Themes** | `image.theme` picks a chart theme (`ocean`, `paper`, `midnight`, ...: background, fonts, series palette, diagram colours) that fills every field the chart leaves out; typed rules (`FlowNode:fill_color`), slot rules (`uml:color`) and bare field names. `nymph themes` lists them; see [docs/themes.md](docs/themes.md). |
 | **Text style** | `font` (an embedded font by file name), `font_size` and `text_color` on `image`, layouts, plots and labels, inherited down the tree. `nymph fonts` lists the fonts. |
 | **Provenance** | An optional `source` key records the prompt, query or code that made the data; it travels in the PNG for the next edit. |
 | **Round trip** | The PNG carries its YAML; `nymph image.png` prints it back byte for byte. |
@@ -159,6 +160,7 @@ carries its source: `bdg::nymph::extract_source(png)` returns it.
 | [docs/cursor.md](docs/cursor.md) | nymph in Cursor: the plugin, the `mcp.json` entry, the rule |
 | [docs/claude.md](docs/claude.md) | nymph in Claude: the Claude Code plugin, the Claude Desktop extension, the claude.ai skill, `nymph mcp` |
 | [docs/shapes.md](docs/shapes.md) | The shape library: every shape, how to use and add one |
+| [docs/themes.md](docs/themes.md) | Chart themes: the built-in ones, choosing one, which value a field gets, the theme file format |
 | [docs/examples.md](docs/examples.md) | The example charts with their sources and images |
 | [docs/viewer.md](docs/viewer.md) | The web viewer: files, embedding, JavaScript API, events, interaction; the editor module |
 | [docs/web-app.md](docs/web-app.md) | The web app: opening, editing, saving, sharing, offline; hosting and Google Drive setup |

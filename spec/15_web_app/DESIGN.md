@@ -658,7 +658,7 @@ outlines use the accent.
 pinned look across panel re-creation. The web app pins it from the page:
 `data-theme` or `prefers-color-scheme`, and the CSS `--accent`, again on
 each theme change. The chart itself keeps its own theme (the app's
-**Chart:** menu overrides it): a diagram canvas stays as authored, as in
+**Theme…** dialog previews another, docs/themes.md): a diagram canvas stays as authored, as in
 Lucidchart or Mermaid's editor.
 
 **Rejected.** Deriving the panel's colours from the figure's ImGui theme

@@ -18,6 +18,8 @@
 #include "nymph.hpp"
 #include "png/png_meta.hpp"
 #include "shapes/shape_catalog.hpp"
+#include "edit/source_edit.hpp"
+#include "themes/theme_catalog.hpp"
 
 namespace bdg::nymph::embedded {
 extern const unsigned char cli_examples[];
@@ -234,6 +236,47 @@ std::string shapes_listing(const std::string& name) {
   } catch (const std::invalid_argument& e) {
     throw cli_failure{"shapes", e.what()};
   }
+}
+
+namespace {
+
+[[noreturn]] void unknown_theme(const std::string& command, const std::string& name) {
+  std::vector<std::string> names;
+  for (const chart_theme& t : chart_themes()) {
+    names.push_back(t.id);
+  }
+  throw cli_failure{command, "unknown theme '" + name + "'" + did_you_mean(name, names) + " (themes: " +
+                                 chart_theme_list() + ")"};
+}
+
+} // namespace
+
+std::string themes_listing(const std::string& name) {
+  if (!name.empty()) {
+    for (const embedded_file& f : embedded_themes()) {
+      if (f.name == name) {
+        return std::string(f.text());
+      }
+    }
+    unknown_theme("themes", name);
+  }
+  size_t width = 0;
+  for (const chart_theme& t : chart_themes()) {
+    width = std::max(width, t.id.size());
+  }
+  std::string text;
+  for (const chart_theme& t : chart_themes()) {
+    text += t.id + std::string(width + 2 - t.id.size(), ' ') + t.name + " (" + (t.dark ? "dark" : "light") +
+        "): " + t.description + "\n";
+  }
+  return text;
+}
+
+std::string source_with_theme(std::string_view source, const std::string& theme) {
+  if (!is_known_theme(theme)) {
+    unknown_theme("--theme", theme);
+  }
+  return set_field(source, "image", "theme", theme);
 }
 
 std::string schema_type_text(const std::string& type) {

@@ -9,6 +9,8 @@
 #include <sstream>
 #include "cli/cli_support.hpp"
 #include "core/error.hpp"
+#include "render/image_options.hpp"
+#include "themes/theme_catalog.hpp"
 #include "window/viewer_window.hpp"
 
 namespace bdg::nymph {
@@ -16,7 +18,7 @@ namespace bdg::nymph {
 namespace {
 
 constexpr const char* kViewUsage =
-    "usage: nymph view <in> [--theme light|dark|classic] [--fit source|width|fill] [--edit [--no-mcp]]\n"
+    "usage: nymph view <in> [--theme <theme>] [--fit source|width|fill] [--edit [--no-mcp]]\n"
     "  opens <in> (a YAML file or a nymph PNG) in a window: drag to pan, wheel to zoom,\n"
     "  hover for values, double-click to fit. Keys: R resets the view, S saves the image on\n"
     "  screen as <in>.view.png, Y saves its YAML as <in>.view.yaml, Esc or Q closes.\n"
@@ -42,11 +44,11 @@ view_args parse_view_args(std::span<const std::string_view> args) {
     const std::string_view a = args[i];
     if (a == "--theme") {
       if (i + 1 >= args.size()) {
-        throw view_usage_error{"--theme needs light, dark or classic"};
+        throw view_usage_error{"--theme needs a theme (" + chart_theme_list() + ")"};
       }
       const std::string_view value = args[++i];
-      if (value != "light" && value != "dark" && value != "classic") {
-        throw view_usage_error{"unknown theme '" + std::string(value) + "' (themes: light, dark, classic)"};
+      if (!is_known_theme(value)) {
+        throw view_usage_error{"unknown theme '" + std::string(value) + "' (themes: " + chart_theme_list() + ")"};
       }
       o.theme = std::string(value);
     } else if (a == "--edit") {

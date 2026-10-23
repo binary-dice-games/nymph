@@ -1,0 +1,3 @@
+name: Dark
+description: Light text on a near-black background, ImGui's dark colours.
+base: dark

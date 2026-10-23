@@ -58,8 +58,8 @@ A markdown renderer can turn a fenced block whose language is `nymph`
 into the last form (escape `<` and `&` in the text). Attributes: `src`,
 `fit` (`source`: laid out at the source size, shrunk to a narrower box;
 `width`: laid out at the box width; `fill`: at the box size; `scale`:
-laid out at the source size and scaled to the box width, up or down), `theme` (`source`, `light`, `dark`,
-`classic`, `auto`), `tooltips` (`false` turns nymph's own off), `menu`
+laid out at the source size and scaled to the box width, up or down), `theme` (`source`, `auto` (light or dark as the system), or any
+[chart theme](themes.md)), `tooltips` (`false` turns nymph's own off), `menu`
 (`false` turns the right-click menu off). Events,
 bubbling: `nymph-load` (shown; `detail` is `info()`), `nymph-hover`,
 `nymph-click`, `nymph-view`, `nymph-error` (the error is also shown as
@@ -81,7 +81,8 @@ setInterval(() => viewer.setData({ revenue: latestValues() }), 250);
 | `setSource(yaml, {resetView})` | Shows a new source; the zoom of elements that did not change is kept unless `resetView`. |
 | `setData(tables)` | Replaces the source's `data` (an object, or YAML / JSON text); the view is kept. |
 | `setPng(bytes)` | Shows the source a nymph PNG carries; resolves `false` for a PNG without one (shown as a plain image). |
-| `setTheme(theme)`, `resetView()`, `resize(w, h, ratio)` | Theme override (`''` for the source's), back to the source's view, box size (the element and `createViewer` follow their container themselves). |
+| `setTheme(theme)`, `resetView()`, `resize(w, h, ratio)` | [Chart theme](themes.md) override (`''` for the source's; returns a promise, as the theme may fetch a font), back to the source's view, box size (the element and `createViewer` follow their container themselves). |
+| `themes()` | The chart themes: `[{id, name, description, base, dark, background, text_color, palette}]`, for a picker. |
 | `on(event, callback)` | `hover` (pick or `null`), `click` (pick), `view` (every plot, Gantt chart, 3D plot and diagram after a pan, zoom, rotation or legend click settles: ranges, rotation, zoom, hidden series), `error` (an update failed). Returns a function that removes the listener. |
 | `rendered()` | Resolves when every update so far is on screen. |
 | `info()`, `state()`, `source()` | Rasterizer, description and size; geometry, hovered pick and plot views; the source on screen. |
@@ -156,7 +157,7 @@ editor.on('save', () => save(editor.toYaml()));
 | `open(yamlOrPng)`, `setSource(yaml, {asChange, label, origin})` | A new document; with `asChange`, one undo step. |
 | `source()`, `toYaml()`, `toPng()`, `paneText()` | The YAML, with the view on screen, as a PNG; the pane's text. |
 | `modified()`, `markSaved()`, `version()`, `state()` | Unsaved changes, the change counter, labels of undo / redo, the selection. |
-| `undo()`, `redo()`, `resetView()`, `setTheme(t)`, `showPanel(on)`, `showSource(on, line)` | |
+| `undo()`, `redo()`, `resetView()`, `setTheme(t)`, `themes()`, `showPanel(on)`, `showSource(on, line)` | `setTheme` shows a chart theme without changing the source (a promise); the panel's **Theme** button writes `image.theme`. |
 | `setAppearance({dark, accent, accentDark})` | The panel's look, to match the page: light or dark, accent colours as `#rrggbb` (nymph's green when left out). Without it the panel is dark only for a chart in the `dark` theme. |
 | `tool(name, args, {origin})`, `toolDefinitions()` | The editor tools of `nymph mcp` (`editor_state`, `editor_set_fields`, `editor_add_element`, ...), run in the page; changes are attributed to `origin`. |
 | `beginGroup(label, origin)`, `endGroup()` | Several changes as one undo step. |

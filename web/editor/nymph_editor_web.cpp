@@ -26,6 +26,7 @@
 #include "fonts/embedded_fonts.hpp"
 #include "mcp/editor_tools.hpp"
 #include "nymph.hpp"
+#include "themes/theme_catalog.hpp"
 #include "view/live_view.hpp"
 #include "workspace/editor_workspace.hpp"
 #include "workspace/workspace_tools.hpp"
@@ -281,6 +282,12 @@ EMSCRIPTEN_KEEPALIVE const char* nymph_editor_version() {
 
 /// @brief Every catalog font as JSON [{name, size, embedded}], for the page's
 ///        font loader.
+/// @brief The chart themes as JSON (chart_themes_json()), for pickers.
+EMSCRIPTEN_KEEPALIVE const char* nymph_editor_themes() {
+  scratch() = chart_themes_json();
+  return scratch().c_str();
+}
+
 EMSCRIPTEN_KEEPALIVE const char* nymph_editor_font_catalog() {
   json list = json::array();
   for (const font_entry& f : font_catalog()) {

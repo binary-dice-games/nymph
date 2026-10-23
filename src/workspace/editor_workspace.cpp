@@ -432,7 +432,7 @@ void editor_workspace::frame(double now_seconds) {
     view_.set_selection(panel_->model().selection());
     panel_->refresh();
   }
-  panel_->set_theme(view_.theme());
+  panel_->set_theme(view_.theme_base());
   panel_->check_fonts();
   if (appearance_) {
     panel_->set_appearance(*appearance_);

@@ -52,6 +52,7 @@ target_compile_definitions(test_tree_edit PRIVATE NYMPH_SOURCE_DIR="${PROJECT_SO
 nymph_add_test(test_view_edit_flow test_view_edit_flow.cpp)
 nymph_add_test(test_schema test_schema.cpp)
 nymph_add_test(test_bind test_bind.cpp)
+nymph_add_test(test_themes test_themes.cpp)
 nymph_add_test(test_plot2d test_plot2d.cpp)
 # Reads the sample sources in tests/data in place.
 target_compile_definitions(test_plot2d PRIVATE NYMPH_SOURCE_DIR="${PROJECT_SOURCE_DIR}")

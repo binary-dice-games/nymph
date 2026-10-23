@@ -38,11 +38,13 @@ constexpr const char* kUsage =
     "       nymph example [<Type or name>]        a complete example source using an element type (none: list them)\n"
     "       nymph fonts [--licenses]              embedded fonts (names for `font:`), or their licences\n"
     "       nymph shapes [<name>]                 the shape library (names for `shape:`), or the details of one\n"
+    "       nymph themes [<name>]                 the chart themes (names for `image.theme`), or one's file\n"
     "       nymph rasterizers                     whether OpenGL can be used here, and why not\n"
     "       nymph view <in> [--theme <t>] [--fit <f>]  open <in> in a window: pan, zoom, hover (nymph view --help)\n"
     "       nymph mcp [--rasterizer <r>]          run as an MCP server on stdin / stdout (for AI agents)\n"
     "       nymph --version | --help\n"
     "render writes <in> with its extension replaced by .png unless -o is given; -o - writes to stdout.\n"
+    "--theme <name> renders or checks with that chart theme (written into the PNG's source).\n"
     "--rasterizer software|opengl chooses how a render draws (default opengl: the GPU when there is one,\n"
     "otherwise the software rasterizer).\n";
 
@@ -59,6 +61,7 @@ struct options {
   std::optional<std::string> paged; ///< set by --paged: the directory of the pages
   bool licenses = false;
   std::optional<rasterizer> raster; ///< set by --rasterizer
+  std::optional<std::string> theme; ///< set by --theme
 };
 
 options parse(std::span<const std::string_view> args) {
@@ -67,7 +70,7 @@ options parse(std::span<const std::string_view> args) {
   if (!args.empty() &&
       (args[0] == "render" || args[0] == "extract" || args[0] == "check" || args[0] == "schema" || args[0] == "example" ||
        args[0] == "fonts" ||
-       args[0] == "shapes" || args[0] == "rasterizers")) {
+       args[0] == "shapes" || args[0] == "themes" || args[0] == "rasterizers")) {
     o.command = std::string(args[0]);
     i = 1;
   }
@@ -90,6 +93,11 @@ options parse(std::span<const std::string_view> args) {
       } else {
         throw usage_error{"unknown rasterizer '" + std::string(value) + "' (rasterizers: software, opengl)"};
       }
+    } else if (a == "--theme") {
+      if (i + 1 >= args.size()) {
+        throw usage_error{"--theme needs a theme name (nymph themes lists them)"};
+      }
+      o.theme = std::string(args[++i]);
     } else if (a == "--markdown" && o.command == "schema") {
       o.markdown = true;
     } else if (a == "--paged" && o.command == "schema") {
@@ -125,7 +133,10 @@ int do_render(
     std::ostream& out,
     std::ostream& err,
     const renderer_test_options& gl_options) {
-  const std::string source = source_of(input, path);
+  std::string source = source_of(input, path);
+  if (o.theme) {
+    source = source_with_theme(source, *o.theme);
+  }
   std::vector<uint8_t> png;
   try {
     renderer r = make_renderer(o.raster.value_or(rasterizer::opengl), gl_options);
@@ -152,8 +163,9 @@ int do_extract(const options& o, const std::string& path, const bytes_t& input, 
 }
 
 /// `check`: bind and lay out, print nothing.
-int do_check(const std::string& path, const bytes_t& input) {
-  check_source(source_of(input, path));
+int do_check(const options& o, const std::string& path, const bytes_t& input) {
+  const std::string source = source_of(input, path);
+  check_source(o.theme ? source_with_theme(source, *o.theme) : source);
   return 0;
 }
 
@@ -253,6 +265,15 @@ int do_shapes(const options& o, std::ostream& out) {
   return 0;
 }
 
+/// `themes`: every chart theme, or the file of the one named.
+int do_themes(const options& o, std::ostream& out) {
+  if (o.positional.size() > 1 || o.output) {
+    throw usage_error{"themes takes at most one theme name"};
+  }
+  out << themes_listing(o.positional.empty() ? std::string() : o.positional[0]);
+  return 0;
+}
+
 /// `rasterizers`: one line per rasterizer, saying whether it can be used.
 int do_rasterizers(const options& o, std::ostream& out, const renderer_test_options& gl_options) {
   if (!o.positional.empty() || o.output) {
@@ -310,6 +331,9 @@ int run_cli(
     if (o.raster && !o.command.empty() && o.command != "render") {
       throw usage_error{"--rasterizer applies only to rendering"};
     }
+    if (o.theme && !o.command.empty() && o.command != "render" && o.command != "check") {
+      throw usage_error{"--theme applies only to render and check"};
+    }
     if (o.command == "rasterizers") {
       return do_rasterizers(o, out, gl_options);
     }
@@ -324,6 +348,9 @@ int run_cli(
     }
     if (o.command == "shapes") {
       return do_shapes(o, out);
+    }
+    if (o.command == "themes") {
+      return do_themes(o, out);
     }
     if (o.positional.size() != 1) {
       throw usage_error{o.positional.empty() ? "no input" : "too many inputs"};
@@ -353,7 +380,7 @@ int run_cli(
     if (o.command == "extract") {
       return do_extract(o, path, input, out);
     }
-    return do_check(path, input);
+    return do_check(o, path, input);
   } catch (const usage_error& e) {
     err << "nymph: " << e.message << "\n" << kUsage;
     return 2;

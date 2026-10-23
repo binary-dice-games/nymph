@@ -219,7 +219,7 @@ TEST(editor_model, TheImageOptionsAreSelectedLikeAnElement) {
   ASSERT_TRUE(m.selection());
   EXPECT_EQ(m.selected_type(), "Image");
   const std::vector<editable_field> fields = m.fields();
-  ASSERT_EQ(fields.size(), 8u);
+  ASSERT_EQ(fields.size(), 10u); // with background and palette
   const editable_field* width = find(fields, "width");
   ASSERT_NE(width, nullptr);
   EXPECT_TRUE(width->written);
@@ -252,6 +252,22 @@ TEST(editor_model, ImageOptionsAreChangedAddedAndRemoved) {
   EXPECT_EQ(m.image().theme, "light");
   ASSERT_TRUE(m.undo());
   EXPECT_EQ(m.image().theme, "dark");
+}
+
+TEST(editor_model, AChartThemeFillsWhatTheSourceLeavesOut) {
+  editor_model m("root: {type: Flowchart, children: [{type: FlowNode, id: a, text: A}]}\n");
+  ASSERT_TRUE(m.set_fields("image", {{"theme", std::string("ocean")}}).ok);
+  EXPECT_NE(m.source().find("theme: ocean"), std::string::npos);
+  EXPECT_EQ(m.image().theme, "ocean");
+  EXPECT_EQ(m.image().background, "#0f2233");
+  m.select(edit_target_id{"root", ""});
+  const std::vector<editable_field> fields = m.fields();
+  const editable_field* fill = find(fields, "fill_color");
+  ASSERT_NE(fill, nullptr);
+  EXPECT_FALSE(fill->written); // the theme's value, not the source's
+  EXPECT_EQ(std::get<std::string>(fill->current), "#16324a");
+  ASSERT_TRUE(m.set_fields("image", {{"theme", std::nullopt}}).ok);
+  EXPECT_EQ(m.image().theme, "light");
 }
 
 TEST(editor_model, TheFirstImageOptionCreatesTheSectionAndTheLastRemovalDropsIt) {

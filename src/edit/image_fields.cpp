@@ -3,13 +3,21 @@
 /// @brief The image options as fields (see image_fields.hpp).
 #include "edit/image_fields.hpp"
 #include "render/text_style.hpp"
+#include "themes/theme_catalog.hpp"
 
 namespace bdg::nymph {
 
 namespace {
 
+/// The chart themes, in catalog order (light, dark, classic first).
 const name_table& theme_names() {
-  static const name_table t{{"light", 0}, {"dark", 1}, {"classic", 2}};
+  static const name_table t = [] {
+    std::vector<name_entry> entries;
+    for (const chart_theme& th : chart_themes()) {
+      entries.push_back({th.id, static_cast<int64_t>(entries.size())});
+    }
+    return name_table(std::move(entries));
+  }();
   return t;
 }
 
@@ -26,13 +34,21 @@ const std::vector<field_desc>& image_fields() {
         "Supersampling factor of a saved PNG, 1 to 4: it is width x scale by height x scale pixels. The window "
         "does not show it.",
         value_range{1, 4}));
-    f.push_back(enum_field("theme", 0, theme_names(), "Colours of the whole figure: light, dark or classic."));
+    f.push_back(enum_field(
+        "theme",
+        0,
+        theme_names(),
+        "Chart theme: the colours, fonts and series palette every field left out takes (" + chart_theme_list() +
+            ")."));
     f.push_back(int_field(
         "padding", 8, "Pixels between the edge of the image and the figure.", value_range{0, 2048}));
     for (field_desc style : text_style_fields()) {
       style.description = "Text style of the whole figure: " + style.description;
       f.push_back(std::move(style));
     }
+    f.push_back(color_field("background", "Background of the whole figure; empty for the theme's."));
+    f.push_back(texts_field(
+        "palette", "Series colours (\"#RRGGBB\" each) plots take in turn when they set none; empty for the theme's."));
     return f;
   }();
   return fields;
@@ -60,6 +76,12 @@ value image_field_value(const image_options& o, size_t index) {
   }
   if (name == "font_size") {
     return o.font_size;
+  }
+  if (name == "background") {
+    return o.background;
+  }
+  if (name == "palette") {
+    return o.palette;
   }
   return o.text_color;
 }

@@ -288,8 +288,10 @@ test('Download YAML carries the edit; a PNG input downloads a PNG with the sourc
     dt.items.add(new File([new Uint8Array(bytes)], 'pie.png', { type: 'image/png' }));
     window.dispatchEvent(new DragEvent('drop', { dataTransfer: dt, bubbles: true, cancelable: true }));
   }, png);
-  // The open chart is modified: discard it.
+  // The open chart is modified: discard it, and wait for the PNG (the old
+  // chart is still shown, idle, until it opens).
   await page.click('dialog.dlg >> text=Discard');
+  await page.waitForFunction(() => window.nymphApp.app.doc?.name === 'pie.png' && window.nymphApp.app.viewer, null, { timeout: 30000 });
   await shown(page);
   await call(page, 'app_set_mode', { mode: 'edit' });
   await shown(page);
@@ -441,6 +443,36 @@ test('?example=…&mode=edit opens the editor; the embed code draws on a blank p
   await blank.route(`${site.base}/blank.html`, (route) => route.fulfill({ contentType: 'text/html', body: `<!doctype html><body>${snippet}</body>` }));
   await blank.goto(`${site.base}/blank.html`);
   await blank.waitForFunction(() => document.querySelector('nymph-viewer')?.viewer?.info?.().hasFigure, null, { timeout: 30000 });
+  await done(page);
+});
+
+test('themes: the picker lists them; View previews one, Edit writes it into the file as one undo step', async () => {
+  const page = await openApp({ path: '/?example=line' });
+  await shown(page);
+  const listed = await call(page, 'app_list_themes');
+  const themes = listed.structuredContent.themes;
+  assert(themes.length >= 8 && themes[0].id === 'light' && themes.some((t) => t.id === 'paper'), JSON.stringify(themes).slice(0, 200));
+  // View: the dialog's cards, a preview that leaves the file alone.
+  page.evaluate(() => window.nymphApp.commands.run('app_choose_theme'));
+  await page.waitForSelector('.theme-card');
+  assert((await page.locator('.theme-card').count()) === themes.length + 1, 'a card per theme and its own');
+  await page.click('.theme-card[title*="serif"]'); // Paper: a font fetched on demand
+  await page.waitForFunction(() => window.nymphApp.app.chartTheme === 'paper', null, { timeout: 30000 });
+  assert(!(await state(page)).modified, 'a preview does not modify the file');
+  assert(!(await page.evaluate(() => window.nymphApp.app.doc.source)).includes('theme:'), 'the source is unchanged');
+  // Edit: the theme goes into the source, and the preview gives way to it.
+  await call(page, 'app_set_mode', { mode: 'edit' });
+  await shown(page);
+  const r = await call(page, 'app_set_file_theme', { theme: 'ocean' });
+  assert(!r.isError, JSON.stringify(r));
+  await shown(page);
+  const source = await page.evaluate(() => window.nymphApp.app.editor.source());
+  assert(/theme: ocean/.test(source), source.slice(0, 200));
+  assert(await page.evaluate(() => window.nymphApp.app.chartTheme) === 'source', 'the preview is off');
+  assert((await state(page)).modified, 'modified');
+  await page.evaluate(() => window.nymphApp.app.editor.undo());
+  assert(!/theme:/.test(await page.evaluate(() => window.nymphApp.app.editor.source())), 'undone');
+  assert((await call(page, 'app_set_file_theme', { theme: 'neon' })).isError, 'unknown theme refused');
   await done(page);
 });
 

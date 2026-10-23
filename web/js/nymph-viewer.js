@@ -496,7 +496,7 @@ export class NymphViewer {
     this.cleanup.push(() => window.removeEventListener('resize', ratio));
     if (this.options.theme === 'auto' && typeof matchMedia !== 'undefined') {
       const dark = matchMedia('(prefers-color-scheme: dark)');
-      const apply = () => this.setTheme(dark.matches ? 'dark' : 'light');
+      const apply = () => this.setTheme(dark.matches ? 'dark' : 'light').catch(() => {});
       dark.addEventListener('change', apply);
       this.cleanup.push(() => dark.removeEventListener('change', apply));
       apply();
@@ -645,7 +645,7 @@ export class NymphViewer {
     this.handle = this.core.m._nymph_viewer_create(FIT[this.options.fit ?? 'source'] ?? 0, this.options.tooltips === false ? 0 : 1, 0);
     this.webgl = false;
     if (this.themeOverride) {
-      this.setTheme(this.themeOverride);
+      this.setTheme(this.themeOverride).catch(() => {});
     }
     this.boxKey = undefined; // the new handle has no size yet
     this.fitToContainer();
@@ -926,14 +926,40 @@ export class NymphViewer {
     );
   }
 
-  /** Overrides the source's theme: "light", "dark", "classic", or "" for the source's own. */
+  /**
+   * Overrides the source's chart theme (one of themes(): "light", "dark",
+   * "ocean", ...), or "" for the source's own. Applied after earlier
+   * updates; resolves once shown, fetching any font the theme uses, and
+   * rejects with a NymphError (the previous theme stays).
+   */
   setTheme(theme) {
     this.checkAlive();
-    if (this.core.withCString(theme, (ptr) => this.core.m._nymph_viewer_set_theme(this.handle, ptr)) !== STATUS.ok) {
-      throw new NymphError(this.core.lastError());
-    }
-    this.themeOverride = theme;
-    this.schedule();
+    const run = async () => {
+      for (let attempt = 0; attempt < 4; ++attempt) {
+        this.checkAlive();
+        const status = this.core.withCString(theme, (ptr) => this.core.m._nymph_viewer_set_theme(this.handle, ptr));
+        if (status === STATUS.ok) {
+          this.themeOverride = theme;
+          this.schedule();
+          return;
+        }
+        const info = this.core.lastError();
+        if (status !== STATUS.fontsNeeded) {
+          throw new NymphError(info);
+        }
+        await this.core.ensureFonts(info.fonts);
+      }
+      throw new NymphError({ kind: 'fonts', message: 'fonts were registered but are still missing' });
+    };
+    const result = this.queue.then(run, run);
+    this.queue = result.catch(() => {});
+    result.catch((e) => this.emit('error', e));
+    return result;
+  }
+
+  /** The chart themes: [{id, name, description, base, dark, background, text_color, palette}]. */
+  themes() {
+    return JSON.parse(this.core.string(this.core.m._nymph_themes()));
   }
 
   /** Sets the box the chart is shown in: CSS pixels and the device pixel ratio. */
@@ -1105,7 +1131,7 @@ export async function createViewer(container, options = {}) {
   }
   const viewer = new NymphViewer(core, handle, options);
   if (options.theme && options.theme !== 'source' && options.theme !== 'auto') {
-    viewer.setTheme(options.theme);
+    await viewer.setTheme(options.theme);
   }
   if (container != null) {
     viewer.mount(container);
@@ -1169,7 +1195,7 @@ export class NymphViewerElement extends (typeof HTMLElement === 'undefined' ? cl
       return;
     }
     if (name === 'theme' && this.viewer && after !== 'auto') {
-      this.viewer.setTheme(after === 'source' || after === null ? '' : after);
+      this.viewer.setTheme(after === 'source' || after === null ? '' : after).catch(() => {});
       return;
     }
     this.reload();

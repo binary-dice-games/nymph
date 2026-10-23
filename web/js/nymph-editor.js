@@ -181,7 +181,7 @@ export class NymphEditor {
       this.core.withCStrings([this.options.fileName], (n) => this.m._nymph_editor_set_file_name(n));
     }
     if (this.options.theme) {
-      this.setTheme(this.options.theme);
+      this.setTheme(this.options.theme).catch((e) => this.emit('error', e));
     }
     if (this.options.appearance) {
       this.setAppearance(this.options.appearance);
@@ -298,10 +298,21 @@ export class NymphEditor {
     this.schedule();
   }
 
-  /** "light", "dark", "classic", or "" for the source's own. */
-  setTheme(theme) {
-    this.core.check(this.core.withCStrings([theme === 'source' ? '' : theme], (t) => this.m._nymph_editor_set_theme(t)));
+  /**
+   * Shows the chart in a chart theme (one of themes()) without changing the
+   * source, or in its own ("" or "source"); fetches the theme's fonts.
+   * Choosing a theme for the file is the panel's Theme button (it writes
+   * `image.theme`).
+   */
+  async setTheme(theme) {
+    const t = theme === 'source' ? '' : theme;
+    this.core.check(await this.core.withFonts(() => this.core.withCStrings([t], (p) => this.m._nymph_editor_set_theme(p))));
     this.schedule();
+  }
+
+  /** The chart themes: [{id, name, description, base, dark, background, text_color, palette}]. */
+  themes() {
+    return JSON.parse(this.core.string(this.m._nymph_editor_themes()));
   }
 
   /**

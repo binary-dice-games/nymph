@@ -213,15 +213,21 @@ class live_view {
   ///         stays); as set_source().
   bool set_png(std::span<const uint8_t> png, bool reset_view = true);
 
-  /// @brief Overrides `image.theme`: "light", "dark", "classic", or "" for
-  ///        the source's own.
-  /// @throws std::invalid_argument for an unknown theme.
+  /// @brief Overrides `image.theme` with a chart theme
+  ///        (themes/theme_catalog.hpp: "light", "dark", "ocean", ...), or ""
+  ///        for the source's own. The figure is bound again: the theme
+  ///        fills the fields the source leaves out.
+  /// @throws std::invalid_argument for an unknown theme; as set_source()
+  ///         when the source does not bind with it (the override stays).
   void set_theme(std::string theme);
 
-  /// @brief The theme the figure is drawn with: the override of
+  /// @brief The chart theme the figure is drawn with: the override of
   ///        set_theme(), else the source's `image.theme`; "light" without a
   ///        figure.
   std::string theme() const;
+
+  /// @brief The base colours of theme(): "light", "dark" or "classic".
+  std::string theme_base() const;
 
   /// @brief Sets the box the view is shown in.
   void resize(view_size size);

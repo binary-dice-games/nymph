@@ -111,6 +111,8 @@ add_library(nymph STATIC
   placeholders/svg_shapes.cpp
   shapes/shape_catalog.hpp
   shapes/shape_catalog.cpp
+  themes/theme_catalog.hpp
+  themes/theme_catalog.cpp
   elements/ui/widgets.cpp
   elements/ui/register_ui.cpp
   elements/uml/uml.hpp
@@ -154,6 +156,8 @@ include("${PROJECT_SOURCE_DIR}/cmake/NymphPlaceholders.cmake")
 nymph_embed_placeholders(nymph)
 include("${PROJECT_SOURCE_DIR}/cmake/NymphShapes.cmake")
 nymph_embed_shapes(nymph)
+include("${PROJECT_SOURCE_DIR}/cmake/NymphThemes.cmake")
+nymph_embed_themes(nymph)
 target_include_directories(nymph PUBLIC
   ${CMAKE_CURRENT_SOURCE_DIR}
   ${CMAKE_CURRENT_BINARY_DIR}/generated

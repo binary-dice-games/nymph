@@ -383,6 +383,31 @@ TEST_F(cli, FontsListsTheNamesAndPrintsTheLicences) {
   EXPECT_EQ(run({"fonts", "x.ttf"}).code, 2);
 }
 
+TEST_F(cli, ThemesListsThemAndShowsOne) {
+  const run_result all = run({"themes"});
+  EXPECT_EQ(all.code, 0);
+  EXPECT_EQ(all.out.rfind("light ", 0), 0u);
+  EXPECT_NE(all.out.find("\nocean "), std::string::npos);
+  const run_result one = run({"themes", "ocean"});
+  EXPECT_EQ(one.code, 0);
+  EXPECT_NE(one.out.find("base: dark"), std::string::npos);
+  const run_result unknown = run({"themes", "oceans"});
+  EXPECT_EQ(unknown.code, 1);
+  EXPECT_NE(unknown.err.find("did you mean 'ocean'"), std::string::npos);
+}
+
+TEST_F(cli, ThemeOptionWritesTheThemeIntoThePng) {
+  write("t.yaml", "root: {type: Label, text: hi}\n");
+  const run_result r = run({"render", path("t.yaml"), "--theme", "sunset", "--rasterizer", "software"});
+  ASSERT_EQ(r.code, 0) << r.err;
+  const run_result back = run({"extract", path("t.png")});
+  EXPECT_NE(back.out.find("theme: sunset"), std::string::npos) << back.out;
+  EXPECT_EQ(read("t.yaml"), "root: {type: Label, text: hi}\n"); // the input is left as written
+  EXPECT_EQ(run({"check", path("t.yaml"), "--theme", "ocean"}).code, 0);
+  EXPECT_EQ(run({"check", path("t.yaml"), "--theme", "neon"}).code, 1);
+  EXPECT_EQ(run({"schema", "--theme", "ocean"}).code, 2);
+}
+
 // ── Rasterizers (spec/02_opengl_rasterizer, plan step 6) ─────────────────────
 
 #if defined(_WIN32)

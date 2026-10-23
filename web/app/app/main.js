@@ -983,14 +983,50 @@ function defineCommands() {
   commands.define({
     name: 'app_set_chart_theme',
     title: 'Chart theme',
-    description: 'Shows the chart in its own theme (source) or light, dark or classic, without changing the file.',
-    inputSchema: schema({ theme: { type: 'string', enum: ['source', 'light', 'dark', 'classic'] } }, ['theme']),
-    run: ({ theme }) => {
+    description:
+      'Shows the chart in another chart theme (an id from app_list_themes) without changing the file, or in its own (source).',
+    inputSchema: schema({ theme: { type: 'string', description: "'source', or a theme id (light, dark, ocean, ...)" } }, ['theme']),
+    run: async ({ theme }) => {
+      await (app.editor ?? app.viewer)?.setTheme(theme === 'source' ? '' : theme);
       app.chartTheme = theme;
       keep('chartTheme', theme);
-      (app.editor ?? app.viewer)?.setTheme(theme === 'source' ? '' : theme);
       return { theme };
     },
+  });
+  commands.define({
+    name: 'app_list_themes',
+    title: 'Chart themes',
+    description: 'The chart themes: id, name, description, base colours and swatch colours.',
+    scope: 'document',
+    run: () => ({ themes: chartThemes() }),
+  });
+  commands.define({
+    name: 'app_set_file_theme',
+    title: 'Set the chart theme',
+    description:
+      "Writes the chart's theme into the file (image.theme), as one undo step; Edit mode only. 'light' is the default.",
+    scope: 'editor',
+    effect: 'edit',
+    inputSchema: schema({ theme: { type: 'string', description: 'A theme id from app_list_themes.' } }, ['theme']),
+    run: async ({ theme }, { origin }) => {
+      if (!app.editor) {
+        throw new Error('open the chart in the editor to change its theme');
+      }
+      if (app.chartTheme !== 'source') {
+        // Show the file's theme, not a preview over it.
+        await app.editor.setTheme('');
+        app.chartTheme = 'source';
+        keep('chartTheme', 'source');
+      }
+      return app.editor.tool('editor_set_fields', { path: 'image', fields: { theme: theme === 'light' ? null : theme } }, { origin });
+    },
+  });
+  commands.define({
+    name: 'app_choose_theme',
+    title: 'Theme…',
+    description: 'Opens the theme picker: in Edit mode it sets the file\'s theme, in View mode it previews one.',
+    scope: 'document',
+    run: () => chooseTheme(),
   });
   commands.define({
     name: 'app_close',
@@ -1007,6 +1043,88 @@ function defineCommands() {
   });
   commands.define({ name: 'app_about', title: 'About', description: 'Version and licences.', run: () => about() });
   commands.define({ name: 'app_shortcuts', title: 'Keyboard shortcuts', description: 'The keyboard shortcuts.', run: () => shortcuts() });
+}
+
+/** The chart themes the loaded module knows, [] before one is loaded. */
+function chartThemes() {
+  try {
+    return (app.editor ?? app.viewer)?.themes() ?? [];
+  } catch {
+    return [];
+  }
+}
+
+/** The theme of the open file: its image.theme, "light" when it has none. */
+function fileTheme() {
+  const m = /^image:\s*(?:\{[^}\n]*\btheme:\s*([\w-]+)|\n(?:[ \t]+.*\n)*?[ \t]+theme:\s*([\w-]+))/m.exec(app.doc?.source ?? '');
+  return m ? (m[1] ?? m[2]) : 'light';
+}
+
+/**
+ * The theme picker (like a slide editor's): a card per chart theme with
+ * its colours. Edit mode writes the choice into the file; View mode
+ * previews it.
+ */
+async function chooseTheme() {
+  const themes = chartThemes();
+  const editing = app.mode === 'edit' && app.editor;
+  const current = editing || app.chartTheme === 'source' ? fileTheme() : app.chartTheme;
+  const choice = await dialog('Theme', (body, close) => {
+    body.append(
+      el(
+        'p',
+        { class: 'muted' },
+        editing
+          ? 'Colours, fonts and series palette for everything the chart does not set itself. Saved in the file (image.theme); Ctrl+Z undoes it.'
+          : 'A preview: the file keeps its own theme. Open the chart in Edit to change it.',
+      ),
+    );
+    const grid = el('div', { class: 'theme-grid', role: 'listbox', 'aria-label': 'Chart themes' });
+    if (!editing) {
+      grid.append(
+        el(
+          'button',
+          { type: 'button', class: `theme-card own${app.chartTheme === 'source' ? ' on' : ''}`, onclick: () => close('source') },
+          el('span', { class: 'swatch own' }, 'Aa'),
+          el('span', { class: 'theme-name' }, 'Its own theme'),
+          el('span', { class: 'theme-desc' }, 'As the file sets it.'),
+        ),
+      );
+    }
+    for (const t of themes) {
+      const swatch = el(
+        'span',
+        { class: 'swatch', style: `background:${t.background};color:${t.text_color}` },
+        el('span', { class: 'swatch-title' }, 'Aa'),
+        el('span', { class: 'swatch-dots' }, t.palette.slice(0, 5).map((c) => el('i', { style: `background:${c}` }))),
+      );
+      grid.append(
+        el(
+          'button',
+          {
+            type: 'button',
+            role: 'option',
+            'aria-selected': String(t.id === current),
+            class: `theme-card${t.id === current ? ' on' : ''}`,
+            title: t.description,
+            onclick: () => close(t.id),
+          },
+          swatch,
+          el('span', { class: 'theme-name' }, t.name),
+          el('span', { class: 'theme-desc' }, t.description),
+        ),
+      );
+    }
+    body.append(grid, dialogButtons(close, [{ label: 'Close', value: undefined }]));
+  });
+  if (choice === undefined) {
+    return;
+  }
+  if (editing) {
+    await commands.run('app_set_file_theme', { theme: choice === 'source' ? 'light' : choice });
+  } else {
+    await commands.run('app_set_chart_theme', { theme: choice });
+  }
 }
 
 function applyAppTheme(theme) {
@@ -1087,7 +1205,7 @@ function wireControls() {
       ...(app.doc
         ? [
             { label: 'Reset view', icon: 'reset', run: () => act('app_reset_view') },
-            ...['source', 'light', 'dark', 'classic'].map((t) => ({ label: `Chart: ${t === 'source' ? 'its own theme' : t}`, note: mark(app.chartTheme === t), run: () => act('app_set_chart_theme', { theme: t }) })),
+            { label: 'Theme…', icon: 'theme', run: () => act('app_choose_theme') },
             '-',
           ]
         : []),
