@@ -6,8 +6,7 @@ next starts after its tests pass. Native tests go in `tests/` with
 `web/tests/browser/` (Playwright with the preinstalled Chromium, skipped
 with 77 when Playwright is missing), serve the built site from a local
 server on port 0, and wait on conditions, never fixed sleeps. A
-`CHANGELOG.md` entry is added with each user-visible step (5, 6, 7, 8, 9,
-10, 11, 12, 13).
+`CHANGELOG.md` entry is added with each user-visible step (5 to 13).
 
 ## 1. Risk check: the editor module builds and draws
 
@@ -21,7 +20,9 @@ pointer events and draw (host logic temporarily inline, replaced in step
 too (through a temporary source list if step 4's library is not there
 yet). Measured and written into this step's result: gzip sizes of
 `nymph-viewer-core.wasm` before and after (must not change), of
-`nymph-editor-core.wasm` with and without `editor_tools` and JSON. If JSON
+`nymph-editor-core.wasm` with and without `editor_tools` and JSON, and
+with ImGuiColorTextEdit's `TextEditor` drawn in the panel (built from a
+temporary checkout; step 5 adds the submodule). If JSON
 costs more than 150 KB gzip, update DESIGN.md section 5.2 (a smaller set
 of exports instead of `tool()`) before step 4. `web/size_budget.json` with
 the viewer's budget (measured + 2 %) and the editor's (measured + 10 %);
@@ -29,7 +30,8 @@ a `nymph_web_size` ctest that checks them.
 
 **Tests:** `nymph_web_size` passes; a browser test loads the module on a
 page, draws `examples/flowchart.yaml` with the panel, and finds both the
-figure's and the panel's pixels non-blank in their regions; clicking a
+figure's and the panel's pixels non-blank in their regions, and a
+`TextEditor` showing the source; clicking a
 node (position from `live_view::targets_at` via a test export) changes the
 panel's pixels.
 
@@ -89,7 +91,41 @@ server and the web module; `nymph_mcp` links it.
 `editor_undo` directly on a fake host; the existing `test_editor_server`
 tests pass.
 
-## 5. Web editor module and `nymph-editor.js`
+## 5. Source pane
+
+**Goal:** `nymph view --edit` shows the YAML in an ImGui code editor beside
+the figure, in sync both ways, and opens a source that does not bind in
+repair state.
+
+**Deliverables:** `extern/ImGuiColorTextEdit` submodule (pinned,
+`nymph_ensure_submodules()` in the `NYMPH_VIEW` / `NYMPH_WEB` blocks,
+`TextEditor.cpp` built into `nymph_workspace`, its licence in the
+third-party notices); `src/edit/yaml_language.*`; `src/edit/source_pane.*`
+(DESIGN.md section 5.4: FiraMono in the panel atlas, palettes by theme,
+debounced apply, error squiggle and marker, read-only panel while ahead,
+span patching, undo routing, selection sync); `workspace_layout` source
+region and divider; Source button and `Ctrl+U` in the tab bar;
+`editor_workspace::open()` / `show_source()` / `repairing()`;
+`editor_model` creatable from repair state; `view_command`: `--edit` with
+a bad source opens in repair state; `editor_state` reports the pane;
+`docs/viewer.md` and `docs/cli.md`.
+
+**Tests** (`test_source_pane`, `test_yaml_language`, headless ImGui):
+tokens of keys, strings, numbers, comments, type names and `$column`;
+typing a new title applies after the pause and the model's source has it;
+a broken text marks the loader's line and column, leaves the model and
+figure as they were, makes the inspector read-only, and an agent write
+(`call_editor_tool`) is refused; fixing it applies and clears the marks;
+a panel commit changes only the changed span of the pane (cursor line
+kept); `Ctrl+Z` in the pane undoes the document while in step and the text
+while ahead; selecting a node moves the cursor to its line and putting the
+cursor in a node's line selects it; `open()` with a broken source is in
+repair state and becomes a normal editor once it binds; a source without
+the pane shown is untouched (existing tests pass). By hand on Xvfb:
+`nymph view --edit` on a broken file opens, is fixed and saved; drag the
+pane's divider.
+
+## 6. Web editor module and `nymph-editor.js`
 
 **Goal:** a page can embed the editor with `createEditor()`, with the full
 editor working by mouse, keyboard and the tool API.
@@ -109,12 +145,15 @@ headless flag; `docs/viewer.md` section on the editor module.
 `toPng()` equals `render_png(toYaml())`; a bad source rejects with line
 and column. Browser: typing into the title field through the `textarea`
 changes `source()`; `Ctrl+C` then `Ctrl+V` into another field copies the
-text; `Ctrl+D` duplicates the selected node and the page sees
+text; typing in the source pane (shown with `showSource(true)`) changes
+the figure and `source()`; `createEditor` with a broken source rejects,
+and with `repair: true` opens with `repairing()` true; `Ctrl+D`
+duplicates the selected node and the page sees
 `defaultPrevented`; `csv-export` fires with the table's CSV and
 `importCsv` replaces it; `save` fires on `Ctrl+S`. By hand: Firefox and
-Safari typing (IME on one of them).
+Safari typing in a field and in the source pane (IME on one of them).
 
-## 6. Site and app shell: open and view
+## 7. Site and app shell: open and view
 
 **Goal:** the site's root is the app; a user opens a local file and sees
 it in the viewer, with clear messages for every failure.
@@ -137,7 +176,7 @@ shows the "no nymph chart" message; the old URLs (`nymph-viewer.js`,
 `.wasm`, `fonts/…`, `demo/`) answer 200; no request leaves the local
 server.
 
-## 7. Edit mode and saving
+## 8. Edit mode and saving
 
 **Goal:** the user switches to Edit, edits, and saves to the same file
 or as a download, without ever losing changes silently.
@@ -146,7 +185,9 @@ or as a download, without ever losing changes silently.
 prefetch; hand-over both ways keeping the view (DESIGN.md section 4);
 modified tracking ignoring the `view` key; Save ▾ (Save, Download YAML,
 Download PNG) and `Ctrl+S`; save in place through `FileSystemFileHandle`
-where available; PNG inputs saved as PNG; unsaved-changes dialog on open,
+where available; PNG inputs saved as PNG; the Source button (switching
+to Edit in View mode) and "Fix in source" (Edit in repair state at the
+error line); unsaved-changes dialog on open,
 close and `beforeunload`; Edit disabled without WebGL2, with the reason.
 
 **Tests** (browser): View → Edit after a zoom keeps the plot's x range
@@ -155,10 +196,12 @@ title dot; Download YAML gives the edited source with the view; Download
 PNG of a PNG input carries the edited source (`extract_source`); save in
 place with a stubbed `showOpenFilePicker` writes the new bytes; opening
 another file while modified shows the dialog and Cancel keeps the
-document; Edit → View shows the edited chart; the viewer module was not
+document; Source in View mode opens Edit with the pane; a broken file's
+"Fix in source" opens repair state, and once fixed the file can be saved
+and viewed; Edit → View shows the edited chart; the viewer module was not
 re-downloaded and the editor module was fetched only on Edit.
 
-## 8. URLs and share links
+## 9. URLs and share links
 
 **Goal:** files open from a URL or a shared link, and the user can share
 what is on screen.
@@ -176,25 +219,6 @@ GitHub `blob/` URL is rewritten (unit test of the rewrite function in
 Node); `#y=` from Copy link reopens the same source byte for byte;
 `?example=line&mode=edit` opens the editor; Copy embed code gives a snippet
 that, on a blank page, draws the chart.
-
-## 9. Source drawer
-
-**Goal:** the user edits the YAML text beside the chart, both ways in
-sync, and repairs a file that does not bind.
-
-**Deliverables:** `web/app/package.json` / lockfile pinning CodeMirror 6
-and esbuild; `nymph-site` bundles it to `site/app/vendor/` when `npm` is
-found, else the text-area fallback; `app/ui/source.js` (debounced
-re-bind, error mark at line and column, sync with `change` events, cursor
-kept); "Fix in source" from the error banner; the drawer resizable,
-right or bottom by width.
-
-**Tests** (browser): typing a new title in the drawer changes the viewer
-and, in Edit, `editor.undo()` reverts it in one step; a panel edit appears
-in the drawer; a syntax error marks the right line and keeps the last
-chart; opening a broken file opens the drawer at the error and fixing it
-draws the chart and enables Edit; the fallback (bundle removed) still
-edits.
 
 ## 10. Start screen: recent, drafts, templates
 
@@ -256,7 +280,8 @@ form) and by keyboard.
 under 720 px the strip is an overlay toggled by a Panel button
 (`workspace_layout` overlay mode, native unchanged); Keyboard shortcuts
 dialog; labels and focus order for every control; the editor canvas'
-label pointing to the drawer.
+label saying it is not readable by screen readers and pointing to
+Download YAML.
 
 **Tests**: native `test_editor_layout` cases for the overlay mode;
 browser at 390 x 844 with touch: a pinch zooms the viewer, Edit shows the
@@ -286,11 +311,12 @@ hand); a deploy from `main` serves the app at the site root.
   API unchanged; the viewer within its size budget.
 - On the deployed site, by hand: open a YAML from the computer, a PNG by
   drag and drop, a file from a GitHub URL, a shared `#y=` link; edit each
-  (select, toolbar, add a node, edit a table, the drawer) and save in place
+  (select, toolbar, add a node, edit a table, the source pane) and save in place
   (Chrome) and as a download (Firefox); reload with unsaved changes and
   restore; with the owner's Google keys, open and save a Drive file;
   install the PWA and open a file offline; view and edit a title on a
   phone.
-- `nymph view --edit` behaves as before on Linux and Windows.
+- `nymph view --edit` behaves as before on Linux and Windows, plus the
+  source pane and repair state.
 - `spec/INDEX.md`, `README.md`, `docs/web-app.md`, `docs/viewer.md` and
   `CHANGELOG.md` describe what was built.

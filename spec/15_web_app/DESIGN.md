@@ -33,10 +33,15 @@ In scope:
 
 - The app: a static single-page site (`web/app/`), no framework, no server.
   Start screen, document screen, open sources, save targets, share links,
-  recent files and draft recovery, source text editor, light / dark theme,
-  installable and offline (PWA).
+  recent files and draft recovery, light / dark theme, installable and
+  offline (PWA).
 - The editor in the browser: `editor_panel` and the editor's host logic
   compiled to WebAssembly, with a JavaScript API (`nymph-editor.js`).
+- A **source pane** in the editor: the YAML text in an ImGui code editor
+  ([ImGuiColorTextEdit](https://github.com/goossens/ImGuiColorTextEdit)),
+  kept in sync with the figure and the panel, in the browser and in
+  `nymph view --edit` alike (section 5.4). It is also how a file that does
+  not bind gets repaired.
 - A refactor that makes this possible without a second copy of the host
   logic: the platform-neutral part of `viewer_window.cpp` moves to a new
   `editor_workspace`, used by `nymph view` and by the web editor.
@@ -61,6 +66,10 @@ Files owned or changed:
 | `web/js/nymph-viewer.js` | exports its font loader and key mapping for `nymph-editor.js`; no API change |
 | `web/CMakeLists.txt` | editor targets, `nymph-site` target, size checks |
 | `src/workspace/` | new: `editor_workspace`, `workspace_host`; `editor_panel` moves here from `src/window/` |
+| `src/edit/source_pane.*`, `src/edit/yaml_language.*` | new: the source pane and its YAML highlighting |
+| `src/edit/editor_model.*`, `src/edit/workspace_layout.hpp` | repair state, source-pane region and its divider |
+| `extern/ImGuiColorTextEdit` | new submodule (MIT), pinned |
+| `src/window/view_command.cpp` | `--edit` opens a source that does not bind in repair state |
 | `src/window/viewer_window.cpp` | becomes a thin native host over `editor_workspace` |
 | `src/window/csv_dialog.*` | new: the native CSV file dialogs, moved out of `table_grid` |
 | `src/edit/table_grid.*`, `inspector.*` | CSV import / export and Save become host requests |
@@ -134,7 +143,7 @@ https://binary-dice-games.github.io/nymph/
 │ (banner: error / "restored unsaved changes" / "read-only: from a URL")   │
 │                                                                          │
 │   viewer canvas (View)  or  editor canvas: figure | panel strip (Edit)   │
-│                                              (Source drawer, resizable)  │
+│              (Edit: source pane | figure | panel strip, resizable)      │
 └──────────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -142,7 +151,8 @@ https://binary-dice-games.github.io/nymph/
   while there are unsaved changes, an icon for where it came from.
 - **View | Edit**: switches modules (section 4). Edit is disabled, with the
   reason as tooltip, when the browser has no WebGL2.
-- **Source**: a drawer with the YAML text (section 3.7).
+- **Source**: shows the editor's source pane (section 3.7); in View mode
+  it switches to Edit first.
 - **Save ▾**: Save (back to where it came from, when possible, else the
   same as Download YAML), Download YAML, Download PNG, Save to Drive.
   `Ctrl+S` is Save.
@@ -155,7 +165,7 @@ https://binary-dice-games.github.io/nymph/
 
 | Case | Message and action |
 |---|---|
-| Source does not bind | the loader's message with line and column; "Fix in source" opens the drawer at that line. Edit stays disabled until it binds |
+| Source does not bind | the loader's message with line and column; "Fix in source" opens Edit in repair state (section 5.4) at that line |
 | PNG without a nymph chart | "This image has no nymph chart in it (it may have been re-encoded by the site it came from). Ask for the YAML, or the original PNG." |
 | URL refused by CORS / network | "That server does not let other sites read the file. Download it and open it here." with the URL |
 | HTTP error, too large, not a nymph file | status code / size limit / what was found |
@@ -233,23 +243,14 @@ gives `?url=` / `?example=` / `?drive=` when the origin has one, else the
 offers the file instead. A Drive link works only for people the file is
 shared with, and says so.
 
-### 3.7 Source drawer
+### 3.7 Source text
 
-The YAML text in a code editor: CodeMirror 6 with its YAML mode, line
-numbers, search, the loader's error underlined at its line and column. It
-is bundled from npm at build time (section 6) and loaded the first time the
-drawer opens, so the start screen does not pay for it.
-
-- Typing re-binds after 300 ms without a keystroke. In View mode the viewer
-  shows the new source; in Edit mode it goes in as
-  `editor.setSource(text, {asChange: true})`, one undo step in the editor.
-  A source that does not bind keeps the last good chart and shows the
-  error; nothing else changes.
-- An edit made in the editor (panel, toolbar, undo) replaces the drawer's
-  text, keeping the cursor line when the text around it is the same.
-- It is also the repair path: a file that does not bind opens with the
-  drawer at the error, and the accessible way to edit (the editor canvas is
-  not reachable by a screen reader, section 8).
+The YAML text is edited in the editor module's source pane (section 5.4),
+not in the page: the app has no text editor of its own. The **Source**
+button toggles it (`editor.showSource()`); in View mode it first switches
+to Edit, since the viewer module carries no editor code (goal 2). A file
+that does not bind opens straight in Edit, in repair state, with the pane
+at the error.
 
 ### 3.8 Google Drive
 
@@ -294,6 +295,7 @@ a new loader.
        └──────────► nymph-editor.js ──► nymph-editor-core.wasm   Edit (whole library + editor)
                          │
                          └─ nymph_editor_web.cpp ─► editor_workspace ─► live_view, editor_panel
+                                                                   ├─► source_pane (ImGuiColorTextEdit)
                                                                    └─► editor_tools (JS tool API)
 ```
 
@@ -340,8 +342,10 @@ class workspace_host {
 class editor_workspace {
  public:
   editor_workspace(view_options options, workspace_host& host, const char* glsl_version);
-  void set_source(std::string_view source, bool reset_view);  // throws nymph::error, fonts_needed
-  void show_panel(bool on);            // creates / destroys the editor_panel; throws for an invalid source
+  void open(std::string source, bool reset_view);  // a source that does not bind opens in repair state
+  void show_panel(bool on);            // creates / destroys the editor_panel
+  void show_source(bool on, std::optional<int> line = {});  // the source pane, cursor at `line`
+  bool repairing() const;              // the text does not bind (section 5.4)
   void resize(float css_width, float css_height, float scale);
   void pointer(const pointer_event& e);
   bool key(window_key key, key_mods mods, bool down, bool repeat);   // true: consumed
@@ -362,8 +366,9 @@ It holds what `viewer_window` does today between the window and the
 editor: pointer routing between the figure box, the strip, the toolbar and
 popups (including drags that start in one and end in another), the
 divider, key routing and the editor shortcuts (undo, redo, Delete,
-`Ctrl+D`, `Alt+Up/Down`, `R`), clicks and right-clicks in the figure to
-selections and menus, the toolbar anchor, tab changes, and applying
+`Ctrl+D`, `Alt+Up/Down`, `R`, `Ctrl+U` for the source pane), clicks and
+right-clicks in the figure to selections and menus, the toolbar anchor,
+tab changes, the source pane and its divider, and applying
 `commit_result`s to the view (`set_source_moved`). `viewer_window` keeps
 the native window, the event loop, the window size, file writes (Save over
 the input, `S` / `Y` copies), the "unsaved changes" dialog on close, and
@@ -384,8 +389,11 @@ createEditor(container: HTMLElement, options: {
   fileName?: string;
   theme?: "source" | "light" | "dark" | "classic" | "auto";
   panel?: boolean;                    // default true
+  sourcePane?: boolean;               // default false
+  repair?: boolean;                   // default false: a source that does not bind rejects;
+                                      // true: opens in repair state
   wasmUrl?: string; fontBaseUrl?: string;
-}): Promise<NymphEditor>;             // rejects with NymphError when the source does not bind
+}): Promise<NymphEditor>;             // rejects with NymphError (bind error, no WebGL2)
 
 class NymphEditor {
   setSource(yaml: string, opts?: { asChange?: boolean; resetView?: boolean }): Promise<void>;
@@ -395,6 +403,7 @@ class NymphEditor {
   modified(): boolean;  markSaved(): void;  version(): number;
   undo(): void;  redo(): void;  resetView(): void;
   setTheme(theme: string): void;  showPanel(on: boolean): void;  focus(): void;
+  showSource(on: boolean, line?: number): void;  repairing(): boolean;
   tool(name: string, args?: object): object;   // the editor tools of 14 section 6, synchronous
   importCsv(table: string, csv: string): void; // answer to "csv-import"
   on(event: "change" | "selection" | "save" | "csv-import" | "csv-export" | "error",
@@ -406,7 +415,7 @@ class NymphEditor {
 - `tool()` runs `editor_tools` (14 section 6) in-process: `editor_state`,
   `editor_element`, `editor_set_fields`, `editor_add_element`, ... with the
   same JSON arguments and results, and `expected_version`. It is the
-  scripting surface for the app (e.g. the drawer's error navigation), for
+  scripting surface for the app (e.g. selecting what an error names), for
   tests, and for a later agent connection (section 11). A tool's error is
   a thrown `NymphError` with the tool's message.
 - `asChange: true` is one undo step (`editor_model::set_source`); without
@@ -438,10 +447,84 @@ class NymphEditor {
   `Ctrl+V` key reaches ImGui, as the viewer does for mockups.
 - **Cursor**: `set_cursor` sets the canvas' CSS cursor.
 - **Fonts**: the viewer's loader (exported by `nymph-viewer.js`, which
-  loads no wasm by being imported).
+  loads no wasm by being imported). The source pane's monospace font is
+  fetched the same way the first time the pane opens.
+
+### 5.4 Source pane (`src/edit/source_pane.*`)
+
+The YAML text beside the figure, in both hosts. A `TextEditor` from
+ImGuiColorTextEdit drawn in the panel's ImGui context (which already covers
+the whole window), so its keys, clipboard, popups and theme are the
+panel's.
+
+**Place.** The **Source** button at the right end of the tab bar, or
+`Ctrl+U`, splits the left side: the pane on the left, the figure (or the
+data table) on the right, with a divider that works as the strip's (6 px
+hit zone, at least 240 px each side, double-click restores 40 % of the
+left side). The pane stays while the user changes tabs, so a table edit
+shows its YAML. `workspace_layout` gains the region; `figure_box()` is
+what remains.
+
+**Look.** `FiraMono-Regular.ttf` from the font catalog, added to the
+panel's atlas (embedded natively; fetched on demand in the web build, the
+default font until it arrives). The editor's dark or light palette by the
+figure theme. Line numbers, two-space tabs inserted as spaces,
+indentation folding, matching brackets for flow mappings, find and
+replace (`Ctrl+F`, `Ctrl+H`). `yaml_language()` is a
+`TextEditor::Language` with a custom tokenizer: comments, mapping keys,
+strings, numbers, `true` / `false` / `null`, element type names after
+`type:` (from the registry), and `$column` references in their own colour;
+the lines of a `|` block (CSV data) are left plain.
+
+**Text to model.** The editor's change callback, 300 ms after the last
+keystroke, calls `editor_model::set_source(text)`: one undo step of the
+document. Accepted: the figure, panel and tree follow, markers are
+cleared. Refused: the loader's error is drawn as a squiggle at its line
+and column plus a line marker with the message as tooltip, and in the
+panel's error area; the figure keeps the last good source. The pane is then
+**ahead** of the model ("not applied" in its header), and until its text
+binds again the inspector, toolbar and tree menus are read-only and agent
+writes are refused ("the user is editing the source"), so nothing can
+replace text the user is typing. Pending pane text is applied before any
+other change, as the inspector's pending text is (14 section 7).
+
+**Model to text.** Any other accepted change (panel, toolbar, tree,
+tables, agent, document undo / redo) is written into the pane as one
+`ReplaceSectionText` of the span that differs (common prefix and suffix
+kept), so cursor, scroll and folds outside it stay.
+
+**Undo.** One history, the document's. `Ctrl+Z` / `Ctrl+Y` in the pane
+are the model's undo and redo while the pane is in step with the model,
+and the text editor's own (fine-grained) undo while it is ahead, so the
+user can step back to text that binds. The pane intercepts these keys
+before the `TextEditor` sees them.
+
+**Selection.** Selecting an element (figure, tree) moves the pane's cursor
+to the element's first line (`node::line`) and marks its lines; moving the
+cursor in the pane selects the innermost element whose text holds the
+cursor's line (after 300 ms), so the figure's outline follows the text.
+
+**Repair state.** `editor_workspace::open()` with a source that does not
+bind has no model yet: the pane is shown, cursor at the error; the figure
+box shows the error (or the last good chart); the strip says "Fix the
+source to edit". The first text that binds creates the model, and the
+workspace becomes a normal editor. Save works in repair state for YAML
+(the text as it is); a PNG input waits until it binds. Natively,
+`nymph view --edit broken.yaml` now opens in repair state instead of
+exiting; plain `nymph view` still reports the error and exits.
+
+The MCP tools see the pane: `editor_state` reports whether it is shown,
+ahead of the model, and its error; `editor_source` returns the model's
+source.
 
 ## 6. Build
 
+- ImGuiColorTextEdit is a submodule, `extern/ImGuiColorTextEdit`, pinned
+  to a commit that matches the ImGui submodule (1.92.9), initialized with
+  `nymph_ensure_submodules()` when `NYMPH_VIEW` or `NYMPH_WEB` is on; it
+  builds into `nymph_workspace` (`TextEditor.cpp` only; not `TextDiff`, not
+  the example or extras). Its licence joins `nymph fonts --licenses`' list
+  of third-party notices and the About panel.
 - `NYMPH_WEB` builds both modules. New target `nymph-editor` from
   `web/editor/` linking `nymph`, `nymph_workspace` and
   `nymph_editor_tools`, with the viewer's link flags; output in
@@ -452,14 +535,9 @@ class NymphEditor {
   types it needs, over `nymph` and `nymph_json`, without `nymph_cli`).
   `nymph_window` and `nymph_mcp` link them.
 - `nymph-site` target: assembles `<build>/web/site/` (section 3.1) from the
-  module outputs, `web/app/`, `examples/`, the CodeMirror bundle, and
+  module outputs, `web/app/`, `examples/`, and
   `config.json` from CMake cache variables `NYMPH_GOOGLE_CLIENT_ID`,
   `NYMPH_GOOGLE_API_KEY`, `NYMPH_GOOGLE_APP_ID` (empty by default).
-- CodeMirror: `web/app/package.json` and `package-lock.json` pin it;
-  `nymph-site` runs `npm ci` and `esbuild` into `site/app/vendor/` when
-  `npm` is found, and otherwise the drawer falls back to a plain text area
-  (with line numbers and the error line marked), so a build without Node
-  still produces a working site.
 - Size checks (ctest, web builds): gzip sizes of
   `nymph-viewer-core.wasm`, `nymph-editor-core.wasm` and the app shell
   against `web/size_budget.json`. The viewer's budget is its size before
@@ -486,9 +564,8 @@ class NymphEditor {
 - **The ImGui editor in a canvas, not a DOM rewrite.** The native editor
   is a large, tested piece (inspector, toolbar, tree menu, tables, number
   box); a DOM version would be a second editor to keep in step with the
-  schema. The canvas editor costs accessibility and native text widgets;
-  the source drawer (real DOM) covers both, and the shell around it is
-  DOM.
+  schema. The canvas editor costs screen-reader access and native text
+  widgets (section 8); the shell around it is DOM.
 - **Extract `editor_workspace`, not copy `viewer_window`.** The routing
   rules (drags across regions, toolbar over the figure, keys while a popup
   is open) took several iterations natively; two copies would drift.
@@ -497,10 +574,19 @@ class NymphEditor {
   undo. Reusing them gives the app and tests a complete, documented API
   for the price of linking JSON into the editor module (accepted if it
   fits the budget; plan step 1 measures).
-- **CodeMirror bundled at build time, not a CDN.** A CDN would be a
-  third-party request on every visit (goal 4) and an availability risk.
-  Not a submodule either: it is a set of npm packages; a pinned lockfile is
-  the reproducible form. The text-area fallback keeps Node optional.
+- **The source text in ImGui (ImGuiColorTextEdit), not a DOM code editor
+  such as CodeMirror.** The whole editor then has one look, one keyboard
+  model, one clipboard path and one undo history, and the same pane works
+  in `nymph view --edit`, where there is no DOM. A DOM editor would also
+  need npm and a bundler in the site build, and a second sync path for the
+  native host. Costs: no screen-reader access to the text, IME and phone
+  keyboards through the hidden `textarea` like every other field, and about
+  14,000 lines of C++ in the editor module (never in the viewer). Chosen
+  over ImGui's `InputTextMultiline`, which has no highlighting, line
+  numbers, markers, folding or search. The goossens version is maintained,
+  follows ImGui 1.92, and has the marker, squiggle, section-replace and
+  change-callback APIs the pane needs; it has no YAML mode, so nymph
+  writes one (`yaml_language`).
 - **`drive.file` scope.** Full Drive scopes need Google's security review
   and show a frightening consent screen; `drive.file` limits the app to
   files the user hands it, which is all it needs.
@@ -539,17 +625,25 @@ class NymphEditor {
   Safari) are detected and their actions hidden or replaced, never broken.
 - Accessibility: every shell control is a real button or menu with a label
   and keyboard access; the viewer canvas keeps its `aria-label`; the editor
-  canvas is labelled as a visual editor and points to the Source drawer.
+  canvas, source pane included, is not reachable by a screen reader. Its
+  label says so and points to Download YAML for editing elsewhere
+  (section 11).
+- `extern/ImGuiColorTextEdit` is not edited (CLAUDE.md, Dependencies).
+  Everything nymph-specific (language, key interception, sync) is in
+  `source_pane`; a needed upstream change is proposed upstream and the
+  submodule bumped.
 - Code style: C++ as nymph (`bdg::nymph`, `snake_case`); JavaScript as
-  `web/js/` and `extension/` (ES modules, no framework, no build step
-  except the CodeMirror bundle).
+  `web/js/` and `extension/` (ES modules, no framework, no build step).
 
 ## 9. Testing Strategy
 
 1. **Native GoogleTest**: `editor_workspace` with a fake host and no GL
    frames drawn (pointer routing by region, divider drag, key routing and
-   shortcuts, CSV and save requests, `import_csv`); the existing editor and
-   window tests unchanged.
+   shortcuts, CSV and save requests, `import_csv`); `source_pane` against
+   a plain ImGui context (typing applies after the pause, a refused text
+   marks its line and locks the panel, model changes patch only the
+   changed span, undo routing, selection to cursor and back, repair state);
+   `yaml_language` tokens; the existing editor and window tests unchanged.
 2. **Node** (web builds): the editor module with `panel` frames run but
    not presented (a test-only headless flag): create, `tool()` reads and
    writes, `setSource` with and without `asChange`, `modified`, `toYaml`,
@@ -559,8 +653,9 @@ class NymphEditor {
    paste; `?url=` from the local server and a CORS failure message;
    `#y=` round trip; View → Edit → View keeps the view; a click on a target
    (rectangles from `tool("editor_state")`) selects it; a panel edit marks
-   the document modified and Save downloads the expected YAML; the drawer's
-   edit reaches the editor and an invalid edit shows its error; the draft
+   the document modified and Save downloads the expected YAML; typing in
+   the source pane reaches the figure, and a broken file opens in repair
+   state and is fixed there; the draft
    is restored after a reload; Drive with a stub of Google's scripts served
    locally; the service worker serves the shell offline.
 4. **Size budget** test (section 6).
@@ -578,7 +673,9 @@ panel, toolbar, tree and data editing, editor tools),
 `extract_source`), [07_release_pipeline](../07_release_pipeline/DESIGN.md)
 (CI web job, Emscripten version).
 
-Changes others see: `editor_panel` moves to `src/workspace/` and Save /
+Changes others see: `nymph view --edit` gains the source pane and opens
+broken sources in repair state; `editor_state` reports the pane;
+`editor_panel` moves to `src/workspace/` and Save /
 CSV become host requests (14's design is corrected where it says the panel
 opens those dialogs); `nymph-viewer.js` exports two helpers; the demo
 page's examples move to `examples/` at the site root; the site's root is
@@ -586,8 +683,9 @@ the app instead of a redirect to the demo.
 
 Risks, checked first in the plan (step 1): the editor module's size with
 JSON linked in; two ImGui contexts drawn into one WebGL2 context per frame
-(native does it with desktop GL); ImGui text input through a hidden
-`textarea` on Safari and phones (step 5).
+(native does it with desktop GL); ImGuiColorTextEdit under Emscripten and
+its size. Later: ImGui text input (source pane included) through a hidden
+`textarea` on Safari and phones (step 6).
 
 ## 11. Extension Points
 
@@ -600,6 +698,11 @@ JSON linked in; two ImGui contexts drawn into one WebGL2 context per frame
 - **Agents in the browser**: the `tool()` API behind a `postMessage` or
   WebMCP bridge, so a chat app can drive the open editor as `nymph mcp`
   drives `nymph view --edit`.
+- **More in the source pane**: completion of field and type names from
+  the schema (the editor's autocomplete API), hover help from field
+  descriptions, a diff against the saved file (`TextDiff`).
+- **A screen-reader path to the text**: a DOM mirror of the pane in the
+  app, read-only or editable, fed by the `change` event.
 - **Phone editing beyond the basics**: plan step 13 makes the strip an
   overlay under 720 px; a touch-first panel layout (larger targets, a
   bottom sheet) is later work.
