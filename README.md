@@ -188,6 +188,8 @@ carries its source: `bdg::nymph::extract_source(png)` returns it.
 | [spec/11_cross_browser_extension/PLAN.md](spec/11_cross_browser_extension/PLAN.md) | Its implementation steps and tests |
 | [spec/14_editor_workspace/DESIGN.md](spec/14_editor_workspace/DESIGN.md) | Editor workspace: resizable panel, adding and removing elements, data table tabs, the editor as an MCP server |
 | [spec/14_editor_workspace/PLAN.md](spec/14_editor_workspace/PLAN.md) | Its implementation steps and tests |
+| [spec/15_web_app/DESIGN.md](spec/15_web_app/DESIGN.md) | The web app on GitHub Pages (planned): open, view and edit nymph files in the browser, editor in a second WebAssembly module |
+| [spec/15_web_app/PLAN.md](spec/15_web_app/PLAN.md) | Its implementation steps and tests |
 | [CHANGELOG.md](CHANGELOG.md) | User-facing changes between releases |
 | [CLAUDE.md](CLAUDE.md) | Coding style and project rules for AI agents and contributors |
 
