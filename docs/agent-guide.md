@@ -89,6 +89,12 @@ once and can be undone in the editor.
 A refused change names the problem as the loader does and changes nothing.
 With several editors open, `editor` (a file name or process id) chooses
 one; without an open editor the tools say so: use `render_chart` instead.
+While the user is fixing source text that does not load, changes are
+refused ("the user is editing the source"): wait and read the state again.
+
+To let a user look at or edit a chart in the browser without installing
+anything, give them a link to the web app: `https://binary-dice-games.github.io/nymph/?url=<the raw URL of the YAML or PNG>`
+(add `&mode=edit` to open the editor).
 
 ## Source format
 

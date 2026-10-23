@@ -233,6 +233,17 @@ ctest --test-dir build-web        # Node tests of the module
 every example live next to its PNG (serve the folder over HTTP to open
 it). See [viewer.md](viewer.md) for what to serve.
 
+The same build makes the editor module, `build-web/web/editor/`
+(`nymph-editor.js`, `nymph-editor-core.js` and `.wasm`, about 1.2 MB gzip:
+the editor of `nymph view --edit`, loaded only to edit), and assembles the
+[web app](web-app.md)'s site in `build-web/web/site/` (`nymph-site`
+target): what the `pages` workflow deploys. Preview it with
+`python3 -m http.server -d build-web/web/site`. The cache variables
+`NYMPH_GOOGLE_CLIENT_ID`, `NYMPH_GOOGLE_API_KEY` and `NYMPH_GOOGLE_APP_ID`
+turn on its Google Drive buttons ([web-app.md](web-app.md#hosting-and-setup)),
+`NYMPH_SITE_COMMIT` names the commit it was built from (default: git
+`HEAD`). `ctest` checks both modules against `web/size_budget.json`.
+
 It also writes `build-web/claude/viewer.html`, the MCP App that shows
 `nymph mcp`'s charts live in a Claude conversation. Embed it in the
 native build to serve it:

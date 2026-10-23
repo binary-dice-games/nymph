@@ -9,6 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- The web app at https://binary-dice-games.github.io/nymph/: open nymph YAML and PNG files from the computer (file picker, drag and drop, paste), a URL, Google Drive (when the site is set up for it), a shared link, Recent or a template; view them live; edit them with the editor of `nymph view --edit`; save back to the file (Chrome, Edge) or Drive, or download YAML or PNG; copy a link that reopens the chart or HTML that embeds it. Unsaved changes are kept as drafts; the app installs, opens `.yaml` files from the system and works offline. Phones and tablets get the viewer only.
+- The editor module for web pages: `editor/nymph-editor.js` (`createEditor()`), a second WebAssembly module next to the viewer's, with the editor tools as a JavaScript API (`tool()`), attributed changes and undo groups.
+- `nymph view --edit` and the web editor: a source pane (`Ctrl+U`, or the **Source** tab button) shows the YAML beside the figure, highlighted, with line numbers, folding and find / replace, in step with the panel both ways; a file that does not load opens at its error there instead of failing.
+- `nymph view --edit`: the undo and redo buttons name the change they undo or redo; `Ctrl+S` asks to save.
+
 - `nymph view --edit`: a floating toolbar next to the selected element changes its shape, fill, line and text colours, font, text size and line style, copies its style to the next element clicked, clears its style, duplicates and deletes it; plots get a colour scheme picker (pie charts and heatmaps change their plot's), series a marker picker and marker size.
 - `nymph view --edit`: clicking a legend entry selects its series (a pie chart's slice selects the chart) instead of hiding it.
 - `nymph view --edit`: the divider between the figure and the editor panel can be dragged.
@@ -32,6 +37,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `nymph view --edit`: choosing a colour for a field that was automatic opens the colour picker at once.
 
 ### Fixed
+- `nymph view --edit` no longer redraws the editor panel continuously while nothing changes.
 - `nymph view --edit`: adding a child from an element's right-click menu no longer crashes.
 - `nymph view` and the web viewer: a series colour removed by an edit, an undo or a new source goes back to its automatic colour instead of keeping the old one; automatic colours and markers match a fresh render.
 - The library builds with GCC again (a stray carriage return in `src/edit/tree_edit.cpp`).

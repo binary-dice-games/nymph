@@ -10,14 +10,15 @@ OpenGL when a GPU is available, or on the CPU with its own software
 rasterizer: no GPU, window or display needed, and no OpenGL library
 linked.
 It is meant for AI agents that need to show information as a chart.
+The [web app](https://binary-dice-games.github.io/nymph/) ([docs](docs/web-app.md))
+opens, views and edits nymph files in the browser, with nothing to install.
 The [web viewer](docs/viewer.md) ([live demo](https://binary-dice-games.github.io/nymph/demo/))
 shows the same charts live in a web page
 (WebAssembly and WebGL2), with pan, zoom and data-point values, for
 markdown viewers and chatbots: `<nymph-viewer src="chart.yaml"></nymph-viewer>`;
 `nymph view chart.yaml` opens it in a window; `--edit` adds a panel and a
 floating toolbar to click-select texts and elements and edit them, add and
-remove elements,
-edit the data tables, and let an AI agent work on the open chart through
+remove elements, edit the data tables and the YAML, and let an AI agent work on the open chart through
 `nymph mcp`.
 The [Chrome extension](docs/extension.md) does it on any page you read:
 nymph PNGs on GitHub or any site become live charts of the same size.
@@ -118,7 +119,7 @@ carries its source: `bdg::nymph::extract_source(png)` returns it.
 | `imuml/` | ImUml, the UML diagram library for Dear ImGui that nymph's diagrams use |
 | `app/` | The `nymph` command-line executable |
 | `tests/` | GoogleTest suite, run with `ctest` |
-| `web/` | The interactive web viewer: WebAssembly module and JavaScript API (`NYMPH_WEB`) |
+| `web/` | The web viewer, the editor module (WebAssembly, JavaScript APIs) and the web app (`web/app/`), built with `NYMPH_WEB` |
 | `claude/` | Claude integration: the agent skill text (`claude/skill/`), the MCP App that shows charts live in the chat (`claude/app/`) and the Claude Code plugin (`claude/plugin/`, listed by `.claude-plugin/marketplace.json`) |
 | `cursor/` | Cursor integration: the plugin (`cursor/plugin/`, listed by `.cursor-plugin/marketplace.json`) and its rule template |
 | `extension/` | The Chrome extension that turns nymph PNGs on any page into live viewers (built with `NYMPH_WEB`) |
@@ -159,7 +160,8 @@ carries its source: `bdg::nymph::extract_source(png)` returns it.
 | [docs/claude.md](docs/claude.md) | nymph in Claude: the Claude Code plugin, the Claude Desktop extension, the claude.ai skill, `nymph mcp` |
 | [docs/shapes.md](docs/shapes.md) | The shape library: every shape, how to use and add one |
 | [docs/examples.md](docs/examples.md) | The example charts with their sources and images |
-| [docs/viewer.md](docs/viewer.md) | The web viewer: files, embedding, JavaScript API, events, interaction |
+| [docs/viewer.md](docs/viewer.md) | The web viewer: files, embedding, JavaScript API, events, interaction; the editor module |
+| [docs/web-app.md](docs/web-app.md) | The web app: opening, editing, saving, sharing, offline; hosting and Google Drive setup |
 | [docs/extension.md](docs/extension.md) | The Chrome extension: install, the toolbar button, sites, privacy, limits |
 | [docs/releasing.md](docs/releasing.md) | Publishing a release from a tag: the workflow, the release files, one-time setup of each channel |
 | [spec/INDEX.md](spec/INDEX.md) | Index of the project specifications (one folder per project, with its DESIGN.md and PLAN.md) |
@@ -188,8 +190,7 @@ carries its source: `bdg::nymph::extract_source(png)` returns it.
 | [spec/11_cross_browser_extension/PLAN.md](spec/11_cross_browser_extension/PLAN.md) | Its implementation steps and tests |
 | [spec/14_editor_workspace/DESIGN.md](spec/14_editor_workspace/DESIGN.md) | Editor workspace: resizable panel, adding and removing elements, data table tabs, the editor as an MCP server |
 | [spec/14_editor_workspace/PLAN.md](spec/14_editor_workspace/PLAN.md) | Its implementation steps and tests |
-| [spec/15_web_app/DESIGN.md](spec/15_web_app/DESIGN.md) | The web app on GitHub Pages (planned): open, view and edit nymph files in the browser, editor in a second WebAssembly module |
-| [spec/15_web_app/PLAN.md](spec/15_web_app/PLAN.md) | Its implementation steps and tests |
+| [spec/15_web_app/DESIGN.md](spec/15_web_app/DESIGN.md), [PLAN.md](spec/15_web_app/PLAN.md) | The web app: editor in a second WebAssembly module, source pane, commands for agents; its steps |
 | [CHANGELOG.md](CHANGELOG.md) | User-facing changes between releases |
 | [CLAUDE.md](CLAUDE.md) | Coding style and project rules for AI agents and contributors |
 

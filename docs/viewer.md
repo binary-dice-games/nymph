@@ -19,6 +19,7 @@ From `build-web/web/`, served together from one folder:
 | `nymph-viewer-core.js`, `nymph-viewer-core.wasm` | The module (about 630 KB gzip), loaded on the first viewer. |
 | `fonts/` | The font files and their licences, fetched only when a chart names a font. |
 | `nymph-viewer.single.js` | Instead of the three files above: everything in one file (about 690 KB gzip). Fonts still come from `fonts/` next to it, or `fontBaseUrl`. |
+| `editor/` | Optional: the [editor module](#the-editor-module), loaded only by pages that edit. |
 
 The page's Content Security Policy must allow `'wasm-unsafe-eval'` (or
 `'unsafe-eval'`) in `script-src`. The module reads no file and makes no
@@ -26,11 +27,13 @@ request itself: the API fetches `src` URLs and fonts.
 
 ## Live demo
 
-Every example, live next to its PNG, is at
+The [web app](web-app.md) at <https://binary-dice-games.github.io/nymph/>
+opens, views and edits charts; every example, live next to its PNG, is at
 <https://binary-dice-games.github.io/nymph/demo/>. The `pages` workflow
-(`.github/workflows/pages.yml`) rebuilds and publishes it on each push to
-`main`; enable it once under Settings > Pages > Source: GitHub Actions.
-To host your own copy, serve `build-web/web/` (the demo is `demo/`).
+(`.github/workflows/pages.yml`) rebuilds, tests and publishes the site on
+each push to `main`; enable it once under Settings > Pages > Source: GitHub
+Actions. To host your own copy, serve `build-web/web/site/`. The viewer's
+files keep their paths there (`nymph-viewer.js`, `fonts/`, ...).
 
 ## Embedding
 
@@ -130,12 +133,50 @@ save the image / YAML on screen next to the input as `*.view.png` /
 closes; while a text field of a user interface has the keyboard, keys go
 to the field instead (`Esc` leaves it). See [cli.md](cli.md).
 
+## The editor module
+
+`editor/nymph-editor.js` puts the editor of `nymph view --edit` in a page:
+the same panel, toolbar, tree and data editing, and the source pane,
+drawn with WebGL2 into one canvas that fills its container. It is a second
+WebAssembly module (about 1.2 MB gzip) so pages that only view stay small;
+it imports `../nymph-viewer.js` for its font loader, so serve it in an
+`editor/` folder next to the viewer's files. Design:
+[spec/15_web_app/DESIGN.md](../spec/15_web_app/DESIGN.md) section 5.
+
+```js
+import { createEditor } from './editor/nymph-editor.js';
+const editor = await createEditor(document.getElementById('box'), { source: yamlText, sourcePane: true });
+editor.on('change', (c) => console.log(c.label, c.origin, editor.source()));
+editor.on('save', () => save(editor.toYaml()));
+```
+
+| Method / event | What |
+|----------------|------|
+| `createEditor(container, {source \| png, fileName, theme, panel, sourcePane, repair})` | The editor, or a `NymphError` (no WebGL2, a source that does not load; with `repair: true` such a source opens with only the source pane editing). |
+| `open(yamlOrPng)`, `setSource(yaml, {asChange, label, origin})` | A new document; with `asChange`, one undo step. |
+| `source()`, `toYaml()`, `toPng()`, `paneText()` | The YAML, with the view on screen, as a PNG; the pane's text. |
+| `modified()`, `markSaved()`, `version()`, `state()` | Unsaved changes, the change counter, labels of undo / redo, the selection. |
+| `undo()`, `redo()`, `resetView()`, `setTheme(t)`, `showPanel(on)`, `showSource(on, line)` | |
+| `tool(name, args, {origin})`, `toolDefinitions()` | The editor tools of `nymph mcp` (`editor_state`, `editor_set_fields`, `editor_add_element`, ...), run in the page; changes are attributed to `origin`. |
+| `beginGroup(label, origin)`, `endGroup()` | Several changes as one undo step. |
+| `importCsv(table, csv)`, `targetRect(path, field)`, `focus()`, `destroy()` | |
+| `change` {label, origin, version, modified}, `selection`, `save`, `csv-import` {table}, `csv-export` {table, fileName, csv}, `error` | Events: the page saves, picks and writes files; the module does no I/O. |
+
 ### Editing in the window
 
 `nymph view --edit chart.yaml` (or the `E` key in any `nymph view`) docks
 an editor panel to the right of the figure; `E` hides it again. Drag the
 divider between them to make the panel wider or narrower (double-click it
 for the default width).
+
+- **Source.** The **Source** tab button (or `Ctrl+U`) shows the YAML between
+  the figure and the panel, highlighted, with line numbers, folding and
+  find / replace (`Ctrl+F`, `Ctrl+H`). Typing applies after a short pause
+  as one undo step; text that does not load is underlined at the error and
+  the rest of the panel waits (agents too) until it loads again. Selecting
+  an element moves the cursor to its line, and moving the cursor selects
+  the element there. With `--edit`, a file that does not load opens with
+  the source at the error instead of failing.
 
 - **Click to select.** Click a title, an axis label or the legend of a plot, a
   `Label`, a node, group or link text of a diagram: the thing is outlined and

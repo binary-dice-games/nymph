@@ -1058,7 +1058,19 @@ function wireControls() {
   $('btn-more').addEventListener('click', (e) => {
     const theme = load('theme') ?? 'auto';
     const mark = (on) => (on ? '✓' : '');
+    // Under 720 px the bar keeps View | Edit and Save; the rest is here.
+    const narrow = matchMedia('(max-width: 720px)').matches;
     showMenu(e.currentTarget, [
+      ...(app.doc && narrow
+        ? [
+            device.directEditing && { label: 'Source', icon: 'code', note: 'Ctrl+U', run: () => act('app_show_source') },
+            { label: 'Copy link', icon: 'link', run: () => act('app_copy_link') },
+            { label: 'Copy embed code', icon: 'code', run: () => act('app_copy_embed') },
+            { label: 'Download PNG', icon: 'image', run: () => act('app_download', { kind: 'png' }) },
+            { label: 'Download YAML', icon: 'download', run: () => act('app_download', { kind: 'yaml' }) },
+            '-',
+          ]
+        : []),
       ...(app.doc
         ? [
             { label: 'Reset view', icon: 'reset', run: () => act('app_reset_view') },
