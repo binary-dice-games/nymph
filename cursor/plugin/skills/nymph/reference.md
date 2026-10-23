@@ -33,6 +33,8 @@ example across machines): OpenGL output can differ slightly between GPUs.
 | `nymph chart.yaml -o out.png` | Writes `out.png`. |
 | `nymph chart.png` | Prints the YAML stored in a nymph PNG (`-o FILE` writes it). |
 | `nymph check chart.yaml` | Validates without drawing; prints nothing when valid. |
+| `nymph diagram.mmd` | Draws a mermaid diagram (converted to nymph YAML inside the PNG). |
+| `nymph convert diagram.mmd -o diagram.yaml` | Writes the nymph YAML of a mermaid diagram (or of any input). |
 | `nymph render - -o out.png` | Reads the YAML from standard input. |
 | `nymph schema PlotLine` | Lists one element's fields, defaults and allowed values. |
 | `nymph fonts` | Lists the font names `font:` accepts. |
@@ -64,6 +66,26 @@ To change an existing nymph image when you no longer have its source, run
 YAML has a `source` key, read it first: it says how the data was made, so
 you can rerun that prompt, query or code for fresh data instead of
 guessing. Keep `source` up to date when you change the data.
+
+## Starting from mermaid
+
+Diagrams (flowchart, sequence, class, state, ER, Gantt, pie, mind map,
+Sankey, xychart) may be drafted in mermaid instead of YAML: nymph reads
+mermaid wherever it reads YAML, detected by its content, converts it and
+draws the result. It never writes mermaid.
+
+1. Write the mermaid and draw it: `render_chart` with it as `source` (or
+   `nymph diagram.mmd`). Warnings name what nymph dropped (`click`,
+   icons, ...); errors give the line and column in the mermaid.
+2. Revise the mermaid until the user is satisfied (`editor_set_source`
+   takes mermaid for a chart open in the editor).
+3. Convert: `convert_chart` (`output_path` ending in `.yaml`) or `nymph
+   convert diagram.mmd -o diagram.yaml`. Keep and edit that YAML from now
+   on: it declares every node explicitly, and nymph's fields (colours,
+   fonts, shapes, layout hints, sizes) refine the look.
+
+A PNG drawn from mermaid carries the converted YAML. Plots, dashboards
+and user interfaces have no mermaid form: write them in YAML.
 
 ## The chart open in the editor
 

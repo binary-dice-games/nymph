@@ -100,10 +100,13 @@ and send mermaid to the open editor.
 mentioning mermaid; new `convert_chart` (`source` | `input_path`,
 `output_path` `.yaml` / `.yml`); `src/mcp/editor_tools.cpp`:
 `editor_set_source` converts mermaid (errors as tool errors at mermaid
-positions); `claude/skill/` and `docs/agent-guide.md`: a short "Start in
-mermaid" workflow section (when, the three calls, what carries over,
-converting); `docs/claude.md`. The skill and plugin sync checks are
-updated if they pin tool lists.
+positions); `docs/claude.md`. The agent text was written ahead of the
+code (with the design): `claude/skill/nymph/SKILL.md` ("Diagrams: draft
+in mermaid, finish in nymph"), `docs/agent-guide.md` ("Starting from
+mermaid", two command rows), `cursor/rule/nymph.mdc.in`, and their plugin
+copies. This step checks that text against what was built and corrects
+it (tool names, arguments, warning wording). The skill and plugin sync
+checks are updated if they pin tool lists.
 
 **Tests** (`test_mcp_tools`, `test_editor_server` extended): `render_chart`
 with mermaid `source` returns an image, `structuredContent.source` equal to
