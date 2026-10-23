@@ -70,13 +70,21 @@ class viewer : public window_events, public workspace_host {
         *this, view_options{request_.args.fit, /*cpu_textures=*/false, /*tooltips=*/true}, w.glsl_version(), gl);
     ws_->init_view();
     ws_->set_file_name(name_);
-    ws_->view().set_source(request_.source);
     ws_->view().set_theme(request_.args.theme);
-    ws_->set_saved_source(request_.source);
+    if (request_.repair.empty()) {
+      ws_->view().set_source(request_.source);
+      ws_->set_saved_source(request_.source);
+    }
     open_at_layout_size();
-    set_title("");
+    set_title(request_.repair.empty() ? std::string() : "does not load: " + request_.repair);
     w.show();
-    if (request_.args.edit) {
+    if (!request_.repair.empty()) {
+      window_->make_current();
+      ws_->open(request_.source, true, true); // repair state: the source pane at the error
+      sync_size();
+      ws_->panel()->set_folder(std::filesystem::path(request_.args.input).parent_path());
+      start_agent_server();
+    } else if (request_.args.edit) {
       set_panel(true);
     }
     while (true) {
@@ -86,7 +94,7 @@ class viewer : public window_events, public workspace_host {
           return;
         }
         present(true);
-        if (ws_->panel() != nullptr && ws_->panel()->panel().pending()) {
+        if (ws_->pending()) {
           // A typed text waits for its pause: poll instead of sleeping in the event queue.
           std::this_thread::sleep_for(std::chrono::milliseconds(10));
         }

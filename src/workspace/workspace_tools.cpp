@@ -50,6 +50,10 @@ void workspace_tools::changed(const commit_result& r, const std::string& tool) {
   ws_.apply_change(r, by.empty() ? std::string() : "changed by " + by + ": " + tool);
 }
 
+std::string workspace_tools::locked_reason() const {
+  return ws_.panel() != nullptr ? ws_.panel()->locked_reason() : std::string();
+}
+
 void workspace_tools::select(const edit_target_id& target) {
   if (ws_.panel() == nullptr) {
     return;

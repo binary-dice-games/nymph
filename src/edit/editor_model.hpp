@@ -70,6 +70,35 @@ class editor_model {
  public:
   /// @throws nymph::error if `source` is not a valid nymph source.
   explicit editor_model(std::string source);
+
+  /// @brief Marks the repair constructor.
+  struct repair_t {};
+  /// @brief A model of `source` that does not throw: a source that does not
+  ///        bind is held as it is, in repair state (repairing()), until a
+  ///        set_source() that binds (spec/15_web_app/DESIGN.md section 5.4).
+  editor_model(std::string source, repair_t);
+
+  /// @brief The source does not bind yet: every change but set_source() is
+  ///        refused, and the first text that binds starts the history.
+  bool repairing() const {
+    return repairing_;
+  }
+  /// @brief Why the source does not bind (repair state), with its position.
+  const std::string& repair_error() const {
+    return repair_error_;
+  }
+  int repair_line() const {
+    return repair_line_;
+  }
+  int repair_column() const {
+    return repair_column_;
+  }
+
+  /// @brief The 1-based line where element `path` starts in the source, or 0.
+  int element_line(std::string_view path) const;
+  /// @brief The element whose text starts last at or before 1-based `line`
+  ///        (the innermost one there), or "" before the first element.
+  std::string element_at_line(int line) const;
   ~editor_model();
   editor_model(const editor_model&) = delete;
   editor_model& operator=(const editor_model&) = delete;
@@ -361,6 +390,10 @@ class editor_model {
   std::string label_;
   std::optional<open_group> group_;
   std::string last_label_;
+  bool repairing_ = false;
+  std::string repair_error_;
+  int repair_line_ = 0;
+  int repair_column_ = 0;
   std::string last_origin_ = "user";
   std::string last_key_; ///< Element, field and undo generation of the last change, for merging.
   uint64_t version_ = 0;

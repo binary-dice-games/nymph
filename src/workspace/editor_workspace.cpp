@@ -83,13 +83,68 @@ void editor_workspace::set_host_files(bool on) {
   }
 }
 
-std::string editor_workspace::show_panel(bool on) {
+void editor_workspace::open(const std::string& source, bool reset_view, bool edit) {
+  try {
+    view_.set_source(source, reset_view);
+  } catch (const fonts_needed&) {
+    throw;
+  } catch (const error&) {
+    if (!edit) {
+      throw;
+    }
+    // Repair state: the panel holds the text, the figure shows nothing.
+    show_panel(false);
+    saved_source_ = source;
+    repair_source_ = source;
+    const std::string refused = show_panel(true, true);
+    repair_source_.reset();
+    if (!refused.empty()) {
+      throw;
+    }
+    return;
+  }
+  show_panel(false);
+  saved_source_ = source;
+  if (edit) {
+    const std::string refused = show_panel(true);
+    if (!refused.empty()) {
+      throw std::runtime_error("cannot edit: " + refused);
+    }
+  }
+}
+
+void editor_workspace::retry_view() {
+  if (panel_ == nullptr || panel_->model().repairing()) {
+    return;
+  }
+  inspector_events events;
+  events.source = panel_->model().source();
+  try {
+    view_.set_source(*events.source);
+  } catch (const fonts_needed& e) {
+    host_.need_fonts(e.fonts());
+    return;
+  } catch (const std::exception& e) {
+    status_ = std::string("cannot show: ") + e.what();
+  }
+  panel_->refresh();
+}
+
+void editor_workspace::show_source(bool on, std::optional<int> line) {
+  if (panel_ != nullptr) {
+    panel_->show_source(on, line);
+    relayout();
+  }
+}
+
+std::string editor_workspace::show_panel(bool on, bool repair) {
   if ((panel_ != nullptr) == on) {
     return {};
   }
   if (on) {
     try {
-      panel_ = std::make_unique<editor_panel>(std::string(view_.source()), file_name_, glsl_version_.c_str());
+      const std::string source = repair_source_ ? *repair_source_ : std::string(view_.source());
+      panel_ = std::make_unique<editor_panel>(source, file_name_, glsl_version_.c_str(), repair);
     } catch (const std::exception& e) {
       return e.what();
     }
@@ -109,7 +164,7 @@ std::string editor_workspace::show_panel(bool on) {
     pointer_in_panel_ = false;
     panel_drag_ = false;
     figure_drag_ = false;
-    divider_drag_ = false;
+    divider_drag_ = drag::none;
     set_cursor(cursor_shape::arrow);
   }
   last_ = nullptr;
@@ -189,30 +244,41 @@ void editor_workspace::pointer(const pointer_event& in) {
 }
 
 bool editor_workspace::divider(pointer_event::kind type, float x, int button) {
-  if (divider_drag_) {
+  if (divider_drag_ != drag::none) {
     if (type == pointer_event::kind::move) {
-      panel_->set_strip_width(css_w_ - x);
-      strip_wanted_ = panel_->wanted_strip_width();
+      if (divider_drag_ == drag::strip) {
+        panel_->set_strip_width(css_w_ - x);
+        strip_wanted_ = panel_->wanted_strip_width();
+      } else {
+        panel_->set_source_width(panel_->strip_x() - x);
+      }
       relayout();
     } else if (type == pointer_event::kind::up) {
-      divider_drag_ = false;
+      divider_drag_ = drag::none;
     }
     return true;
   }
-  const bool over = !panel_drag_ && !panel_->popup_open() && !panel_->modal_open() && divider_hit(x, panel_->strip_x());
-  set_cursor(over ? cursor_shape::resize_horizontal : cursor_shape::arrow);
-  if (!over || type != pointer_event::kind::down || button != 0) {
+  const bool free = !panel_drag_ && !panel_->popup_open() && !panel_->modal_open();
+  const bool over_strip = free && divider_hit(x, panel_->strip_x());
+  const bool over_source = free && !over_strip && panel_->source_shown() && divider_hit(x, panel_->source_x());
+  set_cursor(over_strip || over_source ? cursor_shape::resize_horizontal : cursor_shape::arrow);
+  if (!(over_strip || over_source) || type != pointer_event::kind::down || button != 0) {
     return false;
   }
   const double now = workspace_now();
   if (now - divider_clicked_at_ < kDoubleClick) {
-    panel_->set_strip_width(kDefaultStripWidth); // double-click: back to the default width
-    strip_wanted_ = kDefaultStripWidth;
+    // A double-click puts the divider back where it starts.
+    if (over_strip) {
+      panel_->set_strip_width(kDefaultStripWidth);
+      strip_wanted_ = kDefaultStripWidth;
+    } else {
+      panel_->set_source_width(0.0f);
+    }
     divider_clicked_at_ = -1.0;
     relayout();
   } else {
     divider_clicked_at_ = now;
-    divider_drag_ = true;
+    divider_drag_ = over_strip ? drag::strip : drag::source;
   }
   // The figure and the strip see the pointer leave.
   view_.input({pointer_event::kind::leave, 0.0f, 0.0f, 0});
@@ -256,6 +322,35 @@ void editor_workspace::set_cursor(cursor_shape shape) {
 
 key_outcome editor_workspace::key(window_key key, key_mods mods, bool down, bool repeat) {
   const key_event figure_key{imgui_key(key), down, mods.ctrl, mods.shift, mods.alt, false};
+  // Shortcuts that hold wherever the keyboard is (spec/15_web_app/DESIGN.md
+  // section 5.4): the source pane, saving, and the document's undo while
+  // the pane is in step with the model.
+  if (panel_ != nullptr && mods.ctrl && !mods.alt) {
+    if (key == window_key::u) {
+      if (down && !repeat) {
+        show_source(!panel_->source_shown());
+      }
+      return key_outcome::consumed;
+    }
+    if (key == window_key::s && !panel_->modal_open()) {
+      if (down && !repeat) {
+        flush_pending();
+        host_.request_save();
+      }
+      return key_outcome::consumed;
+    }
+    const bool undo_key = key == window_key::z || key == window_key::y;
+    if (undo_key && panel_->source_focused() && !panel_->source_ahead() && !panel_->modal_open()) {
+      if (down) {
+        if (key == window_key::y || mods.shift) {
+          redo();
+        } else {
+          undo();
+        }
+      }
+      return key_outcome::consumed;
+    }
+  }
   // A popup of the panel (a menu, a colour picker) takes the keys too:
   // Escape closes it, not the window.
   const bool panel_keys = panel_ != nullptr && (panel_->wants_keyboard() || panel_->modal_open() || panel_->popup_open());
@@ -289,8 +384,6 @@ key_outcome editor_workspace::key(window_key key, key_mods mods, bool down, bool
       undo();
     } else if (key == window_key::y || (key == window_key::z && mods.shift)) {
       redo();
-    } else if (key == window_key::s) {
-      host_.request_save();
     }
     return key_outcome::consumed;
   }
@@ -380,7 +473,7 @@ void editor_workspace::draw_figure(int pixel_width, int pixel_height) {
   // The figure's draw data fills the bottom-left of the drawable (OpenGL
   // counts from the bottom), which is the left side under the tab bar. A
   // data tab hides it.
-  if (last_ != nullptr && (panel_ == nullptr || !panel_->figure_box().empty())) {
+  if (last_ != nullptr && (panel_ == nullptr || (!panel_->figure_box().empty() && !panel_->model().repairing()))) {
     view_.with_contexts([&] { ImGui_ImplOpenGL3_RenderDrawData(const_cast<ImDrawData*>(last_)); });
   }
 }
@@ -417,6 +510,8 @@ void editor_workspace::apply(const inspector_events& events) {
         view_.set_source_moved(*events.source, [&](std::string_view p) { return events.paths.apply(p); });
         last_ = nullptr; // the contexts were recreated
       }
+    } catch (const fonts_needed& e) {
+      host_.need_fonts(e.fonts());
     } catch (const std::exception& e) {
       status_ = std::string("cannot show: ") + e.what();
     }

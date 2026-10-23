@@ -145,6 +145,12 @@ find_program(NYMPH_NODE node)
 if(NYMPH_NODE)
   add_test(NAME nymph_web_node
     COMMAND "${NYMPH_NODE}" "${CMAKE_CURRENT_SOURCE_DIR}/tests/node/run.mjs" "${NYMPH_WEB_OUT}" "${PROJECT_SOURCE_DIR}")
+  # The editor module, headless (spec/15_web_app plan step 6), and both
+  # modules' sizes against web/size_budget.json (plan step 1).
+  add_test(NAME nymph_web_editor_node
+    COMMAND "${NYMPH_NODE}" "${CMAKE_CURRENT_SOURCE_DIR}/tests/node/editor.mjs" "${NYMPH_WEB_OUT}" "${PROJECT_SOURCE_DIR}")
+  add_test(NAME nymph_web_size
+    COMMAND "${NYMPH_NODE}" "${CMAKE_CURRENT_SOURCE_DIR}/tests/node/size.mjs" "${NYMPH_WEB_OUT}" "${PROJECT_SOURCE_DIR}")
   # In Chromium through Playwright (WebGL2 through SwiftShader without a
   # GPU); skipped (77) when Playwright is not installed.
   add_test(NAME nymph_web_browser

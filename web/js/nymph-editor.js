@@ -204,7 +204,9 @@ export class NymphEditor {
     } else {
       const text = typeof input === 'string' ? input : new TextDecoder().decode(input);
       status = await this.core.withFonts(() =>
-        this.core.withString(text, (p, n) => this.m._nymph_editor_open(p, n, opts.resetView === false ? 0 : 1)),
+        this.core.withString(text, (p, n) =>
+          this.m._nymph_editor_open(p, n, opts.resetView === false ? 0 : 1, (opts.repair ?? this.options.repair) ? 1 : 0),
+        ),
       );
     }
     this.core.check(status);
@@ -289,6 +291,23 @@ export class NymphEditor {
   showPanel(on) {
     this.core.check(this.m._nymph_editor_show_panel(on ? 1 : 0));
     this.schedule();
+  }
+
+  /**
+   * Shows or hides the YAML source pane beside the figure (Ctrl+U in the
+   * editor); `line` (1-based) puts its cursor there.
+   */
+  showSource(on, line = 0) {
+    if (on) {
+      this.core.ensureFonts(['FiraMono-Regular.ttf']).then(() => this.schedule(), () => {});
+    }
+    this.core.check(this.m._nymph_editor_show_source(on ? 1 : 0, line));
+    this.schedule();
+  }
+
+  /** The source does not bind: only the source pane edits until it does. */
+  repairing() {
+    return !!this.state().repairing;
   }
 
   // ── Tools (spec/14_editor_workspace/DESIGN.md section 6) ──────────────
@@ -389,6 +408,16 @@ export class NymphEditor {
       if (this.canvas) {
         this.canvas.style.cursor = detail;
       }
+      return;
+    }
+    if (kind === 'fonts') {
+      this.core
+        .ensureFonts(detail)
+        .then(() => {
+          this.core.check(this.m._nymph_editor_retry_view());
+          this.schedule();
+        })
+        .catch((e) => this.emit('error', e));
       return;
     }
     if (kind === 'copy') {
@@ -595,6 +624,9 @@ export class NymphEditor {
  * @param {string} [options.fileName] shown in the panel's dialogs
  * @param {string} [options.theme] "source", "light", "dark", "classic"
  * @param {boolean} [options.panel] the editor panel (default true)
+ * @param {boolean} [options.sourcePane] show the YAML source pane (default false)
+ * @param {boolean} [options.repair] open a source that does not bind in repair
+ *        state (the source pane at the error) instead of rejecting
  * @param {boolean} [options.headless] no canvas or GL: frames run, nothing is drawn (tests)
  * @param {string|URL} [options.wasmUrl] default: nymph-editor-core.wasm next to this file
  * @param {string|URL} [options.fontBaseUrl] default: ../fonts/
@@ -607,6 +639,9 @@ export async function createEditor(container, options = {}) {
     editor.init();
     if (options.source !== undefined || options.png !== undefined) {
       await editor.open(options.png ?? options.source);
+    }
+    if (options.sourcePane || editor.repairing()) {
+      editor.showSource(true);
     }
   } catch (e) {
     editor.destroy();

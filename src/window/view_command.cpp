@@ -94,7 +94,18 @@ view_request prepare_view(const view_args& args) {
   // problem is reported before a window opens; the same view says how big
   // the layout is.
   live_view probe;
-  probe.set_source(r.source);
+  try {
+    probe.set_source(r.source);
+  } catch (const error& e) {
+    if (!args.edit) {
+      throw;
+    }
+    // The editor opens it in repair state, at a usable size.
+    r.repair = e.what();
+    r.width = 900;
+    r.height = 640;
+    return r;
+  }
   probe.set_theme(args.theme);
   probe.resize(view_size{0.0f, 0.0f, 1.0f});
   const view_geometry g = probe.geometry();

@@ -43,6 +43,12 @@ class editor_host {
   virtual void changed(const commit_result& r, const std::string& tool) = 0;
   /// @brief Selects in the panel and the figure.
   virtual void select(const edit_target_id& target) = 0;
+  /// @brief Why the editor takes no change now ("" when it does): the user
+  ///        is fixing source text that does not load (spec/15_web_app
+  ///        section 5.4). Writes are refused with this reason.
+  virtual std::string locked_reason() const {
+    return {};
+  }
   /// @brief A PNG of the figure as the user sees it, scaled down to at most
   ///        `max_width` pixels (0: as it is); its size in `width`, `height`.
   virtual std::vector<uint8_t> view_image(int max_width, int& width, int& height) = 0;

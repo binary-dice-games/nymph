@@ -77,6 +77,9 @@ class web_host : public workspace_host {
   void changed(const commit_result& r) override {
     pending_change = json{{"label", r.label}, {"origin", r.origin}};
   }
+  void need_fonts(const std::vector<std::string>& fonts) override {
+    send("fonts", json(fonts).dump());
+  }
   bool has_clipboard() const override {
     return true;
   }
@@ -246,16 +249,18 @@ std::u32string utf32(std::string_view text) {
   return out;
 }
 
-/// Shows `source` as a new document (no undo history), the panel as asked.
-void open_source(editor& e, std::string_view source, bool reset_view) {
-  e.ws->view().set_source(source, reset_view); // throws before anything changes
-  e.ws->show_panel(false);
-  e.ws->set_saved_source(std::string(source));
-  if (e.panel_wanted) {
-    const std::string refused = e.ws->show_panel(true);
-    if (!refused.empty()) {
-      throw std::runtime_error("cannot edit: " + refused);
-    }
+/// Shows `source` as a new document (no undo history), the panel as asked;
+/// with `repair`, a source that does not bind opens in repair state.
+void open_source(editor& e, std::string_view source, bool reset_view, bool repair) {
+  const bool shown = e.ws->panel() != nullptr && e.ws->panel()->source_shown();
+  if (repair && e.panel_wanted) {
+    e.ws->open(std::string(source), reset_view, true);
+  } else {
+    e.ws->view().set_source(source, reset_view); // throws before anything changes
+    e.ws->open(std::string(source), reset_view, e.panel_wanted);
+  }
+  if (shown && e.ws->panel() != nullptr) {
+    e.ws->show_source(true);
   }
   e.last_selection.reset();
 }
@@ -356,11 +361,28 @@ EMSCRIPTEN_KEEPALIVE int nymph_editor_set_file_name(const char* name) {
 }
 
 /// @brief Opens `text` as a new document: 0, 1 (does not bind) or 2 (fonts needed).
-EMSCRIPTEN_KEEPALIVE int nymph_editor_open(const char* text, int size, int reset_view) {
+EMSCRIPTEN_KEEPALIVE int nymph_editor_open(const char* text, int size, int reset_view, int repair) {
   return guarded([&] {
     editor& e = get();
     e.host.make_current();
-    open_source(e, std::string_view(text, static_cast<size_t>(size)), reset_view != 0);
+    open_source(e, std::string_view(text, static_cast<size_t>(size)), reset_view != 0, repair != 0);
+    return kOk;
+  });
+}
+
+/// @brief Shows or hides the source pane; `line` > 0 puts its cursor there.
+EMSCRIPTEN_KEEPALIVE int nymph_editor_show_source(int on, int line) {
+  return guarded([&] {
+    get().ws->show_source(on != 0, line > 0 ? std::optional<int>(line) : std::nullopt);
+    return kOk;
+  });
+}
+
+/// @brief The figure again after the fonts a "fonts" event named were registered.
+EMSCRIPTEN_KEEPALIVE int nymph_editor_retry_view() {
+  return guarded([&] {
+    get().host.make_current();
+    get().ws->retry_view();
     return kOk;
   });
 }
@@ -374,7 +396,7 @@ EMSCRIPTEN_KEEPALIVE int nymph_editor_open_png(const uint8_t* bytes, int size) {
     }
     editor& e = get();
     e.host.make_current();
-    open_source(e, *source, true);
+    open_source(e, *source, true, false);
     return static_cast<int>(kOk);
   });
 }
@@ -548,6 +570,9 @@ EMSCRIPTEN_KEEPALIVE const char* nymph_editor_state() {
            {"panel", e.ws->panel_shown()},
            {"stripWidth", e.ws->strip_width()},
            {"tabHeight", e.ws->tab_height()},
+           {"repairing", e.ws->repairing()},
+           {"sourceShown", e.ws->panel() != nullptr && e.ws->panel()->source_shown()},
+           {"locked", e.ws->panel() != nullptr ? e.ws->panel()->locked_reason() : std::string()},
            {"wantsKeyboard", e.ws->wants_keyboard()}};
     if (const editor_panel* p = e.ws->panel()) {
       const editor_model& m = const_cast<editor_panel*>(p)->model();

@@ -235,6 +235,13 @@ endif()
 # routing between them, drawn with Dear ImGui's OpenGL3 backend (desktop GL
 # loaded at run time natively, WebGL2 in the web editor).
 if(NYMPH_VIEW OR NYMPH_WEB)
+  # The source pane's code editor (ImGuiColorTextEdit, MIT; extern/ is not
+  # edited): TextEditor only, not its diff view, example or extras.
+  nymph_ensure_submodules(extern/ImGuiColorTextEdit)
+  add_library(nymph_text_editor STATIC "${NYMPH_EXTERN_DIR}/ImGuiColorTextEdit/TextEditor.cpp")
+  target_include_directories(nymph_text_editor SYSTEM PUBLIC "${NYMPH_EXTERN_DIR}/ImGuiColorTextEdit")
+  target_link_libraries(nymph_text_editor PUBLIC nymph_imgui)
+  set_target_properties(nymph_text_editor PROPERTIES CXX_STANDARD 20)
   add_library(nymph_workspace STATIC
     workspace/workspace_input.hpp
     workspace/editor_panel.hpp
@@ -243,10 +250,14 @@ if(NYMPH_VIEW OR NYMPH_WEB)
     workspace/editor_workspace.cpp
     workspace/workspace_tools.hpp
     workspace/workspace_tools.cpp
+    workspace/source_pane.hpp
+    workspace/source_pane.cpp
+    workspace/yaml_language.hpp
+    workspace/yaml_language.cpp
     "${NYMPH_EXTERN_DIR}/imgui/backends/imgui_impl_opengl3.cpp"
   )
   target_include_directories(nymph_workspace PUBLIC "${NYMPH_EXTERN_DIR}/imgui/backends")
-  target_link_libraries(nymph_workspace PUBLIC nymph nymph_editor_tools)
+  target_link_libraries(nymph_workspace PUBLIC nymph nymph_editor_tools nymph_text_editor)
   if(NYMPH_WEB)
     target_compile_definitions(nymph_workspace PRIVATE IMGUI_IMPL_OPENGL_ES3)
   endif()

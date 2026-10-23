@@ -72,6 +72,11 @@ class workspace_host {
   virtual std::string status_line(const std::string& status) const {
     return status;
   }
+  /// @brief The figure needs fonts it does not have (the web build fetches
+  ///        them, then calls editor_workspace::retry_view()).
+  virtual void need_fonts(const std::vector<std::string>& fonts) {
+    (void)fonts;
+  }
   /// @brief Makes the GL context current (before a read-back).
   virtual void make_current() {}
   /// @brief Whether the host gives the panel its clipboard (the page's);
@@ -159,9 +164,30 @@ class editor_workspace {
   void set_host_files(bool on);
 
   /// @brief Shows or hides the editor panel (GL context current).
+  /// @param repair With a source that does not bind, open the panel in
+  ///        repair state (source pane only) instead of refusing.
   /// @return "" when done, else why the source cannot be edited (the panel
   ///         stays hidden).
-  std::string show_panel(bool on);
+  std::string show_panel(bool on, bool repair = false);
+
+  /// @brief Opens `source` as the document, with the panel when `edit`:
+  ///        a source that does not bind opens in repair state (the source
+  ///        pane at the error, the figure empty) when `edit`, and throws
+  ///        nymph::error otherwise. Throws fonts_needed as live_view does.
+  void open(const std::string& source, bool reset_view, bool edit);
+  /// @brief The panel is in repair state: its source does not bind yet.
+  bool repairing() const {
+    return panel_ != nullptr && panel_->model().repairing();
+  }
+  /// @brief Shows or hides the source pane (with the panel; Ctrl+U).
+  void show_source(bool on, std::optional<int> line = std::nullopt);
+  /// @brief Shows the model's source in the figure again after the fonts it
+  ///        needed were registered (workspace_host::need_fonts()).
+  void retry_view();
+  /// @brief Text typed in the panel or the source pane waits for its pause.
+  bool pending() const {
+    return panel_ != nullptr && (panel_->panel().pending() || panel_->source_pending());
+  }
   bool panel_shown() const {
     return panel_ != nullptr;
   }
@@ -274,6 +300,7 @@ class editor_workspace {
   std::string file_name_;
   std::string saved_source_;
   std::string status_;
+  std::optional<std::string> repair_source_; ///< The text show_panel() opens in repair state.
   bool host_files_ = false;
   float css_w_ = 0.0f;
   float css_h_ = 0.0f;
@@ -283,7 +310,7 @@ class editor_workspace {
   float strip_wanted_ = kDefaultStripWidth;
   bool panel_drag_ = false; ///< A button went down over the panel and is still held.
   bool figure_drag_ = false; ///< A button went down over the figure and is still held.
-  bool divider_drag_ = false;
+  enum class drag { none, strip, source } divider_drag_ = drag::none; ///< The divider being dragged.
   bool pointer_in_panel_ = false;
   std::optional<std::pair<float, float>> right_down_; ///< Where the right button went down in the figure.
   double divider_clicked_at_ = -1.0;
