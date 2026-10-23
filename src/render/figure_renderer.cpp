@@ -50,7 +50,7 @@ void run_frames(
 image render_frames(const image_options& options, const draw_fn& draw, raster_backend& backend) {
   check_options(options);
   context_scope scope;
-  configure(*find_theme(options.theme), backend.name(), kPngBackendFlags);
+  configure(options, backend.name(), kPngBackendFlags);
   texture_store textures;
   draw_context ctx(options);
   load_fonts(ctx);
@@ -92,7 +92,7 @@ std::unordered_map<const node*, rect> layout_figure(const figure& f) {
   check_options(f.image);
   require_fonts(f);
   context_scope scope;
-  configure(*find_theme(f.image.theme), "nymph_soft_rasterizer", kPngBackendFlags);
+  configure(f.image, "nymph_soft_rasterizer", kPngBackendFlags);
   texture_store textures;
   draw_context ctx(f.image);
   load_fonts(ctx);

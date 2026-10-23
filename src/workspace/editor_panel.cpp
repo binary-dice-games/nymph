@@ -1,15 +1,18 @@
 // MIT License © 2026 Binary Dice Games
 /// @file editor_panel.cpp
 /// @brief The editor panel's ImGui context and its frames.
-#include "window/editor_panel.hpp"
+#include "workspace/editor_panel.hpp"
 #include <imgui_impl_opengl3.h>
 #include <algorithm>
 #include <cfloat>
 #include <cmath>
 #include <cstdio>
 #include <utility>
+#include "core/error.hpp"
 #include "edit/image_fields.hpp"
+#include "fonts/embedded_fonts.hpp"
 #include "render/frame_setup.hpp"
+#include "workspace/panel_style.hpp"
 
 namespace bdg::nymph {
 
@@ -35,44 +38,6 @@ class panel_context_scope {
   ImGuiContext* previous_;
 };
 
-/// The panel's look beyond the figure theme's colours: rounder, roomier
-/// controls and softer borders. Only the panel's own context uses it; the
-/// figure and rendered images keep the theme as is.
-void apply_panel_style(ImGuiStyle& style) {
-  style.WindowRounding = 8.0f;
-  style.ChildRounding = 6.0f;
-  style.FrameRounding = 6.0f;
-  style.PopupRounding = 8.0f;
-  style.GrabRounding = 6.0f;
-  style.ScrollbarRounding = 8.0f;
-  style.TabRounding = 6.0f;
-  style.WindowPadding = ImVec2(10.0f, 8.0f);
-  style.FramePadding = ImVec2(10.0f, 6.0f);
-  style.ItemSpacing = ImVec2(8.0f, 7.0f);
-  style.ItemInnerSpacing = ImVec2(6.0f, 5.0f);
-  style.IndentSpacing = 18.0f;
-  style.ScrollbarSize = 14.0f;
-  style.GrabMinSize = 12.0f;
-  style.WindowBorderSize = 0.0f;
-  style.ChildBorderSize = 1.0f;
-  style.PopupBorderSize = 1.0f;
-  style.FrameBorderSize = 0.0f;
-  style.TabBarBorderSize = 1.0f;
-  style.SeparatorTextBorderSize = 2.0f;
-  style.SeparatorTextPadding = ImVec2(16.0f, 4.0f);
-  style.WindowMenuButtonPosition = ImGuiDir_Right;
-  style.ButtonTextAlign = ImVec2(0.5f, 0.5f);
-}
-
-/// Softens the theme's frame borders and gives hovered/pressed buttons a
-/// clear step, whatever the theme.
-void soften_colors(ImGuiStyle& style) {
-  ImVec4* c = style.Colors;
-  c[ImGuiCol_Border].w = std::min(c[ImGuiCol_Border].w, 0.45f);
-  c[ImGuiCol_Separator].w = std::min(c[ImGuiCol_Separator].w, 0.5f);
-  c[ImGuiCol_PopupBg].w = 1.0f;
-}
-
 } // namespace
 
 ImGuiKey imgui_key(window_key key) {
@@ -97,42 +62,100 @@ ImGuiKey imgui_key(window_key key) {
     case window_key::x: return ImGuiKey_X;
     case window_key::y: return ImGuiKey_Y;
     case window_key::z: return ImGuiKey_Z;
+    case window_key::f: return ImGuiKey_F;
+    case window_key::h: return ImGuiKey_H;
+    case window_key::u: return ImGuiKey_U;
     default: return ImGuiKey_None;
   }
 }
 
-editor_panel::editor_panel(std::string source, std::string file_name, const char* glsl_version)
-    : model_(std::move(source)), file_name_(std::move(file_name)) {
+editor_panel::editor_panel(std::string source, std::string file_name, const char* glsl_version, bool repair)
+    : model_(std::move(source), editor_model::repair_t{}), file_name_(std::move(file_name)) {
+  if (model_.repairing() && !repair) {
+    throw error(model_.repair_line(), model_.repair_column(), model_.repair_error());
+  }
+  pane_.reset(model_.source());
+  synced_source_ = model_.source();
+  if (model_.repairing()) {
+    source_shown_ = true;
+    pending_line_ = std::max(1, model_.repair_line());
+    pane_.refused(model_.repair_line(), model_.repair_column(), model_.repair_error());
+  }
   const panel_context_scope scope(nullptr);
   context_ = ImGui::CreateContext();
   ImGui::SetCurrentContext(context_);
   ImGuiIO& io = ImGui::GetIO();
   io.IniFilename = nullptr;
   io.LogFilename = nullptr;
-  ImGui::GetStyle().FontSizeBase = 15.0f;
-  apply_panel_style(ImGui::GetStyle());
-  set_theme("light");
-  ImGui_ImplOpenGL3_Init(glsl_version);
+  ImGui::GetStyle().FontSizeBase = kUiFontSize;
+  apply_appearance(appearance_);
+  headless_ = glsl_version == nullptr || *glsl_version == '\0';
+  if (!headless_) {
+    ImGui_ImplOpenGL3_Init(glsl_version);
+  } else {
+    io.BackendFlags |= ImGuiBackendFlags_RendererHasTextures; // texture requests stay pending: nothing draws
+  }
 }
 
 editor_panel::~editor_panel() {
   const panel_context_scope scope(context_);
-  ImGui_ImplOpenGL3_Shutdown();
+  if (!headless_) {
+    ImGui_ImplOpenGL3_Shutdown();
+  }
   ImGui::DestroyContext(context_);
+}
+
+void editor_panel::set_clipboard(std::function<void(std::string_view)> set, std::function<std::string()> get) {
+  clipboard_set_ = std::move(set);
+  clipboard_get_ = std::move(get);
+  const panel_context_scope scope(context_);
+  ImGuiPlatformIO& pio = ImGui::GetPlatformIO();
+  pio.Platform_ClipboardUserData = this;
+  pio.Platform_SetClipboardTextFn = [](ImGuiContext*, const char* text) {
+    auto* self = static_cast<editor_panel*>(ImGui::GetPlatformIO().Platform_ClipboardUserData);
+    if (self->clipboard_set_) {
+      self->clipboard_set_(text != nullptr ? text : "");
+    }
+  };
+  pio.Platform_GetClipboardTextFn = [](ImGuiContext*) -> const char* {
+    auto* self = static_cast<editor_panel*>(ImGui::GetPlatformIO().Platform_ClipboardUserData);
+    self->clipboard_text_ = self->clipboard_get_ ? self->clipboard_get_() : std::string();
+    return self->clipboard_text_.c_str();
+  };
 }
 
 void editor_panel::set_theme(const std::string& name) {
   if (name == theme_) {
     return;
   }
-  const theme* t = find_theme(name);
-  if (t == nullptr) {
+  theme_ = name;
+  if (!appearance_pinned_) {
+    panel_appearance a = appearance_;
+    a.dark = name == "dark";
+    apply_appearance(a);
+  }
+}
+
+void editor_panel::check_fonts() {
+  if ((ui_font_ == nullptr && !font_data("FiraSans-Regular.ttf").empty()) ||
+      (mono_ == nullptr && !font_data("FiraMono-Regular.ttf").empty())) {
+    refresh();
+  }
+}
+
+void editor_panel::set_appearance(const panel_appearance& appearance) {
+  if (appearance_pinned_ && appearance == appearance_) {
     return;
   }
-  theme_ = name;
+  appearance_pinned_ = true;
+  apply_appearance(appearance);
+}
+
+void editor_panel::apply_appearance(const panel_appearance& appearance) {
+  appearance_ = appearance;
+  pane_.set_palette(source_palette(appearance));
   const panel_context_scope scope(context_);
-  t->imgui(&ImGui::GetStyle()); // the colours of the figure's theme
-  soften_colors(ImGui::GetStyle());
+  apply_panel_style(ImGui::GetStyle(), appearance);
   refresh();
 }
 
@@ -216,7 +239,90 @@ bool editor_panel::ask_close() {
 }
 
 bool editor_panel::wants_frame() const {
-  return frames_left_ > 0 || inspector_.pending();
+  return frames_left_ > 0 || inspector_.pending() || (source_shown_ && pane_.waiting());
+}
+
+std::string editor_panel::locked_reason() const {
+  if (model_.repairing()) {
+    return "fix the source first: " + model_.repair_error();
+  }
+  if (pane_.ahead()) {
+    return "the source text does not load yet: " + pane_.error();
+  }
+  return {};
+}
+
+void editor_panel::show_source(bool on, std::optional<int> line) {
+  if (model_.repairing()) {
+    on = true; // the only way to fix it
+  }
+  source_shown_ = on;
+  if (on && line) {
+    pending_line_ = line;
+  }
+  refresh();
+}
+
+void editor_panel::draw_source(double now_seconds, inspector_events& events) {
+  if (!source_shown_) {
+    return;
+  }
+  const workspace_layout regions = layout();
+  ImGui::SetNextWindowPos(ImVec2(regions.source.x, regions.source.y), ImGuiCond_Always);
+  ImGui::SetNextWindowSize(ImVec2(regions.source.width, regions.source.height), ImGuiCond_Always);
+  ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.0f, 0.0f));
+  ImGui::Begin(
+      "##nymph_source", nullptr,
+      ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoMove |
+          ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoBringToFrontOnFocus | ImGuiWindowFlags_NoScrollbar |
+          ImGuiWindowFlags_NoScrollWithMouse);
+  ImGui::PopStyleVar();
+  if (pending_line_) {
+    pane_.go_to_line(*pending_line_);
+    pane_.editor().SetFocus();
+    pending_line_.reset();
+  }
+  const std::optional<std::string> typed = pane_.draw(now_seconds, mono_, 14.0f);
+  ImGui::End();
+  if (typed) {
+    model_.set_label("Edit source");
+    const commit_result r = model_.set_source(*typed);
+    model_.set_label("");
+    if (r.ok) {
+      events.source = r.source;
+      pane_.accepted(r.source);
+      synced_source_ = r.source;
+      inspector_.set_error("");
+    } else {
+      pane_.refused(r.line, r.column, r.error);
+    }
+    refresh();
+  }
+  if (const std::optional<int> line = pane_.take_cursor_line(now_seconds)) {
+    const std::string path = model_.element_at_line(*line);
+    const std::optional<edit_target_id>& selected = model_.selection();
+    if (!path.empty() && (!selected || selected->element != path)) {
+      events.select = edit_target_id{path, ""};
+      synced_selection_ = events.select;
+    }
+  }
+}
+
+void editor_panel::sync_source(inspector_events& events) {
+  (void)events;
+  if (model_.source() != synced_source_ && !pane_.ahead() && !pane_.pending()) {
+    pane_.follow(model_.source());
+    synced_source_ = model_.source();
+  }
+  const std::optional<edit_target_id>& selected = model_.selection();
+  const bool same = selected.has_value() == synced_selection_.has_value() &&
+      (!selected || (selected->element == synced_selection_->element));
+  if (!same) {
+    synced_selection_ = selected;
+    if (selected && source_shown_) {
+      pane_.go_to_line(model_.element_line(selected->element));
+    }
+  }
 }
 
 inspector_events editor_panel::frame(double now_seconds, const std::vector<edit_element>& tree, const std::string& status) {
@@ -229,8 +335,34 @@ inspector_events editor_panel::frame(double now_seconds, const std::vector<edit_
   last_time_ = now_seconds;
   ImGui::GetStyle().FontScaleDpi = scale_;
 
-  ImGui_ImplOpenGL3_NewFrame();
+  if (ui_font_ == nullptr) {
+    // The panel's text in the figures' sans font (Fira Sans), once its
+    // bytes are there; ImGui's bitmap font until then.
+    const std::span<const uint8_t> sans = font_data("FiraSans-Regular.ttf");
+    if (!sans.empty()) {
+      ImFontConfig config;
+      config.FontDataOwnedByAtlas = false;
+      ui_font_ = io.Fonts->AddFontFromMemoryTTF(const_cast<uint8_t*>(sans.data()), static_cast<int>(sans.size()), kUiFontSize, &config);
+      io.FontDefault = ui_font_;
+      refresh(); // a few frames more, drawn with it
+    }
+  }
+  if (mono_ == nullptr) {
+    // The pane's monospace font, once its bytes are there (embedded
+    // natively; fetched on demand by the web page).
+    const std::span<const uint8_t> mono = font_data("FiraMono-Regular.ttf");
+    if (!mono.empty()) {
+      ImFontConfig config;
+      config.FontDataOwnedByAtlas = false;
+      mono_ = io.Fonts->AddFontFromMemoryTTF(const_cast<uint8_t*>(mono.data()), static_cast<int>(mono.size()), 14.0f, &config);
+      refresh();
+    }
+  }
+  if (!headless_) {
+    ImGui_ImplOpenGL3_NewFrame();
+  }
   ImGui::NewFrame();
+  const bool locked = !locked_reason().empty();
   const workspace_layout regions = layout();
   constexpr ImGuiWindowFlags kFixed = ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize |
       ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoSavedSettings |
@@ -242,13 +374,17 @@ inspector_events editor_panel::frame(double now_seconds, const std::vector<edit_
     ImGui::SetNextWindowPos(ImVec2(regions.left.x, regions.left.y), ImGuiCond_Always);
     ImGui::SetNextWindowSize(ImVec2(regions.left.width, regions.left.height), ImGuiCond_Always);
     ImGui::Begin("##nymph_table", nullptr, kFixed);
+    ImGui::BeginDisabled(locked);
     grid_.draw(model_, *tab_, table_events);
+    ImGui::EndDisabled();
     ImGui::End();
   }
   // The floating toolbar over the figure, first: the fields below show
   // what it changed.
   const layout_box toolbar_before = toolbar_.rect();
-  const inspector_events tool_events = toolbar_.draw(model_, inspector_.menu(), figure_box(), anchor_);
+  ImGui::BeginDisabled(locked);
+  const inspector_events tool_events = toolbar_.draw(model_, inspector_.menu(), figure_box(), locked ? std::nullopt : anchor_);
+  ImGui::EndDisabled();
   const layout_box toolbar_after = toolbar_.rect();
   if (toolbar_after.x != toolbar_before.x || toolbar_after.y != toolbar_before.y ||
       toolbar_after.width != toolbar_before.width || toolbar_after.height != toolbar_before.height) {
@@ -257,7 +393,24 @@ inspector_events editor_panel::frame(double now_seconds, const std::vector<edit_
   ImGui::SetNextWindowPos(ImVec2(regions.strip.x, 0.0f), ImGuiCond_Always);
   ImGui::SetNextWindowSize(ImVec2(regions.strip.width, height_), ImGuiCond_Always);
   ImGui::Begin("##nymph_editor", nullptr, kFixed);
-  inspector_events events = inspector_.draw(model_, tree, status);
+  inspector_events events;
+  if (model_.repairing()) {
+    ImGui::TextWrapped("This source does not load. Fix it in the source pane; the editor opens once it does.");
+    ImGui::Spacing();
+    ImGui::PushStyleColor(ImGuiCol_Text, IM_COL32(200, 40, 40, 255));
+    ImGui::TextWrapped("%s", pane_.error().empty() ? model_.repair_error().c_str() : pane_.error().c_str());
+    ImGui::PopStyleColor();
+  } else {
+    if (locked) {
+      ImGui::PushStyleColor(ImGuiCol_Text, IM_COL32(200, 40, 40, 255));
+      ImGui::TextWrapped("%s", locked_reason().c_str());
+      ImGui::PopStyleColor();
+      ImGui::Separator();
+    }
+    ImGui::BeginDisabled(locked);
+    events = inspector_.draw(model_, tree, status);
+    ImGui::EndDisabled();
+  }
   if (tool_events.source && !events.source) {
     events.source = tool_events.source;
     events.paths = tool_events.paths;
@@ -275,6 +428,8 @@ inspector_events editor_panel::frame(double now_seconds, const std::vector<edit_
   grid_.dialogs(model_, table_events);
   draw_table_dialogs(table_events);
   ImGui::End();
+  draw_source(now_seconds, events);
+  sync_source(events);
   // A table change: shown like any other (the inspector's own come first).
   if (table_events.source && !events.source) {
     events.source = table_events.source;
@@ -297,7 +452,7 @@ inspector_events editor_panel::frame(double now_seconds, const std::vector<edit_
       select_tab_ = true;
     }
   }
-  wants_keyboard_ = io.WantTextInput;
+  wants_keyboard_ = io.WantTextInput || source_focused();
   modal_open_ = ImGui::IsPopupOpen(kSaveDialog) || ImGui::IsPopupOpen(kCloseDialog);
   popup_open_ = ImGui::IsPopupOpen(nullptr, ImGuiPopupFlags_AnyPopupId | ImGuiPopupFlags_AnyPopupLevel);
   ImGui::Render();
@@ -370,6 +525,17 @@ void editor_panel::draw_tabs(inspector_events& events) {
         }
         ImGui::EndPopup();
       }
+    }
+    if (source_shown_) {
+      ImGui::PushStyleColor(ImGuiCol_Tab, ImGui::GetStyleColorVec4(ImGuiCol_TabSelected));
+    }
+    const bool toggle_source = ImGui::TabItemButton("Source", ImGuiTabItemFlags_Trailing | ImGuiTabItemFlags_NoTooltip);
+    if (source_shown_) {
+      ImGui::PopStyleColor();
+    }
+    ImGui::SetItemTooltip(source_shown_ ? "Hide the YAML source (Ctrl+U)" : "Show the YAML source beside the chart (Ctrl+U)");
+    if (toggle_source) {
+      show_source(!source_shown_);
     }
     if (ImGui::TabItemButton("+", ImGuiTabItemFlags_Trailing | ImGuiTabItemFlags_NoTooltip)) {
       const std::vector<data_table> tables = model_.tables();
@@ -511,6 +677,9 @@ void editor_panel::draw_dialogs() {
 
 void editor_panel::render() {
   const panel_context_scope scope(context_);
+  if (headless_) {
+    return;
+  }
   if (ImDrawData* data = ImGui::GetDrawData()) {
     ImGui_ImplOpenGL3_RenderDrawData(data);
   }

@@ -18,8 +18,10 @@
 #include "edit/field_value.hpp"
 #include "edit/image_fields.hpp"
 #include "edit/number_box.hpp"
+#include "edit/panel_widgets.hpp"
 #include "fonts/embedded_fonts.hpp"
 #include "schema/element_class.hpp"
+#include "themes/theme_catalog.hpp"
 
 namespace bdg::nymph {
 
@@ -592,6 +594,76 @@ void inspector::draw_tree(editor_model& model, const std::vector<edit_element>& 
   }
 }
 
+namespace {
+
+/// "#RRGGBB[AA]" as ImGui's colour, opaque grey for anything else.
+ImU32 swatch_color(const std::string& text) {
+  float rgba[4];
+  return parse_color(text, rgba) ? ImGui::ColorConvertFloat4ToU32(ImVec4(rgba[0], rgba[1], rgba[2], rgba[3]))
+                                 : IM_COL32(128, 128, 128, 255);
+}
+
+/// A theme's swatch in `[lo, hi)`: its background, a line in its text
+/// colour and a dot per series colour.
+void draw_swatch(ImDrawList* dl, ImVec2 lo, ImVec2 hi, const chart_theme& t) {
+  const float rounding = 6.0f;
+  dl->AddRectFilled(lo, hi, swatch_color(t.background), rounding);
+  dl->AddRect(lo, hi, ImGui::GetColorU32(ImGuiCol_Border), rounding);
+  const float h = hi.y - lo.y;
+  const float pad = h * 0.18f;
+  dl->AddRectFilled(
+      ImVec2(lo.x + pad, lo.y + pad), ImVec2(lo.x + (hi.x - lo.x) * 0.55f, lo.y + pad + h * 0.12f),
+      swatch_color(t.text_color), 2.0f);
+  const size_t dots = std::min<size_t>(t.palette.size(), 5);
+  const float r = h * 0.13f;
+  for (size_t i = 0; i < dots; ++i) {
+    const ImVec2 c(lo.x + pad + r + static_cast<float>(i) * r * 2.6f, hi.y - pad - r);
+    dl->AddCircleFilled(c, r, swatch_color(t.palette[i]));
+  }
+}
+
+} // namespace
+
+void inspector::draw_themes(editor_model& model, inspector_events& events) {
+  constexpr const char* kThemePopup = "##themes";
+  if (!ImGui::BeginPopup(kThemePopup)) {
+    return;
+  }
+  ImGui::TextDisabled("Theme: the colours, fonts and series palette of what the chart leaves out.");
+  const std::string current = model.image().theme;
+  const ImGuiStyle& style = ImGui::GetStyle();
+  const float row_h = ImGui::GetTextLineHeight() * 2.0f + style.FramePadding.y * 2.0f;
+  const float swatch_w = row_h * 1.6f;
+  for (const chart_theme& t : chart_themes()) {
+    ImGui::PushID(t.id.c_str());
+    const ImVec2 at = ImGui::GetCursorScreenPos();
+    const bool chosen = ImGui::Selectable("##theme", t.id == current, 0, ImVec2(360.0f, row_h));
+    ImDrawList* dl = ImGui::GetWindowDrawList();
+    const ImVec2 lo(at.x + style.FramePadding.x * 0.5f, at.y + style.FramePadding.y * 0.5f);
+    draw_swatch(dl, lo, ImVec2(lo.x + swatch_w, at.y + row_h - style.FramePadding.y * 0.5f), t);
+    const float text_x = lo.x + swatch_w + style.ItemSpacing.x * 1.5f;
+    dl->AddText(ImVec2(text_x, at.y + style.FramePadding.y), ImGui::GetColorU32(ImGuiCol_Text), t.name.c_str());
+    dl->PushClipRect(at, ImVec2(at.x + 360.0f, at.y + row_h), true);
+    dl->AddText(
+        ImVec2(text_x, at.y + style.FramePadding.y + ImGui::GetTextLineHeight()),
+        ImGui::GetColorU32(ImGuiCol_TextDisabled),
+        t.description.c_str());
+    dl->PopClipRect();
+    if (ImGui::IsItemHovered() && !t.description.empty()) {
+      ImGui::SetItemTooltip("%s", t.description.c_str());
+    }
+    if (chosen && t.id != current) {
+      model.set_label("Theme: " + t.name);
+      // The default theme is the absence of one.
+      const std::optional<std::string> value = t.id == "light" ? std::nullopt : std::optional<std::string>(t.id);
+      note(model.set_fields(kImagePath, {{"theme", value}}), events);
+      model.set_label("");
+    }
+    ImGui::PopID();
+  }
+  ImGui::EndPopup();
+}
+
 void inspector::draw_info(editor_model& model, inspector_events& events) {
   constexpr const char* kInfoDialog = "Description and source";
   if (info_open_) {
@@ -690,6 +762,7 @@ inspector_events inspector::draw(editor_model& model, const std::vector<edit_ele
 
   // Toolbar.
   ImGui::BeginDisabled(!model.can_undo());
+  const std::string undo_tip = model.undo_label();
   if (ImGui::Button("Undo")) {
     if (const std::optional<std::string> s = model.undo()) {
       events.source = *s;
@@ -697,9 +770,13 @@ inspector_events inspector::draw(editor_model& model, const std::vector<edit_ele
       error_.clear();
     }
   }
+  if (!undo_tip.empty()) {
+    ImGui::SetItemTooltip("Undo: %s", undo_tip.c_str());
+  }
   ImGui::EndDisabled();
   ImGui::SameLine();
   ImGui::BeginDisabled(!model.can_redo());
+  const std::string redo_tip = model.redo_label();
   if (ImGui::Button("Redo")) {
     if (const std::optional<std::string> s = model.redo()) {
       events.source = *s;
@@ -707,16 +784,34 @@ inspector_events inspector::draw(editor_model& model, const std::vector<edit_ele
       error_.clear();
     }
   }
+  if (!redo_tip.empty()) {
+    ImGui::SetItemTooltip("Redo: %s", redo_tip.c_str());
+  }
   ImGui::EndDisabled();
   ImGui::SameLine();
   events.reset_view = ImGui::Button("Reset view");
+  if (ImGui::Button("Theme")) {
+    ImGui::OpenPopup("##themes");
+  }
+  ImGui::SetItemTooltip("Choose the chart's theme: colours, fonts and series palette.");
+  draw_themes(model, events);
   ImGui::SameLine();
   if (ImGui::Button("Info")) {
     info_open_ = !info_open_;
   }
   ImGui::SetItemTooltip("Edit the description (alt text) and the source note of the figure.");
   ImGui::BeginDisabled(!model.modified());
-  events.save = ImGui::Button("Save");
+  // Save at the row's right end when it fits, else on its own line.
+  {
+    const float save_w = ImGui::CalcTextSize("Save").x + ImGui::GetStyle().FramePadding.x * 2.0f;
+    const float row_end = ImGui::GetItemRectMax().x + ImGui::GetStyle().ItemSpacing.x;
+    const float right = ImGui::GetCursorScreenPos().x + ImGui::GetContentRegionAvail().x; // the next line's start + width
+    if (row_end + save_w <= right) {
+      ImGui::SameLine(0.0f, 0.0f);
+      ImGui::SetCursorScreenPos(ImVec2(right - save_w, ImGui::GetCursorScreenPos().y));
+    }
+  }
+  events.save = primary_button("Save");
   ImGui::EndDisabled();
   if (!status.empty()) {
     ImGui::TextDisabled("%s", status.c_str());
@@ -740,7 +835,7 @@ inspector_events inspector::draw(editor_model& model, const std::vector<edit_ele
   ImGui::BeginChild("##body", ImVec2(0, reserved > 0.0f ? -(reserved + style.ItemSpacing.y) : 0.0f));
 
   // The elements.
-  if (ImGui::CollapsingHeader("Elements", ImGuiTreeNodeFlags_DefaultOpen)) {
+  if (section_header("Elements", ImGuiTreeNodeFlags_DefaultOpen)) {
     ImGui::BeginChild("##elements", ImVec2(0, elements_height_), ImGuiChildFlags_Borders);
     draw_tree(model, tree, events);
     ImGui::EndChild();
@@ -781,7 +876,7 @@ inspector_events inspector::draw(editor_model& model, const std::vector<edit_ele
       draw_field(model, *first, true, events);
       ImGui::Separator();
     }
-    if (ImGui::CollapsingHeader("All fields", first != nullptr ? 0 : ImGuiTreeNodeFlags_DefaultOpen)) {
+    if (section_header("All fields", first != nullptr ? 0 : ImGuiTreeNodeFlags_DefaultOpen)) {
       for (const editable_field& f : fields) {
         if (&f != first) {
           draw_field(model, f, false, events);

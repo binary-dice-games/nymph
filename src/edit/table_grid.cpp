@@ -104,6 +104,10 @@ std::vector<std::string> table_grid::folder_entries(const std::filesystem::path&
 }
 
 void table_grid::ask_import(const std::string& name) {
+  if (host_files_) {
+    requests_.push_back({true, name});
+    return;
+  }
   dialog_ = dialog::import_csv;
   open_dialog_ = true;
   dialog_table_ = name;
@@ -113,6 +117,10 @@ void table_grid::ask_import(const std::string& name) {
 }
 
 void table_grid::ask_export(const std::string& name) {
+  if (host_files_) {
+    requests_.push_back({false, name});
+    return;
+  }
   dialog_ = dialog::export_csv;
   open_dialog_ = true;
   dialog_table_ = name;

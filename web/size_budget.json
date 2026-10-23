@@ -1,0 +1,5 @@
+{
+  "_comment": "Most gzip -9 bytes of each module (spec/15_web_app/DESIGN.md section 6), as Node's zlib at level 9 counts them: the viewer as before the web app plus 2 %, the editor as measured in plan step 1 plus 10 %.",
+  "nymph-viewer-core.wasm": 844917,
+  "editor/nymph-editor-core.wasm": 1279233
+}

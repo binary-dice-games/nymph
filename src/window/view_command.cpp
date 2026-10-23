@@ -9,6 +9,8 @@
 #include <sstream>
 #include "cli/cli_support.hpp"
 #include "core/error.hpp"
+#include "render/image_options.hpp"
+#include "themes/theme_catalog.hpp"
 #include "window/viewer_window.hpp"
 
 namespace bdg::nymph {
@@ -16,7 +18,7 @@ namespace bdg::nymph {
 namespace {
 
 constexpr const char* kViewUsage =
-    "usage: nymph view <in> [--theme light|dark|classic] [--fit source|width|fill] [--edit [--no-mcp]]\n"
+    "usage: nymph view <in> [--theme <theme>] [--fit source|width|fill] [--edit [--no-mcp]]\n"
     "  opens <in> (a YAML file or a nymph PNG) in a window: drag to pan, wheel to zoom,\n"
     "  hover for values, double-click to fit. Keys: R resets the view, S saves the image on\n"
     "  screen as <in>.view.png, Y saves its YAML as <in>.view.yaml, Esc or Q closes.\n"
@@ -42,11 +44,11 @@ view_args parse_view_args(std::span<const std::string_view> args) {
     const std::string_view a = args[i];
     if (a == "--theme") {
       if (i + 1 >= args.size()) {
-        throw view_usage_error{"--theme needs light, dark or classic"};
+        throw view_usage_error{"--theme needs a theme (" + chart_theme_list() + ")"};
       }
       const std::string_view value = args[++i];
-      if (value != "light" && value != "dark" && value != "classic") {
-        throw view_usage_error{"unknown theme '" + std::string(value) + "' (themes: light, dark, classic)"};
+      if (!is_known_theme(value)) {
+        throw view_usage_error{"unknown theme '" + std::string(value) + "' (themes: " + chart_theme_list() + ")"};
       }
       o.theme = std::string(value);
     } else if (a == "--edit") {
@@ -94,7 +96,18 @@ view_request prepare_view(const view_args& args) {
   // problem is reported before a window opens; the same view says how big
   // the layout is.
   live_view probe;
-  probe.set_source(r.source);
+  try {
+    probe.set_source(r.source);
+  } catch (const error& e) {
+    if (!args.edit) {
+      throw;
+    }
+    // The editor opens it in repair state, at a usable size.
+    r.repair = e.what();
+    r.width = 900;
+    r.height = 640;
+    return r;
+  }
   probe.set_theme(args.theme);
   probe.resize(view_size{0.0f, 0.0f, 1.0f});
   const view_geometry g = probe.geometry();
@@ -154,13 +167,6 @@ int run_view_cli(std::span<const std::string_view> args, std::ostream& err) {
     err << "nymph: " << label << ": " << e.what() << "\n";
   }
   return 1;
-}
-
-key_route route_key(bool panel_has_keyboard, bool figure_has_keyboard) {
-  if (panel_has_keyboard) {
-    return key_route::panel;
-  }
-  return figure_has_keyboard ? key_route::figure : key_route::viewer;
 }
 
 } // namespace bdg::nymph

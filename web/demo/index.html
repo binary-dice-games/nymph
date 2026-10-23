@@ -18,6 +18,7 @@
     .pair > div { min-width: 0; }
     .pair img { max-width: 100%; display: block; }
     .label { font-size: 12px; opacity: 0.7; margin-bottom: 4px; }
+    h2 a.open { font: 13px system-ui, sans-serif; margin-left: 10px; }
     #pick { position: sticky; top: 0; background: var(--bg); padding: 6px 0; font-family: ui-monospace, monospace; font-size: 13px; min-height: 1.4em; }
   </style>
 </head>
@@ -28,15 +29,16 @@
   <main id="examples"></main>
   <script type="module">
     import { createViewer } from '../nymph-viewer.js';
-    const list = await (await fetch('examples/index.json')).json();
+    // The examples sit at the site's root, shared with the app (spec/15_web_app).
+    const list = await (await fetch('../examples/index.json')).json();
     const main = document.getElementById('examples');
     const pick = document.getElementById('pick');
     for (const name of list) {
       const section = document.createElement('section');
-      section.innerHTML = `<h2>${name}</h2><div class="pair"><div><div class="label">live</div><div class="live"></div></div>` +
-        `<div><div class="label">PNG</div><img alt="${name}" src="examples/${name}.png"></div></div>`;
+      section.innerHTML = `<h2>${name} <a class="open" href="../?example=${name}">Open in the app</a></h2><div class="pair"><div><div class="label">live</div><div class="live"></div></div>` +
+        `<div><div class="label">PNG</div><img alt="${name}" src="../examples/${name}.png"></div></div>`;
       main.appendChild(section);
-      const source = await (await fetch(`examples/${name}.yaml`)).text();
+      const source = await (await fetch(`../examples/${name}.yaml`)).text();
       createViewer(section.querySelector('.live'), { source }).then((viewer) => {
         viewer.on?.('hover', (p) => {
           pick.textContent = p ? `${name}: ${p.label} ${Object.entries(p.values).map(([k, v]) => `${k}=${v}`).join(' ')}` : '';

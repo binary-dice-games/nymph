@@ -29,6 +29,7 @@
 #include "render/draw_context.hpp"
 #include "render/figure_renderer.hpp"
 #include "render/frame_setup.hpp"
+#include "themes/theme_catalog.hpp"
 
 namespace bdg::nymph {
 
@@ -186,6 +187,7 @@ struct live_view::impl {
   view_options options;
   view_size size;
   std::string theme_override;
+  unsigned outline_rgb = 0x288cff; ///< set_outline_color()
 
   std::unique_ptr<figure> fig;
   std::string source;
@@ -215,7 +217,7 @@ struct live_view::impl {
   image_options frame_options; ///< What draw_context sees; updated in place.
   std::unique_ptr<draw_context> ctx;
   texture_store textures;
-  std::string applied_theme; ///< Theme the contexts are configured with.
+  std::string applied_theme; ///< style_key() the contexts are configured with.
   ImU32 clear = IM_COL32(255, 255, 255, 255);
 
   std::function<void()> on_create; ///< set_context_hooks()
@@ -254,10 +256,33 @@ struct live_view::impl {
 
   const std::string& effective_theme() const {
     static const std::string kLight = "light";
-    if (!theme_override.empty()) {
-      return theme_override;
+    if (fig) {
+      return fig->image.theme; // bound with the override, if any
     }
-    return fig ? fig->image.theme : kLight;
+    return theme_override.empty() ? kLight : theme_override;
+  }
+
+  /// The options the styles come from: the figure's (its theme applied),
+  /// or the override's base colours before there is a figure.
+  image_options style_options() const {
+    if (fig) {
+      return fig->image;
+    }
+    image_options o;
+    if (const chart_theme* t = find_chart_theme(effective_theme())) {
+      o.base = t->base;
+    }
+    return o;
+  }
+
+  /// What configure_style() depends on, to notice a change.
+  std::string style_key() const {
+    const image_options o = style_options();
+    std::string key = o.base + "|" + o.background;
+    for (const std::string& c : o.palette) {
+      key += "|" + c;
+    }
+    return key;
   }
 
   ImGuiBackendFlags backend_flags() const {
@@ -274,9 +299,9 @@ struct live_view::impl {
     ctx->set_interactive(true);
     ctx->set_tooltips(options.tooltips);
     const context_switch on(*contexts);
-    applied_theme = effective_theme();
+    applied_theme = style_key();
     configure_backend("nymph_live_view", backend_flags(), options.cpu_textures);
-    configure_style(*find_theme(applied_theme));
+    configure_style(style_options());
     load_fonts(*ctx);
     update_clear_color();
     install_clipboard();
@@ -309,11 +334,11 @@ struct live_view::impl {
   /// Re-applies the theme's styles if it changed; call with the contexts
   /// current.
   void apply_theme() {
-    if (applied_theme == effective_theme()) {
+    if (applied_theme == style_key()) {
       return;
     }
-    applied_theme = effective_theme();
-    configure_style(*find_theme(applied_theme));
+    applied_theme = style_key();
+    configure_style(style_options());
     update_clear_color();
   }
 
@@ -374,7 +399,6 @@ struct live_view::impl {
     frame_options.width = static_cast<int>(g.layout_width);
     frame_options.height = static_cast<int>(g.layout_height);
     frame_options.scale = 1; // the framebuffer scale goes to ImGui directly
-    frame_options.theme = effective_theme();
   }
 
   /// What a recorded view would save, rounded to what matters on screen.
@@ -657,8 +681,11 @@ struct live_view::impl {
     const auto to_logical = [&](const edit_target& t) {
       return std::pair<ImVec2, ImVec2>{ImVec2(t.x / s, t.y / s), ImVec2((t.x + t.width) / s, (t.y + t.height) / s)};
     };
-    const ImU32 hover_color = IM_COL32(40, 140, 255, 200);
-    const ImU32 select_color = IM_COL32(40, 140, 255, 255);
+    const auto outline = [&](int alpha) {
+      return IM_COL32((outline_rgb >> 16) & 0xff, (outline_rgb >> 8) & 0xff, outline_rgb & 0xff, alpha);
+    };
+    const ImU32 hover_color = outline(200);
+    const ImU32 select_color = outline(255);
     if (io.MousePos.x > -FLT_MAX / 2) {
       const std::vector<edit_target> under = targets_at_css(io.MousePos.x * s, io.MousePos.y * s);
       if (!under.empty()) {
@@ -809,7 +836,7 @@ void live_view::set_source_moved(std::string_view source, const path_rename& ren
 
 void live_view::set_source(std::string_view source, bool reset_view) {
   impl& m = *impl_;
-  figure f = bind_source(source, builtin_registry());
+  figure f = bind_source(source, builtin_registry(), bind_options{m.theme_override});
   if (std::vector<std::string> missing = fonts_missing(f); !missing.empty()) {
     throw fonts_needed(std::move(missing));
   }
@@ -893,10 +920,24 @@ bool live_view::set_png(std::span<const uint8_t> png, bool reset_view) {
 
 void live_view::set_theme(std::string theme) {
   impl& m = *impl_;
-  if (!theme.empty() && find_theme(theme) == nullptr) {
-    throw std::invalid_argument("unknown theme '" + theme + "' (themes: light, dark, classic)");
+  if (!theme.empty() && !is_known_theme(theme)) {
+    throw std::invalid_argument("unknown theme '" + theme + "' (themes: " + chart_theme_list() + ")");
   }
+  if (theme == m.theme_override) {
+    return;
+  }
+  const std::string previous = m.theme_override;
   m.theme_override = std::move(theme);
+  if (m.fig) {
+    // The theme fills the fields the source leaves out: bind again.
+    try {
+      set_source(std::string(m.source), false);
+    } catch (...) {
+      m.theme_override = previous;
+      throw;
+    }
+    return;
+  }
   {
     const context_switch on(*m.contexts);
     m.apply_theme();
@@ -907,6 +948,10 @@ void live_view::set_theme(std::string theme) {
 
 std::string live_view::theme() const {
   return impl_->effective_theme();
+}
+
+std::string live_view::theme_base() const {
+  return impl_->style_options().base;
 }
 
 void live_view::resize(view_size size) {
@@ -1041,6 +1086,15 @@ std::vector<edit_target> live_view::targets_at(float x, float y) const {
 
 std::optional<edit_target> live_view::target_for(std::string_view element, std::string_view field) const {
   return impl_->edit_mode ? impl_->find_target(element, field) : std::nullopt;
+}
+
+void live_view::set_outline_color(unsigned rgb) {
+  impl& m = *impl_;
+  if (m.outline_rgb == rgb) {
+    return;
+  }
+  m.outline_rgb = rgb;
+  m.pending_frames = std::max(m.pending_frames, 1);
 }
 
 void live_view::set_selection(std::optional<edit_target_id> selection) {

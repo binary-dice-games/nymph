@@ -1,0 +1,21 @@
+{
+  "name": "nymph",
+  "short_name": "nymph",
+  "description": "Open, view and edit nymph charts: plots, UML diagrams, flowcharts, Gantt and Sankey charts, UI mockups.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#f6f7f9",
+  "theme_color": "#0f9f86",
+  "icons": [
+    { "src": "icon.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" }
+  ],
+  "file_handlers": [
+    {
+      "action": "./",
+      "accept": { "application/yaml": [".yaml", ".yml"], "text/yaml": [".yaml", ".yml"] }
+    }
+  ],
+  "launch_handler": { "client_mode": "focus-existing" }
+}

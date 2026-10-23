@@ -84,7 +84,7 @@ target_include_directories(nymph_stb INTERFACE ${NYMPH_EXTERN_DIR}/stb)
 
 # ── nymph_json (nlohmann/json) ────────────────────────────────────────────────
 
-if(NYMPH_MCP)
+if(NYMPH_MCP OR NYMPH_VIEW OR NYMPH_WEB)
   nymph_ensure_submodules(extern/json)
   # The headers only: the project's own CMakeLists.txt adds install rules.
   add_library(nymph_json INTERFACE)

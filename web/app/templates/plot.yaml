@@ -1,0 +1,25 @@
+nymph: 1
+description: A line chart of two series over twelve months.
+image: {width: 800, height: 450}
+root:
+  type: Plot
+  title: Monthly sales
+  x_label: month
+  y_label: units
+  children:
+    - {type: PlotLine, label: online, xs: $month, ys: $online, marker: Circle}
+    - {type: PlotLine, label: in store, xs: $month, ys: $store}
+data: |
+  month, online, store
+  1, 120, 200
+  2, 135, 190
+  3, 160, 185
+  4, 158, 170
+  5, 190, 165
+  6, 230, 160
+  7, 260, 150
+  8, 250, 155
+  9, 280, 150
+  10, 300, 160
+  11, 340, 175
+  12, 390, 210

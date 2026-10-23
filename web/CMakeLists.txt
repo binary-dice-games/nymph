@@ -73,18 +73,44 @@ add_custom_command(
 add_custom_target(nymph-viewer-js ALL DEPENDS "${NYMPH_WEB_OUT}/nymph-viewer.js")
 add_dependencies(nymph-viewer nymph-viewer-js)
 
+# ── The editor module (spec/15_web_app/DESIGN.md sections 4 and 5) ──────────
+
+# A second module, loaded only to edit, so the viewer stays small: the whole
+# library plus the editor workspace, drawn into its own WebGL2 canvas.
+# Output in <build>/web/editor/: nymph-editor.js (the API, which imports
+# ../nymph-viewer.js for its font loader), nymph-editor-core.js and .wasm.
+set(NYMPH_EDITOR_OUT "${NYMPH_WEB_OUT}/editor")
+add_executable(nymph-editor editor/nymph_editor_web.cpp)
+target_link_libraries(nymph-editor PRIVATE nymph_workspace)
+set_target_properties(nymph-editor PROPERTIES
+  OUTPUT_NAME nymph-editor-core
+  SUFFIX ".js"
+  RUNTIME_OUTPUT_DIRECTORY "${NYMPH_EDITOR_OUT}"
+)
+set(NYMPH_EDITOR_LINK_OPTIONS ${NYMPH_WEB_LINK_OPTIONS})
+list(TRANSFORM NYMPH_EDITOR_LINK_OPTIONS REPLACE "createNymphCore" "createNymphEditorCore")
+target_link_options(nymph-editor PRIVATE ${NYMPH_EDITOR_LINK_OPTIONS})
+add_custom_command(
+  OUTPUT "${NYMPH_EDITOR_OUT}/nymph-editor.js"
+  COMMAND "${CMAKE_COMMAND}" -E copy "${CMAKE_CURRENT_SOURCE_DIR}/js/nymph-editor.js" "${NYMPH_EDITOR_OUT}/nymph-editor.js"
+  DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/js/nymph-editor.js"
+  COMMENT "Copying nymph-editor.js"
+  VERBATIM)
+add_custom_target(nymph-editor-js ALL DEPENDS "${NYMPH_EDITOR_OUT}/nymph-editor.js")
+add_dependencies(nymph-editor nymph-editor-js)
+
 # The demo page, with every example (source and PNG) and their list.
 file(GLOB nymph_example_sources CONFIGURE_DEPENDS "${PROJECT_SOURCE_DIR}/examples/*.yaml")
 list(SORT nymph_example_sources)
 set(nymph_example_list "")
 foreach(source IN LISTS nymph_example_sources)
   get_filename_component(name "${source}" NAME_WE)
-  configure_file("${source}" "${NYMPH_WEB_OUT}/demo/examples/${name}.yaml" COPYONLY)
-  configure_file("${PROJECT_SOURCE_DIR}/examples/${name}.png" "${NYMPH_WEB_OUT}/demo/examples/${name}.png" COPYONLY)
+  configure_file("${source}" "${NYMPH_WEB_OUT}/examples/${name}.yaml" COPYONLY)
+  configure_file("${PROJECT_SOURCE_DIR}/examples/${name}.png" "${NYMPH_WEB_OUT}/examples/${name}.png" COPYONLY)
   list(APPEND nymph_example_list "\"${name}\"")
 endforeach()
 list(JOIN nymph_example_list ", " nymph_example_json)
-file(WRITE "${NYMPH_WEB_OUT}/demo/examples/index.json" "[${nymph_example_json}]\n")
+file(WRITE "${NYMPH_WEB_OUT}/examples/index.json" "[${nymph_example_json}]\n")
 configure_file("${CMAKE_CURRENT_SOURCE_DIR}/demo/index.html" "${NYMPH_WEB_OUT}/demo/index.html" COPYONLY)
 
 # The fonts the module fetches (cmake/NymphFonts.cmake copied them to
@@ -113,17 +139,65 @@ add_custom_command(
   VERBATIM)
 add_custom_target(nymph-claude-app ALL DEPENDS "${NYMPH_CLAUDE_APP}")
 
+# ── The site (spec/15_web_app/DESIGN.md sections 3.1 and 6) ─────────────────
+
+# <build>/web/site/ is exactly what GitHub Pages serves (pages.yml); preview
+# it with `python3 -m http.server -d <build>/web/site`. The Google values
+# are public (restricted to the site's origin): without them the app shows
+# no Drive control.
+set(NYMPH_GOOGLE_CLIENT_ID "" CACHE STRING "OAuth client id for the web app's Google Drive provider")
+set(NYMPH_GOOGLE_API_KEY "" CACHE STRING "Browser API key for the web app's Google Drive provider (Picker)")
+set(NYMPH_GOOGLE_APP_ID "" CACHE STRING "Google Cloud project number for the web app's Drive Picker")
+set(NYMPH_SITE_COMMIT "" CACHE STRING "Commit the site is built from (default: git HEAD at configure time)")
+set(_nymph_commit "${NYMPH_SITE_COMMIT}")
+if(NOT _nymph_commit)
+  execute_process(COMMAND git rev-parse HEAD WORKING_DIRECTORY "${PROJECT_SOURCE_DIR}"
+    OUTPUT_VARIABLE _nymph_commit OUTPUT_STRIP_TRAILING_WHITESPACE ERROR_QUIET)
+  if(NOT _nymph_commit)
+    set(_nymph_commit "dev")
+  endif()
+endif()
+set(NYMPH_SITE_OUT "${NYMPH_WEB_OUT}/site")
+file(GLOB_RECURSE _nymph_app_files CONFIGURE_DEPENDS "${PROJECT_SOURCE_DIR}/web/app/*")
+add_custom_target(nymph-site ALL
+  COMMAND "${CMAKE_COMMAND}"
+          "-DWEB=${NYMPH_WEB_OUT}" "-DSOURCE=${PROJECT_SOURCE_DIR}" "-DOUT=${NYMPH_SITE_OUT}"
+          "-DVERSION=${PROJECT_VERSION}" "-DCOMMIT=${_nymph_commit}"
+          "-DGOOGLE_CLIENT_ID=${NYMPH_GOOGLE_CLIENT_ID}" "-DGOOGLE_API_KEY=${NYMPH_GOOGLE_API_KEY}"
+          "-DGOOGLE_APP_ID=${NYMPH_GOOGLE_APP_ID}"
+          -P "${PROJECT_SOURCE_DIR}/cmake/NymphSite.cmake"
+  DEPENDS ${_nymph_app_files} "${PROJECT_SOURCE_DIR}/cmake/NymphSite.cmake"
+  COMMENT "Assembling the site in ${NYMPH_SITE_OUT}"
+  VERBATIM)
+add_dependencies(nymph-site nymph-viewer nymph-viewer-single nymph-viewer-js nymph-editor nymph-editor-js)
+
 # ── Tests (Node) ─────────────────────────────────────────────────────────────
 
 find_program(NYMPH_NODE node)
 if(NYMPH_NODE)
   add_test(NAME nymph_web_node
     COMMAND "${NYMPH_NODE}" "${CMAKE_CURRENT_SOURCE_DIR}/tests/node/run.mjs" "${NYMPH_WEB_OUT}" "${PROJECT_SOURCE_DIR}")
+  # The editor module, headless (spec/15_web_app plan step 6), and both
+  # modules' sizes against web/size_budget.json (plan step 1).
+  add_test(NAME nymph_web_editor_node
+    COMMAND "${NYMPH_NODE}" "${CMAKE_CURRENT_SOURCE_DIR}/tests/node/editor.mjs" "${NYMPH_WEB_OUT}" "${PROJECT_SOURCE_DIR}")
+  add_test(NAME nymph_web_app_node
+    COMMAND "${NYMPH_NODE}" "${CMAKE_CURRENT_SOURCE_DIR}/tests/node/app.mjs" "${NYMPH_WEB_OUT}" "${PROJECT_SOURCE_DIR}")
+  add_test(NAME nymph_web_size
+    COMMAND "${NYMPH_NODE}" "${CMAKE_CURRENT_SOURCE_DIR}/tests/node/size.mjs" "${NYMPH_WEB_OUT}" "${PROJECT_SOURCE_DIR}")
   # In Chromium through Playwright (WebGL2 through SwiftShader without a
   # GPU); skipped (77) when Playwright is not installed.
   add_test(NAME nymph_web_browser
     COMMAND "${NYMPH_NODE}" "${CMAKE_CURRENT_SOURCE_DIR}/tests/browser/run.mjs" "${NYMPH_WEB_OUT}" "${PROJECT_SOURCE_DIR}")
   set_tests_properties(nymph_web_browser PROPERTIES SKIP_RETURN_CODE 77 TIMEOUT 600)
+  # The editor module in Chromium (spec/15_web_app plan step 6).
+  add_test(NAME nymph_web_editor_browser
+    COMMAND "${NYMPH_NODE}" "${CMAKE_CURRENT_SOURCE_DIR}/tests/browser/editor.mjs" "${NYMPH_WEB_OUT}" "${PROJECT_SOURCE_DIR}")
+  set_tests_properties(nymph_web_editor_browser PROPERTIES SKIP_RETURN_CODE 77 TIMEOUT 600)
+  # The web app on the built site (spec/15_web_app plan steps 7 to 13).
+  add_test(NAME nymph_web_app_browser
+    COMMAND "${NYMPH_NODE}" "${CMAKE_CURRENT_SOURCE_DIR}/tests/browser/app.mjs" "${NYMPH_WEB_OUT}" "${PROJECT_SOURCE_DIR}")
+  set_tests_properties(nymph_web_app_browser PROPERTIES SKIP_RETURN_CODE 77 TIMEOUT 900)
 else()
   message(STATUS "nymph: node not found; skipping the web viewer's Node and browser tests")
 endif()

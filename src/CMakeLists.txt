@@ -77,6 +77,7 @@ add_library(nymph STATIC
   edit/edit_toolbar.hpp
   edit/edit_toolbar.cpp
   edit/workspace_layout.hpp
+  edit/panel_widgets.hpp
   elements/plot_style.hpp
   elements/plot_style.cpp
   elements/plot2d.hpp
@@ -110,6 +111,8 @@ add_library(nymph STATIC
   placeholders/svg_shapes.cpp
   shapes/shape_catalog.hpp
   shapes/shape_catalog.cpp
+  themes/theme_catalog.hpp
+  themes/theme_catalog.cpp
   elements/ui/widgets.cpp
   elements/ui/register_ui.cpp
   elements/uml/uml.hpp
@@ -153,6 +156,8 @@ include("${PROJECT_SOURCE_DIR}/cmake/NymphPlaceholders.cmake")
 nymph_embed_placeholders(nymph)
 include("${PROJECT_SOURCE_DIR}/cmake/NymphShapes.cmake")
 nymph_embed_shapes(nymph)
+include("${PROJECT_SOURCE_DIR}/cmake/NymphThemes.cmake")
+nymph_embed_themes(nymph)
 target_include_directories(nymph PUBLIC
   ${CMAKE_CURRENT_SOURCE_DIR}
   ${CMAKE_CURRENT_BINARY_DIR}/generated
@@ -211,6 +216,60 @@ add_custom_command(
   VERBATIM)
 target_sources(nymph_cli PRIVATE "${_cli_out}/cli_examples.cpp")
 
+# ── nymph_editor_tools — the editor's tools without the MCP server ─────────
+
+# spec/15_web_app/DESIGN.md section 6: the editor tools
+# (spec/14_editor_workspace/DESIGN.md section 6) over an editor_host, for the
+# native editor's MCP server and the web editor's tool() alike; no CLI, no
+# sockets.
+if(NYMPH_MCP OR NYMPH_VIEW OR NYMPH_WEB)
+  add_library(nymph_editor_tools STATIC
+    mcp/tool.hpp
+    mcp/tool.cpp
+    mcp/base64.hpp
+    mcp/base64.cpp
+    mcp/editor_tools.hpp
+    mcp/editor_tools.cpp
+  )
+  target_link_libraries(nymph_editor_tools PUBLIC nymph nymph_json)
+endif()
+
+# ── nymph_workspace — the editor as both hosts drive it ────────────────────
+
+# spec/15_web_app/DESIGN.md section 5.1: the figure, the editor panel and the
+# routing between them, drawn with Dear ImGui's OpenGL3 backend (desktop GL
+# loaded at run time natively, WebGL2 in the web editor).
+if(NYMPH_VIEW OR NYMPH_WEB)
+  # The source pane's code editor (ImGuiColorTextEdit, MIT; extern/ is not
+  # edited): TextEditor only, not its diff view, example or extras.
+  nymph_ensure_submodules(extern/ImGuiColorTextEdit)
+  add_library(nymph_text_editor STATIC "${NYMPH_EXTERN_DIR}/ImGuiColorTextEdit/TextEditor.cpp")
+  target_include_directories(nymph_text_editor SYSTEM PUBLIC "${NYMPH_EXTERN_DIR}/ImGuiColorTextEdit")
+  target_link_libraries(nymph_text_editor PUBLIC nymph_imgui)
+  set_target_properties(nymph_text_editor PROPERTIES CXX_STANDARD 20)
+  add_library(nymph_workspace STATIC
+    workspace/workspace_input.hpp
+    workspace/editor_panel.hpp
+    workspace/editor_panel.cpp
+    workspace/panel_style.hpp
+    workspace/panel_style.cpp
+    workspace/editor_workspace.hpp
+    workspace/editor_workspace.cpp
+    workspace/workspace_tools.hpp
+    workspace/workspace_tools.cpp
+    workspace/source_pane.hpp
+    workspace/source_pane.cpp
+    workspace/yaml_language.hpp
+    workspace/yaml_language.cpp
+    "${NYMPH_EXTERN_DIR}/imgui/backends/imgui_impl_opengl3.cpp"
+  )
+  target_include_directories(nymph_workspace PUBLIC "${NYMPH_EXTERN_DIR}/imgui/backends")
+  target_link_libraries(nymph_workspace PUBLIC nymph nymph_editor_tools nymph_text_editor)
+  if(NYMPH_WEB)
+    target_compile_definitions(nymph_workspace PRIVATE IMGUI_IMPL_OPENGL_ES3)
+  endif()
+endif()
+
 # ── nymph_mcp — the MCP server over the library and the CLI helpers ─────────
 
 # spec/06_claude_integration/DESIGN.md section 4.1. Above nymph_cli, whose
@@ -224,8 +283,6 @@ if(NYMPH_MCP)
     mcp/mcp_server.hpp
     mcp/mcp_server.cpp
     mcp/server_options.hpp
-    mcp/base64.hpp
-    mcp/base64.cpp
     mcp/tools.hpp
     mcp/tools.cpp
     mcp/resources.hpp
@@ -236,14 +293,12 @@ if(NYMPH_MCP)
     ipc/local_socket.cpp
     ipc/editor_registry.hpp
     ipc/editor_registry.cpp
-    mcp/editor_tools.hpp
-    mcp/editor_tools.cpp
     mcp/editor_server.hpp
     mcp/editor_server.cpp
     mcp/editor_bridge.hpp
     mcp/editor_bridge.cpp
   )
-  target_link_libraries(nymph_mcp PUBLIC nymph_cli nymph_json)
+  target_link_libraries(nymph_mcp PUBLIC nymph_cli nymph_json nymph_editor_tools)
   if(WIN32)
     target_link_libraries(nymph_mcp PRIVATE ws2_32) # sockets: a system library
   endif()
@@ -300,12 +355,9 @@ if(NYMPH_VIEW)
     window/view_command.cpp
     window/viewer_window.hpp
     window/viewer_window.cpp
-  window/editor_panel.hpp
-  window/editor_panel.cpp
     window/window_host.hpp
     window/window_icon.hpp
     window/window_icon.cpp
-    "${NYMPH_EXTERN_DIR}/imgui/backends/imgui_impl_opengl3.cpp"
   )
   # The window's icon: resources/icon.png, compiled in (window_icon.cpp).
   set(_nymph_icon_png "${PROJECT_SOURCE_DIR}/resources/icon.png")
@@ -326,8 +378,7 @@ if(NYMPH_VIEW)
     target_sources(nymph_window PRIVATE window/window_x11.cpp)
     target_link_libraries(nymph_window PRIVATE ${CMAKE_DL_LIBS})
   endif()
-  target_include_directories(nymph_window PRIVATE "${NYMPH_EXTERN_DIR}/imgui/backends")
-  target_link_libraries(nymph_window PUBLIC nymph_cli)
+  target_link_libraries(nymph_window PUBLIC nymph_cli nymph_workspace)
   # The editor as an MCP server for agents (spec/14_editor_workspace).
   if(NYMPH_MCP)
     target_link_libraries(nymph_window PUBLIC nymph_mcp)

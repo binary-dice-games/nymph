@@ -54,6 +54,18 @@ std::string fonts_text();
 /// @throws cli_failure for an unknown shape name.
 std::string shapes_listing(const std::string& name);
 
+/// @brief The `nymph themes [<name>]` text (also the MCP tool
+///        `list_themes`): every chart theme, one per line ("ocean  Ocean
+///        (dark): ..."), or the YAML file of the one named.
+/// @throws cli_failure for an unknown theme name.
+std::string themes_listing(const std::string& name);
+
+/// @brief `source` with `image.theme` set to `theme` (`--theme`), every
+///        other byte as written.
+/// @throws cli_failure for an unknown theme; nymph::error for a source
+///         that does not parse.
+std::string source_with_theme(std::string_view source, const std::string& theme);
+
 /// @brief `nymph schema <type>`: the reference of one element type.
 /// @throws cli_failure (file "schema") for an unknown type, with the
 ///         closest name and the list of types.

@@ -77,14 +77,20 @@ const server = createServer(async (req, res) => {
     }
     return;
   }
+  // The build's own files first (examples/index.json is generated), then
+  // the examples and resources of the sources.
   const fromSource = path.startsWith('/examples/') || path.startsWith('/resources/');
-  const file = fromSource ? join(sourceDir, normalize(path)) : join(webDir, normalize(path));
-  try {
-    const body = await readFile(file);
-    res.writeHead(200, { 'content-type': TYPES[extname(file)] ?? 'application/octet-stream' }).end(body);
-  } catch {
-    res.writeHead(404).end('not found');
+  const files = fromSource ? [join(webDir, normalize(path)), join(sourceDir, normalize(path))] : [join(webDir, normalize(path))];
+  for (const file of files) {
+    try {
+      const body = await readFile(file);
+      res.writeHead(200, { 'content-type': TYPES[extname(file)] ?? 'application/octet-stream' }).end(body);
+      return;
+    } catch {
+      // the next place
+    }
   }
+  res.writeHead(404).end('not found');
 });
 await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
 const base = `http://127.0.0.1:${server.address().port}`;

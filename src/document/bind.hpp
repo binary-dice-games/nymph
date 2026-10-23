@@ -29,6 +29,18 @@ struct figure {
   view_map views;
 };
 
+struct chart_theme;
+
+/// @brief What bind_source() may change about a source.
+struct bind_options {
+  /// A chart theme to use instead of the source's `image.theme`
+  /// (themes/theme_catalog.hpp); empty for the source's own.
+  std::string theme;
+  /// A theme that is not built in (tests, tools), used instead of both;
+  /// must outlive the call.
+  const chart_theme* custom_theme = nullptr;
+};
+
 /// @brief Parses and checks a source (spec/01_core_features/DESIGN.md section 3).
 ///
 /// Reads the top-level keys (`nymph`, `description`, `image`, `root`,
@@ -36,14 +48,18 @@ struct figure {
 /// parses `data` (one table or named tables), walks the element tree
 /// checking every type, placement (slot), field, value, name, range and
 /// colour, and replaces every `$column` / `$table:column` reference with
-/// literal data. Pure: no file access, no ImGui.
+/// literal data. Every field and image option the source leaves out takes
+/// the chart theme's value, when it has one and no enclosing element
+/// writes that field (docs/themes.md). Pure: no file access, no ImGui.
 ///
 /// @param source The whole source text.
 /// @param reg    The element types the source may use.
+/// @param options A theme override.
 /// @return The figure.
 /// @throws nymph::error, positioned in the source (line 0 for a size
-///         limit), for the first problem found.
-figure bind_source(std::string_view source, const registry& reg);
+///         limit), for the first problem found; std::invalid_argument for
+///         an unknown theme in `options`.
+figure bind_source(std::string_view source, const registry& reg, const bind_options& options = {});
 
 /// @brief A source whose top-level `data` value was replaced.
 struct data_replacement {

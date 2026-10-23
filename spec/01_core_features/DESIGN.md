@@ -116,11 +116,47 @@ wish nymph's keys and defaults, plus the text style:
 |---|---|---|---|
 | `width` / `height` | int | `800` / `500` | Image size in pixels, 16–4096. |
 | `scale` | int | `1` | Supersampling factor 1–4: the PNG is `width*scale` x `height*scale`, same layout, sharper. |
-| `theme` | string | `light` | `light`, `dark` or `classic` (ImGui + ImPlot built-in styles). wish's fourth theme, `wish`, is not ported (section 10). |
+| `theme` | string | `light` | A chart theme (below, "Themes"): `light`, `dark`, `classic` (ImGui + ImPlot built-in styles alone) or one built on them (`ocean`, `paper`, ...). wish's fourth theme, `wish`, is not ported (section 10). |
 | `padding` | int | `8` | Pixels between the image edge and `root`. |
 | `font` | string | `default` | Font of all text: an embedded font file name (`FiraSans-Regular.ttf`) or `default`, ImGui's built-in font. |
 | `font_size` | number | `16` | Text size in logical pixels, 1–96. |
 | `text_color` | colour | theme | Colour of all text. |
+| `background` | colour | theme | The image's background (ImGui `WindowBg`); plot areas and legends take a faint step from it. |
+| `palette` | list of colours | theme | Series colours taken in turn: the plots' default colormap (an ImPlot / ImPlot3D colormap added per palette). |
+
+### Themes
+
+A chart theme (`src/themes/`, files in `resources/themes/`, compiled in by
+`cmake/NymphThemes.cmake`; user docs in `docs/themes.md`) is a named set of
+values for whatever the source leaves out: a `base` (the ImGui / ImPlot /
+ImUml colours: light, dark or classic), image options (`padding`, `font`,
+`font_size`, `text_color`, `background`, `palette`) and field rules keyed
+`[qualifier:]field`. `bind_source()` applies it: image options the source
+does not write, then, while binding each element, every field it does not
+write gets the most specific rule covering it: its type (`FlowNode:`, any
+case), else the longest prefix of one of its slots (`uml.flow.item:`,
+`uml:`), else the bare field name. Two rules keep the source in charge:
+
+1. A field that an enclosing element writes (or `image`, for `font`,
+   `font_size` and `text_color`) is left to inherit, untouched by the theme;
+   the binder counts the fields written by the elements above.
+2. A bare `font`, `font_size` or `text_color` rule is the image's own, so it
+   inherits like a source's `image.text_color` instead of being set on every
+   element (which would break inheritance from a typed rule above).
+
+The bound `image_options` carry `theme` (the id) and `base`; renderers
+configure the styles from `base`, then `configure_style(image_options)`
+applies background and palette. `bind_options{theme}` overrides the
+source's theme (viewer and editor previews, `--theme` on `nymph view`);
+`live_view::set_theme()` binds the source again with it.
+
+Rejected: themes as render-time style only (ImGui / ImPlot colours) --
+diagram node fills, series weights and fonts are fields, and a theme that
+cannot reach fields cannot restyle a diagram; resolving themes at draw time
+-- every element class would need to know about them, while bind already
+knows which fields the source wrote. Field values from a theme are not
+marked as written, so the editor shows them as the element's values and a
+clear goes back to the theme's.
 
 ### Text style
 
@@ -709,8 +745,9 @@ as a second line behind `bind()`. Per call:
   (pinning grid and tick colours first) and pops them afterwards, so
   inheritance is ImGui's own push stack and measuring sees the same font
   as drawing.
-- Style: the `image.theme` ImGui, ImPlot and ImPlot3D styles
-  (`StyleColorsLight` / `Dark` / `Classic`), with
+- Style: the ImGui, ImPlot and ImPlot3D styles of the theme's `base`
+  (`StyleColorsLight` / `Dark` / `Classic`), then its `background` and
+  `palette` (section 3, "Themes"), with
   `AntiAliasedLinesUseTex = true` (see section 7) and window rounding,
   border and padding 0. The image is cleared to the theme's `WindowBg`,
   made opaque.
@@ -1090,8 +1127,10 @@ portable between the two projects.
   `draw.command`) with plot coordinates mapped through
   `ImPlot::PlotToPixels` and drawn on `ImPlot::GetPlotDrawList()`; the
   transform lives in `draw_context`, so the command classes do not change.
-- **More themes**: `image.theme` maps to functions applied in
-  `render_figure()`; the rasterizer is unaffected.
+- **More themes**: a file dropped into `resources/themes/` is embedded on
+  the next build; the theme test checks its rules against the registry.
+  A new base palette (beyond light, dark, classic) is a `theme` style
+  entry in `frame_setup.cpp`.
 - **More fonts**: a file dropped into `resources/fonts/` (with its licence text) is
   embedded on the next build and accepted by every `font` field; nothing
   else changes. Another set can be built in with `-DNYMPH_FONTS_DIR`.

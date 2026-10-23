@@ -539,6 +539,9 @@ class win32_window : public native_window {
       case 'X': return window_key::x;
       case 'Y': return window_key::y;
       case 'Z': return window_key::z;
+      case 'F': return window_key::f;
+      case 'H': return window_key::h;
+      case 'U': return window_key::u;
       default: return window_key::other;
     }
   }

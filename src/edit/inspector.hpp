@@ -124,6 +124,9 @@ class inspector {
 
   /// The Description window: the figure's `description` and `source` keys.
   void draw_info(editor_model& model, inspector_events& events);
+  /// The Theme popup: every chart theme with a swatch; a click sets
+  /// `image.theme` (docs/themes.md).
+  void draw_themes(editor_model& model, inspector_events& events);
 
   bool info_open_ = false;
   std::string info_key_; ///< The key being typed into, "" when none.

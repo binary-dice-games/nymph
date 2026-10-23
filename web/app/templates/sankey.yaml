@@ -1,0 +1,13 @@
+nymph: 1
+description: A Sankey diagram of a budget from income to spending.
+image: {width: 760, height: 420}
+root:
+  type: SankeyDiagram
+  title: Monthly budget
+  children:
+    - {type: SankeyFlow, from: Salary, to: Budget, value: 3000}
+    - {type: SankeyFlow, from: Freelance, to: Budget, value: 800}
+    - {type: SankeyFlow, from: Budget, to: Rent, value: 1300}
+    - {type: SankeyFlow, from: Budget, to: Food, value: 600}
+    - {type: SankeyFlow, from: Budget, to: Transport, value: 300}
+    - {type: SankeyFlow, from: Budget, to: Savings, value: 1600}
