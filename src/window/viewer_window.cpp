@@ -632,7 +632,9 @@ class viewer : public window_events {
         set_title(std::string("cannot edit: ") + e.what());
         return;
       }
-      panel_->model().set_original(saved_source_);
+      // A mermaid input has no YAML file yet: Save (the conversion) is
+      // offered at once.
+      panel_->model().set_original(from_mermaid_ ? std::string() : saved_source_);
       panel_->set_strip_width(strip_wanted_);
       if (from_mermaid_) {
         set_mermaid_save_target();

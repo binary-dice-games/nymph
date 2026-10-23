@@ -1,0 +1,21 @@
+---
+title: Animals
+---
+classDiagram
+    Animal <|-- Duck
+    Animal <|-- Fish
+    Pond "1" o-- "*" Duck : has
+    class Animal {
+      <<abstract>>
+      +String name
+      +int age
+      +makeSound()*
+    }
+    class Duck {
+      +String beakColor
+      +swim()
+    }
+    class Fish {
+      -int sizeInFeet
+      -canEat()
+    }

@@ -73,7 +73,32 @@ struct diagram {
       check_limit(states.size(), kMaxUmlNodes, "states", at, ctx);
       return static_cast<int>(states.size() - 1);
     }
-    return static_cast<int>(it->second);
+    // As in mermaid, a composite block claims a state first named outside
+    // any composite (`Stopped --> Playing` before `state Active { Playing }`).
+    const int i = static_cast<int>(it->second);
+    if (states[it->second].parent == -1 && current() >= 0 && !is_ancestor_or_self(i, current())) {
+      states[it->second].parent = current();
+    }
+    return i;
+  }
+
+  /// Whether state `a` is `b` or contains it.
+  bool is_ancestor_or_self(int a, int b) const {
+    for (int x = b; x >= 0; x = states[static_cast<size_t>(x)].parent) {
+      if (x == a) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  /// How many composites contain state `i`.
+  int depth(int i) const {
+    int d = 0;
+    for (int x = states[static_cast<size_t>(i)].parent; x >= 0; x = states[static_cast<size_t>(x)].parent) {
+      ++d;
+    }
+    return d;
   }
 
   /// A free id for a pseudo-state: `base`, or `base_2`, ...
@@ -343,8 +368,16 @@ document convert_state(const source_text& src, context& ctx) {
       return rank(a) != rank(b) ? rank(a) < rank(b) : d.states[a].seq < d.states[b].seq;
     });
   };
+  // Deepest states first, so a composite's children are built before it.
+  std::vector<size_t> by_depth(d.states.size());
+  for (size_t i = 0; i < by_depth.size(); ++i) {
+    by_depth[i] = i;
+  }
+  std::stable_sort(by_depth.begin(), by_depth.end(), [&](size_t a, size_t b) {
+    return d.depth(static_cast<int>(a)) > d.depth(static_cast<int>(b));
+  });
   std::vector<element> built(d.states.size());
-  for (size_t i = d.states.size(); i-- > 0;) {
+  for (const size_t i : by_depth) {
     const state_info& s = d.states[i];
     element e("State", s.at);
     e.text("id", s.id);

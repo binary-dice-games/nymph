@@ -1,0 +1,26 @@
+---
+title: Shop database
+---
+erDiagram
+    CUSTOMER ||--o{ ORDER : places
+    ORDER ||--|{ LINE : contains
+    PRODUCT ||--o{ LINE : "ordered in"
+    CUSTOMER {
+        int id PK
+        string email UK
+        string name
+    }
+    ORDER {
+        int id PK
+        int customer_id FK
+        date placed
+    }
+    LINE {
+        int order_id PK, FK
+        int product_id PK, FK
+        int quantity
+    }
+    PRODUCT {
+        int id PK
+        string name
+    }

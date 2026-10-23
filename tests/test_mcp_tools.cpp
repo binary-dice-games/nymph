@@ -482,5 +482,59 @@ TEST(mcp_base64, rejects_malformed_text) {
   EXPECT_FALSE(base64_decode("TQ===").has_value());
 }
 
+
+// ── Mermaid (spec/16_mermaid_import/PLAN.md step 4) ─────────────────────────
+
+const char* const kMermaid =
+    "flowchart LR\n"
+    "  A[Start] --> B{Ok?}\n"
+    "  B -->|yes| C\n"
+    "  click A callback\n";
+
+TEST_F(mcp_tools, render_takes_mermaid_and_returns_the_converted_yaml) {
+  start(software());
+  const json result = call("render_chart", {{"source", kMermaid}});
+  const std::string text = text_of(result);
+  EXPECT_EQ(result["content"][0]["type"], "image");
+  EXPECT_NE(text.find("Converted from mermaid (flowchart); convert_chart gives the nymph YAML."), std::string::npos)
+      << text;
+  EXPECT_NE(text.find("source:4:3: warning: click is ignored"), std::string::npos) << text;
+  // The App draws structuredContent.source: the YAML, never the mermaid.
+  const std::string source = result["structuredContent"]["source"];
+  EXPECT_EQ(source, import_mermaid(kMermaid).source);
+  EXPECT_EQ(text_of(call("convert_chart", {{"source", kMermaid}})).rfind(source, 0), 0u);
+}
+
+TEST_F(mcp_tools, mermaid_errors_point_at_the_mermaid) {
+  write("bad.mmd", "flowchart LR\n  A --> B@{ shape: blob }\n");
+  EXPECT_EQ(error_text(call("check_chart", {{"input_path", path("bad.mmd")}})), cli_error({"check", path("bad.mmd")}));
+  EXPECT_EQ(
+      error_text(call("render_chart", {{"source", "flowchart LR\n  A --> B@{ shape: blob }\n"}})).rfind("source:2:10: ", 0),
+      0u);
+}
+
+TEST_F(mcp_tools, check_reports_the_mermaid_kind) {
+  const std::string text = text_of(call("check_chart", {{"source", "sequenceDiagram\n  A->>B: hi\n"}}));
+  EXPECT_EQ(text, "valid\nConverted from mermaid (sequenceDiagram).");
+}
+
+TEST_F(mcp_tools, convert_writes_only_yaml_and_reads_every_input) {
+  write("flow.mmd", kMermaid);
+  const json written = call("convert_chart", {{"input_path", path("flow.mmd")}, {"output_path", path("flow.yaml")}});
+  EXPECT_EQ(read_file(dir_ / "flow.yaml"), cli_output({"convert", path("flow.mmd")}));
+  EXPECT_NE(text_of(written).find("written to "), std::string::npos);
+  for (const char* bad : {"flow.png", "flow.mmd"}) {
+    EXPECT_EQ(
+        error_text(call("convert_chart", {{"source", kMermaid}, {"output_path", path(bad)}})).rfind("output_path must end in", 0),
+        0u)
+        << bad;
+  }
+  // A YAML source is checked and returned; a nymph PNG gives its source.
+  EXPECT_EQ(text_of(call("convert_chart", {{"source", kSource}})), kSource);
+  write("chart.png", as_string(render_png(kSource)));
+  EXPECT_EQ(text_of(call("convert_chart", {{"input_path", path("chart.png")}})), kSource);
+  EXPECT_FALSE(error_text(call("convert_chart", {{"source", kBadSource}})).empty());
+}
+
 } // namespace
 } // namespace bdg::nymph::mcp
