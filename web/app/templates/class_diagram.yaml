@@ -1,0 +1,12 @@
+nymph: 1
+description: A UML class diagram of an order with its lines and customer.
+image: {width: 720, height: 460}
+root:
+  type: ClassDiagram
+  title: Orders
+  children:
+    - {type: Class, id: Customer, attributes: ["-name: string", "-email: string"], methods: ["+orders() Order[]"]}
+    - {type: Class, id: Order, attributes: ["-id: int", "-placed: date"], methods: ["+total() money"]}
+    - {type: Class, id: OrderLine, attributes: ["-quantity: int", "-price: money"]}
+    - {type: ClassRelation, from: Customer, to: Order, kind: Association, label: places, from_label: "1", to_label: "*"}
+    - {type: ClassRelation, from: Order, to: OrderLine, kind: Composition, to_label: "1..*"}

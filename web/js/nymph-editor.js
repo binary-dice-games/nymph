@@ -155,6 +155,11 @@ export class NymphEditor {
   init() {
     let target = '';
     if (!this.headless) {
+      // Its own box, so the page's container keeps its own positioning.
+      this.root = document.createElement('div');
+      this.root.className = 'nymph-editor';
+      this.root.style.cssText = 'position:relative;width:100%;height:100%;overflow:hidden;';
+      this.container.appendChild(this.root);
       const canvas = document.createElement('canvas');
       canvas.className = 'nymph-editor-canvas';
       canvas.style.cssText = 'display:block;width:100%;height:100%;outline:none;touch-action:none;';
@@ -164,7 +169,7 @@ export class NymphEditor {
         'aria-label',
         this.options.label ?? 'Visual chart editor (not readable by screen readers: download the YAML to edit it elsewhere)',
       );
-      this.container.appendChild(canvas);
+      this.root.appendChild(canvas);
       this.canvas = canvas;
       target = '!nymph-editor';
       this.m.specialHTMLTargets[target] = canvas;
@@ -545,8 +550,7 @@ export class NymphEditor {
     keys.autocomplete = 'off';
     keys.spellcheck = false;
     keys.style.cssText = 'position:absolute;left:0;top:0;width:1px;height:1px;opacity:0;border:0;padding:0;resize:none;pointer-events:none;';
-    this.container.style.position ||= 'relative';
-    this.container.appendChild(keys);
+    this.root.appendChild(keys);
     this.keys = keys;
     const mods = (e) => (e.ctrlKey || e.metaKey ? 1 : 0) | (e.shiftKey ? 2 : 0) | (e.altKey ? 4 : 0);
     const plain = (e) => e.key.length === 1 && !e.ctrlKey && !e.metaKey && !e.altKey;
@@ -621,8 +625,7 @@ export class NymphEditor {
     this.observer?.disconnect();
     this.removers?.forEach((r) => r());
     this.m._nymph_editor_destroy();
-    this.canvas?.remove();
-    this.keys?.remove();
+    this.root?.remove();
     this.m.nymphEditorEvent = null;
   }
 }

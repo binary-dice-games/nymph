@@ -1,0 +1,18 @@
+nymph: 1
+description: A project schedule in two phases with dependencies and a milestone.
+image: {width: 760, height: 360}
+root:
+  type: GanttChart
+  title: Project plan
+  children:
+    - type: GanttSection
+      name: Plan
+      children:
+        - {type: GanttTask, id: brief, name: Brief, start: 2026-01-05, duration: 3}
+        - {type: GanttTask, id: design, name: Design, after: [brief], duration: 5}
+    - type: GanttSection
+      name: Build
+      children:
+        - {type: GanttTask, id: build, name: Build, after: [design], duration: 10}
+        - {type: GanttTask, id: test, name: Test, after: [build], duration: 4}
+        - {type: GanttTask, name: Launch, after: [test], milestone: true}

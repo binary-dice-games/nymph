@@ -105,12 +105,12 @@ list(SORT nymph_example_sources)
 set(nymph_example_list "")
 foreach(source IN LISTS nymph_example_sources)
   get_filename_component(name "${source}" NAME_WE)
-  configure_file("${source}" "${NYMPH_WEB_OUT}/demo/examples/${name}.yaml" COPYONLY)
-  configure_file("${PROJECT_SOURCE_DIR}/examples/${name}.png" "${NYMPH_WEB_OUT}/demo/examples/${name}.png" COPYONLY)
+  configure_file("${source}" "${NYMPH_WEB_OUT}/examples/${name}.yaml" COPYONLY)
+  configure_file("${PROJECT_SOURCE_DIR}/examples/${name}.png" "${NYMPH_WEB_OUT}/examples/${name}.png" COPYONLY)
   list(APPEND nymph_example_list "\"${name}\"")
 endforeach()
 list(JOIN nymph_example_list ", " nymph_example_json)
-file(WRITE "${NYMPH_WEB_OUT}/demo/examples/index.json" "[${nymph_example_json}]\n")
+file(WRITE "${NYMPH_WEB_OUT}/examples/index.json" "[${nymph_example_json}]\n")
 configure_file("${CMAKE_CURRENT_SOURCE_DIR}/demo/index.html" "${NYMPH_WEB_OUT}/demo/index.html" COPYONLY)
 
 # The fonts the module fetches (cmake/NymphFonts.cmake copied them to
@@ -138,6 +138,38 @@ add_custom_command(
   COMMENT "Writing the nymph MCP App"
   VERBATIM)
 add_custom_target(nymph-claude-app ALL DEPENDS "${NYMPH_CLAUDE_APP}")
+
+# ── The site (spec/15_web_app/DESIGN.md sections 3.1 and 6) ─────────────────
+
+# <build>/web/site/ is exactly what GitHub Pages serves (pages.yml); preview
+# it with `python3 -m http.server -d <build>/web/site`. The Google values
+# are public (restricted to the site's origin): without them the app shows
+# no Drive control.
+set(NYMPH_GOOGLE_CLIENT_ID "" CACHE STRING "OAuth client id for the web app's Google Drive provider")
+set(NYMPH_GOOGLE_API_KEY "" CACHE STRING "Browser API key for the web app's Google Drive provider (Picker)")
+set(NYMPH_GOOGLE_APP_ID "" CACHE STRING "Google Cloud project number for the web app's Drive Picker")
+set(NYMPH_SITE_COMMIT "" CACHE STRING "Commit the site is built from (default: git HEAD at configure time)")
+set(_nymph_commit "${NYMPH_SITE_COMMIT}")
+if(NOT _nymph_commit)
+  execute_process(COMMAND git rev-parse HEAD WORKING_DIRECTORY "${PROJECT_SOURCE_DIR}"
+    OUTPUT_VARIABLE _nymph_commit OUTPUT_STRIP_TRAILING_WHITESPACE ERROR_QUIET)
+  if(NOT _nymph_commit)
+    set(_nymph_commit "dev")
+  endif()
+endif()
+set(NYMPH_SITE_OUT "${NYMPH_WEB_OUT}/site")
+file(GLOB_RECURSE _nymph_app_files CONFIGURE_DEPENDS "${PROJECT_SOURCE_DIR}/web/app/*")
+add_custom_target(nymph-site ALL
+  COMMAND "${CMAKE_COMMAND}"
+          "-DWEB=${NYMPH_WEB_OUT}" "-DSOURCE=${PROJECT_SOURCE_DIR}" "-DOUT=${NYMPH_SITE_OUT}"
+          "-DVERSION=${PROJECT_VERSION}" "-DCOMMIT=${_nymph_commit}"
+          "-DGOOGLE_CLIENT_ID=${NYMPH_GOOGLE_CLIENT_ID}" "-DGOOGLE_API_KEY=${NYMPH_GOOGLE_API_KEY}"
+          "-DGOOGLE_APP_ID=${NYMPH_GOOGLE_APP_ID}"
+          -P "${PROJECT_SOURCE_DIR}/cmake/NymphSite.cmake"
+  DEPENDS ${_nymph_app_files} "${PROJECT_SOURCE_DIR}/cmake/NymphSite.cmake"
+  COMMENT "Assembling the site in ${NYMPH_SITE_OUT}"
+  VERBATIM)
+add_dependencies(nymph-site nymph-viewer nymph-viewer-single nymph-viewer-js nymph-editor nymph-editor-js)
 
 # ── Tests (Node) ─────────────────────────────────────────────────────────────
 

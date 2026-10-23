@@ -1,0 +1,17 @@
+nymph: 1
+description: A flowchart of a review process with a decision and a loop back.
+image: {width: 560, height: 560}
+root:
+  type: Flowchart
+  title: Review process
+  children:
+    - {type: FlowNode, id: start, text: Draft ready, shape: Rounded}
+    - {type: FlowNode, id: review, text: Review}
+    - {type: FlowNode, id: ok, text: Approved?, shape: Diamond}
+    - {type: FlowNode, id: fix, text: Fix comments}
+    - {type: FlowNode, id: done, text: Publish, shape: Rounded}
+    - {type: FlowLink, from: start, to: review}
+    - {type: FlowLink, from: review, to: ok}
+    - {type: FlowLink, from: ok, to: done, label: "yes"}
+    - {type: FlowLink, from: ok, to: fix, label: "no"}
+    - {type: FlowLink, from: fix, to: review}

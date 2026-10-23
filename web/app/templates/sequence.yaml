@@ -1,0 +1,14 @@
+nymph: 1
+description: A UML sequence diagram of a request through an API to a database.
+image: {width: 640, height: 420}
+root:
+  type: SequenceDiagram
+  autonumber: true
+  children:
+    - {type: Participant, id: user, name: User, kind: Actor}
+    - {type: Participant, id: api, name: API}
+    - {type: Participant, id: db, name: Database, kind: Database}
+    - {type: Message, from: user, to: api, text: GET /orders, activate: true}
+    - {type: Message, from: api, to: db, text: query orders, activate: true}
+    - {type: Message, from: db, to: api, text: rows, kind: Reply, deactivate: true}
+    - {type: Message, from: api, to: user, text: 200 OK, kind: Reply, deactivate: true}
