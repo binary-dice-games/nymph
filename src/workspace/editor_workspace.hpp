@@ -15,6 +15,7 @@
 #include <memory>
 #include <optional>
 #include <string>
+#include <string_view>
 #include <utility>
 #include <vector>
 #include "edit/editor_model.hpp"
@@ -73,6 +74,17 @@ class workspace_host {
   }
   /// @brief Makes the GL context current (before a read-back).
   virtual void make_current() {}
+  /// @brief Whether the host gives the panel its clipboard (the page's);
+  ///        else ImGui's own is used.
+  virtual bool has_clipboard() const {
+    return false;
+  }
+  virtual void set_clipboard(std::string_view text) {
+    (void)text;
+  }
+  virtual std::string clipboard() {
+    return {};
+  }
 };
 
 /// @brief The OpenGL calls the workspace makes itself (the backend loads

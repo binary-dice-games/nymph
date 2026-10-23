@@ -73,6 +73,32 @@ add_custom_command(
 add_custom_target(nymph-viewer-js ALL DEPENDS "${NYMPH_WEB_OUT}/nymph-viewer.js")
 add_dependencies(nymph-viewer nymph-viewer-js)
 
+# ── The editor module (spec/15_web_app/DESIGN.md sections 4 and 5) ──────────
+
+# A second module, loaded only to edit, so the viewer stays small: the whole
+# library plus the editor workspace, drawn into its own WebGL2 canvas.
+# Output in <build>/web/editor/: nymph-editor.js (the API, which imports
+# ../nymph-viewer.js for its font loader), nymph-editor-core.js and .wasm.
+set(NYMPH_EDITOR_OUT "${NYMPH_WEB_OUT}/editor")
+add_executable(nymph-editor editor/nymph_editor_web.cpp)
+target_link_libraries(nymph-editor PRIVATE nymph_workspace)
+set_target_properties(nymph-editor PROPERTIES
+  OUTPUT_NAME nymph-editor-core
+  SUFFIX ".js"
+  RUNTIME_OUTPUT_DIRECTORY "${NYMPH_EDITOR_OUT}"
+)
+set(NYMPH_EDITOR_LINK_OPTIONS ${NYMPH_WEB_LINK_OPTIONS})
+list(TRANSFORM NYMPH_EDITOR_LINK_OPTIONS REPLACE "createNymphCore" "createNymphEditorCore")
+target_link_options(nymph-editor PRIVATE ${NYMPH_EDITOR_LINK_OPTIONS})
+add_custom_command(
+  OUTPUT "${NYMPH_EDITOR_OUT}/nymph-editor.js"
+  COMMAND "${CMAKE_COMMAND}" -E copy "${CMAKE_CURRENT_SOURCE_DIR}/js/nymph-editor.js" "${NYMPH_EDITOR_OUT}/nymph-editor.js"
+  DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/js/nymph-editor.js"
+  COMMENT "Copying nymph-editor.js"
+  VERBATIM)
+add_custom_target(nymph-editor-js ALL DEPENDS "${NYMPH_EDITOR_OUT}/nymph-editor.js")
+add_dependencies(nymph-editor nymph-editor-js)
+
 # The demo page, with every example (source and PNG) and their list.
 file(GLOB nymph_example_sources CONFIGURE_DEPENDS "${PROJECT_SOURCE_DIR}/examples/*.yaml")
 list(SORT nymph_example_sources)

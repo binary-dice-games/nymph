@@ -96,6 +96,9 @@ std::string editor_workspace::show_panel(bool on) {
     panel_->model().set_original(saved_source_);
     panel_->set_strip_width(strip_wanted_);
     panel_->grid().set_host_files(host_files_);
+    if (host_.has_clipboard()) {
+      panel_->set_clipboard([this](std::string_view text) { host_.set_clipboard(text); }, [this] { return host_.clipboard(); });
+    }
     image_w_ = panel_->model().image().width;
     image_h_ = panel_->model().image().height;
     view_.set_edit_mode(true);

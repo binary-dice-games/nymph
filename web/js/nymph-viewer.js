@@ -184,7 +184,7 @@ let corePromise = null;
  * inline `about:srcdoc` frame) fails only when a font is needed
  * (spec/06_claude_integration/DESIGN.md section 4.3).
  */
-function fetchFrom(base, here) {
+export function fetchFrom(base, here) {
   return async (name) => {
     let baseUrl;
     try {

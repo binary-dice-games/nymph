@@ -131,6 +131,25 @@ editor_panel::~editor_panel() {
   ImGui::DestroyContext(context_);
 }
 
+void editor_panel::set_clipboard(std::function<void(std::string_view)> set, std::function<std::string()> get) {
+  clipboard_set_ = std::move(set);
+  clipboard_get_ = std::move(get);
+  const panel_context_scope scope(context_);
+  ImGuiPlatformIO& pio = ImGui::GetPlatformIO();
+  pio.Platform_ClipboardUserData = this;
+  pio.Platform_SetClipboardTextFn = [](ImGuiContext*, const char* text) {
+    auto* self = static_cast<editor_panel*>(ImGui::GetPlatformIO().Platform_ClipboardUserData);
+    if (self->clipboard_set_) {
+      self->clipboard_set_(text != nullptr ? text : "");
+    }
+  };
+  pio.Platform_GetClipboardTextFn = [](ImGuiContext*) -> const char* {
+    auto* self = static_cast<editor_panel*>(ImGui::GetPlatformIO().Platform_ClipboardUserData);
+    self->clipboard_text_ = self->clipboard_get_ ? self->clipboard_get_() : std::string();
+    return self->clipboard_text_.c_str();
+  };
+}
+
 void editor_panel::set_theme(const std::string& name) {
   if (name == theme_) {
     return;

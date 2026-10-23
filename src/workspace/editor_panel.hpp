@@ -9,6 +9,8 @@
 #include <imgui.h>
 #include <algorithm>
 #include <filesystem>
+#include <functional>
+#include <string_view>
 #include <optional>
 #include <string>
 #include <vector>
@@ -46,6 +48,10 @@ class editor_panel {
   ~editor_panel();
   editor_panel(const editor_panel&) = delete;
   editor_panel& operator=(const editor_panel&) = delete;
+
+  /// @brief Uses the host's clipboard instead of ImGui's own (the web
+  ///        editor: the page's clipboard). `get` returns the text to paste.
+  void set_clipboard(std::function<void(std::string_view)> set, std::function<std::string()> get);
 
   /// @brief Colours the strip like the figure: "light", "dark" or
   ///        "classic". Does nothing when it is the theme already in use.
@@ -204,6 +210,9 @@ class editor_panel {
   edit_toolbar toolbar_;
   std::optional<layout_box> anchor_; ///< The selection in the figure, for the toolbar.
   ImGuiContext* context_ = nullptr;
+  std::function<void(std::string_view)> clipboard_set_;
+  std::function<std::string()> clipboard_get_;
+  std::string clipboard_text_; ///< What clipboard_get_ returned last, kept for ImGui.
   bool headless_ = false; ///< No OpenGL backend: frames run, nothing is drawn.
   float width_ = 0.0f;
   float height_ = 0.0f;
