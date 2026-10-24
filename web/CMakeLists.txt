@@ -148,6 +148,7 @@ add_custom_target(nymph-claude-app ALL DEPENDS "${NYMPH_CLAUDE_APP}")
 set(NYMPH_GOOGLE_CLIENT_ID "" CACHE STRING "OAuth client id for the web app's Google Drive provider")
 set(NYMPH_GOOGLE_API_KEY "" CACHE STRING "Browser API key for the web app's Google Drive provider (Picker)")
 set(NYMPH_GOOGLE_APP_ID "" CACHE STRING "Google Cloud project number for the web app's Drive Picker")
+set(NYMPH_AGENT_CONNECTORS "webmcp;bridge" CACHE STRING "Agent connectors the web app offers (spec/17_agent_connectors): webmcp, bridge")
 set(NYMPH_SITE_COMMIT "" CACHE STRING "Commit the site is built from (default: git HEAD at configure time)")
 set(_nymph_commit "${NYMPH_SITE_COMMIT}")
 if(NOT _nymph_commit)
@@ -158,6 +159,7 @@ if(NOT _nymph_commit)
   endif()
 endif()
 set(NYMPH_SITE_OUT "${NYMPH_WEB_OUT}/site")
+string(REPLACE ";" "," _nymph_agents "${NYMPH_AGENT_CONNECTORS}") # one argument
 file(GLOB_RECURSE _nymph_app_files CONFIGURE_DEPENDS "${PROJECT_SOURCE_DIR}/web/app/*")
 add_custom_target(nymph-site ALL
   COMMAND "${CMAKE_COMMAND}"
@@ -165,8 +167,9 @@ add_custom_target(nymph-site ALL
           "-DVERSION=${PROJECT_VERSION}" "-DCOMMIT=${_nymph_commit}"
           "-DGOOGLE_CLIENT_ID=${NYMPH_GOOGLE_CLIENT_ID}" "-DGOOGLE_API_KEY=${NYMPH_GOOGLE_API_KEY}"
           "-DGOOGLE_APP_ID=${NYMPH_GOOGLE_APP_ID}"
+          "-DAGENT_CONNECTORS=${_nymph_agents}"
           -P "${PROJECT_SOURCE_DIR}/cmake/NymphSite.cmake"
-  DEPENDS ${_nymph_app_files} "${PROJECT_SOURCE_DIR}/cmake/NymphSite.cmake"
+  DEPENDS ${_nymph_app_files} "${PROJECT_SOURCE_DIR}/cmake/NymphSite.cmake" "${PROJECT_SOURCE_DIR}/docs/agent-web-app.md"
   COMMENT "Assembling the site in ${NYMPH_SITE_OUT}"
   VERBATIM)
 add_dependencies(nymph-site nymph-viewer nymph-viewer-single nymph-viewer-js nymph-editor nymph-editor-js)
@@ -198,6 +201,13 @@ if(NYMPH_NODE)
   add_test(NAME nymph_web_app_browser
     COMMAND "${NYMPH_NODE}" "${CMAKE_CURRENT_SOURCE_DIR}/tests/browser/app.mjs" "${NYMPH_WEB_OUT}" "${PROJECT_SOURCE_DIR}")
   set_tests_properties(nymph_web_app_browser PROPERTIES SKIP_RETURN_CODE 77 TIMEOUT 900)
+  # Agents in the web app (spec/17_agent_connectors); the bridge's end-to-end
+  # test needs a native nymph: NYMPH_NATIVE_EXE, else that test is skipped.
+  set(NYMPH_NATIVE_EXE "" CACHE FILEPATH "A native nymph executable for the web bridge's end-to-end test")
+  add_test(NAME nymph_web_agents_browser
+    COMMAND "${NYMPH_NODE}" "${CMAKE_CURRENT_SOURCE_DIR}/tests/browser/agents.mjs" "${NYMPH_WEB_OUT}" "${PROJECT_SOURCE_DIR}"
+            "${NYMPH_NATIVE_EXE}")
+  set_tests_properties(nymph_web_agents_browser PROPERTIES SKIP_RETURN_CODE 77 TIMEOUT 900)
 else()
   message(STATUS "nymph: node not found; skipping the web viewer's Node and browser tests")
 endif()

@@ -40,8 +40,15 @@ export const device = Object.freeze({
   compression: typeof CompressionStream === 'function' && typeof DecompressionStream === 'function',
   /** Files from the OS ("Open with", installed app). */
   launchQueue: 'launchQueue' in window,
-  /** Agent-assisted editing (a later project; section 11): not offered yet. */
-  assistant: false,
+  /**
+   * Agents the user runs reach the app (spec/17_agent_connectors): WebMCP
+   * wherever the browser has it; the `nymph mcp` bridge on a computer only
+   * (a phone runs no `nymph mcp`).
+   */
+  agents: Object.freeze({
+    webmcp: typeof navigator !== 'undefined' && !!navigator.modelContext,
+    bridge: !mobile,
+  }),
 });
 
 /** Whether Edit can be offered, and why not. */

@@ -4,6 +4,7 @@
 ///        both systems: Winsock's AF_UNIX takes the same calls as POSIX
 ///        sockets but for a few names, kept in the guard below.
 #include "ipc/local_socket.hpp"
+#include "ipc/loopback.hpp"
 #include <algorithm>
 #include <cstring>
 #include <system_error>
@@ -17,8 +18,11 @@
 #define NOMINMAX
 #endif
 #include <winsock2.h>
+#include <ws2tcpip.h>
 #include <afunix.h>
 #else
+#include <netinet/in.h>
+#include <netinet/tcp.h>
 #include <sys/socket.h>
 #include <sys/un.h>
 #include <unistd.h>
@@ -173,6 +177,24 @@ bool local_stream::read_line(std::string& line) {
   }
 }
 
+bool local_stream::read_some(std::string& out) {
+  if (!buffer_.empty()) {
+    out += buffer_;
+    buffer_.clear();
+    return true;
+  }
+  if (handle_ == kInvalid) {
+    return false;
+  }
+  char chunk[16384];
+  const auto n = ::recv(as_native(handle_), chunk, sizeof(chunk), 0);
+  if (n <= 0) {
+    return false;
+  }
+  out.append(chunk, static_cast<size_t>(n));
+  return true;
+}
+
 bool local_stream::write(std::string_view data) {
   while (!data.empty()) {
     if (handle_ == kInvalid) {
@@ -259,6 +281,114 @@ void local_listener::stop() {
   // listening socket down does not wake it on macOS or Windows).
   try {
     local_stream poke = local_stream::connect(path_);
+  } catch (const ipc_error&) {
+  }
+}
+
+// ── Loopback TCP ─────────────────────────────────────────────────────────────
+
+namespace {
+
+sockaddr_in loopback_address(uint16_t port) {
+  sockaddr_in a{};
+  a.sin_family = AF_INET;
+  a.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+  a.sin_port = htons(port);
+  return a;
+}
+
+native new_tcp_socket() {
+  start_sockets();
+  const native s = ::socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+  if (s == kNone) {
+    throw ipc_error("cannot make a socket: " + last_error());
+  }
+#if defined(SO_NOSIGPIPE)
+  const int on = 1;
+  ::setsockopt(s, SOL_SOCKET, SO_NOSIGPIPE, &on, sizeof(on));
+#endif
+  const int nodelay = 1; // small JSON messages, answered at once
+  ::setsockopt(s, IPPROTO_TCP, TCP_NODELAY, reinterpret_cast<const char*>(&nodelay), sizeof(nodelay));
+  return s;
+}
+
+} // namespace
+
+local_stream loopback_connect(uint16_t port) {
+  const sockaddr_in a = loopback_address(port);
+  const native s = new_tcp_socket();
+  if (::connect(s, reinterpret_cast<const sockaddr*>(&a), sizeof(a)) != 0) {
+    const std::string why = last_error();
+    close_native(s);
+    throw ipc_error("cannot connect to 127.0.0.1:" + std::to_string(port) + ": " + why);
+  }
+  return local_stream(as_handle(s));
+}
+
+loopback_listener::loopback_listener(uint16_t port) {
+  const sockaddr_in a = loopback_address(port);
+  const native s = new_tcp_socket();
+#if defined(_WIN32)
+  // Another process may not take the port over while it is ours.
+  const int exclusive = 1;
+  ::setsockopt(s, SOL_SOCKET, SO_EXCLUSIVEADDRUSE, reinterpret_cast<const char*>(&exclusive), sizeof(exclusive));
+#endif
+  if (::bind(s, reinterpret_cast<const sockaddr*>(&a), sizeof(a)) != 0 || ::listen(s, 8) != 0) {
+    const std::string why = last_error();
+    close_native(s);
+    throw ipc_error("cannot listen on 127.0.0.1: " + why);
+  }
+  sockaddr_in bound{};
+  socklen_t size = sizeof(bound);
+  if (::getsockname(s, reinterpret_cast<sockaddr*>(&bound), &size) != 0) {
+    const std::string why = last_error();
+    close_native(s);
+    throw ipc_error("cannot read the listening port: " + why);
+  }
+  port_ = ntohs(bound.sin_port);
+  handle_ = as_handle(s);
+}
+
+loopback_listener::~loopback_listener() {
+  stop();
+  close();
+}
+
+void loopback_listener::close() {
+  if (handle_ != local_stream::kInvalid) {
+    close_native(as_native(handle_));
+    handle_ = local_stream::kInvalid;
+  }
+}
+
+std::optional<local_stream> loopback_listener::accept() {
+  while (!stopped_.load() && handle_ != local_stream::kInvalid) {
+    const native s = ::accept(as_native(handle_), nullptr, nullptr);
+    if (stopped_.load()) {
+      if (s != kNone) {
+        close_native(s);
+      }
+      return std::nullopt;
+    }
+    if (s != kNone) {
+      return local_stream(as_handle(s));
+    }
+#if !defined(_WIN32)
+    if (errno == EINTR) {
+      continue;
+    }
+#endif
+    return std::nullopt;
+  }
+  return std::nullopt;
+}
+
+void loopback_listener::stop() {
+  if (stopped_.exchange(true)) {
+    return;
+  }
+  try {
+    local_stream poke = loopback_connect(port_); // wakes a blocked accept()
   } catch (const ipc_error&) {
   }
 }

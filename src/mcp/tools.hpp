@@ -8,6 +8,7 @@
 #include <functional>
 #include <map>
 #include <memory>
+#include <optional>
 #include <string>
 #include <vector>
 #include "mcp/json_rpc.hpp"
@@ -45,6 +46,13 @@ class tool_registry {
   ///         `arguments` that is not an object, or an unknown tool.
   json call(const json& params);
 
+  /// @brief Tools that come and go (the paired web app's): `list` gives
+  ///        their `tools/list` entries, appended after the registry's own;
+  ///        `call` runs one by name, returning nullopt for a name it does
+  ///        not know. Registry tools of the same name win.
+  void set_dynamic(std::function<json()> list,
+                   std::function<std::optional<json>(const std::string&, const json&)> call);
+
   /// @brief The renderer for `r`, created on first use.
   renderer& renderer_for(rasterizer r);
 
@@ -55,6 +63,8 @@ class tool_registry {
  private:
   server_options options_;
   std::vector<tool> tools_;
+  std::function<json()> dynamic_list_;
+  std::function<std::optional<json>(const std::string&, const json&)> dynamic_call_;
   std::map<rasterizer, std::unique_ptr<renderer>> renderers_;
 };
 

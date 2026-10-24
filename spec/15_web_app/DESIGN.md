@@ -477,6 +477,9 @@ agent change by its connector, as 14 does for `nymph mcp` agents.
 `begin_group(label, origin)` / `end_group()` turn several commits into one
 undo entry (an agent's turn of several tool calls is undone at once); the
 panel never opens a group, so nothing changes for the user's own edits.
+A change whose origin differs from the open group's ends the group first
+(17_agent_connectors), so a user's edit made during an agent's turn is
+never undone with it.
 
 The panel's Save button and `Ctrl+S` call `request_save()`: the native
 host answers by opening the panel's own "overwrite?" modal (which stays in
@@ -926,6 +929,11 @@ The chat panel; each connector (API keys or sign-in, streaming, the tool
 loop, model choice); the WebMCP registration; the `nymph mcp` WebSocket
 bridge and pairing; prompts and the use of the agent guide; whether
 assistant editing is offered on mobile.
+
+That project is [17_agent_connectors](../17_agent_connectors/DESIGN.md).
+It builds only the external kind: the in-app kind (API keys in the page)
+was dropped, so no chat panel is built and `device.assistant` becomes
+`device.agents`.
 
 ## 12. Extension Points
 

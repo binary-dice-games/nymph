@@ -13,19 +13,37 @@ namespace {
 
 constexpr const char* kNoEditor =
     "no nymph editor is open: ask the user to open the chart with `nymph view --edit <file>` (the editor_* tools "
-    "work on the chart open there); to make or render a chart without the editor use render_chart";
+    "work on the chart open there), or, for the chart open in the nymph web app in a browser, call web_app_pair; to "
+    "make or render a chart without the editor use render_chart";
 
 } // namespace
 
-editor_bridge::link& editor_bridge::connect(const std::string& want) {
-  std::filesystem::path dir = dir_;
-  if (dir.empty()) {
-    try {
-      dir = ipc::editors_dir();
-    } catch (const ipc::ipc_error& e) {
-      throw tool_error(std::string(kNoEditor) + " (" + e.what() + ")");
-    }
+std::filesystem::path editor_bridge::dir() const {
+  if (!dir_.empty()) {
+    return dir_;
   }
+  try {
+    return ipc::editors_dir();
+  } catch (const ipc::ipc_error& e) {
+    throw tool_error(std::string(kNoEditor) + " (" + e.what() + ")");
+  }
+}
+
+double editor_bridge::latest_native_focus() const {
+  double latest = -1.0;
+  try {
+    for (const ipc::editor_entry& e : ipc::list_editors(dir())) {
+      if (ipc::process_alive(e.pid)) {
+        latest = std::max(latest, e.focused);
+      }
+    }
+  } catch (const std::exception&) {
+  }
+  return latest;
+}
+
+editor_bridge::link& editor_bridge::connect(const std::string& want) {
+  const std::filesystem::path dir = this->dir();
   // Forget editors that are gone (a crash leaves its file behind).
   std::vector<ipc::editor_entry> editors;
   for (ipc::editor_entry& e : ipc::list_editors(dir)) {
@@ -108,6 +126,18 @@ json editor_bridge::call(const std::string& tool, json arguments) {
     }
     arguments.erase("editor");
   }
+  if (web_ && web_->has_pages()) {
+    bool to_web = want.rfind("web:", 0) == 0;
+    if (want.empty()) {
+      to_web = web_->latest_focus() >= latest_native_focus();
+    } else if (!to_web) {
+      const std::vector<std::string> pages = web_->page_names();
+      to_web = std::find(pages.begin(), pages.end(), "web:" + want) != pages.end();
+    }
+    if (to_web) {
+      return web_->call(want, tool, std::move(arguments));
+    }
+  }
   link& l = connect(want);
   json reply;
   try {
@@ -126,7 +156,9 @@ void add_editor_bridge(tool_registry& registry, std::shared_ptr<editor_bridge> b
   for (json definition : editor_tool_definitions()) {
     definition["inputSchema"]["properties"]["editor"] = {
         {"type", "string"},
-        {"description", "Which open editor: the file it edits or its process id; default the one used last."}};
+        {"description",
+         "Which open editor: the file it edits, its process id, or web:<document name> for a paired web app tab; "
+         "default the one used last."}};
     const std::string name = definition["name"];
     registry.add({std::move(definition), [bridge, name](const json& args) { return bridge->call(name, args); }});
   }

@@ -57,6 +57,7 @@ class session {
   json initialize(const json& params);
 
   std::unique_ptr<tool_registry> tools_;
+  std::shared_ptr<class web_bridge> web_; ///< nymph mcp only
   std::string protocol_version_;
 };
 

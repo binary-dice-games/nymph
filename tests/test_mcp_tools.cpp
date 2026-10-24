@@ -168,13 +168,16 @@ TEST_F(mcp_tools, list_names_every_tool_with_its_schemas) {
     EXPECT_EQ(t["inputSchema"]["additionalProperties"], false);
     EXPECT_TRUE(t["annotations"].contains("readOnlyHint"));
   }
-  // The chart tools, then the tools of a running editor (spec/14_editor_workspace).
+  // The chart tools, the tools of a running editor (spec/14_editor_workspace),
+  // then pairing with the web app (spec/17_agent_connectors).
   std::vector<std::string> expected{
       "render_chart", "check_chart", "convert_chart", "extract_chart", "chart_schema", "example_chart", "list_fonts",
       "list_shapes", "list_themes"};
   for (const json& t : editor_tool_definitions()) {
     expected.push_back(t["name"]);
   }
+  expected.push_back("web_app_pair");
+  expected.push_back("web_app_call");
   EXPECT_EQ(names, expected);
   const json& render = tools[0];
   for (const char* p : {"source", "input_path", "output_path", "rasterizer"}) {
@@ -425,8 +428,9 @@ TEST_F(mcp_tools, the_app_is_a_resource_linked_from_render_chart) {
   ASSERT_EQ(tools[0]["name"], "render_chart");
   EXPECT_EQ(tools[0]["_meta"]["ui"]["resourceUri"], "ui://nymph/viewer");
   EXPECT_EQ(tools[0]["_meta"]["ui"]["visibility"], json({"model", "app"}));
-  // The chart tools end with the app-only viewer_font; the editor's follow.
-  const json& font = tools[tools.size() - 1 - editor_tool_definitions().size()];
+  // The chart tools end with the app-only viewer_font; the editor's and the
+  // two web app tools follow.
+  const json& font = tools[tools.size() - 3 - editor_tool_definitions().size()];
   ASSERT_EQ(font["name"], "viewer_font");
   EXPECT_EQ(font["_meta"]["ui"]["visibility"], json({"app"}));
 

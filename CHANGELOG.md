@@ -9,6 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Web app: the agent you already use works on the open chart. `nymph mcp`'s new `web_app_pair` tool gives a one-time code (or link) to type under **Agents > Connect an agent**; Claude Code, Claude Desktop, Cursor and Gemini CLI then read and change the chart through the app's tools, which join their tool list (`web_app_call` reaches them otherwise). The app never asks for an API key.
+- Web app: the **Agents** panel (`Ctrl+Shift+A`) lists connected agents and every change they made, each with Undo; an agent's request is one undo step; **Stop** halts it; actions that leave the tab still ask first, with "allow without asking" for the open chart.
+- Web app: browser assistants reach the open chart through WebMCP where the browser offers it (a switch turns it off).
+- The live chart in Claude's chat: **Open in the web app** opens it in the app, connected to the same agent.
+- `nymph mcp`: the `editor_*` tools also reach a paired web app tab (`editor: "web:<name>"`).
+
 - The web app at https://binary-dice-games.github.io/nymph/: open nymph YAML and PNG files from the computer (file picker, drag and drop, paste), a URL, Google Drive (when the site is set up for it), a shared link, Recent or a template; view them live; edit them with the editor of `nymph view --edit`; save back to the file (Chrome, Edge) or Drive, or download YAML or PNG; copy a link that reopens the chart or HTML that embeds it. Unsaved changes are kept as drafts; the app installs, opens `.yaml` files from the system and works offline. Phones and tablets get the viewer only.
 - The editor module for web pages: `editor/nymph-editor.js` (`createEditor()`), a second WebAssembly module next to the viewer's, with the editor tools as a JavaScript API (`tool()`), attributed changes and undo groups.
 - `nymph view --edit` and the web editor: a source pane (`Ctrl+U`, or the **Source** tab button) shows the YAML beside the figure, highlighted, with line numbers, folding and find / replace, in step with the panel both ways; a file that does not load opens at its error there instead of failing.
@@ -34,6 +40,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `nymph view --edit` is an MCP server for AI agents: `nymph mcp` has `editor_*` tools that read and change the chart open in the editor (elements, selection, tables, an image of the view); `--no-mcp` turns it off.
 
 ### Changed
+
+- `nymph view --edit` and the web editor: an edit made while an agent's change is in progress is no longer undone together with it.
 - `nymph view --theme`, the viewer element's `theme` attribute and `setTheme()` accept every chart theme, not only `light`, `dark` and `classic`.
 - `nymph view --edit`: number fields are boxes that take a typed value after a click, or change by dragging sideways (Shift finer, Ctrl coarser); a text size of 0 shows as "auto".
 - `nymph view --edit` and the web editor: a flat, web-app style panel (Fira Sans text, light or dark palette, green accent, primary Save button, section headers, thin scrollbars); the selection outline uses the accent. The web editor follows the page's light / dark theme and accent (`setAppearance()`, `appearance` option of `createEditor()`).

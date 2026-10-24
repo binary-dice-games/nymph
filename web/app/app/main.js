@@ -7,6 +7,10 @@
  */
 
 import { NymphError, createViewer } from '../nymph-viewer.js';
+import { Activity } from './agents/activity.js';
+import { Bridge } from './agents/bridge.js';
+import { AgentsPanel } from './agents/panel.js';
+import { WebMcp } from './agents/webmcp.js';
 import { Commands } from './commands.js';
 import { device, editAvailability } from './device.js';
 import { Doc, baseName, withoutView } from './document.js';
@@ -35,8 +39,8 @@ const app = {
 };
 
 /** The registry every control calls (section 3.11). */
-const commands = new Commands(() => ({ hasDocument: !!app.doc, mode: app.mode }));
-window.nymphApp = { app, commands }; // for tests and, later, agent connectors
+const commands = new Commands(() => ({ hasDocument: !!app.doc, mode: app.mode }), { editing: device.directEditing });
+window.nymphApp = { app, commands }; // for tests and the agent connectors
 
 // ── Start ─────────────────────────────────────────────────────────────────────
 
@@ -45,7 +49,18 @@ async function init() {
   app.chartTheme = load('chartTheme') ?? 'source';
   [app.version, app.config] = await Promise.all([fetchJson('version.json', app.version), fetchJson('config.json', {})]);
   app.drive = new DriveProvider(app.config.google ?? {});
+  if (device.directEditing) {
+    // Listed to agents before the editor module loads (spec/17_agent_connectors).
+    commands.editorTools = await fetchJson('editor-tools.json', []);
+  }
   defineCommands();
+  // What the registry needs for agents' change groups and activity
+  // (spec/17_agent_connectors/DESIGN.md sections 4.4 and 5).
+  commands.hooks.beginGroup = (label, origin) => app.editor?.beginGroup(label, origin);
+  commands.hooks.endGroup = () => app.editor?.endGroup();
+  commands.hooks.snapshot = () =>
+    app.doc ? { doc: app.doc.id, source: app.editor ? app.editor.source() : app.doc.source, version: app.editor?.version() ?? null, mode: app.mode } : null;
+  setUpAgents();
   wireControls();
   wireDropAndPaste();
   wireKeys();
@@ -62,6 +77,49 @@ async function init() {
   }
   await route();
   document.documentElement.dataset.ready = 'true';
+}
+
+/**
+ * The agents the user runs (spec/17_agent_connectors): the Agents panel and
+ * its activity, WebMCP, and the `nymph mcp` bridge.
+ */
+function setUpAgents() {
+  const agents = app.config.agents ?? {};
+  const offers = { bridge: !!agents.bridge && device.agents.bridge, webmcp: !!agents.webmcp && device.agents.webmcp };
+  app.activity = new Activity(commands, {
+    snapshot: () => commands.hooks.snapshot(),
+    restore: (source) => commands.run('document_set_source', { source, label: 'Undo an agent\'s change' }),
+    undoEditor: () => app.editor?.undo(),
+    confirm: async (message) =>
+      (await ask('Undo', message, [
+        { label: 'Cancel', value: false },
+        { label: 'Restore', value: true, kind: 'danger', focus: true },
+      ])) === true,
+  });
+  app.webmcp = new WebMcp(commands, {
+    onCall: () => app.agents.connected('webmcp', { name: 'The browser\'s assistant', route: 'through WebMCP' }),
+  });
+  app.bridge = new Bridge(commands, {
+    documentName: () => app.doc?.name ?? 'untitled',
+    version: app.version.version || 'dev',
+    instructions:
+      'The nymph web app: the chart the user has open in a browser tab. Read app_read_guide with name web-app first; call document_state before changing anything.',
+    connected: (id, info) => app.agents.connected(id, info),
+    disconnected: (id) => app.agents.disconnected(id),
+  });
+  app.agents = new AgentsPanel({
+    dock: $('dock'),
+    button: $('btn-agents'),
+    commands,
+    activity: app.activity,
+    offers,
+    webmcpEnabled: () => app.webmcp.enabled,
+    setWebmcp: (on) => app.webmcp.setEnabled(on, !!app.doc),
+    pair: (code) => app.bridge.pair(code),
+  });
+  if (offers.bridge) {
+    app.bridge.resume();
+  }
 }
 
 async function fetchJson(path, fallback) {
@@ -116,6 +174,21 @@ async function route() {
   } catch (e) {
     showStart();
     toast(e.message ?? String(e), 6000);
+  }
+  if (hash.get('pair')) {
+    // A pairing link from an agent (spec/17_agent_connectors section 7.2):
+    // used once, so it leaves the address before anything else.
+    const code = hash.get('pair');
+    hash.delete('pair');
+    history.replaceState(null, '', `${location.pathname}${location.search}${hash.toString() ? `#${hash}` : ''}`);
+    if (app.config.agents?.bridge && device.agents.bridge) {
+      try {
+        await app.bridge.pair(code);
+        toast('Connected: the agent can now work on the open chart.');
+      } catch (e) {
+        toast(e.message ?? String(e), 8000);
+      }
+    }
   }
 }
 
@@ -266,6 +339,7 @@ async function openDrive(fileId, mode) {
 }
 
 async function closeDocument() {
+  commands.documentClosed();
   destroyEditor();
   app.viewer?.destroy();
   app.viewer = null;
@@ -283,6 +357,8 @@ function showStart() {
   $('doc-title').hidden = true;
   $('doc-actions').hidden = true;
   document.title = 'nymph — view and edit charts';
+  app.webmcp?.update(false);
+  app.activity?.clear();
   renderStart();
 }
 
@@ -299,6 +375,10 @@ function showDocument() {
   // The mobile page saves nothing (nothing is ever modified there): its
   // downloads are in the Share menu.
   $('btn-save').parentElement.hidden = !device.directEditing;
+  app.activity?.clear();
+  app.agents?.documentChanged();
+  app.webmcp?.update(true);
+  app.bridge?.focus(); // the chart's name, for `editor: "web:<name>"`
   updateTitle();
 }
 
@@ -348,6 +428,7 @@ async function showMode(mode, { force = false, sourceLine } = {}) {
   if (!force && mode === app.mode && (mode === 'view' ? app.viewer : app.editor)) {
     return;
   }
+  commands.endChange(); // an agent's change group does not span the switch
   const stage = $('stage');
   if (mode === 'view') {
     const source = app.editor ? app.editor.toYaml() : doc.source;
@@ -741,6 +822,62 @@ function defineCommands() {
     run: (args) => app.editor.tool('editor_select', args),
   });
 
+  // ── Agents (spec/17_agent_connectors/DESIGN.md section 4) ──
+  commands.define({
+    name: 'document_begin_change',
+    title: 'Begin a change',
+    description:
+      'Starts a change made of several tool calls, so the user can undo it as one step: call it before the first, and document_end_change after the last.',
+    scope: 'document',
+    inputSchema: schema({ label: str('What the change does, as the user will see it in the undo history, e.g. "Add the billing service".') }, ['label']),
+    run: ({ label }, { origin }) => {
+      if (origin === 'user') {
+        throw new Error('change groups are for agents');
+      }
+      return commands.beginChange(origin, label);
+    },
+  });
+  commands.define({
+    name: 'document_end_change',
+    title: 'End a change',
+    description: 'Ends the change document_begin_change started.',
+    scope: 'document',
+    run: (args, { origin }) => ({ ended: commands.endChange(origin) }),
+  });
+  commands.define({
+    name: 'app_read_guide',
+    title: 'Read a guide',
+    description:
+      'Reads nymph\'s documentation for agents: web-app (how to work in this app: read it first), agent-guide (the format, with examples), format (the source format in full), elements (every element type), or elements/<Diagram> (one family, e.g. elements/Flowchart).',
+    inputSchema: schema({ name: str('web-app, agent-guide, format, elements, or elements/<Diagram>.') }, ['name']),
+    run: async ({ name }) => {
+      if (!/^(web-app|agent-guide|format|elements|elements\/[A-Za-z0-9]+)$/.test(name)) {
+        throw new Error('name must be web-app, agent-guide, format, elements, or elements/<Diagram>');
+      }
+      const r = await fetch(`agent/${name}.md`);
+      if (!r.ok) {
+        throw new Error(`there is no guide '${name}'`);
+      }
+      return r.text();
+    },
+  });
+  commands.define({
+    name: 'app_example_source',
+    title: 'Example source',
+    description: 'The YAML of one of nymph\'s examples (examples/index.json lists them), without opening it: a starting point to adapt.',
+    inputSchema: schema({ name: str('Example name, e.g. line or flowchart.') }, ['name']),
+    run: async ({ name }) => {
+      if (!/^[A-Za-z0-9_-]+$/.test(name)) {
+        throw new Error('an example name is letters, digits, - and _');
+      }
+      const r = await fetch(`examples/${name}.yaml`);
+      if (!r.ok) {
+        throw new Error(`there is no example '${name}'`);
+      }
+      return { name, source: await r.text() };
+    },
+  });
+
   // ── App ──
   commands.define({
     name: 'app_list_templates',
@@ -793,6 +930,7 @@ function defineCommands() {
   });
   commands.define({
     name: 'app_open_file',
+    agent: false, // opens a picker or a dialog for the user
     title: 'Open a file',
     description: 'Asks the user for a file on this computer.',
     effect: 'external',
@@ -805,6 +943,7 @@ function defineCommands() {
   });
   commands.define({
     name: 'app_open_url_dialog',
+    agent: false, // opens a picker or a dialog for the user
     title: 'Open from URL',
     description: 'Asks the user for a URL to open.',
     effect: 'external',
@@ -824,6 +963,7 @@ function defineCommands() {
   });
   commands.define({
     name: 'app_open_drive',
+    agent: false, // opens a picker or a dialog for the user
     title: 'Open from Google Drive',
     description: 'Opens a chart the user picks in Google Drive.',
     effect: 'external',
@@ -837,6 +977,7 @@ function defineCommands() {
   });
   commands.define({
     name: 'app_new_dialog',
+    agent: false, // opens a picker or a dialog for the user
     title: 'New chart…',
     description: 'Shows the templates to start a new chart from.',
     run: async () => {
@@ -901,6 +1042,7 @@ function defineCommands() {
   });
   commands.define({
     name: 'app_save_as',
+    agent: false, // opens a picker or a dialog for the user
     title: 'Save as',
     description: 'Saves the chart as a new file on this computer.',
     scope: 'document',
@@ -1023,6 +1165,7 @@ function defineCommands() {
   });
   commands.define({
     name: 'app_choose_theme',
+    agent: false, // opens a picker or a dialog for the user
     title: 'Theme…',
     description: 'Opens the theme picker: in Edit mode it sets the file\'s theme, in View mode it previews one.',
     scope: 'document',
@@ -1041,8 +1184,8 @@ function defineCommands() {
       }
     },
   });
-  commands.define({ name: 'app_about', title: 'About', description: 'Version and licences.', run: () => about() });
-  commands.define({ name: 'app_shortcuts', title: 'Keyboard shortcuts', description: 'The keyboard shortcuts.', run: () => shortcuts() });
+  commands.define({ name: 'app_about', agent: false, title: 'About', description: 'Version and licences.', run: () => about() });
+  commands.define({ name: 'app_shortcuts', agent: false, title: 'Keyboard shortcuts', description: 'The keyboard shortcuts.', run: () => shortcuts() });
 }
 
 /** The chart themes the loaded module knows, [] before one is loaded. */
@@ -1296,7 +1439,11 @@ function wireKeys() {
     (e) => {
       const ctrl = e.ctrlKey || e.metaKey;
       const typing = e.target.closest?.('input, textarea:not(.nymph-editor-keys), [contenteditable]');
-      if (ctrl && (e.key === 'o' || e.key === 'O')) {
+      if (ctrl && e.shiftKey && (e.key === 'a' || e.key === 'A') && app.doc && !$('btn-agents').hidden) {
+        e.preventDefault();
+        e.stopPropagation();
+        app.agents.toggle();
+      } else if (ctrl && (e.key === 'o' || e.key === 'O')) {
         e.preventDefault();
         e.stopPropagation();
         act('app_open_file');
@@ -1456,6 +1603,7 @@ function shortcuts() {
     ['Delete, Ctrl+D', 'Delete / duplicate the selected element'],
     ['Alt+↑ / Alt+↓', 'Move the selected element'],
     ['Ctrl+F / Ctrl+H', 'Find / replace in the source'],
+    ['Ctrl+Shift+A', 'Show or hide the agents working on the chart'],
     ['Drag, wheel, double-click', 'Pan, zoom, fit the chart'],
     ['?', 'This list'],
   ];

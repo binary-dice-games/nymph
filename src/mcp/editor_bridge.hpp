@@ -16,6 +16,7 @@
 #include "ipc/local_socket.hpp"
 #include "mcp/json_rpc.hpp"
 #include "mcp/tools.hpp"
+#include "mcp/web_bridge.hpp"
 
 namespace bdg::nymph::mcp {
 
@@ -24,11 +25,14 @@ namespace bdg::nymph::mcp {
 class editor_bridge {
  public:
   /// @param dir The editors' folder; empty for ipc::editors_dir().
-  explicit editor_bridge(std::filesystem::path dir = {}) : dir_(std::move(dir)) {}
+  /// @param web The paired web app pages, which count as editors too
+  ///        (spec/17_agent_connectors/DESIGN.md section 7.2); may be null.
+  explicit editor_bridge(std::filesystem::path dir = {}, std::shared_ptr<web_bridge> web = {})
+      : dir_(std::move(dir)), web_(std::move(web)) {}
 
-  /// @brief Calls `tool` on the editor that `arguments.editor` names (a file
-  ///        or a process id; the one focused last when absent), without
-  ///        that argument.
+  /// @brief Calls `tool` on the editor that `arguments.editor` names (a file,
+  ///        a process id, or `web:<name>` for a paired web app tab; the one
+  ///        focused last when absent), without that argument.
   /// @return The editor's CallToolResult.
   /// @throws tool_error when no editor is open, it went away, or it refused
   ///         the request itself.
@@ -41,9 +45,12 @@ class editor_bridge {
     int next_id = 1;
   };
   link& connect(const std::string& want);
+  std::filesystem::path dir() const;
+  double latest_native_focus() const;
   json request(link& l, const std::string& method, json params);
 
   std::filesystem::path dir_;
+  std::shared_ptr<web_bridge> web_;
   std::map<int64_t, std::unique_ptr<link>> links_; ///< By process id.
 };
 

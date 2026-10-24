@@ -65,6 +65,11 @@ from a working one and look up every field you use.
    `editor_view_image` to see the result. Each change shows in the
    editor at once and the user can undo it. Without an open editor they
    say so: then use `render_chart`.
+10. When the user has the chart open in the nymph web app (a browser tab)
+   and wants you to work on it there, call `web_app_pair` and give them
+   the code it returns (typed in the app under Agents > Connect an
+   agent) or its link. Once paired, read `app_read_guide` with `web-app`
+   and use the app's tools; the `editor_*` tools then reach that tab too.
 
 | To draw | Root element |
 |---|---|
