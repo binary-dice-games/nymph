@@ -55,6 +55,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `nymph view --edit`: choosing a colour for a field that was automatic opens the colour picker at once.
 
 ### Fixed
+- Web viewer and web app on phones: a one- or two-finger gesture that starts on the chart no longer also scrolls the page or throws the chart out of view; vertical swipes scroll the page only with the new `touchScroll` option (`touch-scroll` attribute).
 - `nymph view --edit` no longer redraws the editor panel continuously while nothing changes.
 - `nymph view --edit`: adding a child from an element's right-click menu no longer crashes.
 - `nymph view` and the web viewer: a series colour removed by an edit, an undo or a new source goes back to its automatic colour instead of keeping the old one; automatic colours and markers match a fresh render.
