@@ -491,6 +491,7 @@ class chart_class : public element_class {
       setup(n, shown, r.width(), dc);
       plot(n, shown, dc);
       finish_plot_picks(dc);
+      pinch_current_plot(dc);
       dc.record_current_plot(n, false, view_kind::gantt);
       const ImPlotPlot* open_plot = dc.edit_mode() ? ImPlot::GetCurrentPlot() : nullptr;
       ImPlot::EndPlot();

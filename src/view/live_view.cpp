@@ -204,6 +204,11 @@ struct live_view::impl {
   /// on screen carried to renamed paths (set_source() with a rename).
   view_map start_views;
   int input_frames_left = 0;
+  /// The pinch steps fed since the last frame, added up (logical pixels).
+  std::optional<pinch_gesture> pinch;
+  /// Zoom of pinches no plot or diagram took, not yet sent as a whole wheel
+  /// notch (3D plots).
+  float pinch_notches = 0.0f;
 
   // Edit mode (spec/08_view_editor/DESIGN.md section 4).
   bool edit_mode = false;
@@ -453,6 +458,24 @@ struct live_view::impl {
       }
     }
     return v;
+  }
+
+  /// A pinch that no 2D plot or diagram took (a 3D plot, or none) zooms
+  /// with the wheel, a whole notch (about 1.2) at a time.
+  void wheel_untaken_pinch() {
+    const std::optional<pinch_gesture> left = ctx->pinch();
+    ctx->set_pinch(std::nullopt);
+    if (!left) {
+      return;
+    }
+    pinch_notches += std::log(left->scale) / std::log(1.2f);
+    const float whole = std::trunc(pinch_notches);
+    if (whole != 0.0f) {
+      ImGuiIO& io = ImGui::GetIO();
+      io.AddMousePosEvent(left->to.x, left->to.y);
+      io.AddMouseWheelEvent(0.0f, whole);
+      pinch_notches -= whole;
+    }
   }
 
   /// Counts a drawn frame. ImGui takes queued input a step per frame (a
@@ -729,6 +752,7 @@ struct live_view::impl {
     // with render_figure()); then they let go for pan and zoom.
     ctx->set_lock_limits(fresh_frames < kFigureFrames);
     ctx->set_edit_mode(edit_mode);
+    ctx->set_pinch(std::exchange(pinch, std::nullopt));
     ++fresh_frames;
     const node& root = fig->root;
     // In edit mode a click selects; it must not move ImGui's focus away from
@@ -752,6 +776,7 @@ struct live_view::impl {
       ImGui::FocusWindow(focused_before);
     }
     wants_keyboard = io.WantTextInput;
+    wheel_untaken_pinch();
     track_ui_changes();
     hovered.reset();
     if (const std::optional<pick>& p = ctx->hovered()) {
@@ -994,6 +1019,27 @@ void live_view::input(const pointer_event& e) {
   }
   m.pending_frames = std::max(m.pending_frames, kInputFrames);
   m.input_frames_left = kInputFrames + 1; // ImPlot applies some changes a frame late
+}
+
+void live_view::pinch(float from_x, float from_y, float to_x, float to_y, float scale) {
+  impl& m = *impl_;
+  if (!(scale > 0.0f) || !std::isfinite(scale)) {
+    return;
+  }
+  const float s = m.geom.css_scale > 0.0f ? m.geom.css_scale : 1.0f;
+  const ImVec2 from(from_x / s, from_y / s);
+  const ImVec2 to(to_x / s, to_y / s);
+  if (m.pinch) {
+    // This step after the pending one: the content under the first `from`
+    // goes under `to` moved by how far the steps' points differ, scaled.
+    pinch_gesture& p = *m.pinch;
+    p.to = ImVec2(to.x + (p.to.x - from.x) * scale, to.y + (p.to.y - from.y) * scale);
+    p.scale *= scale;
+  } else {
+    m.pinch = pinch_gesture{from, to, scale};
+  }
+  m.pending_frames = std::max(m.pending_frames, kInputFrames);
+  m.input_frames_left = kInputFrames + 1;
 }
 
 void live_view::input_key(const key_event& e) {

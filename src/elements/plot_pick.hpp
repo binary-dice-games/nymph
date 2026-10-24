@@ -115,6 +115,13 @@ std::vector<ImGuiID> forget_plot_items();
 ///        the frame's hovered pick. Call before EndPlot().
 void finish_plot_picks(draw_context& dc);
 
+/// @brief Applies the frame's pinch (draw_context::take_pinch()) to the
+///        open plot when it started inside its plot area: every axis that
+///        takes input gets the range that keeps the content under the
+///        fingers' first midpoint under their new one, scaled by the
+///        pinch. Takes effect next frame. Call before EndPlot().
+void pinch_current_plot(draw_context& dc);
+
 /// @brief The texts of a plot as ImPlot placed them.
 struct plot_texts {
   const node* element = nullptr;

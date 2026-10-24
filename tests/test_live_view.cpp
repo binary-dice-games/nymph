@@ -7,6 +7,7 @@
 #include <sstream>
 #include <imgui.h>
 #include <algorithm>
+#include <cmath>
 #include <filesystem>
 #include <fstream>
 #include <iterator>
@@ -387,6 +388,85 @@ TEST(live_view_input, TheWheelZoomsAroundThePointer) {
   // zoom's frame: new tick labels may then move the area a little).
   const double x_at = q.x_min + (q.x_max - q.x_min) * (px - p.x) / p.width;
   EXPECT_NEAR(x_at, 2.5, 0.05);
+}
+
+TEST(live_view_input, APinchKeepsTheDataUnderTheFingersAndZoomsByTheirSpread) {
+  driven_view d(kPan);
+  const plot_view p = d.plot();
+  // The midpoint starts over data (2.5, 5) and moves 20 px right, 10 up;
+  // two steps before the next frame, each spreading the fingers by sqrt 2.
+  const float fx = p.x + p.width / 4, fy = p.y + p.height / 2;
+  const float mx = fx + 12, my = fy - 4, tx = fx + 20, ty = fy - 10;
+  d.v.pinch(fx, fy, mx, my, std::sqrt(2.0f));
+  d.v.pinch(mx, my, tx, ty, std::sqrt(2.0f));
+  d.run();
+  const plot_view q = d.plot();
+  EXPECT_NEAR(q.x_max - q.x_min, 5.0, 1e-3);
+  EXPECT_NEAR(q.y_max - q.y_min, 5.0, 1e-3);
+  // (In the plot area of the pinch's frame: new tick labels may then move
+  // the area a little.)
+  EXPECT_NEAR(q.x_min + (q.x_max - q.x_min) * (tx - p.x) / p.width, 2.5, 0.05);
+  EXPECT_NEAR(q.y_max - (q.y_max - q.y_min) * (ty - p.y) / p.height, 5.0, 0.05);
+  // Nothing is left to apply once the gesture's frame is drawn.
+  d.run();
+  EXPECT_DOUBLE_EQ(d.plot().x_min, q.x_min);
+  EXPECT_DOUBLE_EQ(d.plot().x_max, q.x_max);
+}
+
+TEST(live_view_input, APinchOnAGanttChartZoomsTimeButNotRows) {
+  driven_view d(
+      "image: {width: 600, height: 240}\n"
+      "root:\n"
+      "  type: GanttChart\n"
+      "  children:\n"
+      "    - {type: GanttTask, id: a, name: A, start: 2026-03-02, duration: 4}\n"
+      "    - {type: GanttTask, id: b, name: B, after: [a], duration: 6}\n",
+      600,
+      240);
+  const plot_view p = d.plot();
+  const float cx = p.x + p.width / 2, cy = p.y + p.height / 2;
+  d.v.pinch(cx, cy, cx, cy, 2.0f);
+  d.run();
+  const plot_view q = d.plot();
+  EXPECT_NEAR(q.x_max - q.x_min, (p.x_max - p.x_min) / 2, 1e-6 * (p.x_max - p.x_min));
+  EXPECT_DOUBLE_EQ(q.y_min, p.y_min);
+  EXPECT_DOUBLE_EQ(q.y_max, p.y_max);
+}
+
+TEST(live_view_input, APinchZoomsADiagramByTheFingersSpread) {
+  driven_view d(
+      "image: {width: 400, height: 300}\n"
+      "root:\n"
+      "  type: ClassDiagram\n"
+      "  children:\n"
+      "    - {type: Class, id: Animal}\n"
+      "    - {type: Class, id: Duck}\n"
+      "    - {type: ClassRelation, from: Duck, to: Animal, kind: Inheritance}\n");
+  const plot_view before = d.plot();
+  ASSERT_EQ(before.kind, "diagram");
+  d.v.pinch(200, 150, 220, 150, 1.5f);
+  d.run();
+  const plot_view after = d.plot();
+  EXPECT_NEAR(after.zoom, 1.5, 1e-4);
+  // The content moved right with the fingers: its centre is now further left.
+  EXPECT_LT(after.center[0], before.center[0]);
+}
+
+TEST(live_view_input, APinchOnA3DPlotZoomsItWithWheelNotches) {
+  driven_view d(
+      "image: {width: 400, height: 300}\n"
+      "root:\n"
+      "  type: Plot3D\n"
+      "  title: S\n"
+      "  children:\n"
+      "    - {type: Plot3DScatter, label: p, xs: [0, 1, 0, 1], ys: [0, 0, 1, 1], zs: [0, 1, 1, 0]}\n");
+  const plot_view before = d.plot();
+  ASSERT_EQ(before.kind, "plot3d");
+  d.v.pinch(200, 160, 200, 160, 1.5f); // about two notches
+  d.run();
+  d.run(); // the notches reach ImPlot3D the frame after the pinch
+  const plot_view after = d.plot();
+  EXPECT_LT(after.x_max - after.x_min, before.x_max - before.x_min);
 }
 
 TEST(live_view_input, TheWheelOverTheXAxisZoomsOnlyX) {
