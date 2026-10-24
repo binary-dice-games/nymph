@@ -633,6 +633,36 @@ test('on a phone: no Edit or Source, ?mode=edit opens View, and the editor is ne
   await done(page);
 });
 
+test('on a phone the document never scrolls: the top bar stays in view', async () => {
+  const page = await openApp({ mobile: true, path: '/?example=line' });
+  await shown(page);
+  const barTop = () => page.evaluate(() => document.getElementById('bar').getBoundingClientRect().top);
+  const fits = await page.evaluate(() => document.scrollingElement.scrollHeight <= document.scrollingElement.clientHeight);
+  assert(fits, 'the document is no taller than the screen');
+  // A drag up on the chart, then on the stage below it.
+  const cdp = await page.context().newCDPSession(page);
+  const touch = (type, points) => cdp.send('Input.dispatchTouchEvent', { type, touchPoints: points.map(([x, y], id) => ({ x, y, id })) });
+  for (const y of [300, 800]) {
+    await touch('touchStart', [[195, y]]);
+    for (let i = 1; i <= 8; ++i) {
+      await touch('touchMove', [[195, y - i * 30]]);
+    }
+    await touch('touchEnd', []);
+  }
+  await page.waitForTimeout(300);
+  assert((await barTop()) === 0 && (await page.evaluate(() => window.scrollY)) === 0, 'the bar stays at the top');
+  // A browser that scrolls the document anyway (iOS Safari): it comes back.
+  await page.evaluate(() => {
+    const tall = document.createElement('div');
+    tall.style.cssText = 'height: 3000px';
+    document.documentElement.appendChild(tall);
+    window.scrollTo(0, 400);
+  });
+  await page.waitForFunction(() => window.scrollY === 0, null, { timeout: 5000 });
+  assert((await barTop()) === 0, 'the bar is back');
+  await done(page);
+});
+
 test('a narrow desktop window keeps Edit', async () => {
   const page = await openApp({ path: '/?example=line' });
   await page.setViewportSize({ width: 390, height: 800 });

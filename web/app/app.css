@@ -69,7 +69,21 @@ body {
   height: 100%;
 }
 
+/* The app fills the screen and only its panes scroll: the document never
+   does. On phones and tablets (iOS Safari) a scrolled document could hide
+   the top bar with no way to drag it back, since the chart keeps its
+   touches. */
+html {
+  overflow: hidden;
+  overscroll-behavior: none;
+}
+
 body {
+  position: fixed;
+  inset: 0;
+  height: auto;
+  overflow: hidden;
+  overscroll-behavior: none;
   background: var(--bg);
   color: var(--text);
   font: 15px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
@@ -554,6 +568,7 @@ main {
   min-width: 0;
   position: relative;
   overflow: auto;
+  overscroll-behavior: contain;
   display: flex;
   align-items: flex-start;
   justify-content: center;
