@@ -591,7 +591,14 @@ class NymphError extends Error { line: number; column: number; }
   (`touch-scroll` attribute) restores `touch-action: pan-y` for pages
   where a vertical swipe must scroll. Positions come from `clientX` /
   `clientY` against the canvas box, not `offsetX` / `offsetY`, which
-  mobile browsers report inconsistently for touch.
+  mobile browsers report inconsistently for touch. Each press is released
+  once (`pointerup`, `pointercancel` or `lostpointercapture`), and the
+  first finger of a new gesture (`isPrimary`) drops any touch still
+  listed, so a release the browser never sent (a pinch ended off the
+  chart) cannot make the next one-finger drag a pinch. `live_view` keeps
+  drawing frames while ImGui's input queue holds events: ImGui takes them
+  a step per frame, and a pinch's last zoom steps must not wait for the
+  next touch.
 - **Scheduling.** `requestAnimationFrame` only while some viewer
   `wants_frame()`; `ResizeObserver` for size and pixel-ratio changes;
   `IntersectionObserver` pauses viewers off screen.
