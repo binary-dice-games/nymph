@@ -563,6 +563,7 @@ EMSCRIPTEN_KEEPALIVE const char* nymph_viewer_state(int handle) {
     j += std::string(",\"hasFigure\":") + (v.has_figure() ? "true" : "false");
     j += std::string(",\"wantsFrame\":") + (v.wants_frame() ? "true" : "false");
     j += std::string(",\"wantsKeyboard\":") + (v.wants_keyboard() ? "true" : "false");
+    j += std::string(",\"viewChanged\":") + (v.view_changed() ? "true" : "false");
     j += ",\"uiRevision\":" + std::to_string(v.ui_revision());
     j += ",\"description\":";
     json_string(j, v.description());

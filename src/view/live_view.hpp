@@ -259,6 +259,12 @@ class live_view {
   ///        host's shortcuts.
   bool wants_keyboard() const;
 
+  /// @brief Whether the user moved a plot, Gantt chart, 3D plot or diagram
+  ///        (pan, zoom, rotation, hidden series) since the source was set
+  ///        with a view reset or reset_view() ran (after the last frame):
+  ///        hosts offer a way back while it is true.
+  bool view_changed() const;
+
   /// @brief A number that changes whenever the state the user changed of a
   ///        user-interface element changes (what source_with_view() would
   ///        save of it), so a host can report view changes for widgets as it

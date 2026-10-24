@@ -50,6 +50,32 @@ function injectStyle() {
   document.head.appendChild(style);
 }
 
+/**
+ * The reset-view button's style, in the document or the shadow root that
+ * holds the chart (a page's styles do not reach into a shadow root).
+ * @param {Document|ShadowRoot} root
+ */
+function injectResetStyle(root) {
+  const parent = root.nodeType === 11 ? root : root.head; // 11: a shadow root
+  if (!parent || parent.querySelector(':scope > style.nymph-reset-style')) {
+    return;
+  }
+  const style = document.createElement('style');
+  style.className = 'nymph-reset-style';
+  style.textContent = `
+.nymph-reset { position: absolute; z-index: 1; box-sizing: border-box; width: 32px; height: 32px; margin: 0; padding: 0;
+  display: grid; place-items: center; color: #3a3a3a; background: rgba(255,255,255,.92);
+  border: 1px solid rgba(0,0,0,.18); border-radius: 6px; box-shadow: 0 1px 3px rgba(0,0,0,.12); cursor: pointer; }
+.nymph-reset[hidden] { display: none; }
+.nymph-reset:hover, .nymph-reset:focus-visible { background: #e8eefc; outline: none; }
+@media (pointer: coarse) { .nymph-reset { width: 40px; height: 40px; } }
+@media (prefers-color-scheme: dark) {
+  .nymph-reset { color: #e6e6e6; background: rgba(38,38,38,.92); border-color: rgba(255,255,255,.2); }
+  .nymph-reset:hover, .nymph-reset:focus-visible { background: #34405a; }
+}`;
+  parent.appendChild(style);
+}
+
 /** A problem in a nymph source (or a failed update). */
 export class NymphError extends Error {
   /**
@@ -295,6 +321,8 @@ export class NymphViewer {
     this.cleanup = [];
     /** A setData() not yet applied, which later calls replace. */
     this.dataSlot = null;
+    /** @type {HTMLButtonElement|null} shown while the user has moved the view */
+    this.resetButton = null;
   }
 
   // ── Events ─────────────────────────────────────────────────────────────────
@@ -342,12 +370,64 @@ export class NymphViewer {
     // vertical one-finger swipes scroll the page instead.
     canvas.style.touchAction = this.options.touchScroll ? 'pan-y' : 'none';
     container.appendChild(canvas);
+    if (this.options.resetButton !== false) {
+      this.addResetButton(container);
+    }
     this.container = container;
     this.canvas = canvas;
     this.ctx2d = canvas.getContext('2d');
     this.listenToInput(canvas);
     this.observe(container);
     this.fitToContainer();
+  }
+
+  /**
+   * @private A button in the chart's bottom-right corner, shown while the
+   * user has moved the view, that resets it (as GitHub's diagrams do).
+   */
+  addResetButton(container) {
+    injectResetStyle(container.getRootNode());
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'nymph-reset';
+    b.title = 'Reset view';
+    b.setAttribute('aria-label', 'Reset view');
+    b.hidden = true;
+    // Four corners: back to the whole chart.
+    b.innerHTML =
+      '<svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" fill="none" stroke="currentColor" ' +
+      'stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M2 6V2h4M10 2h4v4M14 10v4h-4M6 14H2v-4"/></svg>';
+    b.addEventListener('click', () => {
+      b.hidden = true;
+      this.resetView();
+      this.canvas?.focus();
+    });
+    container.appendChild(b);
+    this.resetButton = b;
+    this.cleanup.push(() => {
+      b.remove();
+      this.resetButton = null;
+    });
+  }
+
+  /**
+   * @private Shows the reset button while the view is changed, at the
+   * canvas's bottom-right corner (offsets share the canvas's offset parent,
+   * so the container's own styles stay as the page set them).
+   */
+  placeResetButton(state) {
+    const b = this.resetButton;
+    const c = this.canvas;
+    if (!b || !c) {
+      return;
+    }
+    const show = state.hasFigure && state.viewChanged && c.offsetParent !== null;
+    b.hidden = !show;
+    if (show) {
+      const inset = 8;
+      b.style.left = `${c.offsetLeft + c.offsetWidth - b.offsetWidth - inset}px`;
+      b.style.top = `${c.offsetTop + c.offsetHeight - b.offsetHeight - inset}px`;
+    }
   }
 
   /** @private Pointer, wheel and touch input on the canvas. */
@@ -687,12 +767,20 @@ export class NymphViewer {
     c.style.height = `${g.layoutHeight * g.cssScale}px`;
   }
 
-  /** @private Fires hover and click after a frame, and view once a pan or zoom settles. */
+  /**
+   * @private Fires hover and click after a frame, and view once a pan or
+   * zoom settles; shows or hides the reset button.
+   */
   afterFrame() {
-    if (this.listeners.size === 0) {
+    if (this.listeners.size === 0 && !this.resetButton) {
       return;
     }
     const state = this.state();
+    this.placeResetButton(state);
+    if (this.listeners.size === 0) {
+      this.pendingClick = null;
+      return;
+    }
     const hover = JSON.stringify(state.hovered);
     if (hover !== this.lastHover) {
       this.lastHover = hover;
@@ -1236,6 +1324,7 @@ export class NymphViewer {
  * @param {'source'|'light'|'dark'|'classic'|'auto'} [options.theme] the source's theme (default), a fixed one, or the page's colour scheme
  * @param {boolean} [options.menu] the right-click menu: save as PNG / YAML, about (default true)
  * @param {string} [options.fileName] the name files are saved under, without extension (default: from `src`, or "chart")
+ * @param {boolean} [options.resetButton] a button in the chart's corner, shown once the user pans or zooms, that resets the view (default true)
  * @param {boolean} [options.touchScroll] a vertical one-finger swipe on the chart scrolls the page (default false: every touch gesture that starts on the chart goes to the chart only)
  * @returns {Promise<NymphViewer>}
  */
@@ -1297,7 +1386,7 @@ function isPng(bytes) {
  * `nymph-view` and `nymph-error`.
  */
 export class NymphViewerElement extends (typeof HTMLElement === 'undefined' ? class {} : HTMLElement) {
-  static observedAttributes = ['src', 'fit', 'theme', 'tooltips', 'menu', 'touch-scroll'];
+  static observedAttributes = ['src', 'fit', 'theme', 'tooltips', 'menu', 'reset-button', 'touch-scroll'];
 
   constructor() {
     super();
@@ -1365,6 +1454,7 @@ export class NymphViewerElement extends (typeof HTMLElement === 'undefined' ? cl
           theme: this.getAttribute('theme') ?? 'source',
           tooltips: this.getAttribute('tooltips') !== 'false',
           menu: this.getAttribute('menu') !== 'false',
+          resetButton: this.getAttribute('reset-button') !== 'false',
           touchScroll: this.hasAttribute('touch-scroll') && this.getAttribute('touch-scroll') !== 'false',
           src: src ?? undefined,
         });

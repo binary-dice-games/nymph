@@ -603,6 +603,14 @@ class NymphError extends Error { line: number; column: number; }
   or adds up to a double click (which resets a diagram's view), and the
   pointer leaves the chart while two fingers are down (no hover or tooltip
   under a finger during a pinch).
+- **Reset button.** A `<button>` after the canvas, positioned at the
+  canvas's bottom-right corner from the canvas's offsets (the button and
+  the canvas share an offset parent, so the container's styles stay the
+  page's), shown while `live_view::view_changed()` (the user moved a
+  plot or diagram since the source or the last reset) and calling
+  `resetView()`. Its style goes into the document or the shadow root that
+  holds the chart. On by default (on phones the double tap is the only
+  other way back); `resetButton: false` / `reset-button="false"` hide it.
   A double tap is a double click. The canvas has
   `touch-action: none` (and cancels `touchstart` / `touchmove` for
   browsers that ignore it): a gesture that starts on the chart is the

@@ -740,6 +740,43 @@ test('right-click saves PNG and YAML with the view on screen', async () => {
   await page.close();
 });
 
+test('the reset button shows once the view moves, sits in the corner and resets it', async () => {
+  const page = await openPage();
+  await plotPage(page);
+  const button = () =>
+    page.evaluate(() => {
+      const b = window.v.container.querySelector('button.nymph-reset');
+      const r = b.getBoundingClientRect();
+      const c = window.v.canvas.getBoundingClientRect();
+      return { hidden: b.hidden, right: c.right - r.right, bottom: c.bottom - r.bottom, label: b.getAttribute('aria-label') };
+    });
+  assert((await button()).hidden, 'shown before any pan');
+  const a = await page.evaluate(() => window.at(2, 5));
+  await page.mouse.move(a.x, a.y);
+  await page.mouse.down();
+  await page.mouse.move(a.x - 60, a.y + 20, { steps: 4 });
+  await page.mouse.up();
+  await settleIn(page);
+  const shown = await button();
+  assert(!shown.hidden, 'hidden after a pan');
+  assert(shown.label === 'Reset view', `label ${shown.label}`);
+  assert(Math.abs(shown.right - 8) < 1 && Math.abs(shown.bottom - 8) < 1, `at ${shown.right}, ${shown.bottom} from the corner`);
+  assert((await page.evaluate(() => window.v.state().views[0].xMin)) > 0.1, 'not panned');
+  await page.click('button.nymph-reset');
+  await settleIn(page);
+  const r = await page.evaluate(() => window.v.state().views[0]);
+  assert(r.xMin === 0 && r.xMax === 4 && r.yMin === 0 && r.yMax === 10, `view ${r.xMin}..${r.xMax}, ${r.yMin}..${r.yMax}`);
+  assert((await button()).hidden, 'still shown after the reset');
+  await page.close();
+});
+
+test('resetButton: false adds no reset button', async () => {
+  const page = await openPage();
+  await plotPage(page, PLOT, { resetButton: false });
+  assert((await page.evaluate(() => window.v.container.querySelectorAll('button').length)) === 0, 'a button');
+  await page.close();
+});
+
 test('a right-drag box-zooms and opens no menu', async () => {
   const page = await openPage();
   await plotPage(page);
