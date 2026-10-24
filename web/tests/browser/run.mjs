@@ -11,6 +11,7 @@ import { readFile } from 'node:fs/promises';
 import { createServer } from 'node:http';
 import { createRequire } from 'node:module';
 import { extname, join, normalize } from 'node:path';
+import { pathToFileURL } from 'node:url';
 
 const [webDir, sourceDir] = process.argv.slice(2);
 if (!webDir || !sourceDir) {
@@ -670,7 +671,7 @@ async function renderResult(name) {
  * The host page with the App loaded and sent `result`; resolves once the App
  * shows a chart or gave up. `requests` collects the App frame's requests.
  */
-async function openApp({ context = { theme: 'light', displayMode: 'inline', availableDisplayModes: ['inline', 'fullscreen'] }, result, failFonts = false }) {
+async function openApp({ context = { theme: 'light', displayMode: 'inline', availableDisplayModes: ['inline', 'fullscreen'] }, result, failFonts = false, noOpenLink = false }) {
   const page = await browser.newPage({ viewport: { width: 1000, height: 1300 }, deviceScaleFactor: 1 });
   page.on('pageerror', (e) => console.log(`     page error: ${e.message}`));
   await page.addInitScript(helpers);
@@ -682,7 +683,7 @@ async function openApp({ context = { theme: 'light', displayMode: 'inline', avai
   });
   await page.goto(`${base}/mcp_host.html`);
   await page.waitForFunction(() => window.hostReady === true);
-  await page.evaluate((options) => window.hostStart(options), { context, result, failFonts });
+  await page.evaluate((options) => window.hostStart(options), { context, result, failFonts, noOpenLink });
   // The App frame is sandboxed (an opaque origin): reach it through Playwright.
   let frame = null;
   for (const until = Date.now() + 30000; !frame && Date.now() < until; ) {
@@ -794,6 +795,28 @@ test('the MCP App asks the host for full screen', async () => {
 
   const plain = await openApp({ context: { theme: 'light' }, result: await renderResult('line') });
   assert(await plain.frame.evaluate(() => document.getElementById('fullscreen').hidden), 'no button without full screen');
+  await plain.page.close();
+});
+
+test('the MCP App opens the chart in the web app, paired (spec/17_agent_connectors step 9)', async () => {
+  const { page, frame } = await openApp({ result: await renderResult('line') });
+  assert(await frame.isVisible('#open-app'), 'the button shows with a chart');
+  await frame.click('#open-app');
+  await page.waitForFunction(() => window.host.messages.some((m) => m.method === 'ui/open-link'));
+  const calls = await page.evaluate(() => window.host.toolCalls.map((c) => c.name));
+  assert(calls.includes('web_app_pair'), `asked nymph mcp to pair: ${calls}`);
+  const url = await page.evaluate(() => window.host.messages.find((m) => m.method === 'ui/open-link').params.url);
+  const m = /^https:\/\/app\.test\/nymph\/#y=([A-Za-z0-9_-]+)&pair=41234-K7QM-2XPD$/.exec(url);
+  assert(m, url);
+  const { decodeSource } = await import(pathToFileURL(join(sourceDir, 'web', 'app', 'app', 'share.js')).href);
+  const decoded = await decodeSource(m[1]);
+  assert(decoded.includes('type: Plot') && decoded.startsWith((await readFile(join(sourceDir, 'examples', 'line.yaml'), 'utf8')).slice(0, 40)), 'the chart is in the link');
+  await page.close();
+
+  const plain = await openApp({ result: await renderResult('line'), noOpenLink: true });
+  await plain.frame.click('#open-app');
+  await plain.frame.waitForFunction(() => document.getElementById('message').textContent.includes('Open this link'));
+  assert((await plain.frame.textContent('#message')).includes('#y='), 'the link is shown');
   await plain.page.close();
 });
 
