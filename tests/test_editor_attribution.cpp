@@ -65,6 +65,7 @@ TEST(EditorAttribution, ChangesInAGroupAreOneUndoAndOneRedoStep) {
   const std::string before = m.source();
   m.select(kPlot);
   m.begin_group("Agent turn", "agent:gemini");
+  m.set_origin("agent:gemini");
   ASSERT_TRUE(m.commit("title", "One").ok);
   ASSERT_TRUE(m.commit("x_label", "When").ok);
   ASSERT_TRUE(m.add_element("root", 1, "PlotScatter").ok);
@@ -89,12 +90,54 @@ TEST(EditorAttribution, ARefusedChangeInAGroupLeavesTheOthers) {
   editor_model m(kSource);
   m.select(kPlot);
   m.begin_group("Agent turn", "agent:x");
+  m.set_origin("agent:x");
   ASSERT_TRUE(m.commit("title", "One").ok);
   EXPECT_FALSE(m.commit("marker_size", "\"big\"").ok);
   ASSERT_TRUE(m.commit("x_label", "When").ok);
   m.end_group();
   EXPECT_NE(m.source().find("title: One"), std::string::npos);
   EXPECT_NE(m.source().find("x_label: When"), std::string::npos);
+  ASSERT_TRUE(m.undo());
+  EXPECT_EQ(m.source(), kSource);
+}
+
+TEST(EditorAttribution, AChangeByAnotherOriginEndsTheGroup) {
+  editor_model m(kSource);
+  m.select(kPlot);
+  m.begin_group("Agent turn", "agent:mcp-claude-code");
+  m.set_origin("agent:mcp-claude-code");
+  ASSERT_TRUE(m.commit("title", "One").ok);
+  ASSERT_TRUE(m.commit("x_label", "When").ok);
+  m.set_origin("user");
+  ASSERT_TRUE(m.commit("y_label", "How much").ok);
+  EXPECT_FALSE(m.in_group());
+  m.set_origin("agent:mcp-claude-code");
+  m.begin_group("Agent turn", "agent:mcp-claude-code");
+  ASSERT_TRUE(m.commit("title", "Two").ok);
+  m.end_group();
+  EXPECT_EQ(m.undo_label(), "Agent turn");
+  EXPECT_EQ(m.last_origin(), "agent:mcp-claude-code");
+  ASSERT_TRUE(m.undo()); // the agent's second part only
+  EXPECT_NE(m.source().find("title: One"), std::string::npos);
+  EXPECT_NE(m.source().find("y_label: How much"), std::string::npos);
+  EXPECT_EQ(m.undo_label(), "Set y_label");
+  ASSERT_TRUE(m.undo()); // the user's change
+  EXPECT_EQ(m.source().find("y_label"), std::string::npos);
+  EXPECT_NE(m.source().find("x_label: When"), std::string::npos);
+  EXPECT_EQ(m.undo_label(), "Agent turn");
+  ASSERT_TRUE(m.undo()); // the agent's first part
+  EXPECT_EQ(m.source(), kSource);
+}
+
+TEST(EditorAttribution, AChangeWithTheGroupsOriginJoinsIt) {
+  editor_model m(kSource);
+  m.select(kPlot);
+  m.set_origin("agent:x");
+  m.begin_group("Agent turn", "agent:x");
+  ASSERT_TRUE(m.commit("title", "One").ok);
+  ASSERT_TRUE(m.commit("x_label", "When").ok);
+  EXPECT_TRUE(m.in_group());
+  m.end_group();
   ASSERT_TRUE(m.undo());
   EXPECT_EQ(m.source(), kSource);
 }

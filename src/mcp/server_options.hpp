@@ -3,11 +3,14 @@
 /// @brief What `nymph mcp` was started with.
 #pragma once
 
+#include <chrono>
 #include <cstddef>
 #include <filesystem>
 #include <functional>
 #include <string>
 #include <string_view>
+#include <vector>
+#include "mcp/json_rpc.hpp"
 #include "nymph.hpp"
 #include "render/renderer_options.hpp"
 
@@ -36,6 +39,16 @@ struct server_options {
   /// Where `nymph mcp`'s editor tools look for running editors; empty for
   /// ipc::editors_dir(). Tests pass their own.
   std::filesystem::path editors_dir;
+  /// Writes a server-to-client notification (`notifications/tools/
+  /// list_changed`); may be called from another thread. run_mcp() sets it;
+  /// without it notifications are dropped.
+  std::function<void(const json&)> notify;
+  /// The web app bridge (spec/17_agent_connectors/DESIGN.md section 7.2):
+  /// the app's address for pairing links, the page origins accepted (empty:
+  /// the app's own and `NYMPH_WEB_APP_ORIGINS`), and how long a call waits.
+  std::string web_app_url = "https://binary-dice-games.github.io/nymph/";
+  std::vector<std::string> web_app_origins;
+  std::chrono::milliseconds web_call_timeout{std::chrono::minutes(5)};
 };
 
 } // namespace bdg::nymph::mcp

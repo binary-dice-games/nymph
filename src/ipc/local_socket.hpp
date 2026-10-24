@@ -46,6 +46,11 @@ class local_stream {
   /// @return false at the end of the stream or on an error.
   bool read_line(std::string& line);
 
+  /// @brief Appends the bytes available now (at least one; blocks until
+  ///        some arrive) to `out`: the bytes left by read_line() first.
+  /// @return false at the end of the stream or on an error.
+  bool read_some(std::string& out);
+
   /// @brief Writes all of `data`. @return false on an error.
   bool write(std::string_view data);
 

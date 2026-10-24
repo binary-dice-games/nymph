@@ -305,6 +305,13 @@ if(NYMPH_MCP)
     # (spec/14_editor_workspace/DESIGN.md section 3).
     ipc/local_socket.hpp
     ipc/local_socket.cpp
+    ipc/loopback.hpp
+    mcp/sha1.hpp
+    mcp/sha1.cpp
+    mcp/websocket.hpp
+    mcp/websocket.cpp
+    mcp/web_bridge.hpp
+    mcp/web_bridge.cpp
     ipc/editor_registry.hpp
     ipc/editor_registry.cpp
     mcp/editor_server.hpp

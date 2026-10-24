@@ -309,6 +309,8 @@ class editor_model {
   /// @brief Makes the changes until end_group() one undo entry, labelled
   ///        `label` and attributed to `origin` (an agent's turn). Groups do
   ///        not nest: a begin_group() while one is open continues it.
+  ///        An accepted change whose origin (set_origin()) differs from the
+  ///        group's ends the group first, so it is never undone with it.
   void begin_group(std::string label, std::string origin);
   /// @brief Closes the open group; does nothing without one.
   void end_group();

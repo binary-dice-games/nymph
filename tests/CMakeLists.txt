@@ -195,6 +195,11 @@ if(NYMPH_MCP)
   # The editor's socket and discovery files (spec/14_editor_workspace step 8).
   nymph_add_test(test_local_socket test_local_socket.cpp)
   target_link_libraries(test_local_socket PRIVATE nymph_mcp)
+  # The web app bridge (spec/17_agent_connectors steps 6 and 7).
+  nymph_add_test(test_websocket test_websocket.cpp)
+  target_link_libraries(test_websocket PRIVATE nymph_mcp)
+  nymph_add_test(test_web_bridge test_web_bridge.cpp)
+  target_link_libraries(test_web_bridge PRIVATE nymph_mcp)
   nymph_add_test(test_editor_server test_editor_server.cpp)
   target_link_libraries(test_editor_server PRIVATE nymph_mcp)
   nymph_add_test(test_mcp test_mcp.cpp)

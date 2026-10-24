@@ -125,8 +125,9 @@ TEST(mcp_session, lists_answer_after_initialize) {
       initialize() + notification("notifications/initialized") + request(2, "tools/list") +
       request(3, "resources/list", {{"cursor", "x"}}));
   ASSERT_EQ(r.responses.size(), 3u);
-  // The chart tools, then the editor's (spec/14_editor_workspace).
-  EXPECT_EQ(r.responses[1]["result"]["tools"].size(), 9u + editor_tool_definitions().size());
+  // The chart tools, the editor's (spec/14_editor_workspace) and the web
+  // app's pairing tools (spec/17_agent_connectors).
+  EXPECT_EQ(r.responses[1]["result"]["tools"].size(), 9u + editor_tool_definitions().size() + 2u);
   EXPECT_EQ(r.responses[2]["result"]["resources"].size(), 2u);
 }
 

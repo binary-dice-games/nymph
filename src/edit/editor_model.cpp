@@ -272,6 +272,12 @@ commit_result editor_model::apply(std::string next, const std::string& key, bool
       return fail(e.what(), e.line(), e.column());
     }
   }
+  if (group_ && group_->origin != origin_) {
+    // Someone else's change is not part of the group: undoing the group
+    // must not undo it (spec/17_agent_connectors/DESIGN.md section 4.4).
+    group_.reset();
+    last_key_.clear();
+  }
   const std::string label = group_ ? group_->label : !label_.empty() ? label_ : change_label(key);
   const std::string origin = group_ ? group_->origin : origin_;
   const bool merged = merge && key == last_key_ && !undo_.empty();

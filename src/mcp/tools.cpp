@@ -416,10 +416,24 @@ tool* tool_registry::find(const std::string& name) {
   return it == tools_.end() ? nullptr : &*it;
 }
 
+void tool_registry::set_dynamic(std::function<json()> list,
+                                std::function<std::optional<json>(const std::string&, const json&)> call) {
+  dynamic_list_ = std::move(list);
+  dynamic_call_ = std::move(call);
+}
+
 json tool_registry::list() const {
   json list = json::array();
   for (const tool& t : tools_) {
     list.push_back(t.definition);
+  }
+  if (dynamic_list_) {
+    for (json& t : dynamic_list_()) {
+      const bool taken = std::any_of(tools_.begin(), tools_.end(), [&](const tool& x) { return x.definition.at("name") == t.value("name", std::string()); });
+      if (!taken) {
+        list.push_back(std::move(t));
+      }
+    }
   }
   return {{"tools", std::move(list)}};
 }
@@ -435,6 +449,15 @@ json tool_registry::call(const json& params) {
   }
   const auto it =
       std::find_if(tools_.begin(), tools_.end(), [&](const tool& t) { return t.definition.at("name") == name; });
+  if (it == tools_.end() && dynamic_call_) {
+    try {
+      if (std::optional<json> r = dynamic_call_(name, arguments)) {
+        return *r;
+      }
+    } catch (const tool_error& e) {
+      return text_result(e.what(), true);
+    }
+  }
   if (it == tools_.end()) {
     std::vector<std::string> names;
     for (const tool& t : tools_) {
