@@ -584,8 +584,14 @@ class NymphError extends Error { line: number; column: number; }
   (`live_view::takes_wheel()`), so page scrolling is not hijacked over
   labels and margins; a two-finger pinch becomes wheel zoom at its centre
   (about 1.2 per notch); a double tap is a double click. The canvas has
-  `touch-action: pan-y`: a vertical one-finger swipe scrolls the page, a
-  horizontal one pans the chart.
+  `touch-action: none` (and cancels `touchstart` / `touchmove` for
+  browsers that ignore it): a gesture that starts on the chart is the
+  chart's alone, since the page scrolling under a captured finger moved
+  the chart too and fed it large jumps. The `touchScroll` option
+  (`touch-scroll` attribute) restores `touch-action: pan-y` for pages
+  where a vertical swipe must scroll. Positions come from `clientX` /
+  `clientY` against the canvas box, not `offsetX` / `offsetY`, which
+  mobile browsers report inconsistently for touch.
 - **Scheduling.** `requestAnimationFrame` only while some viewer
   `wants_frame()`; `ResizeObserver` for size and pixel-ratio changes;
   `IntersectionObserver` pauses viewers off screen.

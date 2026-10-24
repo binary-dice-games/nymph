@@ -360,6 +360,62 @@ test('the wheel zooms a plot without scrolling the page, and scrolls it elsewher
   await page.close();
 });
 
+/** A page with touch input, the plot at its top and room to scroll below. */
+async function touchPage() {
+  const page = await browser.newPage({ viewport: { width: 1000, height: 800 }, deviceScaleFactor: 1, hasTouch: true });
+  page.on('pageerror', (e) => console.log(`     page error: ${e.message}`));
+  await page.goto(`${base}/test.html`);
+  await page.waitForFunction(() => window.nymphReady === true);
+  await plotPage(page);
+  await page.evaluate(() => {
+    const spacer = document.createElement('div');
+    spacer.style.height = '3000px';
+    document.body.appendChild(spacer);
+  });
+  const cdp = await page.context().newCDPSession(page);
+  /** Sends one touch event; `points` are the fingers down, as [x, y]. */
+  const touch = (type, points) =>
+    cdp.send('Input.dispatchTouchEvent', { type, touchPoints: points.map(([x, y], id) => ({ x, y, id })) });
+  return { page, touch };
+}
+
+test('a one-finger drag on the chart pans it and never scrolls the page', async () => {
+  const { page, touch } = await touchPage();
+  assert((await page.evaluate(() => window.v.canvas.style.touchAction)) === 'none', 'touch-action');
+  const a = await page.evaluate(() => window.at(2, 5));
+  await touch('touchStart', [[a.x, a.y]]);
+  for (let i = 1; i <= 8; ++i) {
+    await touch('touchMove', [[a.x - i * 6, a.y - i * 10]]); // mostly vertical: was a page scroll
+  }
+  await touch('touchEnd', []);
+  await settleIn(page);
+  const r = await page.evaluate(() => ({ scroll: window.scrollY, p: window.v.state().views[0] }));
+  assert(r.scroll === 0, `the page scrolled to ${r.scroll}`);
+  // 48 px left and 80 px up of a 4 by 10 range: a pan, not a jump out of view.
+  assert(r.p.xMin > 0.1 && r.p.xMin < 2 && Math.abs(r.p.xMax - r.p.xMin - 4) < 1e-6, `x ${r.p.xMin} to ${r.p.xMax}`);
+  assert(r.p.yMin > -5 && r.p.yMin < 0 && Math.abs(r.p.yMax - r.p.yMin - 10) < 1e-6, `y ${r.p.yMin} to ${r.p.yMax}`);
+  await page.close();
+});
+
+test('a pinch on the chart zooms at its centre and never scrolls the page', async () => {
+  const { page, touch } = await touchPage();
+  const c = await page.evaluate(() => window.at(2, 5));
+  await touch('touchStart', [[c.x - 20, c.y]]);
+  await touch('touchStart', [[c.x - 20, c.y], [c.x + 20, c.y]]);
+  for (let i = 1; i <= 8; ++i) {
+    await touch('touchMove', [[c.x - 20 - i * 5, c.y + i * 4], [c.x + 20 + i * 5, c.y + i * 4]]);
+  }
+  await touch('touchEnd', [[c.x + 60, c.y + 32]]);
+  await touch('touchEnd', []);
+  await settleIn(page);
+  const r = await page.evaluate(() => ({ scroll: window.scrollY, p: window.v.state().views[0] }));
+  assert(r.scroll === 0, `the page scrolled to ${r.scroll}`);
+  const width = r.p.xMax - r.p.xMin, centre = (r.p.xMax + r.p.xMin) / 2;
+  assert(width < 4 && width > 0.5, `x range ${width}`);
+  assert(Math.abs(centre - 2) < 0.5, `centred at x = ${centre}`);
+  await page.close();
+});
+
 test('clicking a point fires click with its pick', async () => {
   const page = await openPage();
   await plotPage(page);

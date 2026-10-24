@@ -329,9 +329,10 @@ export class NymphViewer {
     const canvas = document.createElement('canvas');
     canvas.style.display = 'block';
     canvas.setAttribute('role', 'img');
-    // Vertical one-finger drags still scroll the page; everything else
-    // (horizontal drags, pinches) reaches the chart.
-    canvas.style.touchAction = 'pan-y';
+    // A touch gesture that starts on the chart belongs to the chart alone:
+    // the page neither scrolls nor zooms under it. With touchScroll,
+    // vertical one-finger swipes scroll the page instead.
+    canvas.style.touchAction = this.options.touchScroll ? 'pan-y' : 'none';
     container.appendChild(canvas);
     this.container = container;
     this.canvas = canvas;
@@ -343,7 +344,12 @@ export class NymphViewer {
 
   /** @private Pointer, wheel and touch input on the canvas. */
   listenToInput(canvas) {
-    const at = (e) => ({ x: e.offsetX, y: e.offsetY, touch: e.pointerType === 'touch' });
+    // From the canvas box, not offsetX / offsetY: mobile browsers report
+    // those inconsistently for touch pointers (and while the page moves).
+    const at = (e) => {
+      const box = canvas.getBoundingClientRect();
+      return { x: e.clientX - box.left, y: e.clientY - box.top, touch: e.pointerType === 'touch' };
+    };
     // DOM buttons: 0 primary, 1 middle, 2 secondary; ImGui: 0, 2, 1.
     const button = (e) => [0, 2, 1][e.button] ?? 0;
     const add = (type, fn, options) => {
@@ -358,10 +364,14 @@ export class NymphViewer {
         this.rightDown = { x: e.clientX, y: e.clientY };
       }
       if (e.pointerType === 'touch') {
-        this.touches.set(e.pointerId, { x: e.offsetX, y: e.offsetY });
+        const first = this.touches.values().next().value;
+        const p = at(e);
+        this.touches.set(e.pointerId, { x: p.x, y: p.y });
         if (this.touches.size === 2) {
           this.pinchDistance = this.touchDistance();
-          this.pointer('up', { ...at(e), button: 0 }); // the first finger's drag ends: a pinch starts
+          // The first finger's drag ends where that finger is (not at the
+          // second one, which would pan the chart by the gap): a pinch starts.
+          this.pointer('up', { ...first, button: 0, touch: true });
           return;
         }
         if (this.touches.size > 2) {
@@ -372,7 +382,8 @@ export class NymphViewer {
     });
     add('pointermove', (e) => {
       if (e.pointerType === 'touch' && this.touches.has(e.pointerId)) {
-        this.touches.set(e.pointerId, { x: e.offsetX, y: e.offsetY });
+        const p = at(e);
+        this.touches.set(e.pointerId, { x: p.x, y: p.y });
         if (this.touches.size === 2) {
           this.pinch();
           return;
@@ -421,6 +432,14 @@ export class NymphViewer {
       },
       { passive: false },
     );
+    if (!this.options.touchScroll) {
+      // Browsers that do not fully honour touch-action (older iOS Safari)
+      // would still scroll or zoom the page: the touches stay the chart's.
+      // Pointer events, which drive the chart, still fire.
+      const keep = (e) => e.cancelable && e.preventDefault();
+      add('touchstart', keep, { passive: false });
+      add('touchmove', keep, { passive: false });
+    }
     add('contextmenu', (e) => {
       // nymph's menu opens on release instead (the press may start a box
       // zoom); without it, the browser's menu stays outside plots.
@@ -1142,6 +1161,7 @@ export class NymphViewer {
  * @param {'source'|'light'|'dark'|'classic'|'auto'} [options.theme] the source's theme (default), a fixed one, or the page's colour scheme
  * @param {boolean} [options.menu] the right-click menu: save as PNG / YAML, about (default true)
  * @param {string} [options.fileName] the name files are saved under, without extension (default: from `src`, or "chart")
+ * @param {boolean} [options.touchScroll] a vertical one-finger swipe on the chart scrolls the page (default false: every touch gesture that starts on the chart goes to the chart only)
  * @returns {Promise<NymphViewer>}
  */
 export async function createViewer(container, options = {}) {
@@ -1202,7 +1222,7 @@ function isPng(bytes) {
  * `nymph-view` and `nymph-error`.
  */
 export class NymphViewerElement extends (typeof HTMLElement === 'undefined' ? class {} : HTMLElement) {
-  static observedAttributes = ['src', 'fit', 'theme', 'tooltips', 'menu'];
+  static observedAttributes = ['src', 'fit', 'theme', 'tooltips', 'menu', 'touch-scroll'];
 
   constructor() {
     super();
@@ -1270,6 +1290,7 @@ export class NymphViewerElement extends (typeof HTMLElement === 'undefined' ? cl
           theme: this.getAttribute('theme') ?? 'source',
           tooltips: this.getAttribute('tooltips') !== 'false',
           menu: this.getAttribute('menu') !== 'false',
+          touchScroll: this.hasAttribute('touch-scroll') && this.getAttribute('touch-scroll') !== 'false',
           src: src ?? undefined,
         });
         this.viewer = viewer;
