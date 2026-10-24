@@ -518,6 +518,9 @@ struct ImUmlContext {
   bool HasNextView; ///< SetNextDiagramView(), taken by the next Begin.
   float NextZoom;
   ImVec2 NextCenter;
+  bool HasNextPinch; ///< SetNextDiagramPinch(), taken by the next diagram drawn.
+  ImVec2 NextPinchFrom, NextPinchTo;
+  float NextPinchScale;
   // Next item.
   ImU32 NextLineCol, NextFillCol;
   bool HasNextRank;
@@ -530,6 +533,9 @@ struct ImUmlContext {
     }
   }
   ImUmlContext() {
+    HasNextPinch = false;
+    NextPinchFrom = NextPinchTo = ImVec2(0, 0);
+    NextPinchScale = 1.0f;
     HasNextView = false;
     NextZoom = 1.0f;
     NextCenter = ImVec2(0, 0);

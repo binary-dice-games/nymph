@@ -465,6 +465,7 @@ class plot_class : public element_class {
       dc.set_current_plot(&n);
       dc.draw_children(n);
       finish_plot_picks(dc);
+      pinch_current_plot(dc);
       dc.record_current_plot(n, y2);
       dc.set_current_plot(nullptr);
       const ImPlotPlot* open_plot = dc.edit_mode() ? ImPlot::GetCurrentPlot() : nullptr;

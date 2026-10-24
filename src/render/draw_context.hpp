@@ -13,6 +13,7 @@
 #include <string>
 #include <string_view>
 #include <unordered_map>
+#include <utility>
 #include <vector>
 #include "document/view.hpp"
 #include "render/image_options.hpp"
@@ -31,6 +32,16 @@ struct rect {
   float height() const {
     return max.y - min.y;
   }
+};
+
+/// @brief Two fingers moved since the last frame (a pinch), in logical
+///        pixels: the content under `from` goes under `to`, scaled by
+///        `scale` (above 1 zooms in). See spec/04_web_viewer/DESIGN.md
+///        section 4, "Input mapping".
+struct pinch_gesture {
+  ImVec2 from;
+  ImVec2 to;
+  float scale = 1.0f;
 };
 
 /// @brief What a live view reads back about one 2D plot after a frame: its
@@ -320,6 +331,26 @@ class draw_context {
     }
   }
 
+  /// @brief Set by the live view before a frame: the pinch to apply, or none.
+  void set_pinch(std::optional<pinch_gesture> pinch) {
+    pinch_ = pinch;
+  }
+
+  /// @brief The frame's pinch when it started inside `area`; it is then
+  ///        taken (the first plot or diagram under the fingers applies it).
+  std::optional<pinch_gesture> take_pinch(const rect& area) {
+    if (!pinch_ || pinch_->from.x < area.min.x || pinch_->from.x > area.max.x || pinch_->from.y < area.min.y ||
+        pinch_->from.y > area.max.y) {
+      return std::nullopt;
+    }
+    return std::exchange(pinch_, std::nullopt);
+  }
+
+  /// @brief The frame's pinch not yet taken by any plot or diagram.
+  const std::optional<pinch_gesture>& pinch() const {
+    return pinch_;
+  }
+
   /// @brief The input areas recorded in this frame.
   const std::vector<rect>& input_areas() const {
     return input_areas_;
@@ -448,6 +479,7 @@ class draw_context {
   std::optional<pick> hovered_;
   std::vector<plot_view_record> views_;
   std::vector<rect> input_areas_;
+  std::optional<pinch_gesture> pinch_;
   std::vector<plot_view_record> previous_views_;
   std::unordered_map<const node*, rect> rects_;
   std::map<std::string, ImFont*, std::less<>> fonts_;

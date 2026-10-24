@@ -818,5 +818,11 @@ IMGUI_API bool GetItemCounts(int* nodes, int* edges, int* events);
 /// content on that axis. Applies with or without ImUmlDiagramFlags_Interactive
 /// (a saved view drawn into an image); with it, the user moves on from there.
 IMGUI_API void SetNextDiagramView(float zoom, const ImVec2& center);
+/// Pinches the next diagram drawn with ImUmlDiagramFlags_Interactive (screen
+/// pixels): the content under `from` moves under `to`, and the zoom is
+/// multiplied by `scale` (kept within 0.25 to 8). For hosts that read
+/// two-finger gestures themselves; dropped by a diagram that is not
+/// interactive.
+IMGUI_API void SetNextDiagramPinch(const ImVec2& from, const ImVec2& to, float scale);
 
 } // namespace ImUml

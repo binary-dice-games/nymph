@@ -430,6 +430,14 @@ nymph_viewer_pointer(int handle, int type, float x, float y, int button, float w
   });
 }
 
+/// @brief One two-finger pinch step (live_view::pinch()), CSS pixels.
+EMSCRIPTEN_KEEPALIVE int nymph_viewer_pinch(int handle, float from_x, float from_y, float to_x, float to_y, float scale) {
+  return guarded([&] {
+    get(handle).view.pinch(from_x, from_y, to_x, to_y, scale);
+    return kOk;
+  });
+}
+
 /// @brief One key going down (`down` 1) or up; `name` is the DOM
 ///        KeyboardEvent.key, `mods` bits 1 Ctrl, 2 Shift, 4 Alt, 8 Meta.
 EMSCRIPTEN_KEEPALIVE int nymph_viewer_key(int handle, const char* name, int down, int mods) {

@@ -8,6 +8,7 @@
 #include <cmath>
 #include <cstdio>
 #include <cstring>
+#include <optional>
 #include <variant>
 #include <vector>
 #include "core/dates.hpp"
@@ -275,6 +276,35 @@ void finish_picks(draw_context& dc, ImDrawList* dl) {
   }
   draw_pick(dc, *c, dl);
   dc.set_hovered(std::move(c->hit));
+}
+
+void pinch_current_plot(draw_context& dc) {
+  ImPlotPlot* plot = ImPlot::GetCurrentPlot();
+  if (plot == nullptr || (plot->Flags & ImPlotFlags_NoInputs) != 0) {
+    return;
+  }
+  const ImRect& area = plot->PlotRect;
+  const std::optional<pinch_gesture> p = dc.take_pinch({area.Min, area.Max});
+  if (!p || !(p->scale > 0.0f)) {
+    return;
+  }
+  for (int i = 0; i < ImAxis_COUNT; ++i) {
+    ImPlotAxis& axis = plot->Axes[i];
+    if (!axis.Enabled || axis.IsInputLocked()) {
+      continue;
+    }
+    const float from = axis.Vertical ? p->from.y : p->from.x;
+    const float to = axis.Vertical ? p->to.y : p->to.x;
+    const float lo = axis.Vertical ? area.Min.y : area.Min.x;
+    const float hi = axis.Vertical ? area.Max.y : area.Max.x;
+    // The new range, as pixels of today's axis: `from` ends up at `to`.
+    // PixelsToPlot() follows the axis scale (log, symlog, time).
+    const double a = axis.PixelsToPlot(from + (lo - to) / p->scale);
+    const double b = axis.PixelsToPlot(from + (hi - to) / p->scale);
+    if (std::isfinite(a) && std::isfinite(b) && a != b) {
+      axis.SetRange(a, b);
+    }
+  }
 }
 
 void finish_plot_picks(draw_context& dc) {

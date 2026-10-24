@@ -410,9 +410,37 @@ test('a pinch on the chart zooms at its centre and never scrolls the page', asyn
   await settleIn(page);
   const r = await page.evaluate(() => ({ scroll: window.scrollY, p: window.v.state().views[0] }));
   assert(r.scroll === 0, `the page scrolled to ${r.scroll}`);
-  const width = r.p.xMax - r.p.xMin, centre = (r.p.xMax + r.p.xMin) / 2;
-  assert(width < 4 && width > 0.5, `x range ${width}`);
-  assert(Math.abs(centre - 2) < 0.5, `centred at x = ${centre}`);
+  // The fingers moved from 40 px apart to 120: three times closer in.
+  const width = r.p.xMax - r.p.xMin, height = r.p.yMax - r.p.yMin;
+  assert(Math.abs(width - 4 / 3) < 0.03, `x range ${width}`);
+  assert(Math.abs(height - 10 / 3) < 0.07, `y range ${height}`);
+  // The point first under the fingers' midpoint is under it at the end
+  // (give or take the plot area moving as the tick labels widen).
+  const now = await page.evaluate(() => window.at(2, 5));
+  assert(Math.abs(now.x - c.x) < 5 && Math.abs(now.y - (c.y + 32)) < 1.5, `(2, 5) at ${now.x}, ${now.y}; fingers at ${c.x}, ${c.y + 32}`);
+  await page.close();
+});
+
+test('pinching out then in follows the fingers, with no zoom left over after the gesture', async () => {
+  const { page, touch } = await touchPage();
+  const c = await page.evaluate(() => window.at(2, 5));
+  await touch('touchStart', [[c.x - 20, c.y]]);
+  await touch('touchStart', [[c.x - 20, c.y], [c.x + 20, c.y]]);
+  // Apart to 160 px and back to 80, faster than frames are drawn.
+  const steps = [...Array.from({ length: 14 }, (_, i) => 20 + (i + 1) * 5), ...Array.from({ length: 8 }, (_, i) => 90 - (i + 1) * 5)];
+  for (const half of steps) {
+    await touch('touchMove', [[c.x - half, c.y], [c.x + half, c.y]]);
+  }
+  await touch('touchEnd', [[c.x + 50, c.y]]);
+  await touch('touchEnd', []);
+  await settleIn(page);
+  const end = await page.evaluate(() => window.v.state().views[0]);
+  // 40 px to 100: 2.5 times closer in, no more.
+  assert(Math.abs(end.xMax - end.xMin - 4 / 2.5) < 0.03, `x range ${end.xMax - end.xMin}`);
+  await new Promise((r) => setTimeout(r, 300));
+  await settleIn(page);
+  const later = await page.evaluate(() => window.v.state().views[0]);
+  assert(later.xMin === end.xMin && later.xMax === end.xMax, `still zooming after the gesture: ${end.xMin}..${end.xMax} to ${later.xMin}..${later.xMax}`);
   await page.close();
 });
 

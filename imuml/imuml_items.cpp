@@ -2702,6 +2702,8 @@ void EndDiagram(int kind) {
     d->Edges.resize(edge_count); // drop the note links added for this frame
     return;
   }
+  const bool pinch = g.HasNextPinch;
+  g.HasNextPinch = false;
   ImGui::SetCursorScreenPos(d->CursorPos);
   const ImVec2 size = ImGui::CalcItemSize(d->SizeRequest, natural.x, natural.y);
   const ImRect bb(d->CursorPos, d->CursorPos + size);
@@ -2754,6 +2756,15 @@ void EndDiagram(int kind) {
       d->ViewZoom = ImClamp(d->ViewZoom * ImPow(1.2f, io.MouseWheel), 0.25f, 8.0f);
       const float new_zoom = fit * d->ViewZoom;
       d->ViewPan = io.MousePos - at * new_zoom - origin_at(new_zoom);
+    }
+    if (pinch) {
+      // The content point under the fingers' old midpoint goes under the new one.
+      const float old_zoom = fit * d->ViewZoom;
+      const ImVec2 old_origin = origin_at(old_zoom) + d->ViewPan;
+      const ImVec2 at = (g.NextPinchFrom - old_origin) / old_zoom;
+      d->ViewZoom = ImClamp(d->ViewZoom * g.NextPinchScale, 0.25f, 8.0f);
+      const float new_zoom = fit * d->ViewZoom;
+      d->ViewPan = g.NextPinchTo - at * new_zoom - origin_at(new_zoom);
     }
     if (held && ImGui::IsMouseDragging(ImGuiMouseButton_Left)) {
       d->ViewPan += io.MouseDelta;

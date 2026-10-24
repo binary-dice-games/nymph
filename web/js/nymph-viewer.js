@@ -285,6 +285,8 @@ export class NymphViewer {
     /** @type {Map<number, {x: number, y: number}>} touches, for pinch zoom */
     this.touches = new Map();
     this.pinchDistance = 0;
+    /** The fingers' midpoint at the last pinch step. */
+    this.pinchMiddle = { x: 0, y: 0 };
     /** @type {Array<() => void>} undoes listeners and observers */
     this.cleanup = [];
     /** A setData() not yet applied, which later calls replace. */
@@ -377,7 +379,7 @@ export class NymphViewer {
         const p = at(e);
         this.touches.set(e.pointerId, { x: p.x, y: p.y });
         if (this.touches.size === 2) {
-          this.pinchDistance = this.touchDistance();
+          this.startPinch();
           // The first finger's drag ends where that finger is (not at the
           // second one, which would pan the chart by the gap): a pinch starts.
           this.pointer('up', { ...first, button: 0, touch: true });
@@ -422,7 +424,7 @@ export class NymphViewer {
       }
       if (this.touches.size === 2) {
         // A third finger lifted: the pinch goes on from these two.
-        this.pinchDistance = this.touchDistance();
+        this.startPinch();
       }
       if (e.pointerType === 'touch' && this.touches.size === 0) {
         this.pointer('leave');
@@ -519,20 +521,33 @@ export class NymphViewer {
     return Math.hypot(a.x - b.x, a.y - b.y);
   }
 
-  /** @private Two fingers moving apart or together: wheel zoom at their centre. */
+  /** @private The two fingers' midpoint. */
+  touchMiddle() {
+    const [a, b] = [...this.touches.values()];
+    return { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
+  }
+
+  /** @private Two fingers down: later steps are measured from here. */
+  startPinch() {
+    this.pinchDistance = this.touchDistance();
+    this.pinchMiddle = this.touchMiddle();
+  }
+
+  /**
+   * @private Two fingers moved: the content under their old midpoint goes
+   * under the new one, zoomed by how far apart they moved (the content
+   * stays under the fingers).
+   */
   pinch() {
     const distance = this.touchDistance();
-    if (this.pinchDistance > 0 && distance > 0) {
-      const [a, b] = [...this.touches.values()];
-      const x = (a.x + b.x) / 2, y = (a.y + b.y) / 2;
-      // One wheel notch zooms by about 1.2.
-      const notches = Math.log(distance / this.pinchDistance) / Math.log(1.2);
-      if (Math.abs(notches) >= 0.05) {
-        this.pointer('move', { x, y, touch: true });
-        this.pointer('wheel', { x, y, wheelY: notches, touch: true });
-        this.pinchDistance = distance;
-      }
+    const middle = this.touchMiddle();
+    if (this.pinchDistance > 0 && distance > 0 && this.handle !== 0) {
+      const from = this.pinchMiddle;
+      this.core.m._nymph_viewer_pinch(this.handle, from.x, from.y, middle.x, middle.y, distance / this.pinchDistance);
+      this.schedule();
     }
+    this.pinchDistance = distance;
+    this.pinchMiddle = middle;
   }
 
   /** @private Size, pixel ratio, visibility and colour scheme of the page. */

@@ -473,6 +473,9 @@ ImUmlDiagramInfo diagram_class::submit(const node& n, draw_context& dc, const re
           v->center ? ImVec2(static_cast<float>((*v->center)[0]), static_cast<float>((*v->center)[1]))
                     : ImVec2(nan, nan));
     }
+    if (const std::optional<pinch_gesture> p = dc.take_pinch(*r)) {
+      ImUml::SetNextDiagramPinch(p->from, p->to, p->scale);
+    }
     ImGui::SetCursorScreenPos(r->min);
   }
   if (begin_of(kind_)(id.c_str(), size, flags)) {

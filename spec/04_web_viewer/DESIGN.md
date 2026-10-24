@@ -410,6 +410,7 @@ class live_view {
   void set_theme(std::string theme);           // "" = the source's image.theme
   void resize(view_size size);
   void input(const pointer_event& event);
+  void pinch(float from_x, float from_y, float to_x, float to_y, float scale); // two fingers
   void reset_view();
 
   /// Runs one frame if one is due; returns its draw data or nullptr.
@@ -486,7 +487,8 @@ pays nothing:
 
 (Later: `ImUml::SetNextDiagramView(zoom, center)` sets the view of the
 next diagram drawn, with or without the flag, for the saved view; the
-info reports `ViewCenter`.)
+info reports `ViewCenter`. `ImUml::SetNextDiagramPinch(from, to, scale)`
+applies a two-finger pinch to the next interactive diagram drawn.)
 
 
 ImUml fits each diagram to its rectangle (UML DESIGN, fit-to-rectangle
@@ -582,8 +584,19 @@ class NymphError extends Error { line: number; column: number; }
   capture during drags; `wheel` with `preventDefault()` only while the
   pointer is over a plot or diagram that takes input
   (`live_view::takes_wheel()`), so page scrolling is not hijacked over
-  labels and margins; a two-finger pinch becomes wheel zoom at its centre
-  (about 1.2 per notch); a double tap is a double click. The canvas has
+  labels and margins; a two-finger pinch is its own input
+  (`live_view::pinch()`, `nymph_viewer_pinch`), not wheel notches: each
+  step sends the fingers' old and new midpoints and the ratio of their
+  distances, the steps between two frames add up into one, and the plot
+  (every axis that takes input, through ImPlot's own pixel-to-value
+  mapping, so log and time axes work) or diagram under the old midpoint
+  sets its view so the content under the fingers stays under them and
+  zooms exactly as far as they spread. Wheel notches would not do:
+  ImPlot zooms a fixed step per wheel event whatever its size, and ImGui
+  takes one queued wheel event per frame, so a pinch overshot and kept
+  zooming after the fingers stopped. A 3D plot (ImPlot3D) still gets whole
+  wheel notches (about 1.2 each) from a pinch no 2D plot or diagram took.
+  A double tap is a double click. The canvas has
   `touch-action: none` (and cancels `touchstart` / `touchmove` for
   browsers that ignore it): a gesture that starts on the chart is the
   chart's alone, since the page scrolling under a captured finger moved

@@ -555,6 +555,14 @@ void ImUml::SetNextDiagramView(float zoom, const ImVec2& center) {
   g.NextCenter = center;
 }
 
+void ImUml::SetNextDiagramPinch(const ImVec2& from, const ImVec2& to, float scale) {
+  ImUmlContext& g = Ctx();
+  g.HasNextPinch = scale > 0.0f;
+  g.NextPinchFrom = from;
+  g.NextPinchTo = to;
+  g.NextPinchScale = scale;
+}
+
 // ── Items ────────────────────────────────────────────────────────────────────
 
 namespace {

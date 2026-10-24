@@ -236,6 +236,16 @@ class live_view {
   ///        next frames apply it.
   void input(const pointer_event& event);
 
+  /// @brief Feeds a two-finger pinch step, in CSS pixels: the content under
+  ///        `from` (the fingers' previous midpoint) goes under `to` (their
+  ///        midpoint now), zoomed by `scale` (their distance now over
+  ///        before; above 1 zooms in). Steps between two frames add up, and
+  ///        the plot or diagram under `from` applies them in the next frame
+  ///        (spec/04_web_viewer/DESIGN.md section 4, "Input mapping"); a 3D
+  ///        plot gets whole wheel notches instead. A `scale` that is not
+  ///        above 0 is ignored.
+  void pinch(float from_x, float from_y, float to_x, float to_y, float scale);
+
   /// @brief Feeds one key to the figure (user-interface widgets: a text
   ///        field, Ctrl+click on a slider; spec/09_ui_mockups/DESIGN.md
   ///        section 6). Send keys while wants_keyboard(), and every key-up.
