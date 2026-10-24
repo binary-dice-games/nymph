@@ -4,6 +4,7 @@
 //
 //   node run.mjs <nymph source dir> [<build>/extension with the manifests]
 
+import { execFile } from 'node:child_process';
 import { readFile, readdir } from 'node:fs/promises';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
@@ -406,6 +407,16 @@ test('the image size a source asks for is read without parsing it', () => {
   assertEq(size(['root:', '  type: Plot']), { width: 800, height: 500 }, 'no image key');
   assertEq(size(['image: {width: 99999, height: 4}', 'root:']), { width: 800, height: 500 }, 'out of range: the default');
   assertEq(size(['image: {width: 700}', 'root:']), { width: 700, height: 500 }, 'one of the two');
+});
+
+// ── The toolbar badge ────────────────────────────────────────────────────────
+
+test('a stale badge update never lands after a newer count', async () => {
+  // Its own process: the worker needs api.js loaded with a chrome namespace.
+  const script = join(sourceDir, 'extension', 'tests', 'node', 'badge-order.mjs');
+  const out = await new Promise((resolve, reject) =>
+    execFile(process.execPath, [script, sourceDir], (e, stdout, stderr) => (e ? reject(new Error(stderr || e.message)) : resolve(stdout))));
+  assertEq(JSON.parse(out.trim().split('\n').pop()), '3', 'final badge');
 });
 
 // ── Run ──────────────────────────────────────────────────────────────────────
