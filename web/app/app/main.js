@@ -7,6 +7,10 @@
  */
 
 import { NymphError, createViewer } from '../nymph-viewer.js';
+import { Activity } from './agents/activity.js';
+import { Bridge } from './agents/bridge.js';
+import { AgentsPanel } from './agents/panel.js';
+import { WebMcp } from './agents/webmcp.js';
 import { Commands } from './commands.js';
 import { device, editAvailability } from './device.js';
 import { Doc, baseName, withoutView } from './document.js';
@@ -56,6 +60,7 @@ async function init() {
   commands.hooks.endGroup = () => app.editor?.endGroup();
   commands.hooks.snapshot = () =>
     app.doc ? { doc: app.doc.id, source: app.editor ? app.editor.source() : app.doc.source, version: app.editor?.version() ?? null, mode: app.mode } : null;
+  setUpAgents();
   wireControls();
   wireDropAndPaste();
   wireKeys();
@@ -72,6 +77,49 @@ async function init() {
   }
   await route();
   document.documentElement.dataset.ready = 'true';
+}
+
+/**
+ * The agents the user runs (spec/17_agent_connectors): the Agents panel and
+ * its activity, WebMCP, and the `nymph mcp` bridge.
+ */
+function setUpAgents() {
+  const agents = app.config.agents ?? {};
+  const offers = { bridge: !!agents.bridge && device.agents.bridge, webmcp: !!agents.webmcp && device.agents.webmcp };
+  app.activity = new Activity(commands, {
+    snapshot: () => commands.hooks.snapshot(),
+    restore: (source) => commands.run('document_set_source', { source, label: 'Undo an agent\'s change' }),
+    undoEditor: () => app.editor?.undo(),
+    confirm: async (message) =>
+      (await ask('Undo', message, [
+        { label: 'Cancel', value: false },
+        { label: 'Restore', value: true, kind: 'danger', focus: true },
+      ])) === true,
+  });
+  app.webmcp = new WebMcp(commands, {
+    onCall: () => app.agents.connected('webmcp', { name: 'The browser\'s assistant', route: 'through WebMCP' }),
+  });
+  app.bridge = new Bridge(commands, {
+    documentName: () => app.doc?.name ?? 'untitled',
+    version: app.version.version || 'dev',
+    instructions:
+      'The nymph web app: the chart the user has open in a browser tab. Read app_read_guide with name web-app first; call document_state before changing anything.',
+    connected: (id, info) => app.agents.connected(id, info),
+    disconnected: (id) => app.agents.disconnected(id),
+  });
+  app.agents = new AgentsPanel({
+    dock: $('dock'),
+    button: $('btn-agents'),
+    commands,
+    activity: app.activity,
+    offers,
+    webmcpEnabled: () => app.webmcp.enabled,
+    setWebmcp: (on) => app.webmcp.setEnabled(on, !!app.doc),
+    pair: (code) => app.bridge.pair(code),
+  });
+  if (offers.bridge) {
+    app.bridge.resume();
+  }
 }
 
 async function fetchJson(path, fallback) {
@@ -126,6 +174,21 @@ async function route() {
   } catch (e) {
     showStart();
     toast(e.message ?? String(e), 6000);
+  }
+  if (hash.get('pair')) {
+    // A pairing link from an agent (spec/17_agent_connectors section 7.2):
+    // used once, so it leaves the address before anything else.
+    const code = hash.get('pair');
+    hash.delete('pair');
+    history.replaceState(null, '', `${location.pathname}${location.search}${hash.toString() ? `#${hash}` : ''}`);
+    if (app.config.agents?.bridge && device.agents.bridge) {
+      try {
+        await app.bridge.pair(code);
+        toast('Connected: the agent can now work on the open chart.');
+      } catch (e) {
+        toast(e.message ?? String(e), 8000);
+      }
+    }
   }
 }
 
@@ -294,6 +357,8 @@ function showStart() {
   $('doc-title').hidden = true;
   $('doc-actions').hidden = true;
   document.title = 'nymph — view and edit charts';
+  app.webmcp?.update(false);
+  app.activity?.clear();
   renderStart();
 }
 
@@ -310,6 +375,10 @@ function showDocument() {
   // The mobile page saves nothing (nothing is ever modified there): its
   // downloads are in the Share menu.
   $('btn-save').parentElement.hidden = !device.directEditing;
+  app.activity?.clear();
+  app.agents?.documentChanged();
+  app.webmcp?.update(true);
+  app.bridge?.focus(); // the chart's name, for `editor: "web:<name>"`
   updateTitle();
 }
 
@@ -1370,7 +1439,11 @@ function wireKeys() {
     (e) => {
       const ctrl = e.ctrlKey || e.metaKey;
       const typing = e.target.closest?.('input, textarea:not(.nymph-editor-keys), [contenteditable]');
-      if (ctrl && (e.key === 'o' || e.key === 'O')) {
+      if (ctrl && e.shiftKey && (e.key === 'a' || e.key === 'A') && app.doc && !$('btn-agents').hidden) {
+        e.preventDefault();
+        e.stopPropagation();
+        app.agents.toggle();
+      } else if (ctrl && (e.key === 'o' || e.key === 'O')) {
         e.preventDefault();
         e.stopPropagation();
         act('app_open_file');
@@ -1530,6 +1603,7 @@ function shortcuts() {
     ['Delete, Ctrl+D', 'Delete / duplicate the selected element'],
     ['Alt+↑ / Alt+↓', 'Move the selected element'],
     ['Ctrl+F / Ctrl+H', 'Find / replace in the source'],
+    ['Ctrl+Shift+A', 'Show or hide the agents working on the chart'],
     ['Drag, wheel, double-click', 'Pan, zoom, fit the chart'],
     ['?', 'This list'],
   ];

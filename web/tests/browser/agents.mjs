@@ -275,6 +275,357 @@ test('a change group ends after its agent goes quiet', async () => {
   await done(page);
 });
 
+// ── Step 4: the Agents panel and its activity ────────────────────────────────
+
+const dockVisible = (page) => page.evaluate(() => !document.getElementById('dock').hidden);
+const entries = (page) =>
+  page.evaluate(() => [...document.querySelectorAll('#dock .activity-list .entry')].map((e) => ({
+    who: e.querySelector('.who')?.textContent,
+    label: e.querySelector('.label')?.textContent,
+    undo: !!e.querySelector('button[aria-label^="Undo"]'),
+    state: e.querySelector('.state')?.textContent ?? '',
+  })));
+const undoFirst = (page) => page.click('#dock .activity-list .entry:first-child button[aria-label^="Undo"]');
+
+test('without connectors in config.json there is no Agents button', async () => {
+  const context = await browser.newContext({ serviceWorkers: 'block' });
+  const page = await context.newPage();
+  page.errors = [];
+  await page.route('**/config.json', (r) => r.fulfill({ contentType: 'application/json', body: '{"agents": {}}' }));
+  await page.goto(`${site.base}/?example=line`);
+  await page.waitForFunction(() => document.documentElement.dataset.ready === 'true');
+  assert(await page.isHidden('#btn-agents'), 'no Agents button');
+  await context.close();
+});
+
+test('the panel opens by itself on an agent\'s first change, and lists it', async () => {
+  const page = await openApp();
+  await openExample(page, 'line');
+  assert(await page.isVisible('#btn-agents'), 'the Agents button');
+  assert(!(await dockVisible(page)), 'closed at first');
+  await agent(page, 'document_state'); // a read: not listed, does not open it
+  assert(!(await dockVisible(page)), 'still closed after a read');
+  const src = (await source(page)).replace('title:', 'title: Changed #');
+  const r = await agent(page, 'document_set_source', { source: src.replace(/title: Changed #.*\n/, 'title: Changed\n') });
+  assert(!r.isError, text(r));
+  await page.waitForFunction(() => !document.getElementById('dock').hidden);
+  const list = await entries(page);
+  eq(list.length, 1, 'one entry');
+  eq(list[0].who, 'test-agent', 'who');
+  assert(list[0].undo, 'with Undo');
+  await done(page);
+});
+
+test('Undo in View mode restores the chart from before the change', async () => {
+  const page = await openApp();
+  await openExample(page, 'line');
+  const before = await source(page);
+  await agent(page, 'document_set_source', { source: before.replace(/title: .*/, 'title: By the agent') });
+  await page.waitForFunction(() => !document.getElementById('dock').hidden);
+  await undoFirst(page);
+  await page.waitForFunction(() => document.querySelector('#dock .entry.undone'));
+  assert(!(await source(page)).includes('By the agent'), 'restored');
+  eq((await entries(page))[0].state, 'undone', 'marked undone');
+  await done(page);
+});
+
+test('a group is one entry, undone in Edit mode by the editor\'s undo', async () => {
+  const page = await openApp();
+  await openExample(page, 'line', 'edit');
+  const before = await source(page);
+  await agent(page, 'document_begin_change', { label: 'Retitle the chart' });
+  await agent(page, 'editor_set_fields', { path: 'root', fields: { title: 'One' } });
+  await agent(page, 'editor_set_fields', { path: 'root', fields: { x_label: 'When' } });
+  await agent(page, 'document_end_change');
+  await page.waitForFunction(() => !document.getElementById('dock').hidden);
+  const list = await entries(page);
+  eq(list.length, 1, 'one entry for the group');
+  eq(list[0].label, 'Retitle the chart', 'its label');
+  await page.click('#dock .entry:first-child summary');
+  eq(await page.locator('#dock .entry:first-child .tools li').count(), 2, 'two steps');
+  const version = await page.evaluate(() => window.nymphApp.app.editor.version());
+  await undoFirst(page);
+  await page.waitForFunction(() => document.querySelector('#dock .entry.undone'));
+  eq(await source(page), before, 'both undone');
+  eq(await page.evaluate(() => window.nymphApp.app.editor.state().redo), 'Retitle the chart', 'by the editor\'s own undo');
+  assert((await page.evaluate(() => window.nymphApp.app.editor.version())) > version, 'a new version');
+  await done(page);
+});
+
+test('an entry changed since asks before restoring', async () => {
+  const page = await openApp();
+  await openExample(page, 'line');
+  const before = await source(page);
+  await agent(page, 'document_set_source', { source: before.replace(/title: .*/, 'title: By the agent') });
+  await page.waitForFunction(() => !document.getElementById('dock').hidden);
+  // The user changes it after the agent.
+  await page.evaluate(() => window.nymphApp.commands.run('document_set_source', { source: window.nymphApp.app.doc.source.replace('By the agent', 'By the user') }));
+  await undoFirst(page);
+  await page.waitForSelector('dialog.dlg');
+  assert((await page.textContent('dialog.dlg')).includes('Later changes are lost'), 'asks');
+  await page.click('dialog.dlg button:not(.danger)');
+  assert((await source(page)).includes('By the user'), 'Cancel keeps the user\'s change');
+  await undoFirst(page);
+  await page.click('dialog.dlg button.danger');
+  await page.waitForFunction(() => !window.nymphApp.app.doc.source.includes('By the user'));
+  await done(page);
+});
+
+test('Stop ends the agent\'s change and refuses its next write', async () => {
+  const page = await openApp();
+  await openExample(page, 'line', 'edit');
+  await agent(page, 'document_begin_change', { label: 'Long change' });
+  await agent(page, 'editor_set_fields', { path: 'root', fields: { title: 'One' } });
+  await page.waitForFunction(() => !document.getElementById('dock').hidden);
+  await page.waitForSelector('#dock .agents-status button');
+  assert((await page.textContent('#dock .agents-status')).includes('test-agent is changing the chart'), 'status');
+  await page.click('#dock .agents-status button');
+  const r = await agent(page, 'editor_set_fields', { path: 'root', fields: { title: 'Two' } });
+  assert(r.isError && text(r).includes('stopped'), text(r));
+  assert(!(await agent(page, 'document_begin_change', { label: 'Asked first' })).isError, 'a new change after asking');
+  await done(page);
+});
+
+test('an allowed external action is listed; an agent\'s label is shown as text', async () => {
+  const page = await openApp();
+  await openExample(page, 'line');
+  await page.evaluate(() => (window.__x = 0));
+  await agent(page, 'document_begin_change', { label: '<img src=x onerror="window.__x=1">' });
+  await agent(page, 'document_set_source', { source: (await source(page)).replace(/title: .*/, 'title: X') });
+  await agent(page, 'document_end_change');
+  const download = agent(page, 'app_download', { kind: 'yaml' });
+  await page.waitForSelector('dialog.dlg');
+  await page.click('dialog.dlg button.primary');
+  await download;
+  const list = await entries(page);
+  eq(list.length, 2, 'the change and the download');
+  eq(list[0].state, 'allowed', 'the download');
+  eq(list[1].label, '<img src=x onerror="window.__x=1">', 'label as text');
+  eq(await page.locator('#dock img').count(), 0, 'no image element');
+  eq(await page.evaluate(() => window.__x), 0, 'nothing ran');
+  await done(page);
+});
+
+test('Ctrl+Shift+A toggles the panel; no request leaves the site', async () => {
+  const page = await openApp();
+  await openExample(page, 'bars');
+  await page.click('#stage');
+  await page.keyboard.press('Control+Shift+A');
+  assert(await dockVisible(page), 'opened');
+  assert(await page.isVisible('#agents-connect'), 'Connect an agent');
+  await page.keyboard.press('Control+Shift+A');
+  assert(!(await dockVisible(page)), 'closed');
+  const outside = page.requests.filter((u) => !u.startsWith(site.base) && !u.startsWith('data:') && !u.startsWith('blob:'));
+  eq(outside, [], 'requests outside the site');
+  await done(page);
+});
+
+// ── Step 5: WebMCP ───────────────────────────────────────────────────────────
+
+/** A stand-in for the browser's navigator.modelContext: records registrations. */
+const stubWebMcp = () => {
+  window.__tools = [];
+  Object.defineProperty(navigator, 'modelContext', {
+    value: {
+      registerTool(tool) {
+        window.__tools.push(tool);
+        return { unregister: () => (window.__tools = window.__tools.filter((t) => t !== tool)) };
+      },
+    },
+  });
+};
+const webmcpCall = (page, name, args = {}) => page.evaluate(([n, a]) => window.__tools.find((t) => t.name === n).execute(a), [name, args]);
+
+test('WebMCP: the tools are registered while a chart is open', async () => {
+  const page = await openApp({ init: stubWebMcp });
+  eq(await page.evaluate(() => window.__tools.length), 0, 'none on the start screen');
+  await openExample(page, 'line');
+  const [n, expected] = await page.evaluate(() => [window.__tools.length, window.nymphApp.commands.agentTools().length]);
+  eq(n, expected, 'every agent tool');
+  await page.evaluate(() => window.nymphApp.commands.run('app_close'));
+  await page.waitForFunction(() => !window.nymphApp.app.doc);
+  eq(await page.evaluate(() => window.__tools.length), 0, 'removed with the chart');
+  await done(page);
+});
+
+test('WebMCP: a call changes the chart as the browser\'s assistant', async () => {
+  const page = await openApp({ init: stubWebMcp });
+  await openExample(page, 'line');
+  const src = await source(page);
+  const r = await webmcpCall(page, 'document_set_source', { source: src.replace(/title: .*/, 'title: From WebMCP') });
+  assert(!r.isError, text(r));
+  assert((await source(page)).includes('From WebMCP'), 'changed');
+  await page.waitForFunction(() => !document.getElementById('dock').hidden);
+  eq((await entries(page))[0].who, 'the browser\'s assistant', 'attributed');
+  assert((await page.textContent('#dock .agents-list')).includes('WebMCP'), 'listed as connected');
+  // An external action still asks.
+  const download = webmcpCall(page, 'app_download', { kind: 'yaml' });
+  await page.waitForSelector('dialog.dlg');
+  await page.click('dialog.dlg button:not(.primary)');
+  assert((await download).isError, 'declined');
+  await done(page);
+});
+
+test('WebMCP: the switch turns it off; without the API nothing happens', async () => {
+  const page = await openApp({ init: stubWebMcp });
+  await openExample(page, 'line');
+  await page.click('#btn-agents');
+  await page.uncheck('#agents-webmcp');
+  eq(await page.evaluate(() => window.__tools.length), 0, 'unregistered');
+  await page.check('#agents-webmcp');
+  assert((await page.evaluate(() => window.__tools.length)) > 0, 'registered again');
+  const plain = await openApp();
+  await openExample(plain, 'line');
+  eq(await plain.evaluate(() => window.nymphApp.app.webmcp.available), false, 'no WebMCP');
+  eq(await plain.locator('#agents-webmcp').count(), 0, 'no switch');
+  await done(page);
+  await done(plain);
+});
+
+test('on a phone the panel is a bottom sheet, without Connect or editor tools', async () => {
+  const page = await openApp({ mobile: true, init: stubWebMcp });
+  await openExample(page, 'line');
+  assert(await page.isVisible('#btn-agents'), 'Agents, for WebMCP');
+  await page.click('#btn-agents');
+  eq(await page.locator('#agents-connect').count(), 0, 'no Connect');
+  eq(await page.evaluate(() => getComputedStyle(document.getElementById('dock')).position), 'fixed', 'a sheet');
+  const names = await page.evaluate(() => window.__tools.map((t) => t.name));
+  assert(!names.some((n) => n.startsWith('editor_')), 'no editor tools');
+  await done(page);
+});
+
+// ── Step 8: the page side of the nymph mcp bridge ────────────────────────────
+
+/** A `nymph mcp` process driven as an MCP client would. */
+async function startMcp(origins) {
+  const proc = spawn(nymphExe, ['mcp', '--rasterizer', 'software'], {
+    env: { ...process.env, NYMPH_WEB_APP_ORIGINS: origins, NYMPH_EDITORS_DIR: join(webDir, `agents-test-editors-${process.pid}`) },
+    stdio: ['pipe', 'pipe', 'inherit'],
+  });
+  let buffer = '';
+  const waiting = new Map();
+  const notes = [];
+  proc.stdout.on('data', (d) => {
+    buffer += d;
+    let nl;
+    while ((nl = buffer.indexOf('\n')) >= 0) {
+      const m = JSON.parse(buffer.slice(0, nl));
+      buffer = buffer.slice(nl + 1);
+      if (m.id !== undefined && waiting.has(m.id)) {
+        waiting.get(m.id)(m);
+        waiting.delete(m.id);
+      } else if (m.method) {
+        notes.push(m.method);
+      }
+    }
+  });
+  let id = 0;
+  const rpc = (method, params = {}) =>
+    new Promise((resolve) => {
+      const n = ++id;
+      waiting.set(n, resolve);
+      proc.stdin.write(`${JSON.stringify({ jsonrpc: '2.0', id: n, method, params })}\n`);
+    });
+  await rpc('initialize', { protocolVersion: '2025-11-25', capabilities: {}, clientInfo: { name: 'Test Client', version: '1' } });
+  proc.stdin.write(`${JSON.stringify({ jsonrpc: '2.0', method: 'notifications/initialized' })}\n`);
+  const tool = async (name, args = {}) => (await rpc('tools/call', { name, arguments: args })).result;
+  const listed = async () => (await rpc('tools/list')).result.tools.map((t) => t.name);
+  const stop = () => proc.kill();
+  return { tool, listed, notes, stop };
+}
+
+/** Waits until `nymph mcp` lists the page's tools (the page answered tools/list). */
+async function untilPaired(mcp) {
+  for (let i = 0; i < 200; i++) {
+    if ((await mcp.listed()).includes('document_state')) {
+      return;
+    }
+    await new Promise((r) => setTimeout(r, 50));
+  }
+  throw new Error('the page never paired');
+}
+
+const haveNymph = nymphExe && existsSync(nymphExe);
+const bridgeTest = (name, fn) =>
+  test(name, async () => {
+    if (!haveNymph) {
+      console.log(`     (skipped: no native nymph given)`);
+      return;
+    }
+    await fn();
+  });
+
+bridgeTest('bridge: an agent pairs by link, edits the chart, and the tab reconnects after a reload', async () => {
+  const mcp = await startMcp('http://127.0.0.1:*');
+  try {
+    const pair = (await mcp.tool('web_app_pair')).structuredContent;
+    const page = await openApp({ path: `/?example=line#pair=${pair.code}` });
+    await shown(page);
+    await untilPaired(mcp);
+    assert(mcp.notes.includes('notifications/tools/list_changed'), 'the client was told the list changed');
+    assert(!(await page.evaluate(() => location.hash)).includes('pair'), 'the code left the address');
+    eq(text(await mcp.tool('app_set_mode', { mode: 'edit' })).includes('edit'), true, 'switched to Edit');
+    await shown(page);
+    const r = await mcp.tool('editor_set_fields', { path: 'root', fields: { title: 'From the agent' } });
+    assert(!r.isError, JSON.stringify(r));
+    assert((await source(page)).includes('From the agent'), 'the chart changed');
+    await page.waitForFunction(() => !document.getElementById('dock').hidden);
+    eq((await entries(page))[0].who, 'test-client', 'attributed to the client');
+    assert((await page.textContent('#dock .agents-list')).includes('test-client'), 'connected');
+    await undoFirst(page);
+    await page.waitForFunction(() => !window.nymphApp.app.editor.source().includes('From the agent'));
+    // A reload of the tab reconnects with its resume token.
+    await page.reload();
+    await page.waitForFunction(() => document.documentElement.dataset.ready === 'true');
+    await shown(page);
+    await page.waitForFunction(() => window.nymphApp.app.bridge.links.size === 1, null, { timeout: 10000 });
+    const state = await mcp.tool('document_state');
+    assert(!state.isError, JSON.stringify(state));
+    await done(page);
+  } finally {
+    mcp.stop();
+  }
+});
+
+bridgeTest('bridge: a code typed in the Connect dialog pairs; a wrong one says so', async () => {
+  const mcp = await startMcp('http://127.0.0.1:*');
+  try {
+    const pair = (await mcp.tool('web_app_pair')).structuredContent;
+    const page = await openApp({ path: '/?example=bars' });
+    await shown(page);
+    await page.click('#btn-agents');
+    await page.click('#agents-connect');
+    await page.fill('#pair-code', `${pair.port}-AAAA-AAAA`);
+    await page.click('dialog.dlg button.primary');
+    await page.waitForSelector('.toast');
+    assert((await page.textContent('#toasts')).includes('not valid'), await page.textContent('#toasts'));
+    await page.click('#agents-connect');
+    await page.fill('#pair-code', pair.code.toLowerCase());
+    await page.click('dialog.dlg button.primary');
+    await untilPaired(mcp);
+    const r = await mcp.tool('document_state');
+    assert(!r.isError && text(r).includes('bars'), text(r));
+    await done(page);
+  } finally {
+    mcp.stop();
+  }
+});
+
+bridgeTest('bridge: a page from an origin nymph mcp does not accept is refused', async () => {
+  const mcp = await startMcp('https://binary-dice-games.github.io');
+  try {
+    const pair = (await mcp.tool('web_app_pair')).structuredContent;
+    const page = await openApp({ path: '/?example=bars' });
+    await shown(page);
+    const error = await page.evaluate((c) => window.nymphApp.app.bridge.pair(c).then(() => '', (e) => e.message), pair.code);
+    assert(error.includes('Could not reach') || error.includes('closed'), error);
+    assert(!(await mcp.listed()).includes('document_state'), 'not paired');
+    await done(page);
+  } finally {
+    mcp.stop();
+  }
+});
+
 // ── Runner ───────────────────────────────────────────────────────────────────
 
 let failed = 0;
