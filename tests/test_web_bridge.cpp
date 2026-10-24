@@ -188,11 +188,13 @@ class web_bridge_test : public ::testing::Test {
     return false;
   }
 
-  std::unique_ptr<session> s_;
-  json initialize_;
+  // Declared before s_, so they outlive it: the bridge's page threads may
+  // still call notify while the session is being destroyed.
   std::mutex mtx_;
   std::condition_variable cv_;
   int changes_ = 0;
+  std::unique_ptr<session> s_;
+  json initialize_;
 };
 
 // ── Pairing ──────────────────────────────────────────────────────────────────
