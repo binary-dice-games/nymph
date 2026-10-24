@@ -928,6 +928,9 @@ bridge and pairing; prompts and the use of the agent guide; whether
 assistant editing is offered on mobile.
 
 That project is [17_agent_connectors](../17_agent_connectors/DESIGN.md).
+It builds only the external kind: the in-app kind (API keys in the page)
+was dropped, so no chat panel is built and `device.assistant` becomes
+`device.agents`.
 
 ## 12. Extension Points
 

@@ -7,125 +7,118 @@ what this project adds or changes. It builds on the web app,
 [15_web_app](../15_web_app/DESIGN.md) (*app DESIGN*), whose section 11
 prepared for it, on the editor tools and the editor bridge of
 [14_editor_workspace](../14_editor_workspace/DESIGN.md) (*workspace
-DESIGN*), and on `nymph mcp` from
+DESIGN*), and on `nymph mcp` and the MCP App from
 [06_claude_integration](../06_claude_integration/DESIGN.md) (*MCP DESIGN*).
 
 ## 1. Purpose / Scope
 
-The web app opens, views and edits nymph charts. This project lets an AI
-agent help the user do it, in the app, on the chart the user has open:
-"add a node for billing and connect it to orders", "make a Gantt chart
-from this table", "why does this not load?". The user sees every change
-the agent makes, can undo it, and is asked before anything leaves the tab.
+The web app opens, views and edits nymph charts. This project lets the AI
+agent **the user already runs** work on the chart open in the app: "add a
+node for billing and connect it to orders", "make a Gantt chart from this
+table", "why does this not load?". The agent brings its own model, login
+and billing; the app only offers tools. The user sees every change the
+agent makes, can undo it, and is asked before anything leaves the tab.
 
-Two kinds of connector (app DESIGN section 11.1):
+App DESIGN section 11.1 listed two kinds of connector: **in-app** (the app
+calls a model API with the user's key) and **external** (the user's agent
+reaches the app). This project builds **only the external kind** and
+drops the in-app kind (section 9): no API key is ever given to nymph.
 
-| Kind | What it is | Built here |
+| Route | Reaches the app from | Agents |
 |---|---|---|
-| **In-app** | The app calls a model API from the page with the user's key, gives the model the command registry as tools, and runs its tool calls. A chat panel in the dock. | **Claude** (Messages API), **Gemini** (Gemini API) |
-| **External** | An agent the user already runs reaches the open app through MCP. | **WebMCP** (browser agents, where the browser has it); **`nymph mcp` bridge** (Claude Code, Claude Desktop, Cursor, Gemini CLI, any MCP client that runs `nymph mcp`) |
-
-Cursor has no public model API, so it is external only (through `nymph
-mcp`, 12_cursor_integration). Claude in Chrome and Gemini in Chrome are
-external through WebMCP when the browser exposes the page's tools to them
-(*unverified*; without it they see only an unreadable canvas).
+| **`nymph mcp` bridge** | an MCP client that runs `nymph mcp` on the user's computer, paired with the open tab | Claude Code, Claude Desktop, Cursor (12_cursor_integration), Gemini CLI, any stdio MCP client |
+| **WebMCP** | the browser's own agent, through the page's registered tools (*unverified*: a draft API, section 7.1) | Gemini in Chrome, Claude in Chrome, where the browser exposes page tools to them |
+| **"Open in the web app"** from the MCP App | the chart shown in the agent's chat, opened in the app already paired | Claude Desktop, Claude Code, any MCP Apps host running `nymph mcp` |
 
 In scope:
 
-- The **assistant core** (`web/app/app/assistant/`): a provider-neutral
-  session that runs a conversation's tool loop against the command
-  registry, with attribution, undo per turn, Stop, and the confirmation
-  rule for `external` commands.
-- The **chat panel** in the document screen's dock (DOM), on desktop and,
-  as a bottom sheet, on phones.
-- **Model adapters** for Claude and Gemini: keys, model choice,
-  streaming, tool calls, images, errors.
-- **WebMCP registration** of the agent tool list.
-- The **`nymph mcp` web bridge**: a loopback WebSocket opened by `nymph
-  mcp` on request, pairing with a code, and forwarding of the app's tools
-  (`src/mcp/web_bridge.*`, `src/ipc/loopback.*`, `src/mcp/websocket.*`).
 - **Registry changes** the connectors need (section 4): which commands
-  agents see, a stable tool list, two new read commands, origin rules.
+  agents see, a stable tool list, origin rules, change groups, two read
+  commands, a workflow guide for agents.
 - One **`editor_model`** change: a change by another origin closes an open
   undo group (section 4.4).
-- The assistant's **instructions** text and the documentation.
+- The **Agents panel** in the document screen's dock: connections, the
+  Connect dialog, and the activity list with Undo (section 5).
+- **WebMCP registration** of the agent tool list.
+- The **`nymph mcp` web bridge**: a loopback WebSocket opened by `nymph
+  mcp` on request, pairing with a code, forwarding of the app's tools
+  (`src/mcp/web_bridge.*`, `src/ipc/loopback.*`, `src/mcp/websocket.*`).
+- **"Open in the web app"** in the MCP App, paired in one click.
+- Documentation for each client.
 
-Not in scope: a hosted model proxy or any server (keys stay with the user,
-app DESIGN goal 4); OAuth sign-in to a model provider (none is offered to
-third-party web apps today; section 10); storing conversations (a chat
-lives as long as its document is open); agents in `nymph view --edit`'s
-own window (it is already reached through `nymph mcp`, workspace DESIGN);
-the viewer module, the editor module and their JavaScript APIs, which do
-not change; Firefox's and Safari's own assistants; the Chrome extension
-and the MCP App.
+Not in scope: calling any model API from the app, API keys, a chat inside
+the app (dropped, section 9); a hosted, remote MCP server (would reach
+claude.ai and phone chat apps, but needs a server; a separate project,
+section 13); agents in `nymph view --edit`'s own window (already reached
+through `nymph mcp`, workspace DESIGN); the viewer module, the editor
+module and their JavaScript APIs, which do not change; the Chrome
+extension.
 
 Files owned or changed:
 
 | Path | What |
 |---|---|
-| `web/app/app/assistant/` | new: `session.js`, `turns.js` (undo per turn), `chat.js` (panel), `markdown.js` (safe renderer), `settings.js` (keys, consent), `connectors/claude.js`, `connectors/gemini.js`, `webmcp.js`, `bridge.js` (page side of the `nymph mcp` bridge), `instructions.md` |
-| `web/app/vendor/` | new: the vendored provider SDKs (section 6.4), with their licences |
-| `web/app/app/commands.js` | `agent` field, `agentTools()`, origin rules, `unavailable` guidance |
-| `web/app/app/main.js` | `agent: false` on the shell-only commands, `app_read_guide`, `app_example_source`, the dock wiring |
-| `web/app/app/device.js` | `assistant` capability |
+| `web/app/app/agents/` | new: `panel.js` (dock panel, Connect dialog), `activity.js` (activity list, snapshots, Undo), `webmcp.js`, `bridge.js` (page side of the `nymph mcp` bridge) |
+| `web/app/app/commands.js` | `agent` field, `agentTools()`, `callAgent()`, origin rules, change groups, guidance for unavailable commands |
+| `web/app/app/main.js` | `agent: false` on shell-only commands, `app_read_guide`, `app_example_source`, `document_begin_change` / `document_end_change`, `#pair=` route, dock wiring |
+| `web/app/app/device.js` | `agents` capability (replaces `assistant`) |
 | `web/app/editor-tools.json` | new, generated and committed: the editor tool definitions, so agents see them before the editor module loads |
-| `web/app/index.html`, `app.css` | dock content, `ws://127.0.0.1:*` in `connect-src` |
-| `cmake/NymphSite.cmake` | `config.json` `agents` section from cache variables; copies the instructions and vendor files |
+| `web/app/index.html`, `app.css` | dock content, `ws://127.0.0.1:* ws://localhost:*` in `connect-src` |
+| `docs/agent-web-app.md` | new: the workflow guide agents read in the app (copied to `agent/web-app.md` by `nymph-site`) |
+| `cmake/NymphSite.cmake` | `config.json` `agents` section from `NYMPH_AGENT_CONNECTORS` |
 | `src/edit/editor_model.*` | a commit from another origin ends the open group |
 | `src/ipc/loopback.*` | new: TCP listener and stream on 127.0.0.1 |
 | `src/mcp/websocket.*`, `src/mcp/sha1.*` | new: the server side of RFC 6455, what the bridge needs and no more |
 | `src/mcp/web_bridge.*` | new: pairing, page links, forwarding |
 | `src/mcp/editor_bridge.*`, `mcp_session.*`, `json_rpc.*`, `tools.cpp` | pages listed as editors; server-to-client notifications; `web_app_pair` |
-| `docs/web-app.md`, `docs/agent-guide.md`, `docs/claude.md`, `docs/cursor.md`, `docs/gemini-cli.md` (new), `claude/skill/nymph/SKILL.md` | using the assistant, pairing an external agent |
+| `claude/app/` | "Open in the web app" in the viewer's menu |
+| `claude/skill/nymph/SKILL.md`, `docs/agent-guide.md` | `web_app_pair` and when to use it |
+| `docs/web-app.md`, `docs/claude.md`, `docs/cursor.md`, `docs/gemini-cli.md` (new) | connecting each agent |
 
 ## 2. Design Goals
 
-1. **The user stays in charge.** Every change an agent makes is shown,
-   named with who made it, and undoable as one step per turn; anything that
-   leaves the tab waits for the user's Allow; the user's own typing always
-   wins over an agent's write.
-2. **One tool surface for every agent.** In-app connectors, WebMCP and the
-   `nymph mcp` bridge all see the same tools (the registry's agent list),
-   validated, attributed and confirmed by the registry, never by a
-   connector (app DESIGN section 8).
-3. **No server, no stored secrets by default.** The page talks to the
-   model provider directly with the user's key; the key lives in memory
-   unless the user asks to remember it on this device. Nothing about
-   agents loads until the user opens the assistant.
-4. **Works without the editor.** An in-app agent creates and edits charts
-   in View mode and on phones through the `document` commands (app DESIGN
-   section 11.2, item 2); in Edit mode it also gets the fine-grained
-   editor tools.
-5. **Local means local.** The `nymph mcp` bridge listens on 127.0.0.1 only,
-   only after an agent asks for it, accepts only the app's origin, and
-   only a page that typed the one-time code.
-6. **Nothing existing changes for people who do not use it.** No module
-   grows, no request is made, no control appears beyond the Assistant
-   button; `nymph mcp` without pairing behaves exactly as before.
+1. **No keys, no model calls in the app.** The user's agent keeps its own
+   login and billing; nymph never sees a credential and never pays for or
+   chooses a model. There is nothing for the user to have to trust nymph
+   with beyond the chart itself.
+2. **The user stays in charge.** Every change an agent makes is listed,
+   named with who made it, and undoable; anything that leaves the tab
+   waits for the user's Allow; the user's own typing always wins over an
+   agent's write.
+3. **One tool surface for every agent.** WebMCP and the `nymph mcp` bridge
+   see the same tools (the registry's agent list), validated, attributed
+   and confirmed by the registry, never by a connector (app DESIGN
+   section 8). An agent sees the same editor tools in the app, in `nymph
+   view --edit` and through `nymph mcp`.
+4. **Local means local.** The bridge listens on 127.0.0.1 only, only after
+   an agent asks for it, accepts only the app's origin, and only a page
+   that has the one-time code.
+5. **Nothing changes for people who do not use it.** No module grows, no
+   request is made, no port is opened; `nymph mcp` without pairing behaves
+   exactly as before.
 
 ## 3. How It Fits
 
 ```
  the app's page
- ┌─────────────────────────────────────────────────────────────────────┐
- │ chat.js ─► session.js ─► connectors/claude.js ─────────────────────────► Anthropic API
- │            (turns, undo,  connectors/gemini.js ─────────────────────────► Gemini API
- │             Stop)  │                                                   │
- │                    ▼                                                   │
- │ webmcp.js ───► commands.callAgent(name, args, connector) ◄── bridge.js ◄─── ws://127.0.0.1 ── nymph mcp ◄─stdio── Claude Code,
- │   ▲            │ checks args, confirms external,           (MCP server)│    (web_bridge)               Cursor, Gemini CLI,
- │   │            │ snapshots, attribution                                │                               Claude Desktop
- │   │            ▼                                                       │
- │   │      viewer (View)  or  editor tool() (Edit)                       │
- └───┼─────────────────────────────────────────────────────────────────────┘
+ ┌──────────────────────────────────────────────────────────────────┐
+ │ webmcp.js ───► commands.callAgent(name, args, connector) ◄── bridge.js ◄── ws://127.0.0.1 ── nymph mcp ◄─stdio── Claude Code,
+ │   ▲            │ checks args, confirms external,      (MCP server)│      (web_bridge)               Cursor, Gemini CLI,
+ │   │            │ change groups, attribution                       │                                 Claude Desktop
+ │   │            ▼                                                   │                                   │
+ │   │      viewer (View)  or  editor tool() (Edit)                   │   MCP App (in the chat) ──────────┘
+ │   │            │                                                   │     "Open in the web app": #y=…&pair=…
+ │   │            ▼                                                   │
+ │   │      activity.js ──► Agents panel (dock): connections, activity, Undo
+ └───┼──────────────────────────────────────────────────────────────────┘
      └── browser agent (WebMCP)
 ```
 
 Every route ends in `commands.callAgent(name, args, connector)`, which
-gives the call an `agent:` origin. The registry checks availability and arguments, asks the user for
-`external` commands, and runs the command in whichever module is loaded.
-The connectors differ only in how tool calls reach the page and how
-results go back.
+gives the call an `agent:` origin. The registry checks availability and
+arguments, asks the user for `external` commands, and runs the command in
+whichever module is loaded. The connectors only carry tool calls in and
+results out.
 
 ## 4. The Agent Tool List
 
@@ -139,13 +132,25 @@ user gesture: `app_open_file`, `app_open_url_dialog`, `app_open_drive`,
 `app_shortcuts`. Everything else is listed, `external` ones included (they
 are confirmed, section 4.3).
 
-Two new `app` read commands give an agent the format without growing
-either module:
+New commands:
 
-| Command | Arguments | Result |
-|---|---|---|
-| `app_read_guide` | `name`: `agent-guide`, `format`, `elements`, or `elements/<Type>` | the text of that file in the site's `agent/` folder (app DESIGN section 11.2, item 7) |
-| `app_example_source` | `name` | an example's YAML, without opening it |
+| Command | Effect | Arguments | Result |
+|---|---|---|---|
+| `app_read_guide` | read | `name`: `web-app`, `agent-guide`, `format`, `elements`, or `elements/<Type>` | the text of that file in the site's `agent/` folder (app DESIGN section 11.2, item 7) |
+| `app_example_source` | read | `name` | an example's YAML, without opening it |
+| `document_begin_change` | read | `label` | starts a change group (section 4.4) |
+| `document_end_change` | read | — | ends it |
+
+An external agent has no system prompt the app controls, so the workflow
+lives in `agent/web-app.md` (`docs/agent-web-app.md`, about 80 lines),
+and `document_state`'s description says to read it first. It covers:
+View and Edit modes and what each allows; `document_state` first; in Edit
+mode the `editor_*` tools with `expected_version`, in View mode
+`document_check` then `document_set_source`; `document_image` to look at
+the result; `app_read_guide` for an element type before using it; wrapping
+a multi-step change in `document_begin_change` / `document_end_change`;
+making only the change asked; `external` actions are confirmed by the
+user. A test fails when it names a command not in `agentTools()`.
 
 ### 4.2 A stable list
 
@@ -153,507 +158,339 @@ either module:
 for the page's whole life**, whatever the mode: every agent command, plus
 the editor tools on a device with `directEditing`, even while the editor
 is not loaded. Their definitions come from `web/app/editor-tools.json`,
-generated from the native `editor_tool_definitions()` and committed; a test
-fails when it differs from the editor module's `toolDefinitions()`. A call
-to a command that is not available now fails with guidance instead of
-"unknown": an `editor_*` tool in View mode says "the editor is not open:
-call app_set_mode with mode edit, or use document_set_source"; a `document`
-command with no document says to open or create one.
+generated from the editor module's `toolDefinitions()` and committed; a
+test fails when they differ. A call to a command not available now fails
+with guidance instead of "unknown": an `editor_*` tool in View mode says
+"the editor is not open: call app_set_mode with mode edit, or use
+document_set_source"; a `document` command with no document says to open
+or create one.
 
-Why stable: a model provider caches the tool list with the system prompt,
-and a list that changes mid-conversation invalidates that cache and, for
-current Claude models, the thinking kept from earlier turns. A stable list
-also tells the model up front what Edit mode would give it.
+Why stable: MCP clients read `tools/list` once and follow
+`list_changed` unevenly (plan step 1 checks the ones we target); WebMCP
+registrations are cheap but agents may cache them; and an agent plans
+better knowing up front what Edit mode would give it. The bridge's list
+then changes only when a page pairs or goes away.
 
 `commands.list()` (what is available now) stays as it is for the shell and
 the tests.
 
-### 4.3 Origins
+### 4.3 Origins and confirmation
 
-- An origin is `user` or `agent:<connector>` with `<connector>` one of
-  `claude`, `gemini`, `webmcp`, or `mcp:<client>` (the name `nymph mcp`'s
-  client gave in `initialize`, e.g. `mcp:claude-code`, reduced to
-  `[a-z0-9-]`, at most 32 characters).
-- The registry refuses `user` from any route but the shell: connectors
-  call `commands.callAgent(name, args, connector)`, which builds the
-  origin; only the shell's controls call `commands.call(…, "user")`. No
-  external input can choose its origin.
+- An origin is `user` or `agent:<connector>`, `<connector>` being
+  `webmcp` or `mcp:<client>` (the name `nymph mcp`'s client gave in
+  `initialize`, e.g. `mcp:claude-code`, reduced to `[a-z0-9-]`, at most 32
+  characters).
+- Connectors call `commands.callAgent(name, args, connector)`, which
+  builds the origin and rejects any other connector name; only the shell's
+  controls call `commands.call(…, "user")`. No outside input can choose
+  its origin.
 - `external` commands from an agent origin wait for the existing
   confirmation dialog (app DESIGN section 8). Its Allow click is the user
   gesture that downloads and clipboard writes need (*unverified* for the
   clipboard after an `await`; plan step 1).
-- A per-connector "Allow for this session" checkbox in the dialog skips the
-  dialog for the same command from the same connector until the document
-  closes. Never remembered across sessions.
+- The dialog has "Allow for this session": the same command from the same
+  connector then runs without asking until the document closes. Never
+  remembered across sessions.
 
-### 4.4 Undo groups
+### 4.4 Change groups
 
-The in-app session opens a group (`beginGroup(label, origin)`, app DESIGN
-section 5.2) before the first write of a turn and closes it when the turn
-ends, so a turn is one undo step in Edit mode. Today a change made while a
-group is open joins it, whoever makes it; a user's edit during an agent's
-turn would then be undone with the agent's. **Change:** `editor_model`'s
-commit ends the open group first when the change's origin differs from the
-group's. The session reopens a group (same label) before its next write if
-`in_group()` is false; the turn may then be two undo entries, which is
-correct, since the user's change sits between them.
+An agent's request often takes several tool calls; undoing half of it is
+useless. `document_begin_change(label)` opens a group: in Edit mode
+`beginGroup(label, origin)` (app DESIGN section 5.2), so the calls until
+`document_end_change` are one undo step; in View mode one activity entry
+with one snapshot (section 5). A group also ends when its connector
+disconnects, after 60 s without a call from it, or on a mode switch. A
+call without a group is its own step, labelled `<tool> (<connector>)`, as
+`nymph mcp`'s edits are today.
 
-External connectors (WebMCP, the bridge) have no turns: each of their
-writes is its own undo step, labelled `<tool> (<connector>)`, as `nymph
-mcp`'s edits are today.
+Today a change made while a group is open joins it, whoever makes it; a
+user's edit during an agent's change would then be undone with the
+agent's. **Change:** `editor_model`'s commit ends the open group first
+when the change's origin differs from the group's. The registry reopens
+the group (same label) before the agent's next write while its
+`document_begin_change` is still in force; the change is then two undo
+entries, correctly, since the user's sits between them. Two connectors'
+groups do not nest: a second connector's `document_begin_change` while
+another's group is open is refused with "another agent is changing the
+chart".
 
-### 4.5 Undo per turn and in View mode
+## 5. The Agents Panel (`web/app/app/agents/`)
 
-View mode has no undo history (the viewer holds a source, app DESIGN
-section 3.3). `turns.js` keeps, for every turn or external write that
-changed the document, the source before and after it. The chat shows
-**Undo** on each such turn (and the dock's activity list on each external
-write):
+The dock (app DESIGN section 11.2, item 6) gets an **Agents** panel,
+opened from an **Agents** button in the top bar (shown when
+`config.json` enables a connector) or `Ctrl+Shift+A`, and shown by
+itself the first time an agent calls a tool. DOM, labelled
+`complementary` region, keyboard reachable. On a phone it is a bottom
+sheet.
 
-- Edit mode, and the turn's group is still the editor's last undo entry
-  (`last_label()` / `last_origin()`): `editor.undo()`.
-- Otherwise, when the current source equals the turn's "after": the
-  "before" source through `document_set_source` (origin `user`), one undo
-  step in Edit mode.
-- Otherwise (the user or another agent changed it since): "Restore the
-  chart from before this turn? Later changes are lost." with Cancel.
+- **Connections**: each connected agent with its route (`mcp:claude-code`
+  through `nymph mcp`, `webmcp`), Disconnect for bridge connections, and
+  **Connect an agent…**: a field for a pairing code, the steps per client
+  ("ask your agent to connect to the nymph web app"; links to the client
+  docs), and the browser's refusal explained when the socket cannot open
+  (section 7.2). Hidden on phones, which run no `nymph mcp`.
+- **Activity**: one entry per agent change (a group, or a single write):
+  who, its label, when, the tools it called on expand, and **Undo**. Read
+  calls are not listed; `external` ones are, with what the user allowed.
+- **Undo** (`activity.js`). View mode has no undo history (the viewer
+  holds one source, app DESIGN section 3.3), so `activity.js` keeps the
+  source before and after each entry (in memory, open document only, at
+  most 50):
+  - Edit mode, and the entry is still the editor's last undo entry
+    (`last_label()` / `last_origin()`): `editor.undo()`.
+  - Otherwise, when the current source equals the entry's "after": the
+    "before" source through `document_set_source` (origin `user`).
+  - Otherwise (changed since): "Restore the chart from before this change?
+    Later changes are lost." with Cancel.
+- While an agent's group is open, the panel's header says "Claude Code is
+  changing the chart" with **Stop**, which ends the group and refuses that
+  connector's writes until its next `document_begin_change` or a new
+  call after the user dismisses the notice.
 
-Snapshots are kept for the open document only, at most 50, in memory.
+## 6. Capabilities and Configuration
 
-## 5. The Assistant Core (`web/app/app/assistant/`)
+- `device.assistant` becomes `device.agents`: the bridge needs a desktop
+  (`directEditing`); WebMCP is used wherever the browser has it. On a
+  phone without WebMCP no agent can reach the app (section 9).
+- `config.json`'s `agents` section, from the CMake cache variable
+  `NYMPH_AGENT_CONNECTORS` (default `webmcp;bridge`):
+  `{"webmcp": {}, "bridge": {"pairUrl": "<site URL>"}}`. A connector not
+  listed is not offered.
+- The CSP gains `ws://127.0.0.1:* ws://localhost:*` in `connect-src`.
 
-### 5.1 Session
+## 7. Connectors
 
-```js
-class AssistantSession {
-  constructor({ commands, adapter, instructions, device, onEvent })
-  send(text: string, attachments?: { image?: Uint8Array }[]): Promise<void>  // one turn
-  stop(): void                     // aborts the request; running tool calls finish
-  reset(): void                    // new conversation
-  get busy(): boolean
-}
-// onEvent: {type: "text", delta} | {type: "tool", name, args, result, label}
-//          | {type: "turn-end", changed, usage} | {type: "error", message, retry?}
-```
+### 7.1 WebMCP (`agents/webmcp.js`)
 
-A turn: the user's text goes to the adapter with the instructions and
-`agentTools()`; each tool call the model returns runs through
-`commands.callAgent` (in the order given; calls of one response run one
-after another, since they act on one document); the results go back; the
-loop ends when the model answers without tool calls, on Stop, on an error,
-or after **25** model requests in one turn (then "the assistant stopped
-after 25 steps", Continue). Text streams into the chat as it comes.
-
-- **Context.** The first request of a conversation carries, after the
-  user's text, a short state note: `document_state`'s result and the
-  device (`directEditing`). The model reads the source and the image itself
-  through tools; the note is not repeated each turn (it would change the
-  cached prefix), and later turns rely on `document_state`.
-- **History is append-only.** Messages are never edited or removed once
-  sent: current Claude models keep their reasoning only over an unchanged
-  history. Long conversations rely on the provider's own context
-  management (section 6.2).
-- **Busy.** While a turn runs the input is disabled, Stop is shown, and
-  the chat says which tool runs. The user can still edit the chart; an
-  agent write that then fails on `expected_version` or on the source pane
-  being ahead goes back to the model as the tool's error, which tells it
-  to read the state again (workspace DESIGN section 6).
-- **Mode switch.** `app_set_mode` from an agent works like the user's.
-  The editor's undo does not survive a switch, so the turn's snapshot is
-  what Undo uses afterwards.
-- **Document closed or replaced** (`app_new_document`, open from URL):
-  the conversation continues; the snapshots of the old document are
-  dropped and the state note of the next request says a new document is
-  open.
-
-### 5.2 Adapter interface
-
-```js
-interface ModelAdapter {
-  id: "claude" | "gemini";  label: string;
-  models(): Promise<{ id, label }[]>;  defaultModel: string;
-  configured(): boolean;               // a key is set
-  turn({ system, tools, history, signal }): AsyncIterable<
-    { type: "text", delta } | { type: "tool_calls", calls: [{ id, name, args }] }
-    | { type: "end", stop: "done" | "max_tokens" | "refusal", usage }>;
-  addToolResults(history, calls, results): void;  // provider's own message shape
-  addUserMessage(history, text, attachments): void;
-}
-```
-
-The history is the provider's own message list, held by the session but
-written only through the adapter, so provider fields (thinking blocks,
-signatures) survive unchanged. Tool results are MCP `CallToolResult`s; the
-adapter converts text, structured content and images.
-
-### 5.3 Instructions (`assistant/instructions.md`)
-
-About 80 lines, written for an agent with the app's tools, not copied from
-the Claude skill (that text is about `render_chart` and files, as the
-Gemini primer found, 10_gemini_extension section 4.5):
-
-- where it is: the user's open chart in the nymph web app; View and Edit
-  modes, what each allows; mobile has no Edit;
-- the workflow: `document_state` first; in Edit mode prefer the `editor_*`
-  tools (one field or element at a time, with `expected_version`); in View
-  mode `document_check` then `document_set_source`; look at the result
-  with `document_image` after a change; read `app_read_guide` before
-  writing an element type it has not used in this conversation;
-- the source format essentials (skeleton, `$column`, the three rules behind
-  most errors), from the skill text;
-- conduct: make the change asked, nothing else; say in one or two
-  sentences what changed; never invent data; ask before replacing a
-  chart wholesale; `external` actions are confirmed by the user, so ask for
-  them only when the user wants them.
-
-A test fails when the text names a command that is not in
-`agentTools()`, or when it is over 8,000 characters.
-
-## 6. In-App Connectors
-
-### 6.1 Keys and consent (`assistant/settings.js`)
-
-- The user picks a connector in the chat panel's header and pastes an API
-  key; a link opens the provider's key page. The key is kept **in memory**;
-  "Remember on this device" stores it in IndexedDB (`nymph-app`,
-  `settings`), with a line saying anyone using this browser profile can
-  use it. "Forget key" removes it.
-- The first use of a connector in this browser shows a consent dialog:
-  "Your messages, the chart's source and pictures of it are sent to
-  Anthropic / Google, under your API key and their terms." Accept is stored
-  per connector; there is no default connector.
-- A connector that `config.json` disables is not offered.
-
-### 6.2 Claude (`connectors/claude.js`)
-
-- The Messages API with the official TypeScript SDK (`@anthropic-ai/sdk`)
-  in its browser build, vendored (section 6.4), constructed with the
-  user's key and `dangerouslyAllowBrowser: true` (which sends the
-  `anthropic-dangerous-direct-browser-access` header that lets the API
-  answer a page's CORS request). Streaming (`messages.stream`,
-  `finalMessage()` for each step).
-- Models: Claude Opus 5.5 (`claude-opus-5-5`, default), Claude Sonnet 5.5
-  (`claude-sonnet-5-5`), Claude Haiku 5.5 (`claude-haiku-5-5`); the list
-  lives in `config.json` so the site can update it without code.
-- Request: `max_tokens` 64000; adaptive thinking (the default on these
-  models) with `output_config.effort` set explicitly (`medium`; a setting
-  in the panel offers `low` and `high`); tools from `agentTools()` with
-  `strict: true` where the schema allows it; the instructions as `system`;
-  `cache_control` breakpoints on the system prompt and on the last message,
-  so each step re-reads the conversation from cache.
-- **Refusals.** Server-side fallbacks on (`fallbacks: "default"`, beta
-  `server-side-fallback-2026-07-01`); a `refusal` stop that remains is
-  shown as "Claude declined this request", and the turn's tool calls are
-  not run.
-- **Long chats.** Server-side clearing of old tool results (context
-  editing, `clear_tool_uses`) keeps old images and sources from filling the
-  window, without editing the history on the client.
-- Images: `document_image`'s PNG goes back as an image block inside the
-  `tool_result`.
-- Errors by the SDK's typed errors: 401 "the key was refused" (opens the
-  key field), 429 and overloaded "busy, try again" with Retry, network
-  "cannot reach Anthropic". No automatic retry beyond the SDK's own.
-
-### 6.3 Gemini (`connectors/gemini.js`)
-
-- The Gemini API (`generativelanguage.googleapis.com`) with Google's
-  official JavaScript SDK (`@google/genai`), vendored likewise, with the
-  user's key; streamed generation with function calling.
-- Models from `config.json` (Gemini's current Pro and Flash models at
-  release); default the Pro model.
-- Tool schemas: Gemini accepts a subset of JSON Schema; `toGeminiSchema()`
-  maps ours (drops `additionalProperties`, keeps `type`, `properties`,
-  `required`, `enum`, `items`, `description`); a Node test runs it over
-  every agent tool.
-- Images in function responses (*unverified* for the current models):
-  as a part of the function response where the API takes it, else as an
-  inline image part in the same user turn after the responses.
-- Errors: 400 with a key error, 403, 429, network, as for Claude.
-
-### 6.4 Vendored SDKs
-
-Each SDK's published browser-usable ES module build is copied into
-`web/app/vendor/<name>/` at a pinned version, with its licence, by a
-script run by hand (`web/app/vendor/update.sh <name> <version>`), and
-committed. No npm in the site build (app DESIGN section 8), no CDN (the
-CSP allows `'self'` scripts only). They are imported dynamically when a
-connector is first used, so they are never fetched by a user who does not
-use the assistant; the service worker caches them on that fetch, not at
-install. If an SDK's build cannot be imported as plain ES modules without
-a bundler (plan step 1), that connector calls the REST API with `fetch`
-instead, behind the same adapter, and this section is updated.
-
-### 6.5 The chat panel (`assistant/chat.js`)
-
-- An **Assistant** button in the top bar (a capability, section 8) opens
-  the dock with the panel: header (connector and model, settings, New
-  chat, close), the conversation, an input with Send and Stop. On a phone
-  the dock is a bottom sheet over the viewer (half height, draggable to
-  full).
-- Messages: the user's text; the model's text rendered by
-  `markdown.js`; each tool call as a one-line chip (`Set fields: title`,
-  its result on expand); a turn that changed the chart ends with
-  "Changed by Claude · Undo".
-- `markdown.js` renders a small subset (paragraphs, emphasis, lists,
-  inline code, fenced code, links) **as DOM nodes with `textContent`**,
-  never `innerHTML`. Links are http(s) only, shown with their full URL,
-  opened with `rel="noopener noreferrer"`. **No images** are ever loaded
-  from model output: an image URL could carry the chart's data to a third
-  party (prompt injection from an opened file, section 9).
-- A fenced `yaml` / `nymph` block in the model's text gets "Apply to
-  chart", which calls `document_set_source` with origin `user`.
-- Keyboard: `Ctrl+Shift+A` toggles the panel; Enter sends, Shift+Enter is
-  a new line, Escape stops a running turn. The panel is a labelled
-  `complementary` region; new text is announced politely.
-
-## 7. External Connectors
-
-### 7.1 WebMCP (`assistant/webmcp.js`)
-
-Where `navigator.modelContext` exists (*unverified*: the API is a draft
-of the W3C Web Machine Learning group; plan step 1 records the shape
-Chrome ships), the app registers `agentTools()` as the page's tools when a
-document screen is shown, each `execute` calling `commands.callAgent(name,
-args, "webmcp")`, and unregisters them on the start screen. It is on by
-default: a browser agent the user invoked can already read and click the
-page, the tools only make it able to do so correctly, and `external`
-commands are still confirmed. The dock's activity list shows each call.
-One switch in the assistant settings turns it off for this browser.
+Where `navigator.modelContext` exists (*unverified*: the API is a draft of
+the W3C Web Machine Learning community group; plan step 1 records the
+shape Chrome ships), the app registers `agentTools()` as the page's tools
+when a document screen is shown, each `execute` calling
+`commands.callAgent(name, args, "webmcp")`, and unregisters them on the
+start screen. On by default: a browser agent the user invoked can already
+read and click the page, the tools only let it do so correctly, and
+`external` commands are still confirmed. A switch in the Agents panel
+turns it off for this browser. Browser agents that read only the DOM see
+an unreadable canvas; that is a reason to register, not a fallback.
 
 ### 7.2 The `nymph mcp` bridge
 
 **From the agent's side.** `nymph mcp` gains a tool, `web_app_pair`
 (always listed). The agent calls it when the user wants it to work on the
-chart open in the web app. `nymph mcp` then opens a listener on
-`127.0.0.1` (a free port) if it has none, and returns a **pairing code**
-and a **pairing link**:
+chart open in the web app. `nymph mcp` opens a listener on `127.0.0.1` (a
+free port) if it has none, and returns a **pairing code** and a **pairing
+link**:
 
 ```
 code:  48213-K7QM-2XPD          (port, then 40 random bits in Crockford base32)
 link:  https://binary-dice-games.github.io/nymph/#pair=48213-K7QM-2XPD
 ```
 
-The agent shows both to the user: the code is typed into the open app's
-Assistant ▸ Connect an agent dialog; the link opens the app in a new tab,
-paired, for a user with nothing open.
+The agent shows both: the code goes into the open tab's Connect an agent
+field; the link opens the app in a new tab, paired. Both stay in the URL
+fragment, so they never reach a server.
 
-**From the page's side** (`assistant/bridge.js`). The page opens
+**From the page's side** (`agents/bridge.js`). The page opens
 `ws://127.0.0.1:<port>/nymph`, sends `{"pair": "<code>"}` first, and then
-serves MCP over the socket as a server: `initialize`, `tools/list`
-(`agentTools()`), `tools/call` (through `commands.callAgent(…, "mcp:<client>")`),
-and it sends `notifications/tools/list_changed` when its list changes
-(never, today, by section 4.2; kept for later) and `nymph/focus` when its
-tab gains focus. On success `nymph mcp` answers with a **resume token**
-(128 random bits) that the page keeps in `sessionStorage`, so a reload of
-the same tab reconnects without a new code while that `nymph mcp` runs.
+serves MCP over the socket as a server: `initialize` (with the
+`instructions`: read `app_read_guide("web-app")` first), `tools/list`
+(`agentTools()`), `tools/call` (through `commands.callAgent(…,
+"mcp:<client>")`), and it sends `nymph/focus` when its tab gains focus. On
+success `nymph mcp` answers with a **resume token** (128 random bits) that
+the page keeps in `sessionStorage`, so a reload of the same tab reconnects
+without a new code while that `nymph mcp` runs.
 
 **In `nymph mcp`** (`src/mcp/web_bridge.*`):
 
-- The listener accepts only: a `GET` upgrade to `/nymph` with `Host`
-  `127.0.0.1:<port>` or `localhost:<port>` (DNS rebinding), and an
+- The listener accepts only a `GET` upgrade to `/nymph` with `Host`
+  `127.0.0.1:<port>` or `localhost:<port>` (against DNS rebinding) and an
   `Origin` in the allowed list: the site's origin
   (`https://binary-dice-games.github.io`), plus those in
   `NYMPH_WEB_APP_ORIGINS` (self-hosted copies, `http://localhost:<port>`
   for a local `nymph-site` preview). Anything else is closed without a
   body.
-- A code is valid once, for 5 minutes, and three wrong codes in a row
-  close the listener (a new `web_app_pair` opens another). Comparison is
-  constant-time. The listener stays open, without a code, only for
-  resume tokens; it closes when `nymph mcp` exits.
+- A code is valid once, for 5 minutes; three wrong codes in a row close
+  the listener (a new `web_app_pair` opens another). Comparison is
+  constant-time. After pairing, the listener stays open only for resume
+  tokens; it closes when `nymph mcp` exits.
 - A paired page is listed by `editor_bridge` as one more editor, beside
-  native `nymph view --edit` windows: its `editor` name is `web:<file
-  name>`, its focus time from `nymph/focus`. The editor tools route to it
-  as to a native editor (the same tools, workspace DESIGN section 6).
-- Its other tools (`document_*`, `app_*`) are added to `nymph mcp`'s tool
-  list while a page is paired, each with the optional `editor` argument,
-  and `nymph mcp` sends `notifications/tools/list_changed` to its client
-  when that set changes (declaring `tools.listChanged: true`). The app's
-  names do not collide with `nymph mcp`'s chart tools (`render_chart`,
-  `check_chart`, ...).
-- A call to the page waits up to 5 minutes (a confirmation dialog may be
-  open), then fails with "the web app did not answer". A closed socket
-  fails waiting calls with "the web app was closed".
+  native `nymph view --edit` windows: `editor` name `web:<file name>`,
+  focus time from `nymph/focus`. The editor tools route to it as to a
+  native editor (workspace DESIGN section 6).
+- Its other tools (`document_*`, `app_*`) join `nymph mcp`'s tool list
+  while a page is paired, each with the optional `editor` argument;
+  `nymph mcp` declares `tools.listChanged: true` and sends
+  `notifications/tools/list_changed` when that set changes. The app's
+  names do not collide with the chart tools (`render_chart`,
+  `check_chart`, ...). A client that does not follow `list_changed`
+  (plan step 1) gets a generic `web_app_call {name, arguments}` tool
+  instead, listed always.
+- A call to the page waits up to 5 minutes (a confirmation may be open),
+  then fails with "the web app did not answer"; a closed socket fails
+  waiting calls with "the web app was closed".
 - The client name from `initialize` (`clientInfo.name`) goes with each
-  call as `_meta["nymph/origin"]`; the page turns it into
-  `mcp:<client>` (section 4.3).
+  call as `_meta["nymph/origin"]`; the page turns it into `mcp:<client>`.
 
 **Transport code.** `src/ipc/loopback.*`: a TCP listener and stream bound
-to 127.0.0.1, beside `local_socket` and with the same `#if
-defined(_WIN32)` guards. `src/mcp/websocket.*`: the server side of RFC
-6455 that the bridge needs: the upgrade (`Sec-WebSocket-Accept`, hence
-`sha1.*`), masked client frames, unmasked server frames, text messages
-up to 16 MB (fragmented ones reassembled), ping / pong, close. No
-extensions, no binary messages, no TLS (loopback only). One thread per
-page reads messages; calls from the session thread wait on a promise per
-request id, as `editor_bridge` does. Writes to `nymph mcp`'s standard
-output now come from two threads (the session and a page's reader, for
-`list_changed`), so `json_rpc`'s writer takes a mutex.
+to 127.0.0.1, beside `local_socket` with the same `#if defined(_WIN32)`
+guards. `src/mcp/websocket.*`: the server side of RFC 6455 the bridge
+needs: the upgrade (`Sec-WebSocket-Accept`, hence `sha1.*`), masked client
+frames, unmasked server frames, text messages up to 16 MB (fragments
+reassembled), ping / pong, close. No extensions, no binary messages, no
+TLS (loopback only). One thread per page reads messages; calls from the
+session thread wait on a promise per request id, as `editor_bridge` does.
+Writes to `nymph mcp`'s standard output now come from two threads (the
+session, and a page's reader for `list_changed`), so `json_rpc`'s writer
+takes a mutex.
 
 **Browser requirements.** A public site reaching `ws://127.0.0.1` needs,
-in Chrome, the user's Local Network Access permission, asked at the first
+in Chrome, the user's Local Network Access permission at the first
 connection (*unverified* for WebSockets in the shipping version); Firefox
 treats loopback as secure (*unverified*); Safari may block it as mixed
 content (*unverified*). Plan step 1 records each; where it cannot work,
-the Connect dialog says so and points to the in-app connectors.
+the Connect dialog says so.
 
-## 8. Capabilities and Configuration
+### 7.3 "Open in the web app" from the MCP App
 
-- `device.assistant` (app DESIGN section 3.10) becomes `true` on every
-  device; the Assistant button shows when at least one connector is
-  enabled in `config.json`. On a phone only the in-app connectors and
-  WebMCP are offered (no `nymph mcp` there), and the tool list has no
-  editor tools (section 4.2).
-- `config.json`'s `agents` section, from CMake cache variables
-  (`NYMPH_AGENT_CONNECTORS`, default `claude;gemini;webmcp;bridge`) and a
-  committed `web/app/agents.json` for models:
+The MCP App (MCP DESIGN section 4.2) shows a chart in the agent's chat.
+Its menu gains **Open in the web app**: the App calls an app-only tool,
+`web_app_pair`'s sibling `web_app_link {source}`, on its own `nymph mcp`;
+the result is `<site>/#y=<source>&pair=<code>`, which the App opens with
+the host's open-link request (*unverified* per host; plan step 1). The tab
+opens the chart and pairs with that same `nymph mcp`, so the agent in the
+chat can go on editing what the user now sees in the app. Without a
+host's open-link support the item copies the link.
 
-```json
-"agents": {
-  "claude": { "models": [{"id": "claude-opus-5-5", "label": "Claude Opus 5.5"}, ...], "default": "claude-opus-5-5" },
-  "gemini": { "models": [...], "default": "..." },
-  "webmcp": {}, "bridge": { "pairUrl": "https://binary-dice-games.github.io/nymph/" }
-}
-```
+## 8. Security Notes
 
-- The CSP gains `ws://127.0.0.1:* ws://localhost:*` in `connect-src`;
-  `https:` already covers both providers' APIs.
+- Opened files are untrusted and may contain text written to steer an
+  agent. They reach agents only as tool results; nothing a tool returns
+  widens what an agent may do without the user (`external` stays
+  confirmed; there is no tool that fetches arbitrary URLs except
+  `app_open_url`, which is `external`).
+- The pairing code proves the page is the one the user means; `Origin`
+  stops other sites; `Host` stops DNS rebinding; binding 127.0.0.1 stops
+  the network; the code's one use, expiry and three-try limit stop local
+  guessing. A local process of the same user can always act as that user;
+  that is outside this design's threat model.
+- The page never inserts tool arguments or agent text as HTML; the
+  activity list shows labels and arguments with `textContent`.
 
 ## 9. Design Decisions
 
-- **Keys in the page, not a proxy.** A proxy would see every chart and
-  every key and needs a server (app DESIGN goals 4 and 5). Cost: the key is
-  readable by any script on the page; the page runs only its own scripts
-  (CSP `'self'`, Google's only during a Drive action) and never inserts
-  file or model content as HTML. Remembering the key is opt-in.
+- **No in-app chat, no API keys.** The first draft of this design had the
+  page call Claude and Gemini with a key the user pasted. Dropped: a user
+  cannot check that a key handed to a web app is not misused, whatever the
+  app promises, and the standard way to join an app and an agent is the
+  other way round: the app offers tools (MCP, WebMCP, MCP Apps) and the
+  user's agent, with its own login and billing, uses them. It also removes
+  provider SDKs, model choice, a chat UI and per-provider upkeep from
+  nymph. Cost: phones and users without an MCP-capable agent get no agent
+  in the app; a hosted remote MCP server would reach claude.ai and phone
+  chat apps, and is a separate project because it needs a server (app
+  DESIGN goal 5). Rejected too: provider sign-in in place of a key, which
+  Anthropic does not offer to third-party web apps.
 - **One registry, every route.** Connectors only translate. A second path
   (a connector calling the viewer or editor directly) would skip the
-  confirmation, the attribution or the snapshot, which goal 1 forbids.
-- **A stable tool list** over "what is available now": caching and the
-  kept reasoning of current models both need an unchanged prefix, and the
-  model plans better knowing the editor tools exist. Rejected: listing
-  only available tools and restarting the conversation on a mode switch.
+  confirmation, the attribution or the snapshot, which goal 2 forbids.
+- **A stable tool list** over "what is available now" (section 4.2).
 - **The editor tool definitions committed as JSON**, not read from the
-  editor module, so View mode and phones (where that module is never
-  fetched, app DESIGN section 3.10) list them without a 1 MB download. A
-  staleness test keeps them true.
-- **Undo by snapshot in View mode**, not an undo history in the viewer. The
-  viewer holds one source; snapshots of a few chart sources per
-  conversation cost nothing and also cover a turn that switched modes.
-- **A change by someone else ends an agent's undo group.** Otherwise
-  undoing the agent's turn also undoes the user's edit made during it.
+  editor module, so View mode and WebMCP list them without a 1 MB
+  download. A staleness test keeps them true.
+- **Explicit change groups** over guessing an agent's request boundaries
+  by idle time, which would group unrelated edits; the idle timeout only
+  closes a group an agent forgot.
+- **A change by someone else ends an agent's group.** Otherwise undoing
+  the agent's change also undoes the user's edit made during it.
+- **Undo by snapshot in View mode**, not an undo history in the viewer:
+  a few sources per document cost nothing and also cover a change that
+  switched modes.
 - **The page as the MCP server, `nymph mcp` as the listener.** A page
   cannot accept connections; `nymph mcp` is already the process every
-  external agent runs, so it is the natural client, and its existing
-  editor bridge already routes editor tools to "the editor the user has
-  open". Rejected: a separate `nymph serve` daemon (one more thing to
-  start); a fixed port (collisions, and a page could probe it without a
-  code); WebRTC (needs signalling).
+  local agent runs, and its editor bridge already routes editor tools to
+  "the editor the user has open". Rejected: a separate `nymph serve`
+  daemon (one more thing to start); a fixed port (collisions, and a page
+  could probe it without a code); WebRTC (needs signalling).
 - **A typed code, not a confirmation on the agent side.** The page must
-  prove it is the page the user means; the agent side is a CLI or chat
-  with no reliable way to show a prompt. The code also carries the port.
-- **Pairing on request, listener closed by default.** Goal 5: no port is
-  open for people who never pair.
-- **Each external write is one undo step.** WebMCP and MCP have no turn
-  boundary; guessing one by idle time would group unrelated edits.
-- **WebMCP on by default.** It gives the browser's own agent no power the
-  page's DOM does not already give it, and `external` stays confirmed.
-- **No stored conversations.** Chats hold the user's data and the model's
-  output; keeping them adds a privacy surface for little gain. Revisit
-  with a "save chat" action (section 11).
-- **Vendored official SDKs** over hand-written REST clients, for streaming,
-  typed errors and tool-call parsing maintained by the providers; loaded
-  only on use, so the app shell does not grow.
+  prove it is the page the user means; a CLI or chat has no reliable way
+  to show a prompt. The code also carries the port.
+- **Pairing on request.** Goal 5: no port open for people who never pair.
+- **WebMCP on by default** (section 7.1).
 
 ## 10. Constraints and Invariants
 
-- No model API, socket or vendored script is requested until the user
-  opens the assistant (or, for WebMCP, until a document screen shows on a
-  browser that has `navigator.modelContext`, which makes no request).
-- A connector never calls the viewer, the editor or `app` internals;
-  only `commands.callAgent`. No connector can produce the origin `user`.
+- No loopback socket is opened until the user pairs; WebMCP registration
+  makes no request; no other request is added.
+- A connector never calls the viewer, the editor or `app` internals; only
+  `commands.callAgent`. No connector can produce the origin `user`.
 - `external` commands from an agent always pass the confirmation (or the
   session's "Allow for this session" for that connector and command).
-- Model text and tool arguments are never inserted as HTML; no remote
-  image from model output is ever loaded.
-- Opened files are untrusted (they may contain text written to steer the
-  model): their contents reach the model only as tool results, never in
-  the system prompt; nothing a tool returns can widen what the model may
-  do without the user.
-- History sent to a provider is append-only within a conversation.
+- Tool arguments and results are never inserted as HTML.
 - `nymph mcp`: the listener binds 127.0.0.1 only, checks `Host` and
   `Origin`, accepts a code once, closes after three wrong codes; only the
   session thread touches the tool registry; reader threads only parse,
   fulfil promises and queue notifications; shutdown closes sockets and
-  joins every thread. Without `web_app_pair`, no socket, no thread, no
-  change to the tool list.
+  joins every thread. Without `web_app_pair` or `web_app_link`: no socket,
+  no thread, no change to the tool list.
 - The web build compiles none of `src/ipc/` and `src/mcp/web_bridge.*`.
-- Tests use port 0 and test-named files (CLAUDE.md, Tests); no test calls
-  a real model API.
+- Tests use port 0 and test-named files (CLAUDE.md, Tests).
 - Code style: JavaScript as `web/app/` (ES modules, no framework, no build
   step); C++ as nymph.
 
 ## 11. Testing Strategy
 
-1. **Node**: `markdown.js` (every input becomes text nodes; a `<script>`,
-   an `<img>` and a `javascript:` link come out inert), `toGeminiSchema()`
-   over every agent tool, the instructions test, `editor-tools.json`
-   against the editor module's `toolDefinitions()`.
-2. **Browser** (Playwright, built site): the session with a **scripted
-   adapter** (a list of responses): a turn's writes are one undo step and
-   the chat's Undo reverts them in Edit and in View; a user edit during a
-   turn is not undone with it; Stop ends a turn; an `external` call waits
-   for the dialog and Cancel goes back as the tool's error; an `editor_*`
-   call in View mode returns the guidance; 25 steps stop the turn. The
-   Claude and Gemini adapters against **local stub servers** that replay
-   recorded streaming responses (tool calls, images, refusal, 401, 429);
-   the consent dialog and key storage; the chat renders a hostile message
-   inertly; WebMCP with a stubbed `navigator.modelContext`; on an emulated
-   phone the panel is a sheet and lists no editor tools.
+1. **Node**: `editor-tools.json` against the editor module's
+   `toolDefinitions()`; `agent/web-app.md` names only `agentTools()`
+   commands; every `agentTools()` schema is valid JSON Schema.
+2. **Browser** (Playwright, built site), with a **test connector** that
+   calls `callAgent` as a bridge would: a group's writes are one undo
+   step and one activity entry, undone in Edit and in View; a user edit
+   during a group survives the group's Undo; Stop ends a group; an
+   `external` call waits for the dialog and Cancel returns an error; an
+   `editor_*` call in View mode returns the guidance; WebMCP with a
+   stubbed `navigator.modelContext`; on an emulated phone the panel is a
+   sheet without Connect.
 3. **Native** (GoogleTest): `sha1` vectors; WebSocket handshake and
-   framing (masked, fragmented, oversized, close); the listener refuses a
-   wrong `Host` or `Origin`, a reused or wrong code, and closes after three;
-   resume tokens; `web_app_pair` and forwarding with a C++ test client
-   acting as the page (tools list, a call, a timeout, a closed page,
-   `list_changed` reaching the client); `editor_bridge` picks a page or a
-   native editor by focus; `editor_model`: a commit with another origin
-   ends the group.
-4. **End to end** (browser, when a native `nymph` is available to the
-   web job, else skipped with 77): `nymph mcp` with a fake client on
-   stdin calls `web_app_pair`, the page types the code, the client calls
-   `editor_set_fields` and the page's chart changes.
-5. **By hand**, recorded in the plan: a real Claude key and a real Gemini
-   key on the deployed site; Claude Code and Cursor pairing through `nymph
-   mcp` in Chrome and Firefox; WebMCP in a Chrome that has it; a phone.
+   framing; the listener refuses a wrong `Host` or `Origin`, a reused or
+   wrong code, and closes after three; resume tokens; `web_app_pair`,
+   `web_app_link` and forwarding with a C++ test client acting as the
+   page; `list_changed`; `editor_bridge` picks a page or a native editor
+   by focus; `editor_model`: a commit with another origin ends the group.
+4. **End to end** (browser, when a native `nymph` is available to the web
+   job, else skipped with 77): a fake MCP client drives `nymph mcp`, calls
+   `web_app_pair`, the page pairs, the client's edit changes the page's
+   chart.
+5. **By hand**, recorded in the plan: Claude Code, Cursor and Gemini CLI
+   paired in Chrome and Firefox on the deployed site; "Open in the web
+   app" from Claude Desktop; WebMCP in a Chrome that has it.
 
 ## 12. Integration Boundaries
 
 Depends on: app DESIGN (registry, dock, documents, `device.js`, editor
 module API, `agent/` folder), workspace DESIGN (editor tools, versions,
-`editor_bridge`, discovery), MCP DESIGN (`nymph mcp`, session, skill
-text), [12_cursor_integration](../12_cursor_integration/DESIGN.md)
+`editor_bridge`, discovery), MCP DESIGN (`nymph mcp`, session, MCP App,
+skill text), [12_cursor_integration](../12_cursor_integration/DESIGN.md)
 (Cursor runs `nymph mcp`).
 
-Changes others see: `nymph mcp` has `web_app_pair`, may list `document_*`
-/ `app_*` tools and send `list_changed`; `editor_bridge` lists web pages;
-`editor_model` ends a group on another origin's change; the registry has
-`agent`, `agentTools()` and `callAgent`; the app's CSP allows loopback
-WebSockets.
+Changes others see: `nymph mcp` has `web_app_pair` (and the app-only
+`web_app_link`), may list `document_*` / `app_*` tools and send
+`list_changed`; `editor_bridge` lists web pages; `editor_model` ends a
+group on another origin's change; the registry has `agent`,
+`agentTools()`, `callAgent()` and change groups; the MCP App has "Open in
+the web app"; the app's CSP allows loopback WebSockets.
 
-Risks, checked first (plan step 1): the SDKs as plain ES modules; the
-Messages API and Gemini API from a page (CORS, streaming, images in tool
-results); WebMCP's shape; loopback WebSockets from the public site in each
-browser; whether Claude Code, Cursor and Gemini CLI follow
-`tools/list_changed`.
+Risks, checked first (plan step 1): loopback WebSockets from the public
+site in each browser; WebMCP's shape and which agents call it; whether
+Claude Code, Cursor and Gemini CLI follow `tools/list_changed`; the MCP
+Apps hosts' open-link request; clipboard and download after the
+confirmation.
 
 ## 13. Extension Points
 
-- OAuth sign-in for a provider, if one is offered to third-party web
-  apps (replaces the key field, same adapter).
-- More in-app connectors (any model API with tool calls) behind the same
-  adapter interface.
-- Saving a chat with its document; a "save chat" action.
-- Voice input on phones.
-- `nymph view --edit`'s own window gaining the chat panel (ImGui or a
-  webview), reusing the session's rules natively.
-- `resources/subscribe` from the bridge, so an external agent is told
-  when the user changes the chart instead of re-reading it.
+- A **hosted remote MCP server** (streamable HTTP, OAuth) for claude.ai,
+  ChatGPT and phone chat apps, relaying to a paired tab: its own project,
+  since it needs a server.
+- `resources/subscribe` from the bridge, so an external agent is told when
+  the user changes the chart instead of re-reading it.
+- The Agents panel in `nymph view --edit`'s window (an activity list over
+  the existing editor server).
