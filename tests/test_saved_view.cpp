@@ -261,6 +261,18 @@ TEST(saved_view, ADiagramZoomIsSavedAndReopensTheSame) {
   EXPECT_NEAR(reopened.plot().center[1], z.center[1], 0.01);
 }
 
+TEST(saved_view, AZoomedDiagramPassesUnderItsTitle) {
+  std::string titled = kDiagram;
+  titled.replace(titled.find("  children:"), 0, "  title: Zoo\n");
+  const image plain = png_pixels(titled);
+  const image zoomed = png_pixels(titled + "view:\n  root: {zoom: 3, center: [40, 60]}\n");
+  ASSERT_EQ(plain.width, zoomed.width);
+  EXPECT_FALSE(zoomed.rgba == plain.rgba);
+  // The rows of the title look the same: the zoomed content is clipped below it.
+  const size_t band = static_cast<size_t>(plain.width) * 18 * 4;
+  EXPECT_TRUE(std::equal(plain.rgba.begin(), plain.rgba.begin() + band, zoomed.rgba.begin()));
+}
+
 TEST(saved_view, A3DRotationIsSavedAndReopensTheSame) {
   driven_view d(k3D);
   d.drag(200, 150, 260, 170);

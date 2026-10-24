@@ -488,7 +488,8 @@ pays nothing:
 (Later: `ImUml::SetNextDiagramView(zoom, center)` sets the view of the
 next diagram drawn, with or without the flag, for the saved view; the
 info reports `ViewCenter`. `ImUml::SetNextDiagramPinch(from, to, scale)`
-applies a two-finger pinch to the next interactive diagram drawn.)
+applies a two-finger pinch to the next interactive diagram drawn. Content
+panned or zoomed away from the fit is clipped below the title.)
 
 
 ImUml fits each diagram to its rectangle (UML DESIGN, fit-to-rectangle
@@ -596,6 +597,12 @@ class NymphError extends Error { line: number; column: number; }
   takes one queued wheel event per frame, so a pinch overshot and kept
   zooming after the fingers stopped. A 3D plot (ImPlot3D) still gets whole
   wheel notches (about 1.2 each) from a pinch no 2D plot or diagram took.
+  A finger presses the chart only once it moves 6 CSS pixels (a pan,
+  pressed where it went down) or lifts (a tap): a second finger before
+  then makes a pinch with no press at all, so a pinch never clicks a pick
+  or adds up to a double click (which resets a diagram's view), and the
+  pointer leaves the chart while two fingers are down (no hover or tooltip
+  under a finger during a pinch).
   A double tap is a double click. The canvas has
   `touch-action: none` (and cancels `touchstart` / `touchmove` for
   browsers that ignore it): a gesture that starts on the chart is the

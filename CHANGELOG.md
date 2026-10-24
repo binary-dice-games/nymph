@@ -57,6 +57,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 - Web viewer and web app on phones: after a pinch zoom (especially one ended off the chart), a one-finger drag pans again instead of zooming.
 - Web viewer and web app on phones: a pinch zooms plots, Gantt charts and diagrams as far as the fingers spread, keeps the content under the fingers, and stops when they stop.
+- Web viewer and web app on phones: a pinch no longer clicks, highlights or shows the tooltip of what is under the first finger, and two quick pinches no longer reset a diagram's view.
+- Diagrams panned or zoomed (live, or by a saved `view`) pass under their title instead of over it.
 - Claude Desktop extension (`.mcpb`): its manifest lists every tool the server offers, including `convert_chart`, `list_themes`, the `editor_*` tools and `web_app_pair` / `web_app_call`.
 - Browser extension: the toolbar badge no longer stays empty after a site is turned back on while its charts reappear.
 - Web app on phones and tablets: the page itself no longer scrolls, so the top bar can no longer be dragged out of view and stay there.

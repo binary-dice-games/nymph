@@ -444,6 +444,40 @@ test('pinching out then in follows the fingers, with no zoom left over after the
   await page.close();
 });
 
+test('a pinch over a diagram node neither clicks nor hovers it; a tap clicks it', async () => {
+  const { page, touch } = await touchPage();
+  await page.evaluate(async () => {
+    await window.v.setSource('image: {width: 400, height: 300}\nroot:\n  type: ClassDiagram\n  children:\n    - {type: Class, id: Animal}\n');
+    await window.v.rendered();
+    window.events.length = 0;
+  });
+  const c = await page.evaluate(() => {
+    const p = window.v.state().views[0];
+    const box = window.v.canvas.getBoundingClientRect();
+    return { x: box.left + p.x + p.width / 2, y: box.top + p.y + p.height / 2 };
+  });
+  await touch('touchStart', [[c.x, c.y]]);
+  await touch('touchStart', [[c.x, c.y], [c.x + 40, c.y]]);
+  for (let i = 1; i <= 4; ++i) {
+    await touch('touchMove', [[c.x - i * 5, c.y], [c.x + 40 + i * 5, c.y]]);
+  }
+  await settleIn(page);
+  const during = await page.evaluate(() => window.v.state().hovered);
+  await touch('touchEnd', [[c.x + 60, c.y]]);
+  await touch('touchEnd', []);
+  await settleIn(page);
+  const r = await page.evaluate(() => ({ zoom: window.v.state().views[0].zoom, clicks: window.events.filter((e) => e.e === 'click').length }));
+  assert(during === null, `hovered during the pinch: ${JSON.stringify(during)}`);
+  assert(r.clicks === 0, `${r.clicks} clicks`);
+  assert(Math.abs(r.zoom - 2) < 1e-3, `zoom ${r.zoom}`); // 40 px apart to 80
+  await touch('touchStart', [[c.x, c.y]]);
+  await touch('touchEnd', []);
+  await settleIn(page);
+  const clicks = await page.evaluate(() => window.events.filter((e) => e.e === 'click').length);
+  assert(clicks === 1, `a tap made ${clicks} clicks`);
+  await page.close();
+});
+
 test('after a fast pinch whose finger release is lost, a one-finger drag pans and does not zoom', async () => {
   const { page, touch } = await touchPage();
   const c = await page.evaluate(() => window.at(2, 5));

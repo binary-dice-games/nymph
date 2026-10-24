@@ -2793,6 +2793,12 @@ void EndDiagram(int kind) {
     TextCentered(dl, tts, 1.0f, (bb.Min.x + bb.Max.x) * 0.5f, bb.Min.y + 2.0f, StrBegin(d, d->Title),
                  StrEnd(d, d->Title), tts.Col);
   }
+  // Content panned or zoomed away from the fit passes under the title, not
+  // over it (at the fit it stays below it: images are unchanged).
+  const bool moved = title_h > 0.0f && (pan.x != 0.0f || pan.y != 0.0f || d->ViewZoom != 1.0f);
+  if (moved) {
+    dl->PushClipRect(ImVec2(bb.Min.x, bb.Min.y + title_h), bb.Max, true);
+  }
   Painter pt;
   pt.DL = dl;
   pt.D = d;
@@ -2809,6 +2815,9 @@ void EndDiagram(int kind) {
     if (interactive && hovered && !ImGui::IsMouseDragging(ImGuiMouseButton_Left)) {
       FindHovered(pt, edge_count, ImGui::GetIO().MousePos, &info);
     }
+  }
+  if (moved) {
+    dl->PopClipRect();
   }
   dl->PopClipRect();
   d->Edges.resize(edge_count);

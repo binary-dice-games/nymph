@@ -13,6 +13,8 @@
 
 const FIT = { source: 0, width: 1, fill: 2, scale: 3 };
 const POINTER = { move: 0, down: 1, up: 2, wheel: 3, leave: 4 };
+/** CSS pixels a finger moves before it presses the chart (a pan). */
+const TOUCH_SLOP = 6;
 const STATUS = { ok: 0, error: 1, fontsNeeded: 2, plainPng: 3 };
 
 /** The menu's and About panel's styles, added to the page once. */
@@ -285,6 +287,8 @@ export class NymphViewer {
     /** @type {Map<number, {x: number, y: number}>} touches, for pinch zoom */
     this.touches = new Map();
     this.pinchDistance = 0;
+    /** A finger down but not yet pressed on the chart: {id, x, y, touch}. */
+    this.pendingTouch = null;
     /** The fingers' midpoint at the last pinch step. */
     this.pinchMiddle = { x: 0, y: 0 };
     /** @type {Array<() => void>} undoes listeners and observers */
@@ -380,14 +384,25 @@ export class NymphViewer {
         this.touches.set(e.pointerId, { x: p.x, y: p.y });
         if (this.touches.size === 2) {
           this.startPinch();
-          // The first finger's drag ends where that finger is (not at the
-          // second one, which would pan the chart by the gap): a pinch starts.
-          this.pointer('up', { ...first, button: 0, touch: true });
+          if (this.pendingTouch) {
+            // The first finger never pressed: no click, no double click.
+            this.pendingTouch = null;
+          } else {
+            // The first finger's drag ends where that finger is (not at the
+            // second one, which would pan the chart by the gap).
+            this.pointer('up', { ...first, button: 0, touch: true });
+          }
+          // No hover or tooltip under a finger while the pinch goes on.
+          this.pointer('leave');
           return;
         }
         if (this.touches.size > 2) {
           return;
         }
+        // A finger presses once it moves (a pan) or lifts (a tap), so a
+        // second finger can still make it a pinch without a click.
+        this.pendingTouch = { id: e.pointerId, ...p };
+        return;
       }
       this.pointer('down', { ...at(e), button: button(e) });
     });
@@ -398,6 +413,14 @@ export class NymphViewer {
         if (this.touches.size === 2) {
           this.pinch();
           return;
+        }
+        const pending = this.pendingTouch;
+        if (pending?.id === e.pointerId) {
+          if (Math.hypot(p.x - pending.x, p.y - pending.y) < TOUCH_SLOP) {
+            return;
+          }
+          this.pendingTouch = null;
+          this.pointer('down', { ...pending, button: 0 });
         }
       }
       this.pointer('move', at(e));
@@ -417,6 +440,13 @@ export class NymphViewer {
         }
       }
       this.rightDown = null;
+      if (this.pendingTouch?.id === e.pointerId) {
+        // A tap: press where the finger went down (a cancelled one is no tap).
+        if (e.type === 'pointerup') {
+          this.pointer('down', { ...this.pendingTouch, button: 0 });
+        }
+        this.pendingTouch = null;
+      }
       const pinching = this.touches.size >= 2;
       this.touches.delete(e.pointerId);
       if (!pinching) {
@@ -512,6 +542,7 @@ export class NymphViewer {
     }
     this.buttonsDown = this.pressed.size;
     this.touches.clear();
+    this.pendingTouch = null;
     this.pinchDistance = 0;
   }
 
