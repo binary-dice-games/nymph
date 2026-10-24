@@ -55,6 +55,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `nymph view --edit`: choosing a colour for a field that was automatic opens the colour picker at once.
 
 ### Fixed
+- Web viewer and web app on phones: after a pinch zoom (especially one ended off the chart), a one-finger drag pans again instead of zooming.
 - Claude Desktop extension (`.mcpb`): its manifest lists every tool the server offers, including `convert_chart`, `list_themes`, the `editor_*` tools and `web_app_pair` / `web_app_call`.
 - Browser extension: the toolbar badge no longer stays empty after a site is turned back on while its charts reappear.
 - Web app on phones and tablets: the page itself no longer scrolls, so the top bar can no longer be dragged out of view and stay there.

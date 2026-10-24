@@ -455,6 +455,18 @@ struct live_view::impl {
     return v;
   }
 
+  /// Counts a drawn frame. ImGui takes queued input a step per frame (a
+  /// move, then a wheel, ...): frames go on until the queue is empty, or a
+  /// pinch's last zoom steps would wait for the next touch and zoom it
+  /// instead of panning.
+  void end_frame() {
+    --pending_frames;
+    if (!ImGui::GetCurrentContext()->InputEventsQueue.empty()) {
+      pending_frames = std::max(pending_frames, kInputFrames);
+      input_frames_left = kInputFrames + 1;
+    }
+  }
+
   /// Notes the elements whose view changed in the frames after an input.
   void track_changes() {
     view_map now;
@@ -1133,7 +1145,7 @@ const ImDrawData* live_view::frame(double now_seconds) {
   try {
     const context_switch on(*m.contexts);
     m.run_frame(now_seconds);
-    --m.pending_frames;
+    m.end_frame();
     return ImGui::GetDrawData();
   } catch (const error&) {
     // The frame is left open: these contexts cannot be used again.
@@ -1149,7 +1161,7 @@ const ImDrawData* live_view::frame(double now_seconds) {
   }
   const context_switch on(*m.contexts);
   m.run_frame(now_seconds);
-  --m.pending_frames;
+  m.end_frame();
   return ImGui::GetDrawData();
 }
 

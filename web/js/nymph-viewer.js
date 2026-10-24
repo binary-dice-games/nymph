@@ -280,6 +280,8 @@ export class NymphViewer {
     this.lastHover = 'null';
     this.lastView = '';
     this.buttonsDown = 0;
+    /** @type {Set<number>} pointers pressed on the chart and not yet released */
+    this.pressed = new Set();
     /** @type {Map<number, {x: number, y: number}>} touches, for pinch zoom */
     this.touches = new Map();
     this.pinchDistance = 0;
@@ -358,7 +360,14 @@ export class NymphViewer {
     };
     add('pointerdown', (e) => {
       canvas.setPointerCapture(e.pointerId);
-      ++this.buttonsDown;
+      if (e.pointerType === 'touch' && e.isPrimary) {
+        // The only finger on the screen: touches still listed lost their
+        // release (a gesture ended off the chart, or the browser dropped the
+        // event). Left there, they would turn this one-finger pan into a pinch.
+        this.forgetTouches();
+      }
+      this.pressed.add(e.pointerId);
+      this.buttonsDown = this.pressed.size;
       this.closeMenu();
       if (e.button === 2) {
         this.rightDown = { x: e.clientX, y: e.clientY };
@@ -392,7 +401,12 @@ export class NymphViewer {
       this.pointer('move', at(e));
     });
     const release = (e) => {
-      this.buttonsDown = Math.max(0, this.buttonsDown - 1);
+      // Once per press: lostpointercapture follows pointerup, and stands in
+      // for it when the browser never sends it.
+      if (!this.pressed.delete(e.pointerId)) {
+        return;
+      }
+      this.buttonsDown = this.pressed.size;
       // A right click that did not drag (a drag box-zooms a plot) opens the menu.
       if (e.type === 'pointerup' && e.button === 2 && this.rightDown && this.options.menu !== false) {
         const moved = Math.hypot(e.clientX - this.rightDown.x, e.clientY - this.rightDown.y);
@@ -406,12 +420,17 @@ export class NymphViewer {
       if (!pinching) {
         this.pointer('up', { ...at(e), button: button(e) });
       }
+      if (this.touches.size === 2) {
+        // A third finger lifted: the pinch goes on from these two.
+        this.pinchDistance = this.touchDistance();
+      }
       if (e.pointerType === 'touch' && this.touches.size === 0) {
         this.pointer('leave');
       }
     };
     add('pointerup', release);
     add('pointercancel', release);
+    add('lostpointercapture', release);
     add('pointerleave', (e) => {
       if (!canvas.hasPointerCapture(e.pointerId)) {
         this.pointer('leave');
@@ -482,6 +501,16 @@ export class NymphViewer {
       }
     });
     canvas.tabIndex = 0; // reachable from the keyboard: the menu key, text fields
+  }
+
+  /** @private Drops every listed touch, as if all fingers had lifted. */
+  forgetTouches() {
+    for (const id of this.touches.keys()) {
+      this.pressed.delete(id);
+    }
+    this.buttonsDown = this.pressed.size;
+    this.touches.clear();
+    this.pinchDistance = 0;
   }
 
   /** @private */

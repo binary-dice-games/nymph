@@ -416,6 +416,42 @@ test('a pinch on the chart zooms at its centre and never scrolls the page', asyn
   await page.close();
 });
 
+test('after a fast pinch whose finger release is lost, a one-finger drag pans and does not zoom', async () => {
+  const { page, touch } = await touchPage();
+  const c = await page.evaluate(() => window.at(2, 5));
+  // A pinch ended off the chart: sent faster than frames (its zoom steps
+  // queue up), and the browser never reports one finger lifting.
+  await page.evaluate(({ x, y }) => {
+    const canvas = window.v.canvas;
+    canvas.setPointerCapture = () => {}; // made-up pointers cannot be captured
+    const send = (type, pointerId, isPrimary, px) =>
+      canvas.dispatchEvent(new PointerEvent(type, { pointerId, isPrimary, pointerType: 'touch', clientX: px, clientY: y, bubbles: true }));
+    const box = canvas.getBoundingClientRect();
+    x += box.left;
+    y += box.top;
+    send('pointerdown', 101, true, x - 20);
+    send('pointerdown', 102, false, x + 20);
+    for (let i = 1; i <= 8; ++i) {
+      send('pointermove', 101, true, x - 20 - i * 5);
+      send('pointermove', 102, false, x + 20 + i * 5);
+    }
+    send('pointerup', 102, false, x + 60);
+  }, c);
+  await settleIn(page);
+  const before = await page.evaluate(() => window.v.state().views[0]);
+  await touch('touchStart', [[c.x, c.y]]);
+  for (let i = 1; i <= 8; ++i) {
+    await touch('touchMove', [[c.x - i * 10, c.y]]);
+  }
+  await touch('touchEnd', []);
+  await settleIn(page);
+  const after = await page.evaluate(() => window.v.state().views[0]);
+  const width = (p) => p.xMax - p.xMin;
+  assert(Math.abs(width(after) - width(before)) < 1e-6, `zoomed: x range ${width(before)} to ${width(after)}`);
+  assert(after.xMin > before.xMin, `not panned: xMin ${before.xMin} to ${after.xMin}`);
+  await page.close();
+});
+
 test('clicking a point fires click with its pick', async () => {
   const page = await openPage();
   await plotPage(page);
