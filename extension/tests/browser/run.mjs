@@ -450,6 +450,25 @@ async function shot(p, box) {
   return decodePng(await p.screenshot({ clip }));
 }
 
+/**
+ * Hides the viewers' reset-view buttons (in shadow roots and frames): a
+ * parked chart comes back from its YAML, with the zoom but no change of
+ * its own to reset, so the button is not part of what must look alike.
+ */
+async function hideResetButtons(p) {
+  for (const frame of p.frames()) {
+    await frame
+      .evaluate(() => {
+        const walk = (root) => {
+          root.querySelectorAll('.nymph-reset').forEach((b) => (b.style.visibility = 'hidden'));
+          root.querySelectorAll('*').forEach((e) => e.shadowRoot && walk(e.shadowRoot));
+        };
+        walk(document);
+      })
+      .catch(() => {}); // a frame gone meanwhile
+  }
+}
+
 /** Viewport coordinates of a page box's centre (scrolled into view). */
 async function centreOf(p, box) {
   await p.evaluate((y) => scrollTo(0, Math.max(0, y - 20)), box[1]);
@@ -608,6 +627,7 @@ test(`${mode}: at most ${cap} viewers live, and a parked chart comes back with i
   await new Promise((resolve) => setTimeout(resolve, 500));
   await p.mouse.move(5, 5);
   await new Promise((resolve) => setTimeout(resolve, 300));
+  await hideResetButtons(p);
   const zoomed = await shot(p, first);
   let most = 0;
   const height = await p.evaluate(() => document.body.scrollHeight);

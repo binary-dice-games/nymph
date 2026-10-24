@@ -61,7 +61,8 @@ into the last form (escape `<` and `&` in the text). Attributes: `src`,
 `width`: laid out at the box width; `fill`: at the box size; `scale`:
 laid out at the source size and scaled to the box width, up or down), `theme` (`source`, `auto` (light or dark as the system), or any
 [chart theme](themes.md)), `tooltips` (`false` turns nymph's own off), `menu`
-(`false` turns the right-click menu off), `touch-scroll` (vertical swipes
+(`false` turns the right-click menu off), `reset-button` (`false` hides
+the reset-view button), `touch-scroll` (vertical swipes
 on the chart scroll the page). Events,
 bubbling: `nymph-load` (shown; `detail` is `info()`), `nymph-hover`,
 `nymph-click`, `nymph-view`, `nymph-error` (the error is also shown as
@@ -79,7 +80,7 @@ setInterval(() => viewer.setData({ revenue: latestValues() }), 250);
 
 | Call | What |
 |------|------|
-| `createViewer(container, options)` | A viewer in `container` (a canvas is added to it). Options: `source` or `png`, `fit`, `theme`, `tooltips`, `menu` (`false` turns the right-click menu off), `fileName` (for saving; default from `src`, or `chart`), `touchScroll` (vertical swipes on the chart scroll the page; default `false`), `rasterizer` (`auto`, `webgl`, `software`), and for the first viewer of the page `wasmUrl`, `fontBaseUrl`, `fetchFont(name)`. |
+| `createViewer(container, options)` | A viewer in `container` (a canvas is added to it). Options: `source` or `png`, `fit`, `theme`, `tooltips`, `menu` (`false` turns the right-click menu off), `resetButton` (`false` hides the reset-view button), `fileName` (for saving; default from `src`, or `chart`), `touchScroll` (vertical swipes on the chart scroll the page; default `false`), `rasterizer` (`auto`, `webgl`, `software`), and for the first viewer of the page `wasmUrl`, `fontBaseUrl`, `fetchFont(name)`. |
 | `setSource(yaml, {resetView})` | Shows a new source; the zoom of elements that did not change is kept unless `resetView`. A [mermaid](mermaid.md) diagram is converted to nymph YAML first: `source()`, `toYaml()` and the saved files are that YAML, and `info()` adds `importedFrom: "mermaid"`, `mermaidKind` and `warnings`. |
 | `setData(tables)` | Replaces the source's `data` (an object, or YAML / JSON text); the view is kept. |
 | `setPng(bytes)` | Shows the source a nymph PNG carries; resolves `false` for a PNG without one (shown as a plain image). |
@@ -125,8 +126,10 @@ except over a plot or diagram that takes input. On touch screens a gesture
 that starts on the chart goes to the chart only (the page neither scrolls
 nor zooms): one finger pans, two fingers zoom. With `touchScroll: true`
 (attribute `touch-scroll`) a vertical swipe scrolls the page instead.
-Source limits (`x_min`, ...) are where a plot starts; double-click or
-`resetView()` goes back. New data outside the visible range is not
+Source limits (`x_min`, ...) are where a plot starts; double-click,
+`resetView()` or the reset button goes back. The reset button (four
+corners, in the chart's bottom-right corner) shows once the user pans,
+zooms, rotates or hides a series, and resets every plot and diagram. New data outside the visible range is not
 followed unless the axis has the `AutoFit` flag.
 
 ## In a window

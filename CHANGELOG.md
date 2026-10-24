@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Web viewer and web app: a reset-view button in the chart's bottom-right corner, shown once the user pans or zooms (`resetButton: false` / `reset-button="false"` hides it).
 - Web app: the agent you already use works on the open chart. `nymph mcp`'s new `web_app_pair` tool gives a one-time code (or link) to type under **Agents > Connect an agent**; Claude Code, Claude Desktop, Cursor and Gemini CLI then read and change the chart through the app's tools, which join their tool list (`web_app_call` reaches them otherwise). The app never asks for an API key.
 - Web app: the **Agents** panel (`Ctrl+Shift+A`) lists connected agents and every change they made, each with Undo; an agent's request is one undo step; **Stop** halts it; actions that leave the tab still ask first, with "allow without asking" for the open chart.
 - Web app: browser assistants reach the open chart through WebMCP where the browser offers it (a switch turns it off).

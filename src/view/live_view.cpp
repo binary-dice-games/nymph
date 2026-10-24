@@ -1075,6 +1075,10 @@ bool live_view::wants_keyboard() const {
   return impl_->wants_keyboard;
 }
 
+bool live_view::view_changed() const {
+  return !impl_->touched.empty();
+}
+
 void live_view::set_clipboard_hooks(
     std::function<void(std::string_view)> set,
     std::function<std::string()> get) {

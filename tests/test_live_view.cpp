@@ -494,6 +494,26 @@ TEST(live_view_input, APanSurvivesLaterFramesAndResetViewRestoresTheSource) {
   EXPECT_DOUBLE_EQ(d.plot().x_max, 10.0);
 }
 
+TEST(live_view_input, ViewChangedFollowsTheUsersPansAndResets) {
+  driven_view d(kPan);
+  EXPECT_FALSE(d.v.view_changed());
+  const plot_view p = d.plot();
+  d.move(p.x + 50, p.y + 50); // hovering changes nothing
+  EXPECT_FALSE(d.v.view_changed());
+  d.drag(p.x + 100, p.y + 100, p.x + 60, p.y + 120);
+  EXPECT_TRUE(d.v.view_changed());
+  d.v.set_source(kPan); // an update keeps the view
+  d.run();
+  EXPECT_TRUE(d.v.view_changed());
+  d.v.reset_view();
+  d.run();
+  EXPECT_FALSE(d.v.view_changed());
+  d.drag(p.x + 100, p.y + 100, p.x + 60, p.y + 120);
+  d.v.set_source(kPan, true);
+  d.run();
+  EXPECT_FALSE(d.v.view_changed());
+}
+
 TEST(live_view_input, AnUpdateKeepsTheViewUnlessAskedToReset) {
   driven_view d(kPan);
   const plot_view p = d.plot();
