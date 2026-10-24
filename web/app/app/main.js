@@ -44,6 +44,26 @@ window.nymphApp = { app, commands }; // for tests and the agent connectors
 
 // ── Start ─────────────────────────────────────────────────────────────────────
 
+/**
+ * Scrolls the document back to the top whenever the browser moves it (iOS
+ * Safari does, around the on-screen keyboard), so the top bar stays in
+ * view. The app's panes scroll; the document never should.
+ */
+function keepDocumentInPlace() {
+  const restore = () => {
+    if (window.scrollX === 0 && window.scrollY === 0) {
+      return;
+    }
+    // Not while typing: the browser keeps the focused field above the keyboard.
+    if (document.activeElement?.matches?.('input, textarea:not(.nymph-editor-keys), [contenteditable]')) {
+      return;
+    }
+    window.scrollTo(0, 0);
+  };
+  window.addEventListener('scroll', restore, { passive: true });
+  document.addEventListener('focusout', () => setTimeout(restore, 100));
+}
+
 async function init() {
   applyAppTheme(load('theme') ?? 'auto');
   app.chartTheme = load('chartTheme') ?? 'source';
@@ -64,6 +84,7 @@ async function init() {
   wireControls();
   wireDropAndPaste();
   wireKeys();
+  keepDocumentInPlace();
   renderStart();
   registerServiceWorker();
   if (device.launchQueue) {
