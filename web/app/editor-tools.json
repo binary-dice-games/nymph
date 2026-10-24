@@ -1,0 +1,442 @@
+[
+ {
+  "annotations": {
+   "openWorldHint": false,
+   "readOnlyHint": true,
+   "title": "Editor state"
+  },
+  "description": "The chart open in the user's nymph editor: file, version, the element tree (path, type, label, id), the selected element with its written fields and the child types it takes, the data tables, the view on screen (zoom, pan) and the error the editor shows. Call first: 'this', 'the selected node' and the like mean the selection.",
+  "inputSchema": {
+   "additionalProperties": false,
+   "properties": {},
+   "type": "object"
+  },
+  "name": "editor_state",
+  "title": "Editor state"
+ },
+ {
+  "annotations": {
+   "openWorldHint": false,
+   "readOnlyHint": true,
+   "title": "Editor source"
+  },
+  "description": "The whole YAML source of the chart in the editor, and its version.",
+  "inputSchema": {
+   "additionalProperties": false,
+   "properties": {},
+   "type": "object"
+  },
+  "name": "editor_source",
+  "title": "Editor source"
+ },
+ {
+  "annotations": {
+   "openWorldHint": false,
+   "readOnlyHint": true,
+   "title": "Editor element"
+  },
+  "description": "One element's fields (value, written or default, allowed names), its children, the types it takes as children and the elements that name it by id.",
+  "inputSchema": {
+   "additionalProperties": false,
+   "properties": {
+    "path": {
+     "description": "Element path from editor_state, e.g. root/children/2.",
+     "type": "string"
+    }
+   },
+   "required": [
+    "path"
+   ],
+   "type": "object"
+  },
+  "name": "editor_element",
+  "title": "Editor element"
+ },
+ {
+  "annotations": {
+   "openWorldHint": false,
+   "readOnlyHint": true,
+   "title": "Editor table"
+  },
+  "description": "A data table's rows as CSV text (header first), from 'offset' (row, from 0) for 'limit' rows (default 200).",
+  "inputSchema": {
+   "additionalProperties": false,
+   "properties": {
+    "limit": {
+     "description": "Most rows to return.",
+     "type": "integer"
+    },
+    "offset": {
+     "description": "First row, from 0.",
+     "type": "integer"
+    },
+    "table": {
+     "description": "Table name; omit or \"\" for the single unnamed table.",
+     "type": "string"
+    }
+   },
+   "type": "object"
+  },
+  "name": "editor_table",
+  "title": "Editor table"
+ },
+ {
+  "annotations": {
+   "openWorldHint": false,
+   "readOnlyHint": true,
+   "title": "Editor view image"
+  },
+  "description": "A PNG of the figure as the user sees it in the editor (zoom, pan, selection outline).",
+  "inputSchema": {
+   "additionalProperties": false,
+   "properties": {
+    "max_width": {
+     "description": "Largest width in pixels (default 1200).",
+     "type": "integer"
+    }
+   },
+   "type": "object"
+  },
+  "name": "editor_view_image",
+  "title": "Editor view image"
+ },
+ {
+  "annotations": {
+   "destructiveHint": false,
+   "idempotentHint": false,
+   "openWorldHint": false,
+   "readOnlyHint": false,
+   "title": "Editor select"
+  },
+  "description": "Selects an element (and optionally one of its fields) in the editor, and/or shows a tab: 'chart' or a table name.",
+  "inputSchema": {
+   "additionalProperties": false,
+   "properties": {
+    "field": {
+     "description": "A field of it to focus.",
+     "type": "string"
+    },
+    "path": {
+     "description": "Element path.",
+     "type": "string"
+    },
+    "tab": {
+     "description": "'chart', or a table's name (\"\" for the single unnamed table).",
+     "type": "string"
+    }
+   },
+   "type": "object"
+  },
+  "name": "editor_select",
+  "title": "Editor select"
+ },
+ {
+  "annotations": {
+   "destructiveHint": false,
+   "idempotentHint": false,
+   "openWorldHint": false,
+   "readOnlyHint": false,
+   "title": "Editor set fields"
+  },
+  "description": "Sets fields of one element as one undo step: values are strings, numbers, booleans or lists; a string starting with $ is a column reference; null clears a field back to its default. The editor checks the result like any source and refuses (changing nothing) with the loader's message.",
+  "inputSchema": {
+   "additionalProperties": false,
+   "properties": {
+    "expected_version": {
+     "description": "The version from editor_state: the change is refused if the user changed the chart since.",
+     "type": "integer"
+    },
+    "fields": {
+     "description": "Field name to value.",
+     "type": "object"
+    },
+    "path": {
+     "description": "Element path, or 'image' for the image options.",
+     "type": "string"
+    }
+   },
+   "required": [
+    "path",
+    "fields"
+   ],
+   "type": "object"
+  },
+  "name": "editor_set_fields",
+  "title": "Editor set fields"
+ },
+ {
+  "annotations": {
+   "destructiveHint": false,
+   "idempotentHint": false,
+   "openWorldHint": false,
+   "readOnlyHint": false,
+   "title": "Editor add element"
+  },
+  "description": "Adds an element of 'type' to 'parent' (only types the parent takes: see 'takes'). It starts valid: a fresh id, data for a series, and a link's from/to taken from the selected node and the diagram's other ids; 'fields' override them (e.g. {\"from\": \"cart\", \"to\": \"purchases\"} for a FlowLink). Returns its path and the paths that moved.",
+  "inputSchema": {
+   "additionalProperties": false,
+   "properties": {
+    "expected_version": {
+     "description": "The version from editor_state: the change is refused if the user changed the chart since.",
+     "type": "integer"
+    },
+    "fields": {
+     "description": "Field name to value, as editor_set_fields.",
+     "type": "object"
+    },
+    "index": {
+     "description": "Place among the parent's children, from 0; default last.",
+     "type": "integer"
+    },
+    "parent": {
+     "description": "Path of the parent element.",
+     "type": "string"
+    },
+    "type": {
+     "description": "Element type, e.g. FlowLink.",
+     "type": "string"
+    }
+   },
+   "required": [
+    "parent",
+    "type"
+   ],
+   "type": "object"
+  },
+  "name": "editor_add_element",
+  "title": "Editor add element"
+ },
+ {
+  "annotations": {
+   "destructiveHint": false,
+   "idempotentHint": false,
+   "openWorldHint": false,
+   "readOnlyHint": false,
+   "title": "Editor remove element"
+  },
+  "description": "Removes an element (not the root). Refused while other elements name it by id unless 'with_references' is true, which removes those too. Returns the paths that moved.",
+  "inputSchema": {
+   "additionalProperties": false,
+   "properties": {
+    "expected_version": {
+     "description": "The version from editor_state: the change is refused if the user changed the chart since.",
+     "type": "integer"
+    },
+    "path": {
+     "description": "Element path.",
+     "type": "string"
+    },
+    "with_references": {
+     "description": "Also remove the elements that name it.",
+     "type": "boolean"
+    }
+   },
+   "required": [
+    "path"
+   ],
+   "type": "object"
+  },
+  "name": "editor_remove_element",
+  "title": "Editor remove element"
+ },
+ {
+  "annotations": {
+   "destructiveHint": false,
+   "idempotentHint": false,
+   "openWorldHint": false,
+   "readOnlyHint": false,
+   "title": "Editor move element"
+  },
+  "description": "Moves an element to another place among its siblings.",
+  "inputSchema": {
+   "additionalProperties": false,
+   "properties": {
+    "expected_version": {
+     "description": "The version from editor_state: the change is refused if the user changed the chart since.",
+     "type": "integer"
+    },
+    "index": {
+     "description": "New place, from 0.",
+     "type": "integer"
+    },
+    "path": {
+     "description": "Element path.",
+     "type": "string"
+    }
+   },
+   "required": [
+    "path",
+    "index"
+   ],
+   "type": "object"
+  },
+  "name": "editor_move_element",
+  "title": "Editor move element"
+ },
+ {
+  "annotations": {
+   "destructiveHint": false,
+   "idempotentHint": false,
+   "openWorldHint": false,
+   "readOnlyHint": false,
+   "title": "Editor set cells"
+  },
+  "description": "Sets cells of a data table as one undo step; a row past the end adds rows.",
+  "inputSchema": {
+   "additionalProperties": false,
+   "properties": {
+    "cells": {
+     "description": "Each {row (from 0), column (name or number from 0), value}.",
+     "items": {
+      "type": "object"
+     },
+     "type": "array"
+    },
+    "expected_version": {
+     "description": "The version from editor_state: the change is refused if the user changed the chart since.",
+     "type": "integer"
+    },
+    "table": {
+     "description": "Table name; omit for the single unnamed table.",
+     "type": "string"
+    }
+   },
+   "required": [
+    "cells"
+   ],
+   "type": "object"
+  },
+  "name": "editor_set_cells",
+  "title": "Editor set cells"
+ },
+ {
+  "annotations": {
+   "destructiveHint": false,
+   "idempotentHint": false,
+   "openWorldHint": false,
+   "readOnlyHint": false,
+   "title": "Editor set table"
+  },
+  "description": "Replaces a data table with CSV text (header first), or with create: true adds it as a new table (a second table names the first 'first_name' and its references $first_name:column).",
+  "inputSchema": {
+   "additionalProperties": false,
+   "properties": {
+    "create": {
+     "description": "Add the table when it does not exist.",
+     "type": "boolean"
+    },
+    "csv": {
+     "description": "The table as CSV, header first.",
+     "type": "string"
+    },
+    "expected_version": {
+     "description": "The version from editor_state: the change is refused if the user changed the chart since.",
+     "type": "integer"
+    },
+    "first_name": {
+     "description": "With create: the name the single unnamed table gets (default table1).",
+     "type": "string"
+    },
+    "table": {
+     "description": "Table name; \"\" for the single unnamed table.",
+     "type": "string"
+    }
+   },
+   "required": [
+    "csv"
+   ],
+   "type": "object"
+  },
+  "name": "editor_set_table",
+  "title": "Editor set table"
+ },
+ {
+  "annotations": {
+   "destructiveHint": false,
+   "idempotentHint": false,
+   "openWorldHint": false,
+   "readOnlyHint": false,
+   "title": "Editor remove table"
+  },
+  "description": "Removes a data table (refused while elements take data from it).",
+  "inputSchema": {
+   "additionalProperties": false,
+   "properties": {
+    "expected_version": {
+     "description": "The version from editor_state: the change is refused if the user changed the chart since.",
+     "type": "integer"
+    },
+    "table": {
+     "description": "Table name.",
+     "type": "string"
+    }
+   },
+   "type": "object"
+  },
+  "name": "editor_remove_table",
+  "title": "Editor remove table"
+ },
+ {
+  "annotations": {
+   "destructiveHint": false,
+   "idempotentHint": false,
+   "openWorldHint": false,
+   "readOnlyHint": false,
+   "title": "Editor set source"
+  },
+  "description": "Replaces the whole source (one undo step). Prefer the smaller tools; element paths may change. Takes a mermaid diagram too: it is converted to nymph YAML first.",
+  "inputSchema": {
+   "additionalProperties": false,
+   "properties": {
+    "expected_version": {
+     "description": "The version from editor_state: the change is refused if the user changed the chart since.",
+     "type": "integer"
+    },
+    "source": {
+     "description": "The new YAML source, or a mermaid diagram.",
+     "type": "string"
+    }
+   },
+   "required": [
+    "source"
+   ],
+   "type": "object"
+  },
+  "name": "editor_set_source",
+  "title": "Editor set source"
+ },
+ {
+  "annotations": {
+   "destructiveHint": false,
+   "idempotentHint": false,
+   "openWorldHint": false,
+   "readOnlyHint": false,
+   "title": "Editor undo"
+  },
+  "description": "Undoes the last change in the editor (the user's or yours).",
+  "inputSchema": {
+   "additionalProperties": false,
+   "properties": {},
+   "type": "object"
+  },
+  "name": "editor_undo",
+  "title": "Editor undo"
+ },
+ {
+  "annotations": {
+   "destructiveHint": false,
+   "idempotentHint": false,
+   "openWorldHint": false,
+   "readOnlyHint": false,
+   "title": "Editor redo"
+  },
+  "description": "Redoes the last undone change.",
+  "inputSchema": {
+   "additionalProperties": false,
+   "properties": {},
+   "type": "object"
+  },
+  "name": "editor_redo",
+  "title": "Editor redo"
+ }
+]
