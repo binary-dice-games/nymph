@@ -698,7 +698,10 @@ blue and grey, and a dark page then framed a light panel.
   `nymph-viewer-core.wasm`, `nymph-editor-core.wasm` and the app shell
   against `web/size_budget.json`. The viewer's budget is its size before
   this project plus 2 %; the editor's is set in plan step 1 from the
-  measured size plus 10 %.
+  measured size plus 10 %. Both were re-measured once mermaid import
+  ([16_mermaid_import](../16_mermaid_import/DESIGN.md), built alongside
+  this project) put its converters in both modules: viewer 941,867 bytes
+  (budget 960,705), editor 1,280,195 (budget 1,408,215).
 - `pages.yml` builds `nymph-site`, runs the Node and browser web tests, and
   deploys `<build>/web/site/`. Repository variables feed the Google cache
   variables.
