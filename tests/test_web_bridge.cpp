@@ -93,19 +93,22 @@ class fake_page {
       const std::string method = m["method"];
       json result;
       if (method == "initialize") {
-        result = {{"protocolVersion", "2025-11-25"}, {"capabilities", {{"tools", json::object()}}},
-                  {"serverInfo", {{"name", "nymph-web-app"}, {"version", "test"}}}};
+        result = {
+            {"protocolVersion", "2025-11-25"},
+            {"capabilities", {{"tools", json::object()}}},
+            {"serverInfo", {{"name", "nymph-web-app"}, {"version", "test"}}}};
       } else if (method == "tools/list") {
-        result = {{"tools",
-                   {{{"name", "document_state"}, {"description", "state"}, {"inputSchema", {{"type", "object"}}}},
-                    {{"name", "document_set_source"},
-                     {"description", "set"},
-                     {"inputSchema",
-                      {{"type", "object"},
-                       {"properties", {{"source", {{"type", "string"}}}}},
-                       {"additionalProperties", false}}}},
-                    {{"name", "document_slow"}, {"description", "never answers"}, {"inputSchema", {{"type", "object"}}}},
-                    {{"name", "editor_set_fields"}, {"description", "editor"}, {"inputSchema", {{"type", "object"}}}}}}};
+        result = {
+            {"tools",
+             {{{"name", "document_state"}, {"description", "state"}, {"inputSchema", {{"type", "object"}}}},
+              {{"name", "document_set_source"},
+               {"description", "set"},
+               {"inputSchema",
+                {{"type", "object"},
+                 {"properties", {{"source", {{"type", "string"}}}}},
+                 {"additionalProperties", false}}}},
+              {{"name", "document_slow"}, {"description", "never answers"}, {"inputSchema", {{"type", "object"}}}},
+              {{"name", "editor_set_fields"}, {"description", "editor"}, {"inputSchema", {{"type", "object"}}}}}}};
       } else if (method == "tools/call") {
         {
           const std::lock_guard<std::mutex> lock(mtx_);
@@ -149,9 +152,10 @@ class web_bridge_test : public ::testing::Test {
     rpc_message init;
     init.id = 1;
     init.method = "initialize";
-    init.params = {{"protocolVersion", "2025-11-25"},
-                   {"capabilities", json::object()},
-                   {"clientInfo", {{"name", "Test Client"}, {"version", "1"}}}};
+    init.params = {
+        {"protocolVersion", "2025-11-25"},
+        {"capabilities", json::object()},
+        {"clientInfo", {{"name", "Test Client"}, {"version", "1"}}}};
     initialize_ = s_->handle(init).value();
   }
 
@@ -308,8 +312,8 @@ TEST_F(web_bridge_test, EditorToolsGoToThePairedPage) {
   ASSERT_TRUE(page.paired());
   ASSERT_TRUE(wait_changes(1));
   EXPECT_EQ(text_of(call("editor_set_fields", {{"path", "root"}})), "page:editor_set_fields");
-  EXPECT_EQ(text_of(call("editor_set_fields", {{"path", "root"}, {"editor", "web:flow.yaml"}})),
-            "page:editor_set_fields");
+  EXPECT_EQ(
+      text_of(call("editor_set_fields", {{"path", "root"}, {"editor", "web:flow.yaml"}})), "page:editor_set_fields");
   ASSERT_EQ(page.calls().size(), 2u);
   EXPECT_FALSE(page.calls()[1]["arguments"].contains("editor")); // taken out
   const json other = call("document_state", {{"editor", "web:other.yaml"}});

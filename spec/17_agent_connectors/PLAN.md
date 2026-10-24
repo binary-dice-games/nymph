@@ -35,6 +35,31 @@ item:
 **Tests:** none committed; each item records what was run, on which
 version, and the outcome.
 
+
+**Result (partly done, Chromium only):**
+1. *Loopback WebSocket*: in Chromium 153 through Playwright, a page served
+   as `https://binary-dice-games.github.io/nymph/` (the request
+   intercepted) cannot open `ws://127.0.0.1:<port>`:
+   `net::ERR_BLOCKED_BY_LOCAL_NETWORK_ACCESS_CHECKS` (and `fetch` is refused:
+   "Permission was denied for this request to access the loopback address
+   space"). With the `local-network-access` permission granted to the
+   origin, the socket opens and the server sees `Origin:
+   https://binary-dice-games.github.io`. So Chrome asks the user once per
+   site; the Connect dialog's error says to allow it. Firefox and Safari
+   not tried.
+2. *WebMCP*: `navigator.modelContext` is absent in Chromium 153, also with
+   `--enable-features=WebMCP,WebMCPTesting` and
+   `--enable-experimental-web-platform-features`. `webmcp.js` follows the
+   draft (both `registerTool` and `provideContext`) and is tested against a
+   stub; no real browser agent tried.
+3. *`tools/list_changed`* in Claude Code, Cursor and Gemini CLI: not
+   checked (needs signed-in clients). `web_app_call` is therefore always
+   listed.
+4. *MCP Apps open-link*: not checked in a real host; the App shows the
+   link when the host refuses.
+5. *Clipboard and download after the confirmation's Allow*: the download
+   works in Chromium (tested); the clipboard after an `await` not tried.
+
 ## 2. Registry: the agent tool list, origins, change groups
 
 **Goal:** the registry gives every connector one stable, guided tool list
@@ -67,6 +92,8 @@ mode; a second connector's `document_begin_change` is refused while the
 first's is open; a group closes after the idle timeout (shortened by a
 test option).
 
+
+**Result (done):** as planned, plus `Commands.hooks` (editor groups, snapshots) and `onAgentCall`, which the activity list uses. A test-only option shortens the group idle time (`commands.groupIdleMs`). The guide is `docs/agent-web-app.md`, served as `agent/web-app.md`. `NYMPH_AGENT_CONNECTORS` reaches the site script comma-separated (a CMake list would split the custom command's argument). Tests in `web/tests/browser/agents.mjs` (ctest `nymph_web_agents_browser`); the JSON-Schema check is structural (type, required names a property).
 ## 3. `editor_model`: another origin ends the group
 
 **Goal:** a user's change during an agent's change group is never undone
@@ -82,6 +109,8 @@ labelled agent, user, agent; one undo restores only the last agent
 change; a commit with the group's own origin still joins it; the existing
 attribution tests pass.
 
+
+**Result (done):** `editor_model::apply()` ends the group when `origin_` differs from the group's. The three existing group tests now set the agent's origin before committing, as every caller does (`call_editor_tool`, the web module). `test_editor_attribution`: two new tests.
 ## 4. Agents panel and activity
 
 **Goal:** the user sees every agent and every change it made, and undoes
@@ -104,6 +133,8 @@ read calls are not listed, an allowed `external` call is; a hostile label
 is a sheet without Connect; an axe-core scan of the open panel has no
 serious violations; no request leaves the local server.
 
+
+**Result (done):** `web/app/app/agents/panel.js`, `activity.js`. Undo in Edit mode uses the editor's undo when its version has not moved since the entry's last write (no new export was needed). An entry whose change replaced the document (`app_new_document`) has no Undo. The axe-core scan was not run (axe is not available offline here). Found and fixed: the Connect dialog's button closed the dialog with the word "submit" before the form's submit handler ran (the shell's "Open from URL" dialog builds its button the same way and may have the same problem).
 ## 5. WebMCP
 
 **Goal:** a browser agent that supports WebMCP uses the app's tools on the
@@ -121,6 +152,8 @@ chart with origin `agent:webmcp` and appears in the activity list; an
 `navigator.modelContext` nothing happens. By hand: a Chrome that has
 WebMCP, if step 1 found one.
 
+
+**Result (done, against a stub):** `agents/webmcp.js`; tested with a stubbed `navigator.modelContext` (`registerTool`). No browser here has WebMCP (step 1).
 ## 6. Native transport: loopback TCP and WebSocket
 
 **Goal:** `nymph` can serve a WebSocket on 127.0.0.1 on every platform.
@@ -139,6 +172,8 @@ unmasked client frame, an oversized message, a bad upgrade and a wrong
 join on destruction. CI builds and runs it on Linux, macOS, MSVC and
 MSYS2.
 
+
+**Result (done, Linux):** `local_stream` gained `read_some()`; the loopback listener lives in `local_socket.cpp` beside the file socket so Winsock setup is shared (`loopback.hpp` declares it); a listener that stops closes its socket from the accepting thread. `websocket` owns its stream from the start (`accept_upgrade()`), so a connection still in its handshake can be shut down. `test_websocket` (10 tests). MSVC, MSYS2 and macOS not built here.
 ## 7. `nymph mcp` web bridge
 
 **Goal:** an agent that runs `nymph mcp` pairs with the open web app and
@@ -146,12 +181,11 @@ uses its tools.
 
 **Deliverables:** `src/mcp/web_bridge.hpp/.cpp` (pairing codes, resume
 tokens, allowed origins with `NYMPH_WEB_APP_ORIGINS`, page links, calls
-with a 5-minute wait); `web_app_pair` and the app-only `web_app_link` in
-`tools.cpp`; `editor_bridge` listing paired pages (`web:<name>`, focus);
+with a 5-minute wait); `web_app_pair` and `web_app_call` (in
+`web_bridge.cpp`); `editor_bridge` listing paired pages (`web:<name>`, focus);
 the page's `document_*` / `app_*` tools added to `nymph mcp`'s list while
 paired, with `tools.listChanged: true` and
-`notifications/tools/list_changed`, or `web_app_call` if step 1 found a
-client that ignores it; `json_rpc` writer mutex; the client name as
+`notifications/tools/list_changed`; `json_rpc` writer mutex; the client name as
 `_meta["nymph/origin"]`; the server instructions,
 `claude/skill/nymph/SKILL.md` and `docs/agent-guide.md` say when to call
 `web_app_pair`.
@@ -168,10 +202,12 @@ reaches the page with `_meta["nymph/origin"]` and its result comes back;
 `editor: "web:flow.yaml"` to that page, and a native editor still works
 beside it; a page that does not answer fails the call after the wait
 (shortened by a test option); a closed page fails waiting calls and drops
-its tools; `web_app_link` returns a `#y=…&pair=…` link that pairs; without
+its tools; `web_app_call` reaches any tool of the page; without
 pairing the session's tool list and behaviour equal today's (existing
 `test_mcp*` tests pass).
 
+
+**Result (done):** `src/mcp/web_bridge.*`; the page tools reach the list through `tool_registry::set_dynamic()`; `run_mcp` writes responses and notifications under one mutex. `web_app_call` is always listed (step 1 could not check `list_changed`), and no `web_app_link` tool was built (step 9). The existing tool-list tests count the two new tools. `test_web_bridge` (13 tests, 30 runs in a row without a failure).
 ## 8. Page side of the bridge
 
 **Goal:** the user connects Claude Code, Cursor or Gemini CLI to the open
@@ -194,21 +230,26 @@ is refused; a wrong code shows the field's error. By hand: Claude Code,
 Cursor and Gemini CLI paired on the deployed site in Chrome and Firefox
 (Safari's result from step 1 noted in the docs).
 
+
+**Result (done):** `agents/bridge.js`, the `#pair=` route (the code leaves the address at once), resume tokens per port in `sessionStorage`. The end-to-end tests run a native `nymph mcp` given as `NYMPH_NATIVE_EXE` (third argument of `agents.mjs`) and are skipped without it; here they ran with `build/app/nymph`: pairing by link, editing in Edit mode, Undo, reconnecting after a reload, the Connect dialog with a wrong and a right code, an origin `nymph mcp` refuses. Not tried with a real Claude Code, Cursor or Gemini CLI.
 ## 9. "Open in the web app" from the MCP App
 
 **Goal:** a chart shown in the agent's chat opens in the app, paired with
 the same agent, in one click.
 
 **Deliverables:** the menu item in `claude/app/` (DESIGN.md section 7.3),
-calling `web_app_link` and the host's open-link request, or copying the
-link where the host has none; `docs/claude.md`.
+calling `web_app_pair`, building the `#y=…&pair=…` link in the App, and
+the host's `ui/open-link` request, or showing the link where the host has
+none; `docs/claude.md`.
 
 **Tests:** the MCP App's existing harness (stand-in host, 06 section 9):
-the item calls `web_app_link` with the shown source and asks the host to
-open the returned link; with no open-link support it copies the link. By
+the button calls `web_app_pair` and asks the host to open a link that
+holds the shown source and the code; with no open-link support it copies the link. By
 hand: Claude Desktop opens the app on the chart, and the agent in the chat
 then edits it there.
 
+
+**Result (done, stand-in host):** the button in `claude/app/`, tested in `web/tests/browser/run.mjs` with the stand-in host answering `web_app_pair` and `ui/open-link`, and refusing it. Claude Desktop not tried.
 ## 10. Documentation and status
 
 **Goal:** users and the owner can find, use and configure the connectors.
@@ -221,6 +262,8 @@ key; the owner's `NYMPH_AGENT_CONNECTORS`); `CHANGELOG.md`;
 **Tests:** the docs' links resolve; a deploy from `main` serves the Agents
 button and `config.json` with the `agents` section.
 
+
+**Result (done):** README, `docs/web-app.md` (Agents), `docs/claude.md`, `docs/cursor.md`, `docs/gemini-cli.md`, `docs/cli.md`, `docs/agent-guide.md`, the skill text (and the plugins' copies, by `nymph-plugin-sync`), CHANGELOG, `spec/INDEX.md`. The first deploy is not done.
 ## Completion Criteria
 
 - Every test above passes in CI (native on Linux, macOS, MSVC and MSYS2;

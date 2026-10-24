@@ -45,9 +45,8 @@ struct echo_server {
       }
       ws = std::make_unique<websocket>(std::move(*s));
       const std::string host = "127.0.0.1:" + std::to_string(listener.port());
-      const bool ok = ws->accept_upgrade("/nymph", [&](const ws_request& r) {
-        return r.host == host && r.origin == "https://app.test";
-      });
+      const bool ok = ws->accept_upgrade(
+          "/nymph", [&](const ws_request& r) { return r.host == host && r.origin == "https://app.test"; });
       upgraded.set_value(ok);
       int n = 0;
       std::string text;
@@ -72,8 +71,9 @@ struct echo_server {
 TEST(websocket, Sha1TestVectors) {
   EXPECT_EQ(hex(sha1("")), "da39a3ee5e6b4b0d3255bfef95601890afd80709");
   EXPECT_EQ(hex(sha1("abc")), "a9993e364706816aba3e25717850c26c9cd0d89d");
-  EXPECT_EQ(hex(sha1("abcdbcdecdefdefgefghfghighijhijkijkljklmklmnlmnomnopnopq")),
-            "84983e441c3bd26ebaae4aa1f95129e5e54670f1");
+  EXPECT_EQ(
+      hex(sha1("abcdbcdecdefdefgefghfghighijhijkijkljklmklmnlmnomnopnopq")),
+      "84983e441c3bd26ebaae4aa1f95129e5e54670f1");
   EXPECT_EQ(hex(sha1(std::string(1000, 'a'))), "291e9a6c66994949b57ba5e650361e98fc36b1ba");
 }
 

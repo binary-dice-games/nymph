@@ -116,6 +116,21 @@ one; without an open editor the tools say so: use `render_chart` instead.
 While the user is fixing source text that does not load, changes are
 refused ("the user is editing the source"): wait and read the state again.
 
+### The chart open in the web app
+
+The nymph web app is a browser tab; `nymph mcp` reaches the chart open
+there once the user pairs it. Call `web_app_pair`: it returns a one-time
+code (`48213-K7QM-2XPD`, valid once for 5 minutes) and a link. The user
+types the code in the app (Agents > Connect an agent) or opens the link.
+Then the app's own tools join yours (`document_state`, `document_set_source`,
+`document_image`, `app_set_mode`, `app_read_guide`, ...), and the
+`editor_*` tools work on the tab (`editor: "web:<file name>"` picks one
+of several). If they do not appear in your tool list, call them through
+`web_app_call` (`name`, `arguments`). Read `app_read_guide` with
+`web-app` first: it explains View and Edit modes, change groups
+(`document_begin_change` / `document_end_change`, one undo step for the
+user) and what the user is asked to confirm.
+
 To let a user look at or edit a chart in the browser without installing
 anything, give them a link to the web app: `https://binary-dice-games.github.io/nymph/?url=<the raw URL of the YAML or PNG>`
 (add `&mode=edit` to open the editor).

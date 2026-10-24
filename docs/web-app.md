@@ -94,18 +94,50 @@ offers **Reload** (it never reloads by itself).
 | `Ctrl+U` | The YAML source |
 | `Ctrl+Z`, `Ctrl+Y` | Undo, redo |
 | `Delete`, `Ctrl+D`, `Alt+↑/↓` | Delete, duplicate, move the selected element |
+| `Ctrl+Shift+A` | The Agents panel |
 | `?` | All shortcuts |
 
-## For agents
+## Agents
 
-Every action of the app is a command shaped as an MCP tool (name,
-description, JSON Schema), listed by `window.nymphApp.commands.list()` and
-run by `commands.call(name, args, origin)`; in Edit mode they include the
-editor's `editor_*` tools. Changes record who made them. A command that
-leaves the browser tab (opening a URL, saving, downloading, copying) asks
-the user first when an agent calls it. Agent connectors (Claude, Cursor,
-Gemini) are planned on this (design section 11). The agent guide and the
-element reference are served under `agent/`.
+An AI agent you already use can work on the chart open in the app: Claude
+Code, Claude Desktop, Cursor and Gemini CLI through `nymph mcp`, and the
+browser's own assistant through WebMCP where the browser has it. The agent
+brings its own model, login and billing: **the app never asks for an API
+key and calls no model.** Your chart goes to the agent you connect, and
+nowhere else.
+
+**Connect an agent.** Ask it to "connect to the nymph web app". It calls
+`nymph mcp`'s `web_app_pair` and gives you a code like `48213-K7QM-2XPD`
+and a link. Type the code under **Agents** (`Ctrl+Shift+A`) > **Connect an
+agent**, or open the link (it opens the app, connected). The code works
+once, for 5 minutes. `nymph mcp` then listens on `127.0.0.1` only, for
+this site only; reloading the tab reconnects. Chrome may ask to let the
+site reach apps on this device: allow it. Per client:
+[claude.md](claude.md#the-web-app), [cursor.md](cursor.md#the-web-app),
+[gemini-cli.md](gemini-cli.md). From a chart shown in Claude's chat,
+**Open in the web app** does both steps at once.
+
+**What you see.** The **Agents** panel lists who is connected and every
+change an agent made, newest first, each with **Undo** (in Edit mode the
+editor's own undo; in View mode the chart from before the change). An agent
+groups the steps of one request, so Undo takes them back together; while
+it works the panel says so, with **Stop**. Your own edits always win: an
+agent's write that would overwrite them is refused. Anything that leaves
+the tab (saving, downloading, copying, opening a URL) asks you first;
+"Allow ... without asking" lasts until the chart closes.
+
+**What agents see.** The app's commands, as MCP tools: `document_state`,
+`document_set_source`, `document_image`, `app_set_mode`, the editor's
+`editor_*` tools (in Edit mode), and `app_read_guide`, which serves the
+agent guide, the element reference and a workflow guide for the app
+(`agent/web-app.md`). The list is
+`window.nymphApp.commands.agentTools()`; the shell's own controls use the
+same commands.
+
+**Browser assistants (WebMCP).** Where the browser offers WebMCP
+(`navigator.modelContext`), the app registers its tools while a chart is
+open; a switch in the Agents panel turns that off. On phones this is the
+only way an agent reaches the app.
 
 ## Hosting and setup
 
@@ -122,6 +154,13 @@ builds it, runs the web tests and deploys it on each push to `main` (Settings
 | `editor/` | The editor module (`nymph-editor.js`, about 1.2 MB gzip), loaded only to edit |
 | `examples/`, `templates/`, `demo/`, `agent/` | Examples, templates, the demo page, agent docs |
 | `version.json`, `config.json` | The build's commit; the provider settings |
+
+`config.json`'s `agents` section lists the agent connectors offered:
+`NYMPH_AGENT_CONNECTORS` (CMake, default `webmcp;bridge`) sets it; an empty
+value hides the Agents button. A copy of the app on another address must
+be added to the origins `nymph mcp` accepts: `NYMPH_WEB_APP_ORIGINS`
+(comma-separated; an entry ending in `:*` accepts any port, as
+`http://localhost:*` for a local preview).
 
 **Google Drive** (optional): in the Google Cloud console create a project,
 enable the Google Drive API and the Google Picker API, configure the OAuth

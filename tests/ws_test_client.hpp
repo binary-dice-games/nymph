@@ -21,9 +21,10 @@ class ws_client {
     if (host.empty()) {
       host = "127.0.0.1:" + std::to_string(port);
     }
-    stream_.write("GET " + path + " HTTP/1.1\r\nHost: " + host + "\r\nUpgrade: websocket\r\nConnection: Upgrade\r\n" +
-                  (origin.empty() ? std::string() : "Origin: " + origin + "\r\n") +
-                  "Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==\r\nSec-WebSocket-Version: 13\r\n\r\n");
+    stream_.write(
+        "GET " + path + " HTTP/1.1\r\nHost: " + host + "\r\nUpgrade: websocket\r\nConnection: Upgrade\r\n" +
+        (origin.empty() ? std::string() : "Origin: " + origin + "\r\n") +
+        "Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==\r\nSec-WebSocket-Version: 13\r\n\r\n");
     size_t end = std::string::npos;
     while ((end = in_.find("\r\n\r\n")) == std::string::npos) {
       if (!stream_.read_some(in_)) {

@@ -107,15 +107,29 @@ download menu, since chat frames usually cannot save files.
 | `list_fonts` | The names a chart's `font` accepts |
 | `list_shapes` | The shape library (the names a node's `shape` accepts); with `name`, the details of one shape |
 | `list_themes` | The chart themes `image.theme` accepts; with `name`, one theme's file |
-| `editor_state`, `editor_add_element`, `editor_set_fields`, ... | The chart open in the user's editor (`nymph view --edit`): read its elements, selection, tables and view image, and change them (sixteen `editor_*` tools; `editor_set_source` takes mermaid too; [viewer.md](viewer.md#editing-in-the-window), [agent-guide.md](agent-guide.md#the-chart-open-in-the-editor)) |
+| `editor_state`, `editor_add_element`, `editor_set_fields`, ... | The chart open in the user's editor (`nymph view --edit`, or a paired web app tab): read its elements, selection, tables and view image, and change them (sixteen `editor_*` tools; `editor_set_source` takes mermaid too; [viewer.md](viewer.md#editing-in-the-window), [agent-guide.md](agent-guide.md#the-chart-open-in-the-editor)) |
+| `web_app_pair`, `web_app_call` | Connect to the chart open in the [web app](web-app.md#agents): a one-time code and link for the user; then the app's own tools (`document_*`, `app_*`) join the list (`web_app_call` reaches them for clients that do not re-read it) |
 
 Errors name the line and column of the source, as on the command line
 ([cli.md](cli.md)). The server also offers [agent-guide.md](agent-guide.md)
 and [elements.md](elements.md) as resources.
 
+## The web app
+
+Claude can work on the chart open in the [web app](web-app.md#agents):
+ask it to "connect to the nymph web app". It calls `web_app_pair` and gives
+you a code to type under **Agents > Connect an agent**, or a link that
+opens the app connected. In the live chart in the chat, **Open in the web
+app** does it in one click: the app opens on that chart, and Claude keeps
+editing it there. Every change Claude makes is listed in the app with
+Undo; saving or downloading asks you first. Works with Claude Code and
+Claude Desktop (they run `nymph mcp` on your computer); claude.ai cannot
+reach your computer.
+
 ## Other agents
 
 Cursor has its own plugin and `mcp.json` entry: [cursor.md](cursor.md).
+Gemini CLI uses the same `nymph mcp`: [gemini-cli.md](gemini-cli.md).
 
 ## Limits
 

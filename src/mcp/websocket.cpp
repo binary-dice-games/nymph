@@ -98,8 +98,8 @@ bool websocket::accept_upgrade(std::string_view path, const std::function<bool(c
   const std::optional<ws_request> request = parse_head(std::string_view(in_).substr(0, end + 2));
   in_.erase(0, end + 4);
   if (!request || request->method != "GET" || request->upgrade != "websocket" ||
-      request->connection.find("upgrade") == std::string::npos || request->version != "13" ||
-      request->key.empty() || request->path != path) {
+      request->connection.find("upgrade") == std::string::npos || request->version != "13" || request->key.empty() ||
+      request->path != path) {
     answer(stream_, "400 Bad Request");
     return false;
   }
@@ -107,9 +107,10 @@ bool websocket::accept_upgrade(std::string_view path, const std::function<bool(c
     answer(stream_, "403 Forbidden");
     return false;
   }
-  return stream_.write("HTTP/1.1 101 Switching Protocols\r\nUpgrade: websocket\r\nConnection: Upgrade\r\n"
-                       "Sec-WebSocket-Accept: " +
-                       ws_accept_value(request->key) + "\r\n\r\n");
+  return stream_.write(
+      "HTTP/1.1 101 Switching Protocols\r\nUpgrade: websocket\r\nConnection: Upgrade\r\n"
+      "Sec-WebSocket-Accept: " +
+      ws_accept_value(request->key) + "\r\n\r\n");
 }
 
 bool websocket::fill(size_t n) {

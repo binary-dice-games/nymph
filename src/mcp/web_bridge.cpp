@@ -276,9 +276,11 @@ json web_bridge::call(const std::string& want, const std::string& tool, json arg
   }
   auto done = std::make_shared<std::promise<json>>();
   std::future<json> result = done->get_future();
-  const int id = request(*p, "tools/call",
-          {{"name", tool}, {"arguments", std::move(arguments)}, {"_meta", {{"nymph/origin", client}}}},
-          [done](const json& reply) { done->set_value(reply); });
+  const int id = request(
+      *p,
+      "tools/call",
+      {{"name", tool}, {"arguments", std::move(arguments)}, {"_meta", {{"nymph/origin", client}}}},
+      [done](const json& reply) { done->set_value(reply); });
   if (result.wait_for(options_.call_timeout) != std::future_status::ready) {
     {
       const std::lock_guard<std::mutex> lock(p->mtx);
@@ -325,8 +327,9 @@ bool web_bridge::allowed_origin(const std::string& origin) const {
     if (o.size() > 2 && o.compare(o.size() - 2, 2, ":*") == 0) {
       const std::string prefix = o.substr(0, o.size() - 1); // keeps the ':'
       if (origin.size() > prefix.size() && origin.compare(0, prefix.size(), prefix) == 0 &&
-          std::all_of(origin.begin() + static_cast<std::ptrdiff_t>(prefix.size()), origin.end(),
-                      [](char c) { return c >= '0' && c <= '9'; })) {
+          std::all_of(origin.begin() + static_cast<std::ptrdiff_t>(prefix.size()), origin.end(), [](char c) {
+            return c >= '0' && c <= '9';
+          })) {
         return true;
       }
     }
@@ -370,7 +373,8 @@ bool web_bridge::admit(page& p) {
     const bool valid = !code_.empty() && std::chrono::steady_clock::now() < code_expires_ && same_secret(code, code_);
     if (!valid) {
       ++wrong_;
-      p.ws->send_text(to_line(json{{"paired", false}, {"error", "that code is not valid: ask your agent for a new one"}}));
+      p.ws->send_text(
+          to_line(json{{"paired", false}, {"error", "that code is not valid: ask your agent for a new one"}}));
       p.ws->close(1008);
       if (wrong_ >= kMaxWrongCodes) {
         code_.clear();
@@ -435,16 +439,18 @@ void web_bridge::serve(const std::shared_ptr<page>& p) {
           }
         });
       };
-      request(*p, "initialize",
-              {{"protocolVersion", std::string(supported_protocol_versions().front())},
-               {"capabilities", json::object()},
-               {"clientInfo", {{"name", "nymph-mcp"}, {"version", std::string(version())}}}},
-              [p, list_tools](const json& reply) {
-                if (reply.contains("result")) {
-                  p->ws->send_text(to_line(json{{"jsonrpc", "2.0"}, {"method", "notifications/initialized"}}));
-                  list_tools();
-                }
-              });
+      request(
+          *p,
+          "initialize",
+          {{"protocolVersion", std::string(supported_protocol_versions().front())},
+           {"capabilities", json::object()},
+           {"clientInfo", {{"name", "nymph-mcp"}, {"version", std::string(version())}}}},
+          [p, list_tools](const json& reply) {
+            if (reply.contains("result")) {
+              p->ws->send_text(to_line(json{{"jsonrpc", "2.0"}, {"method", "notifications/initialized"}}));
+              list_tools();
+            }
+          });
       std::string text;
       while (!stopping_ && p->ws->read_message(text)) {
         json message;
@@ -482,7 +488,8 @@ void web_bridge::serve(const std::shared_ptr<page>& p) {
           }
         } else if (message.contains("id")) {
           // The bridge serves nothing to the page.
-          p->ws->send_text(to_line(make_error(message["id"], rpc_code::method_not_found, "method not found: " + method)));
+          p->ws->send_text(
+              to_line(make_error(message["id"], rpc_code::method_not_found, "method not found: " + method)));
         }
       }
       p->ws->shutdown();
@@ -549,12 +556,13 @@ void add_web_app_tools(tool_registry& registry, std::shared_ptr<web_bridge> brid
        [bridge](const json&) {
          const web_pairing p = bridge->pair();
          const int64_t minutes = std::max<int64_t>(1, p.expires_in / 60);
-         json r = text_result("Pairing code: " + p.code + "\nLink: " + p.link +
-                              "\n\nAsk the user to type the code in the open nymph web app (Agents > Connect an "
-                              "agent), or to open the link, which opens the app paired. The code works once, for " +
-                              std::to_string(minutes) +
-                              " minutes. Once paired, read app_read_guide with name web-app before changing the "
-                              "chart. If the app's tools do not appear in your list, call them through web_app_call.");
+         json r = text_result(
+             "Pairing code: " + p.code + "\nLink: " + p.link +
+             "\n\nAsk the user to type the code in the open nymph web app (Agents > Connect an "
+             "agent), or to open the link, which opens the app paired. The code works once, for " +
+             std::to_string(minutes) +
+             " minutes. Once paired, read app_read_guide with name web-app before changing the "
+             "chart. If the app's tools do not appear in your list, call them through web_app_call.");
          r["structuredContent"] = {
              {"code", p.code}, {"link", p.link}, {"port", p.port}, {"expiresInSeconds", p.expires_in}};
          return r;
@@ -570,7 +578,8 @@ void add_web_app_tools(tool_registry& registry, std::shared_ptr<web_bridge> brid
           {"properties",
            {{"name", {{"type", "string"}, {"description", "The app's tool."}}},
             {"arguments", {{"type", "object"}, {"description", "Its arguments."}}},
-            {"editor", {{"type", "string"}, {"description", "Which tab: web:<document name>; default the one used last."}}}}},
+            {"editor",
+             {{"type", "string"}, {"description", "Which tab: web:<document name>; default the one used last."}}}}},
           {"required", {"name"}},
           {"additionalProperties", false}}},
         {"annotations",
@@ -587,25 +596,27 @@ void add_web_app_tools(tool_registry& registry, std::shared_ptr<web_bridge> brid
          if (!arguments.is_object()) {
            throw tool_error("'arguments' must be an object");
          }
-         return bridge->call(args.value("editor", std::string()), args["name"].get<std::string>(), std::move(arguments));
+         return bridge->call(
+             args.value("editor", std::string()), args["name"].get<std::string>(), std::move(arguments));
        }});
-  registry.set_dynamic([bridge] { return bridge->page_tools(); },
-                       [bridge](const std::string& name, const json& args) -> std::optional<json> {
-                         bool known = false;
-                         for (const json& t : bridge->page_tools()) {
-                           known = known || t.value("name", std::string()) == name;
-                         }
-                         if (!known) {
-                           return std::nullopt;
-                         }
-                         json arguments = args;
-                         std::string want;
-                         if (arguments.contains("editor") && arguments["editor"].is_string()) {
-                           want = arguments["editor"].get<std::string>();
-                         }
-                         arguments.erase("editor");
-                         return bridge->call(want, name, std::move(arguments));
-                       });
+  registry.set_dynamic(
+      [bridge] { return bridge->page_tools(); },
+      [bridge](const std::string& name, const json& args) -> std::optional<json> {
+        bool known = false;
+        for (const json& t : bridge->page_tools()) {
+          known = known || t.value("name", std::string()) == name;
+        }
+        if (!known) {
+          return std::nullopt;
+        }
+        json arguments = args;
+        std::string want;
+        if (arguments.contains("editor") && arguments["editor"].is_string()) {
+          want = arguments["editor"].get<std::string>();
+        }
+        arguments.erase("editor");
+        return bridge->call(want, name, std::move(arguments));
+      });
 }
 
 } // namespace bdg::nymph::mcp
