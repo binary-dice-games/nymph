@@ -189,6 +189,26 @@ TEST(live_view, FitFillUsesTheWholeBox) {
   EXPECT_EQ(v.geometry().layout_height, 250.0f);
 }
 
+TEST(live_view, FitNaturalLaysOutAtTheSourceSizeAndNeverScales) {
+  live_view v({view_fit::fill});
+  v.set_source(kLine);
+  v.resize({200, 150, 2});
+  EXPECT_EQ(v.geometry().layout_width, 200.0f); // fill: the box
+  v.set_fit(view_fit::natural);
+  EXPECT_TRUE(v.wants_frame());
+  view_geometry g = v.geometry();
+  EXPECT_EQ(g.layout_width, 400.0f); // the source size, clipped by the box
+  EXPECT_EQ(g.layout_height, 300.0f);
+  EXPECT_FLOAT_EQ(g.css_scale, 1.0f);
+  EXPECT_FLOAT_EQ(g.framebuffer_scale, 2.0f);
+  v.resize({900, 700, 1});
+  g = v.geometry();
+  EXPECT_EQ(g.layout_width, 400.0f); // not grown either
+  EXPECT_FLOAT_EQ(g.css_scale, 1.0f);
+  v.set_fit(view_fit::fill);
+  EXPECT_EQ(v.geometry().layout_width, 900.0f);
+}
+
 TEST(live_view, ABoxTooSmallForTheImageOptionsFallsBackToTheSourceSize) {
   live_view v({view_fit::fill});
   v.set_source(kLine);

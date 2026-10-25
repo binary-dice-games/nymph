@@ -613,6 +613,27 @@ EMSCRIPTEN_KEEPALIVE const char* nymph_editor_state() {
            {"sourceShown", e.ws->panel() != nullptr && e.ws->panel()->source_shown()},
            {"locked", e.ws->panel() != nullptr ? e.ws->panel()->locked_reason() : std::string()},
            {"wantsKeyboard", e.ws->wants_keyboard()}};
+    // Where the figure's layout is drawn, for overlays
+    // (spec/18_collaboration/DESIGN.md section 5.3): null while a data tab
+    // or the repair state hides it.
+    j["figure"] = json();
+    {
+      const view_geometry g = e.ws->view().geometry();
+      const editor_panel* p = e.ws->panel();
+      const layout_box box = p != nullptr ? p->figure_box() : layout_box{0.0f, 0.0f, 1.0f, 1.0f};
+      if (g.layout_width > 0.0f && !box.empty() && !e.ws->repairing()) {
+        j["figure"] = json{
+            {"x", box.x},
+            {"y", box.y},
+            {"width", g.layout_width * g.css_scale},
+            {"height", g.layout_height * g.css_scale},
+            {"scale", g.css_scale}};
+        if (p != nullptr) { // the area the figure is shown in (it may clip the figure)
+          j["figure"]["areaWidth"] = box.width;
+          j["figure"]["areaHeight"] = box.height;
+        }
+      }
+    }
     if (const editor_panel* p = e.ws->panel()) {
       const editor_model& m = const_cast<editor_panel*>(p)->model();
       j["version"] = m.version();
@@ -625,6 +646,16 @@ EMSCRIPTEN_KEEPALIVE const char* nymph_editor_state() {
     return kOk;
   });
   return scratch().c_str();
+}
+
+/// @brief How the figure fits its box: 0 fills it (the default), 1 lays it
+///        out at the chart's own size, never scaled (a live session,
+///        spec/18_collaboration/DESIGN.md section 6.4).
+EMSCRIPTEN_KEEPALIVE int nymph_editor_set_fit(int natural) {
+  return guarded([&] {
+    get().ws->view().set_fit(natural != 0 ? view_fit::natural : view_fit::fill);
+    return kOk;
+  });
 }
 
 /// @brief Where element `path`'s `field` ("" the element) is drawn, CSS

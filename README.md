@@ -15,7 +15,9 @@ draws and converts to its YAML.
 The [web app](https://binary-dice-games.github.io/nymph/) ([docs](docs/web-app.md))
 opens, views and edits nymph files in the browser, with nothing to install;
 the agent you already use (Claude Code, Cursor, Gemini CLI) can
-[connect to it](docs/web-app.md#agents) and edit the open chart, with no API key.
+[connect to it](docs/web-app.md#agents) and edit the open chart, with no API key;
+[Collaborate](docs/collaboration.md) shares it live, browser to browser, with a
+whiteboard everyone draws on.
 The [web viewer](docs/viewer.md) ([live demo](https://binary-dice-games.github.io/nymph/demo/))
 shows the same charts live in a web page
 (WebAssembly and WebGL2), with pan, zoom and data-point values, for
@@ -125,7 +127,7 @@ carries its source: `bdg::nymph::extract_source(png)` returns it.
 | `imuml/` | ImUml, the UML diagram library for Dear ImGui that nymph's diagrams use |
 | `app/` | The `nymph` command-line executable |
 | `tests/` | GoogleTest suite, run with `ctest` |
-| `web/` | The web viewer, the editor module (WebAssembly, JavaScript APIs) and the web app (`web/app/`), built with `NYMPH_WEB` |
+| `web/` | The web viewer, the editor module (WebAssembly, JavaScript APIs), the web app (`web/app/`) and the collaboration packages (`web/collab/`), built with `NYMPH_WEB` |
 | `claude/` | Claude integration: the agent skill text (`claude/skill/`), the MCP App that shows charts live in the chat (`claude/app/`) and the Claude Code plugin (`claude/plugin/`, listed by `.claude-plugin/marketplace.json`) |
 | `cursor/` | Cursor integration: the plugin (`cursor/plugin/`, listed by `.cursor-plugin/marketplace.json`) and its rule template |
 | `extension/` | The Chrome extension that turns nymph PNGs on any page into live viewers (built with `NYMPH_WEB`) |
@@ -172,6 +174,7 @@ carries its source: `bdg::nymph::extract_source(png)` returns it.
 | [docs/mermaid.md](docs/mermaid.md) | Mermaid import: the workflow, what each mermaid kind becomes, what is dropped |
 | [docs/viewer.md](docs/viewer.md) | The web viewer: files, embedding, JavaScript API, events, interaction; the editor module |
 | [docs/web-app.md](docs/web-app.md) | The web app: opening, editing, saving, sharing, offline, agents; hosting and Google Drive setup |
+| [docs/collaboration.md](docs/collaboration.md) | Live collaboration: sharing and joining, the whiteboard, privacy, NATs and TURN, embedding the session and whiteboard packages |
 | [docs/extension.md](docs/extension.md) | The Chrome extension: install, the toolbar button, sites, privacy, limits |
 | [docs/releasing.md](docs/releasing.md) | Publishing a release from a tag: the workflow, the release files, one-time setup of each channel |
 | [spec/INDEX.md](spec/INDEX.md) | Index of the project specifications (one folder per project, with its DESIGN.md and PLAN.md) |
@@ -203,6 +206,7 @@ carries its source: `bdg::nymph::extract_source(png)` returns it.
 | [spec/15_web_app/DESIGN.md](spec/15_web_app/DESIGN.md), [PLAN.md](spec/15_web_app/PLAN.md) | The web app: editor in a second WebAssembly module, source pane, commands for agents; its steps |
 | [spec/16_mermaid_import/DESIGN.md](spec/16_mermaid_import/DESIGN.md), [PLAN.md](spec/16_mermaid_import/PLAN.md) | Mermaid import: mermaid read on every entry point, converted to nymph YAML; outputs stay PNG or YAML; its steps |
 | [spec/17_agent_connectors/DESIGN.md](spec/17_agent_connectors/DESIGN.md), [PLAN.md](spec/17_agent_connectors/PLAN.md) | Agent connectors: the user's own agent reaches the web app through `nymph mcp` pairing or WebMCP, no API keys; its steps |
+| [spec/18_collaboration/DESIGN.md](spec/18_collaboration/DESIGN.md), [PLAN.md](spec/18_collaboration/PLAN.md) | Live collaboration over WebRTC with no server: owner-only editing, a shared whiteboard, standalone session and whiteboard packages; its steps |
 | [CHANGELOG.md](CHANGELOG.md) | User-facing changes between releases |
 | [CLAUDE.md](CLAUDE.md) | Coding style and project rules for AI agents and contributors |
 

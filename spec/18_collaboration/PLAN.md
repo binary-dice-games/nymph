@@ -41,6 +41,17 @@ item:
 **Tests:** none committed; each item records what was run, on which
 version, and the outcome.
 
+**Result (not done):** the build sandbox's network proxy refuses the
+tracker hosts (`CONNECT` 403 for `tracker.openwebtorrent.com`, errors for
+`tracker.webtorrent.dev`, `tracker.btorrent.xyz` and others) and has no UDP
+for STUN, so items 1, 2 and 5 against real networks are open. The default
+`NYMPH_COLLAB_TRACKERS` (openwebtorrent, webtorrent.dev, btorrent) and
+`NYMPH_COLLAB_ICE_SERVERS` (Google and Cloudflare STUN) are therefore
+unverified. Item 3 is covered for Chromium only (16 KiB frames between two
+Chromium contexts, `negotiated: true` channels); item 4 for Chromium (the
+app's CSP with `wss:` and loopback `ws:` lets the test tracker connect;
+WebRTC is unaffected). Firefox and Safari not tried.
+
 ## 2. Whiteboard model
 
 **Goal:** the whiteboard state converges on every peer whatever the order
@@ -59,6 +70,12 @@ equal; snapshot round trip; merging two diverged snapshots both ways gives
 the same state; a delete then a late add keeps the item deleted; clear
 removes only older items; undo / redo of own operations only; limits
 refuse with a message; malformed operations are rejected.
+
+**Result:** done. `web/tests/node/collab.mjs` (6 model tests; 200 seeded
+rounds of three peers editing concurrently, then each applying every
+operation in its own order with duplicates). Clear removes items stamped
+before it outright (no tombstone needed: any later put with an older stamp
+is ignored).
 
 ## 3. Session core
 
@@ -81,6 +98,12 @@ reason; removed guest's id refused; lock refuses new joins; a sealed
 message altered by one byte is rejected; host close ends every guest with
 `ended`.
 
+**Result:** done, in the same file (9 session tests, plus one with the
+model synced over a session). Rendezvous became "bring links"
+(`start(context)` with `context.link()`), so the in-memory network, the
+BroadcastChannel and WebRTC share one session path (DESIGN.md section 3.4
+updated).
+
 ## 4. WebRTC links and rendezvous
 
 **Goal:** two browsers on one machine join a room through a tracker, or by
@@ -102,6 +125,17 @@ a guest that joins before the host connects once the host comes; a
 stopped tracker after joining does not drop the link; the tracker sees no
 readable SDP (checked in the test tracker's log); no tracker reachable
 gives the "no tracker" reason within the timeout (shortened for tests).
+
+**Result:** done. `web/tests/browser/tracker.mjs` and
+`web/tests/browser/collab.mjs` (Chromium with
+`--disable-features=WebRtcHideLocalIpsWithMdns`, so host candidates are
+IP addresses). Found while building the app: the host answered all three
+offers of one guest, and its "same peer, new link wins" rule then closed
+the link the guest used, in a loop. Now the host only stays in the swarm,
+guests offer, a guest takes the first answer and pauses its offers, and the
+hello carries a per-tab instance id: a second link of the same instance is
+dropped, another instance (a reload) replaces the old link (DESIGN.md
+section 4).
 
 ## 5. Whiteboard overlay
 
@@ -126,23 +160,33 @@ an unknown sticker name draws the placeholder; pointer mode lets a click
 reach the element below; a late joiner receives the existing items;
 eraser and undo propagate; a read-only whiteboard draws nothing.
 
+**Result:** done (5 browser tests, plus the demo page served alone). A
+whiteboard made after its session opened asks the host for its snapshot
+(`sync` with `want: true`): the join event had already passed.
+
 ## 6. Viewer and editor calls
 
-**Goal:** the app can place the overlay on the figure and follow the
-owner's view.
+**Goal:** the app can place the overlay on the figure in both modules.
 
-**Deliverables:** `figureBox()`, the `figure` event and `viewState()` in
-`nymph-viewer.js` and `nymph-editor.js`, `setViewState()` in the viewer,
-with the C exports in `web/nymph_web.cpp` and
-`web/editor/nymph_editor_web.cpp` (reusing the `view` key code);
-`docs/viewer.md` rows.
+**Deliverables:** `figureBox()` and the `figure` event in
+`nymph-viewer.js` (from its canvas and `state().geometry`) and
+`nymph-editor.js` (from a new `figure` entry in `nymph_editor_state` in
+`web/editor/nymph_editor_web.cpp`); `docs/viewer.md` rows.
 
-**Tests:** Node (`web/tests/node/app.mjs`, `editor.mjs`): `viewState()`
-equals the `view` key of `toYaml()`; `setViewState()` of another viewer's
-state gives the same `viewState()` and leaves `source()` unchanged.
-Browser: `figureBox()` matches the canvas box in the viewer, and in the
-editor after moving the divider (with a `figure` event); the size budget
-test still passes.
+**Tests:** Browser: `figureBox()` matches the canvas box and the layout
+size times the CSS scale in the viewer, and in the editor moves right when
+the divider is dragged and is `null` on a data tab (with a `figure`
+event each time); the size budget test still passes.
+
+**Result:** done; in `web/tests/browser/collab_app.mjs` (viewer box =
+canvas box, a `figure` event on a source of another size, the editor's box
+under its tab bar; the overlay's transform on the figure in both modes).
+Dragging the divider and the data tab are not driven (no tool switches
+tabs). Added after screenshots showed drawings off between the owner's
+editor and the guests: `view_fit::natural` and `setFit()` (DESIGN.md
+sections 5.3 and 6.4), tested natively (`test_live_view`,
+`FitNaturalLaysOutAtTheSourceSizeAndNeverScales`) and in the app (the
+owner's editor and a guest's viewer report the same layout size).
 
 ## 7. App: hosting and joining
 
@@ -172,15 +216,23 @@ connects to a tracker before Collaborate (checked by the test tracker
 seeing no client). Node: the agent tool list includes `collab_state` and
 not the other `collab_*` commands.
 
+**Result:** done (app tests: sharing and every change reaching the guest
+in View and Edit, the guest refused Edit / set source / doc messages,
+Follow the owner and the guest's own view kept, a broken source keeping
+the last chart, closing ending the session after asking, the owner's
+reload resuming the room with its drawings, no tracker contacted before
+Collaborate, the agent tool list). The first chart goes out as version 1
+(a guest takes only versions above its own 0).
+
 ## 8. App: People panel and whiteboard
 
 **Goal:** the collaboration is usable and understandable end to end.
 
-**Deliverables:** `web/app/app/collab/panel.js` and `app.css`: the start
+**Deliverables:** `web/app/app/collab/panel.js`, `export.js` and `app.css`: the start
 dialog (what is shared), name prompt, People panel (invite link, people,
 colours, path, host controls: lock room, lock drawing, remove, new link,
-end), connection settings (TURN, in `localStorage`), the whiteboard over
-the stage in View and Edit mode with its toolbar, guest status messages
+end), connection settings (TURN, in `localStorage`), Download PNG with
+drawings (DESIGN.md section 6.7), the whiteboard over the stage in View and Edit mode with its toolbar, guest status messages
 and the failure messages with their advice.
 
 **Tests:** Browser: the start dialog appears once per browser; lock drawing
@@ -190,6 +242,14 @@ old token for new joins while connected guests stay; the overlay follows
 the editor's divider; a TURN entry in the settings reaches
 `RTCPeerConnection`'s configuration; an unreachable host shows the "no
 answer" message after the (shortened) timeout.
+
+**Result:** done (app tests: the start dialog once, a TURN entry in the
+ICE servers, Only I can draw with a forged operation dropped, Remove, New
+link keeping people in, PNG with drawings, typing "e" and "?" in a note in
+View mode). The "no answer" message after the timeout is tested for the
+session package (no tracker), not in the app. Fixed on the way: the app's
+shortcut and paste handlers read `e.target`, which a shadow root hides; they
+now read `composedPath()[0]`, so a note's text box counts as typing.
 
 ## 9. Documentation and status
 
@@ -206,6 +266,10 @@ shared, NATs and TURN setup, embedding `collab-session` and
 **Tests:** the doc links resolve (the existing link check, if any, else by
 hand); the demo page's code in `docs/collaboration.md` matches
 `web/collab/demo/index.html`.
+
+**Result:** done: `docs/collaboration.md`, `docs/web-app.md`,
+`docs/viewer.md`, `docs/agent-web-app.md`, `README.md`, `CHANGELOG.md`,
+`spec/INDEX.md`.
 
 ## Completion Criteria
 

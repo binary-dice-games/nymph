@@ -186,6 +186,9 @@ export class NymphEditor {
     if (this.options.appearance) {
       this.setAppearance(this.options.appearance);
     }
+    if (this.options.fit) {
+      this.setFit(this.options.fit);
+    }
     // The panel's text and source fonts; ImGui's built-in font shows until
     // they are here.
     this.core.ensureFonts(['FiraSans-Regular.ttf', 'FiraMono-Regular.ttf']).then(() => this.schedule(), () => {});
@@ -401,6 +404,58 @@ export class NymphEditor {
     this.core.check(this.m._nymph_editor_end_group());
   }
 
+  /**
+   * How the figure fits its area: `fill` (the default: laid out at the
+   * area's size) or `natural` (at the chart's own size, never scaled; the
+   * area may clip it), as a live session needs
+   * (spec/18_collaboration/DESIGN.md section 6.4).
+   */
+  setFit(fit) {
+    if (fit !== 'fill' && fit !== 'natural') {
+      throw new NymphError({ kind: 'usage', message: `fit is 'fill' or 'natural', not ${fit}` });
+    }
+    this.core.check(this.m._nymph_editor_set_fit(fit === 'natural' ? 1 : 0));
+    this.schedule();
+  }
+
+  /**
+   * Where the figure's layout is drawn: `{left, top, width, height, scale,
+   * area}`, CSS pixels from the container's top-left corner, `scale` CSS
+   * pixels per layout pixel, `area` the part of the editor it is shown in
+   * ({left, top, width, height}, which may clip it); null while a data tab
+   * or the repair state hides it (spec/18_collaboration/DESIGN.md section
+   * 5.3). The `figure` event fires when it changes.
+   */
+  figureBox() {
+    const f = this.state().figure;
+    if (!f) {
+      return null;
+    }
+    let dx = 0;
+    let dy = 0;
+    if (this.canvas && this.container) {
+      const c = this.canvas.getBoundingClientRect();
+      const box = this.container.getBoundingClientRect();
+      dx = c.left - box.left;
+      dy = c.top - box.top;
+    }
+    const area = f.areaWidth ? { left: dx + f.x, top: dy + f.y, width: f.areaWidth, height: f.areaHeight } : null;
+    return { left: dx + f.x, top: dy + f.y, width: f.width, height: f.height, scale: f.scale, area };
+  }
+
+  /** @private Fires `figure` when figureBox() changed (only while someone listens). */
+  checkFigure() {
+    if (!this.listeners.get('figure')?.size) {
+      return;
+    }
+    const box = this.figureBox();
+    const key = JSON.stringify(box);
+    if (key !== this.lastFigure) {
+      this.lastFigure = key;
+      this.emit('figure', box);
+    }
+  }
+
   /** Where element `path`'s `field` is drawn, CSS pixels in the canvas, or null. */
   targetRect(path, field = '') {
     return JSON.parse(this.core.string(this.core.withCStrings([path, field], (p, f) => this.m._nymph_editor_target(p, f))));
@@ -417,7 +472,7 @@ export class NymphEditor {
   /**
    * "change" {version, label, origin, modified}, "selection" {path, field} or
    * null, "save", "csv-import" {table}, "csv-export" {table, fileName, csv},
-   * "error". @returns a function that removes the listener
+   * "figure" (figureBox() changed), "error". @returns a function that removes the listener
    */
   on(event, cb) {
     if (!this.listeners.has(event)) {
@@ -508,6 +563,7 @@ export class NymphEditor {
         this.emit('error', new NymphError(this.core.lastError()));
       }
       this.syncTextInput();
+      this.checkFigure();
       if (this.m._nymph_editor_wants_frame() === 1) {
         this.schedule();
       }

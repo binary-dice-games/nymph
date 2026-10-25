@@ -23,6 +23,37 @@ export function withoutView(source) {
   return out.join('\n').replace(/\n*$/, '\n');
 }
 
+/**
+ * The source's top-level `view` block (its `view:` line and the lines
+ * under it), or '' when it has none: what withoutView() takes out.
+ */
+export function viewBlock(source) {
+  const out = [];
+  let inside = false;
+  for (const line of source.split('\n')) {
+    if (/^view\s*:/.test(line)) {
+      inside = true;
+      out.push(line);
+      continue;
+    }
+    if (inside && (line === '' || /^[\s#-]/.test(line))) {
+      out.push(line);
+      continue;
+    }
+    inside = false;
+  }
+  return out.join('\n').replace(/\n*$/, out.length ? '\n' : '');
+}
+
+/**
+ * `source` with its `view` block replaced by `block` (from viewBlock()), or
+ * removed when `block` is '' (spec/18_collaboration/DESIGN.md section 6.3).
+ */
+export function withView(source, block) {
+  const rest = withoutView(source);
+  return block ? `${rest}${block}` : rest;
+}
+
 /** A short, stable id for text (FNV-1a, hex). */
 export function hashText(text) {
   let h = 0x811c9dc5;

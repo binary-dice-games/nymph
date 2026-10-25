@@ -482,7 +482,24 @@ void editor_workspace::draw_figure(int pixel_width, int pixel_height) {
   // counts from the bottom), which is the left side under the tab bar. A
   // data tab hides it.
   if (last_ != nullptr && (panel_ == nullptr || (!panel_->figure_box().empty() && !panel_->model().repairing()))) {
-    view_.with_contexts([&] { ImGui_ImplOpenGL3_RenderDrawData(const_cast<ImDrawData*>(last_)); });
+    // A layout of another size than the box (view_fit::natural in a live
+    // session, spec/18_collaboration/DESIGN.md section 6.4, or a fit that
+    // fell back to the source size) is drawn from the box's top-left corner,
+    // where pointer input and the panel's outlines expect it: the draw data
+    // is given the box's size, the rest of the box shows the background.
+    const layout_box box = panel_ != nullptr ? panel_->figure_box() : layout_box{0.0f, 0.0f, css_w_, css_h_};
+    const view_geometry g = view_.geometry();
+    const float s = g.css_scale > 0.0f ? g.css_scale : 1.0f;
+    const ImVec2 size(box.width / s, box.height / s);
+    view_.with_contexts([&] {
+      if (std::fabs(size.x - last_->DisplaySize.x) >= 1.0f || std::fabs(size.y - last_->DisplaySize.y) >= 1.0f) {
+        ImDrawData data = *last_;
+        data.DisplaySize = size;
+        ImGui_ImplOpenGL3_RenderDrawData(&data);
+      } else {
+        ImGui_ImplOpenGL3_RenderDrawData(const_cast<ImDrawData*>(last_));
+      }
+    });
   }
 }
 

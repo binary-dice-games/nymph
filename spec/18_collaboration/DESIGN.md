@@ -1,9 +1,12 @@
 # nymph — Collaboration: Design
 
-**Status: designed; nothing built.** [PLAN.md](PLAN.md) is the
-implementation plan; its step 1 checks the facts this design takes on trust
-(public trackers, NAT success rates, browser limits) before anything is
-built. This document describes only what this project adds or changes; the
+**Status: built** (plan steps 2-9; see [PLAN.md](PLAN.md) for each
+step's result). Tested on Linux: Node (the whiteboard model, the session
+over in-memory links), Chromium through Playwright (real WebRTC between
+browser contexts through a local test tracker and the manual codes, the
+whiteboard, the app end to end). Not yet run: plan step 1 against the
+public trackers and real NATs (this build's sandbox could not reach them),
+Firefox, Safari, a phone, a TURN server. This document describes only what this project adds or changes; the
 app it extends is [15_web_app](../15_web_app/DESIGN.md) (*app DESIGN*), its
 command registry and agent rules are
 [17_agent_connectors](../17_agent_connectors/DESIGN.md) (*agents DESIGN*),
@@ -47,12 +50,16 @@ In scope:
 - STUN by default, TURN from `config.json` or the user's settings;
   the connection path (direct or relayed) shown per person.
 - An owner tab reload resumes the room; a guest reload rejoins it.
+- **Export with drawings**: anyone in a session downloads the chart as a
+  PNG with the whiteboard drawn over it (section 6.7); the PNG still
+  carries the chart's YAML, without the drawings.
 
 Not in scope: more than one editor, or handing over editing (section 12);
 a nymph-run signaling or TURN server; a full mesh between guests (guests
 reach each other only through the host); a "refresh from Google Drive"
 mode for networks where WebRTC fails (section 12); saving the whiteboard
-into the chart, or anywhere outside the tab; voice, video and chat;
+into the chart's YAML, or keeping it anywhere outside the tab (the export
+of section 6.7 is a picture); voice, video and chat;
 agents taking part in a session (section 12); the native `nymph view`
 (no WebRTC there).
 
@@ -63,11 +70,12 @@ Files owned or changed:
 | `web/collab/collab-session.js` | new: the session package |
 | `web/collab/collab-whiteboard.js` | new: the whiteboard package |
 | `web/collab/demo/index.html` | new: both packages over a plain image, no nymph (the embedding example, and the independence test) |
-| `web/app/app/collab/` | new: `collab.js` (commands, doc channel, lifecycle), `adapter.js` (nymph adapter), `panel.js` (People panel, whiteboard toolbar placement) |
+| `web/app/app/collab/` | new: `collab.js` (commands, doc channel, lifecycle), `adapter.js` (nymph adapter), `panel.js` (People panel, dialogs), `export.js` (PNG with drawings) |
 | `web/app/app/main.js`, `document.js`, `commands.js`, `device.js` | guest documents, the `collab_*` commands, `#collab=` route, `config.json` `collab` section |
 | `web/app/index.html`, `app.css` | `wss:` in the CSP's `connect-src`; Collaborate button, People panel |
-| `web/js/nymph-viewer.js`, `web/js/nymph-editor.js` | `figureBox()`, `figure` event, `viewState()`, `setViewState()` |
-| `web/nymph_web.cpp`, `web/editor/nymph_editor_web.cpp` | the C exports behind those calls |
+| `web/js/nymph-viewer.js`, `web/js/nymph-editor.js` | `figureBox()` and the `figure` event |
+| `web/editor/nymph_editor_web.cpp` | the figure's box and scale in the editor's `state()`; `nymph_editor_set_fit` |
+| `src/view/live_view.*` | `view_fit::natural` and `live_view::set_fit()` (section 6.4) |
 | `web/CMakeLists.txt`, `web/size_budget.json` | `collab/` copied by `nymph-site`; budgets for both packages; `NYMPH_COLLAB_TRACKERS`, `NYMPH_COLLAB_ICE_SERVERS` |
 | `web/tests/node/`, `web/tests/browser/` | model, session and app tests; a local test tracker |
 | `docs/collaboration.md` | new: user guide, embedding the packages, setting up TURN |
@@ -146,22 +154,27 @@ demo and tests). Node tests use an in-memory pair.
 
 ### 3.4 Rendezvous
 
-A **rendezvous** gets two peers' WebRTC offers and answers to each other.
-Interface: `start(topic, seal, onSignal)`, `signal(toPeer, message)`,
-`stop()`. Two back ends ship:
+A **rendezvous** brings links to the other side. Interface:
+`start(context)` and `stop()` (and `retry()`, optional), where `context`
+has the role, peer id, room keys, protocol and ICE servers,
+`link(link)` to hand the session a new link, `status(stage, detail)`, and
+`wantsLinks()` (false for a guest already linked to the host). The session
+does the rest (hello, roster). Back ends:
 
 - **`torrent`**: the WebTorrent tracker protocol over `wss`, the protocol
   public trackers were built for (browser peers trading WebRTC offers
   inside a swarm). The session announces to every tracker in the list at
-  once; the first answer wins. The SDP field carries the sealed message,
-  not a readable SDP.
+  once. The SDP field carries the sealed message, not a readable SDP.
 - **`manual`**: the guest gets an **offer code** to send to the host by any
   means (chat, email), the host pastes it and gets an **answer code** to
   send back. Codes are sealed, compressed and base64url (about 1 to 2 KB);
   slow, but it needs nothing on the network but STUN.
 
-Other back ends (Nostr relays, MQTT brokers, a Drive file, a server of the
-embedder's own) fit the same interface (section 12).
+- **`broadcast`**: tabs of one browser, over a `BroadcastChannel` named by
+  the topic; the link is the channel itself (no WebRTC). For the demo and
+  tests.
+- An object with `start` and `stop`: the embedder's own (section 12). Tests
+  use an in-memory network (`createMemoryNetwork()`).
 
 ### 3.5 Session
 
@@ -211,7 +224,9 @@ snapshot; past them a new item is refused with a message.
 
 The model does not need a host. The nymph session happens to have one,
 which answers joiners' snapshot requests; the order the host relays in is
-not needed for convergence.
+not needed for convergence. On `join`, both sides send their snapshot; a
+whiteboard made after its session opened sends its snapshot to the host
+with `want: true`, and the host answers with its own.
 
 ### 3.7 Adapter
 
@@ -224,6 +239,7 @@ to the screen:
 | `element` | The element the overlay covers (it is positioned over it, same box) |
 | `transform()` | The affine map from content units to CSS pixels of `element`'s box: `{a, b, c, d, e, f}` as in `DOMMatrix` |
 | `onChange(callback)` | Calls back when the transform changes (pan, zoom, resize, layout); returns an unsubscribe function |
+| `clip()` (optional) | A rectangle of `element`'s box (`{x, y, width, height}`, CSS pixels) outside which drawings and cursors are hidden, or null (nymph: the editor's figure area, so nothing shows over its panel) |
 
 `createWhiteboard` without an adapter uses the container's box as content
 (one unit per CSS pixel at the size it had when the whiteboard was made).
@@ -251,11 +267,13 @@ guest tab                       trackers (wss)                 host tab
    │                                                              │
 ```
 
-1. Every peer announces to each tracker with up to 5 sealed offers every
-   5 seconds (doubling up to 60 s once connected and the room is quiet);
-   the tracker forwards offers to other peers of the swarm. A host answers
-   a guest's offer, a guest answers the host's; guest-guest pairs ignore
-   each other (the role is inside the sealed part).
+1. The host only stays in the swarm (it announces with no offers every 15
+   seconds). A guest announces 3 sealed offers every 4 seconds until it is
+   linked to the host; the tracker forwards each to another peer of the
+   swarm, and the host answers the ones from guests (the role is inside the
+   sealed part; a guest ignores another guest's offer). A guest takes the
+   first answer, gives up its other offers, and makes no new ones for 15
+   seconds or until that link fails, so one guest makes one link.
 2. Offers are not trickled: a peer waits for ICE gathering to finish (at
    most 3 seconds) and seals the full SDP, so one tracker message carries
    one complete offer.
@@ -263,16 +281,20 @@ guest tab                       trackers (wss)                 host tab
    configured) candidates. DTLS secures the channels; the certificate
    fingerprint travels inside the sealed SDP, so a tracker cannot put
    itself in the middle.
-4. Over `reliable`, the guest sends `hello`; the host answers with the
-   roster, then each app channel's join data (for nymph: the chart and the
-   whiteboard snapshot).
+4. Over `reliable`, the guest sends `hello` (its peer id and this tab's
+   random **instance** id); the host answers with the roster, then each
+   app channel's join data (for nymph: the chart and the whiteboard
+   snapshot). A second link with the same peer and instance is closed (the
+   first stays); the same peer with another instance is a reload, and its
+   new link replaces the old one.
 
-**Running.** The owner edits: on every document change (the app's own
-`change` path, app DESIGN section 3.3), after 150 ms of quiet, the host
-sends `doc {v, source}` to all guests; guests call
-`viewer.setSource(source)`, which keeps their zoom on what did not change.
-Pans and zooms of the owner go as `view {v, state}` to guests following
-the owner. Whiteboard operations from anyone go to the host and out to
+**Running.** The owner edits, pans or zooms: after 150 ms of quiet, the
+host sends `doc {v, source}` to all guests, the source with the owner's
+view in its `view` key (`toYaml()`). A guest following the owner shows it
+as it is: the viewer starts from a `view` key that differs from the one it
+showed, so the guest sees what the owner sees. A guest not following shows
+it with the guest's own `view` key in place of the owner's, so its zoom
+stays (section 6.3). Whiteboard operations from anyone go to the host and out to
 the others; cursors and ink in progress go over `fast`.
 
 **Failing.** A link whose ICE state goes `disconnected` gets an ICE
@@ -293,21 +315,23 @@ import { createSession } from './collab-session.js';
 const session = await createSession({
   role: 'host' | 'guest',
   token,                 // guest: from the invite; host: omit for a new room
+  peerId,                // optional: the same id again after a reload
   protocol: 'nymph/1',   // peers with another protocol are refused, with a message
   me: { name, color },
   rendezvous: [{ kind: 'torrent', urls: [...] }] | [{ kind: 'manual' }]
             | [{ kind: 'broadcast' }],
   iceServers: [...],     // RTCIceServer list
   accept: (channel, message, from) => boolean,   // host only
+  connectTimeoutMs, reconnectMs,                 // 30 s to report a guest's failure, 60 s to find a host again
 });
 ```
 
 | Member | Contract |
 |---|---|
 | `session.token`, `inviteFragment()` | The room token; `collab=<token>` for the host app to put in its link. |
-| `session.me`, `session.role`, `session.peers()` | This peer; the roster (`{id, name, color, role, path: 'direct' \| 'relay' \| 'local' \| null}`). |
+| `session.me`, `session.role`, `session.peers()`, `session.host()` | This peer; the roster (`{id, name, color, role, path: 'direct' \| 'relay' \| 'local' \| null}`, refreshed every 5 s); the host's entry. |
 | `session.channel(name)` | A named channel: `send(message, {to, fast})` (JSON value; `to` a peer id, default everyone), `on('message', (message, from) => …)`, `on('join', (peer) => …)` (for join data). Names are 1-32 ASCII letters, digits and `-`. |
-| `session.on(event, cb)` | `peers` (roster changed), `state` (`connecting`, `open`, `reconnecting`, `ended`, with a reason), `error`. Returns an unsubscribe function. |
+| `session.on(event, cb)` | `peers` (roster changed), `state` (`connecting`, `open`, `reconnecting`, `ended`, with a `reason` and a `message`), `status` (a guest's connection stage: `tracker`, `answer`, `no-tracker`), `error` (a `SessionError` with a stable `reason`: `no-tracker`, `no-answer`, `ice-failed`, `protocol`, ...). Returns an unsubscribe function. |
 | `session.setMe({name, color})` | Changes this peer's presence for everyone. |
 | `session.lock(on)`, `session.remove(id)`, `session.newInvite()` | Host only: no new joins; close a guest's link and refuse its id; a new token (people already in stay). |
 | `session.manual` | With the `manual` rendezvous: `offerCode()` (guest), `acceptOffer(code)` → answer code (host), `acceptAnswer(code)` (guest). |
@@ -341,7 +365,8 @@ const wb = createWhiteboard(container, {
 | `wb.clear()`, `wb.readOnly` | Clear for everyone; a read-only whiteboard shows everything and draws nothing. |
 | `wb.snapshot()`, `wb.load(snapshot)` | A mergeable JSON snapshot (section 3.6); `load` merges, it does not replace. |
 | `wb.toSvg()` | The items as a standalone SVG in content units. |
-| `wb.on('change' \| 'tool', cb)`, `wb.destroy()` | |
+| `wb.items()`, `wb.element` | The live items, oldest first; the overlay element (a host that replaces the container's children puts it back). |
+| `wb.on('change' \| 'tool' \| 'error', cb)`, `wb.destroy()` | `error`: a refused change (the item limit), with a message. |
 
 Keys (`Ctrl+Z`, `Delete`, `Esc` back to pointer) are handled only while a
 tool other than `pointer` is active, so the page's own shortcuts (the
@@ -351,12 +376,18 @@ and an unknown name draws a placeholder.
 
 ### 5.3 Viewer and editor additions
 
-| Call | Viewer | Editor | Contract |
-|---|---|---|---|
-| `figureBox()` | yes | yes | `{left, top, width, height, scale}`: where the figure's layout is drawn, in CSS pixels of the container, and CSS pixels per layout pixel. `null` with no figure. |
-| `on('figure', cb)` | yes | yes | After the figure box changes (resize, a source with another size, the editor's panel or divider). |
-| `viewState()` | yes | yes | The `view` key's content as a JSON object (what `toYaml()` would save). |
-| `setViewState(state)` | yes | no | Shows that view, as a `setSource` with that `view` key would, without changing the source. |
+| Call | Contract |
+|---|---|
+| `figureBox()` | Viewer and editor: `{left, top, width, height, scale}`, where the figure's layout is drawn in CSS pixels of the container, and CSS pixels per layout pixel; `null` with no figure (or, in the editor, while a data tab or the repair state hides it). |
+| `on('figure', cb)` | Viewer and editor: after the figure box changes (resize, a source of another size, the editor's panel, divider or tab). |
+
+The viewer computes it from its canvas and `state().geometry`; the editor
+from a new `figure` entry of its `state()` (the panel's figure box and the
+view's CSS scale). Following a view needs no new call (section 6.3).
+
+The editor also gains `setFit('fill' | 'natural')` (and a `fit` option of
+`createEditor`): `natural` lays the figure out at the chart's own size and
+never scales it, the area clipping what does not fit (section 6.4).
 
 ## 6. nymph Glue
 
@@ -367,8 +398,11 @@ and an unknown name draws a placeholder.
   this chart and its unsaved changes live and can draw over it; their
   browsers and yours learn each other's IP address; public trackers help
   you find each other but see nothing of the chart. Then the People panel
-  opens with the invite link (**Copy link**), the list of people, and the
-  host's controls: Lock the room, Lock drawing, Remove, New link, End.
+  opens with the invite link (**Copy link**, **New link**), the list of
+  people with their connection path, and the host's controls: **Remove**,
+  **Lock the session**, **Only I can draw**, **Clear all**, **End the
+  session**; also the join codes, the name and colour, and the TURN
+  setting. The bar's button reads **Live · N** while a session is open.
 - The host's `accept` hook drops anything a guest sends on the `doc`
   channel and drops whiteboard operations from guests while drawing is
   locked. The doc channel is one way.
@@ -384,9 +418,8 @@ and an unknown name draws a placeholder.
 - The guest's document has origin kind `collab`: read-only (no Edit, no
   Source pane, no theme change written), no draft, no recent entry; Save
   is Download (YAML or PNG of what is shown, without the drawings).
-- **Follow the owner** (on by default) applies the owner's `view` messages
-  with `setViewState`; panning or zooming by hand turns it off, and the
-  button turns it back on.
+- **Follow the owner** (on by default) shows the owner's view; panning or
+  zooming by hand turns it off, and the button turns it back on.
 - A `doc` source that does not bind (the owner is fixing an error) keeps
   the last good chart and shows "The owner's chart has an error; showing
   the last version that worked."
@@ -397,18 +430,33 @@ and an unknown name draws a placeholder.
 
 | Message | From | Meaning |
 |---|---|---|
-| `doc {v, source}` | host | The whole document source, version `v` (increasing). Sent on join and 150 ms after the last change. Guests ignore a `v` not above theirs. |
-| `view {v, state}` | host | The owner's `viewState()` after a pan or zoom settles (the viewer's `view` event) and with every `doc`. |
+| `doc {v, source}` | host | The whole document source with the owner's view (`toYaml()`), version `v` (increasing). Sent on join and 150 ms after the last change of the source or the view. Guests ignore a `v` not above theirs. |
 | `meta {name, mode}` | host | The file name and the owner's mode, for the guest's title. |
 | `lock {drawing}` | host | Drawing locked or not; guests set `wb.readOnly`. |
+
+The owner's view changes are seen through the viewer's `view` event in
+View mode; the editor has no such event, so in Edit mode the host compares
+`toYaml()` with what it last sent every 400 ms while guests are connected.
+
+A guest not following shows `withView(source, ownView)`: the owner's
+source with its top-level `view` block replaced by the one of the guest's
+own `toYaml()` (a text splice, the inverse of `withoutView` in
+`document.js`). Since that `view` key is what the guest has on screen, the
+viewer starts from it and nothing moves.
 
 ### 6.4 Adapter for nymph
 
 `adapter.js` builds the transform from `figureBox()` of the viewer or the
 editor (`a = d = scale`, `e = left`, `f = top`), listens to their `figure`
 event and to the stage's resize, and swaps between them when the mode
-changes. Content units are the figure's layout pixels: the same for every
-person whatever their window. Plots pan and zoom inside a fixed layout, so
+changes. Content units are the figure's layout pixels at the chart's own
+size (`image.width` by `image.height`): the same for every person whatever
+their window. The viewer lays out at that size already (`fit: 'source'`,
+shrunk with CSS in a narrow window); the editor normally lays out at the
+size of its area (`view_fit::fill`), a different layout, so while the owner
+shares, the editor is switched to `view_fit::natural` (the chart's own
+size, never scaled, clipped by a smaller area; the divider widens it) and
+back to `fill` when the session ends. Plots pan and zoom inside a fixed layout, so
 a note beside a plot stays beside it; a note over a data point does not
 follow that point when someone zooms the plot (pinning to data is
 section 12).
@@ -421,6 +469,7 @@ section 12).
 | `collab_join {token}` | app | external | no |
 | `collab_stop` | app | read | no |
 | `collab_state` | app | read | yes: role, people, path, whiteboard item count |
+| `collab_download_png` | document | external | no |
 
 Agents cannot start or join a session (they would share the chart with
 people the user did not choose); the owner's agent connectors keep working
@@ -446,6 +495,25 @@ or by a user in the People panel's **Connection settings** (kept in
 `localStorage`, used for sessions this user joins or hosts).
 `docs/collaboration.md` says how to run coturn or use a hosted TURN
 service.
+
+### 6.7 Export with drawings
+
+**Download PNG with drawings** (Share and Download menus, while a session
+is open, for the owner and guests; command `collab_download_png`, effect
+`external`):
+
+1. The chart's PNG as on screen (`toPng()` of the viewer or editor), drawn
+   into a canvas of the same pixel size.
+2. `wb.toSvg()` (content units are the figure's layout pixels) drawn over
+   it, scaled by the PNG's width over the layout width, through an
+   `<img>` of the SVG as a `blob:` URL.
+3. The canvas encoded as PNG, then the chart PNG's `nymph` iTXt chunk
+   copied in after `IHDR` (chunks are copied whole, CRC included).
+
+So the file shows the drawings, and opening it in nymph opens the chart
+without them (the whiteboard is never in the YAML). The file is named
+`<name>-with-drawings.png`. The whiteboard package itself offers only
+`toSvg()`; compositing is the host's.
 
 ## 7. NAT and Connection Failure
 
@@ -512,6 +580,11 @@ is reachable to each.
 - **Stickers as built-in SVG symbols** (check, cross, question, star,
   heart, thumbs up, warning, arrow), not emoji: emoji look different on
   every system, so two people would see different stickers.
+- **Guests offer, the host answers.** Trackers forward an announcing
+  peer's offers to peers already in the swarm, so the host only needs to
+  be there; offers from the host would reach other guests as often as new
+  ones. A guest taking only the first answer, and the host keeping the
+  first link of a tab (by its instance id), keep each guest to one link.
 - **Untrickled offers.** One sealed message per offer fits the tracker
   protocol (which carries one SDP per offer) and keeps tracker traffic
   low; the cost is up to 3 seconds of ICE gathering before an offer goes.
@@ -519,6 +592,24 @@ is reachable to each.
   normalised 0-1 box. Pixels differ per window; a 0-1 box stretches
   drawings when the figure's aspect changes. The figure's layout pixels
   are what the chart itself is laid out in.
+- **The owner's editor at the chart's own size**, over guests laid out at
+  the owner's editor size. A diagram or a plot lays out differently in a
+  box of another size (it is recentred or stretched), so no transform maps
+  one layout onto another; one shared layout is needed. The chart's own
+  size is the one every viewer and the saved PNG already use, and it does
+  not move when the owner resizes the window or switches modes. Making
+  guests use the owner's area size would mean rewriting `image.width` and
+  `height` in the text they show (and download). `natural` never scales
+  because the editor's selection outline and floating toolbar assume a CSS
+  scale of 1.
+- **Following through the `view` key**, over new view calls in the
+  viewer. The viewer already starts from a `view` key that differs from
+  the one it shows and keeps its zoom otherwise; sending `toYaml()` and
+  splicing the guest's own view key in gives both behaviours with no
+  WebAssembly change.
+- **The PNG with drawings keeps the YAML**, over a plain picture. Someone
+  who receives it can still open the chart; the drawings, being a
+  picture over it, cannot be mistaken for chart content.
 - **Guests are viewers, never editors.** It removes merging from the
   chart (goal 2), lets phones join fully, and keeps every edit going
   through the owner's undo, attribution and agent rules (agents DESIGN).
@@ -579,4 +670,3 @@ is reachable to each.
   owner's Drive file and reload it on a new revision (no whiteboard).
 - **Agents**: a read tool returning the whiteboard's notes so the owner's
   agent can act on what reviewers wrote.
-- **Export with drawings**: the chart PNG with `toSvg()` drawn over it.

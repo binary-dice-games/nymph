@@ -8,6 +8,7 @@
 #   -DVERSION=<x.y.z> -DCOMMIT=<sha>
 #   -DGOOGLE_CLIENT_ID= -DGOOGLE_API_KEY= -DGOOGLE_APP_ID=
 #   -DAGENT_CONNECTORS=webmcp,bridge (spec/17_agent_connectors)
+#   -DCOLLAB_TRACKERS=<url,url> -DCOLLAB_ICE_SERVERS=<JSON> (spec/18_collaboration)
 
 foreach(var WEB SOURCE OUT VERSION COMMIT)
   if(NOT DEFINED ${var})
@@ -30,6 +31,8 @@ foreach(f nymph-viewer.js nymph-viewer-core.js nymph-viewer-core.wasm nymph-view
   file(COPY "${WEB}/${f}" DESTINATION "${OUT}")
 endforeach()
 file(COPY "${WEB}/editor" "${WEB}/fonts" "${WEB}/examples" "${WEB}/demo" DESTINATION "${OUT}")
+# The collaboration packages, at the paths embedders use (spec/18_collaboration).
+file(COPY "${SOURCE}/web/collab" DESTINATION "${OUT}")
 
 # The agent guide and the element reference, for connectors (section 11.2).
 file(MAKE_DIRECTORY "${OUT}/agent")
@@ -61,7 +64,23 @@ if(_bridge GREATER -1)
   endif()
   string(APPEND _agents "\"bridge\": {}")
 endif()
-file(WRITE "${OUT}/config.json" "{${_google}\"agents\": {${_agents}}}\n")
+# Live collaboration (spec/18_collaboration/DESIGN.md section 6.6): the
+# WebTorrent trackers that introduce peers and the ICE (STUN / TURN) servers.
+set(_trackers "")
+if(DEFINED COLLAB_TRACKERS AND NOT COLLAB_TRACKERS STREQUAL "")
+  string(REPLACE "," ";" _tracker_list "${COLLAB_TRACKERS}")
+  foreach(t IN LISTS _tracker_list)
+    if(_trackers)
+      string(APPEND _trackers ", ")
+    endif()
+    string(APPEND _trackers "\"${t}\"")
+  endforeach()
+endif()
+if(NOT DEFINED COLLAB_ICE_SERVERS OR COLLAB_ICE_SERVERS STREQUAL "")
+  set(COLLAB_ICE_SERVERS "[]")
+endif()
+set(_collab "\"collab\": {\"trackers\": [${_trackers}], \"iceServers\": ${COLLAB_ICE_SERVERS}}")
+file(WRITE "${OUT}/config.json" "{${_google}\"agents\": {${_agents}}, ${_collab}}\n")
 
 # The service worker, with this build's commit and the app's modules.
 file(GLOB_RECURSE _app_js RELATIVE "${OUT}" "${OUT}/app/*.js")
