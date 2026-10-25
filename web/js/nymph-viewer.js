@@ -330,7 +330,8 @@ export class NymphViewer {
   /**
    * Listens to `hover` (the pick under the pointer, or null), `click` (a
    * pick clicked), `view` (every plot's area and ranges after a pan or
-   * zoom settles) or `error` (an update made by the element failed).
+   * zoom settles), `figure` (figureBox() changed) or `error` (an update
+   * made by the element failed).
    * @returns {() => void} removes the listener
    */
   on(event, callback) {
@@ -765,6 +766,29 @@ export class NymphViewer {
     const g = this.state().geometry;
     c.style.width = `${g.layoutWidth * g.cssScale}px`;
     c.style.height = `${g.layoutHeight * g.cssScale}px`;
+    this.geometry = g;
+    const key = `${g.layoutWidth},${g.layoutHeight},${g.cssScale}`;
+    if (key !== this.lastFigure) {
+      this.lastFigure = key;
+      this.emit('figure', this.figureBox());
+    }
+  }
+
+  /**
+   * Where the figure's layout is drawn: `{left, top, width, height, scale}`,
+   * CSS pixels from the container's top-left corner, `scale` CSS pixels per
+   * layout pixel; null before the first frame or with no figure
+   * (spec/18_collaboration/DESIGN.md section 5.3). The `figure` event
+   * fires when it changes.
+   */
+  figureBox() {
+    const g = this.geometry;
+    if (!this.canvas || !this.container || !g || this.handle === 0 || this.plainImage) {
+      return null;
+    }
+    const c = this.canvas.getBoundingClientRect();
+    const box = this.container.getBoundingClientRect();
+    return { left: c.left - box.left, top: c.top - box.top, width: g.layoutWidth * g.cssScale, height: g.layoutHeight * g.cssScale, scale: g.cssScale };
   }
 
   /**

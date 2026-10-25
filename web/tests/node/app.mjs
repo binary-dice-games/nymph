@@ -10,7 +10,7 @@ import { pathToFileURL } from 'node:url';
 const [webDir, sourceDir] = process.argv.slice(2);
 const appDir = join(sourceDir, 'web', 'app', 'app');
 const { rawUrl, sniff, isPng } = await import(pathToFileURL(join(appDir, 'open.js')).href);
-const { withoutView, Doc, baseName } = await import(pathToFileURL(join(appDir, 'document.js')).href);
+const { withoutView, viewBlock, withView, Doc, baseName } = await import(pathToFileURL(join(appDir, 'document.js')).href);
 const { encodeSource, decodeSource } = await import(pathToFileURL(join(appDir, 'share.js')).href);
 void webDir;
 
@@ -47,6 +47,17 @@ test('the view key does not count as a change', () => {
   eq(doc.modified, true, 'an edit is');
   eq(doc.fileName('png'), 'a.png', 'png name');
   eq(baseName('C:\\x\\y.yaml'), 'y.yaml', 'base name');
+});
+
+test('a guest\'s own view key replaces the owner\'s (spec/18_collaboration)', () => {
+  const owner = 'root: {type: Plot}\nview:\n  root: {x: [0, 1]}\n\ndata: |\n  x\n  1\n';
+  eq(viewBlock(owner), 'view:\n  root: {x: [0, 1]}\n', 'the view block');
+  eq(viewBlock('root: {type: Plot}\n'), '', 'no view');
+  const mine = 'view:\n  root: {x: [5, 6]}\n';
+  const shown = withView(owner, mine);
+  eq(viewBlock(shown), mine, 'the guest\'s view');
+  eq(withoutView(shown), withoutView(owner), 'the owner\'s chart otherwise');
+  eq(withView(owner, ''), withoutView(owner), 'no view of its own');
 });
 
 test('sniffing: PNG, UTF-8 text, and the rest refused', () => {

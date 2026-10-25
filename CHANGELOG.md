@@ -9,6 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Web app: **Collaborate** (`Ctrl+Shift+L`) shares the open chart live with the people who have its invite link, browser to browser over WebRTC with no server: they see every change as the owner makes it, follow the owner's view or pan their own, and everyone draws on a whiteboard over the chart (cursors, ink, text notes, stickers) that is never saved in the file. The owner can lock the session, remove people, make a new link and let only themselves draw; join codes and a TURN setting help strict networks.
+- Web app: **Download PNG with drawings**, a picture of the chart with the whiteboard over it that still opens in nymph as the chart.
+- `collab/collab-session.js` and `collab/collab-whiteboard.js`: the session (rooms, WebTorrent-tracker or manual signaling, encrypted, a host relaying for guests) and the whiteboard as standalone modules for other pages.
+- Web viewer and editor modules: `figureBox()` and the `figure` event, where the figure is drawn, for overlays; the editor's `setFit('natural')` shows the chart at its own size.
+
 - Web viewer and web app: a reset-view button in the chart's bottom-right corner, shown once the user pans or zooms (`resetButton: false` / `reset-button="false"` hides it).
 - Web app: the agent you already use works on the open chart. `nymph mcp`'s new `web_app_pair` tool gives a one-time code (or link) to type under **Agents > Connect an agent**; Claude Code, Claude Desktop, Cursor and Gemini CLI then read and change the chart through the app's tools, which join their tool list (`web_app_call` reaches them otherwise). The app never asks for an API key.
 - Web app: the **Agents** panel (`Ctrl+Shift+A`) lists connected agents and every change they made, each with Undo; an agent's request is one undo step; **Stop** halts it; actions that leave the tab still ask first, with "allow without asking" for the open chart.

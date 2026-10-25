@@ -1,0 +1,84 @@
+<!doctype html>
+<!-- MIT License © 2026 Binary Dice Games -->
+<!-- collab-session and collab-whiteboard over a plain picture, with no nymph
+     code (spec/18_collaboration/DESIGN.md section 1): the embedding example
+     of docs/collaboration.md. Open it, Start, and send the link; tabs of one
+     browser join with ?local. -->
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>collab demo — a whiteboard over any page</title>
+  <style>
+    body { margin: 0; font: 15px/1.4 system-ui, sans-serif; color: #1c2024; background: #f6f7f9; }
+    header { display: flex; gap: 12px; align-items: center; padding: 12px 16px; background: #fff; border-bottom: 1px solid #e1e5eb; flex-wrap: wrap; }
+    header input { flex: 1; min-width: 240px; padding: 6px 8px; }
+    #picture { position: relative; width: min(800px, calc(100vw - 32px)); margin: 24px auto; }
+    #picture img { display: block; width: 100%; height: auto; border-radius: 8px; box-shadow: 0 2px 12px rgba(0, 0, 0, .1); }
+    #people { margin: 0 16px; color: #5f6b7d; }
+  </style>
+</head>
+<body>
+  <header>
+    <strong>collab demo</strong>
+    <button id="start" type="button">Start a session</button>
+    <input id="link" readonly placeholder="The invite link appears here" aria-label="Invite link">
+    <span id="state"></span>
+  </header>
+  <p id="people"></p>
+  <div id="picture">
+    <img alt="A sample diagram" width="800" height="450" src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 800 450'%3E%3Crect width='800' height='450' fill='%23fff'/%3E%3Cg font-family='sans-serif' font-size='22' text-anchor='middle'%3E%3Crect x='60' y='175' width='170' height='90' rx='12' fill='%23e3f5f1' stroke='%230f9f86' stroke-width='3'/%3E%3Ctext x='145' y='228'%3EIdea%3C/text%3E%3Crect x='315' y='175' width='170' height='90' rx='12' fill='%23e6edfe' stroke='%233e63dd' stroke-width='3'/%3E%3Ctext x='400' y='228'%3EDesign%3C/text%3E%3Crect x='570' y='175' width='170' height='90' rx='12' fill='%23fff6db' stroke='%23f5a524' stroke-width='3'/%3E%3Ctext x='655' y='228'%3EShip%3C/text%3E%3C/g%3E%3Cpath d='M230 220h85M485 220h85' stroke='%231c2024' stroke-width='3' marker-end='url(%23a)'/%3E%3Cdefs%3E%3Cmarker id='a' viewBox='0 0 10 10' refX='9' refY='5' markerWidth='8' markerHeight='8' orient='auto'%3E%3Cpath d='M0 0L10 5L0 10z'/%3E%3C/marker%3E%3C/defs%3E%3C/svg%3E">
+  </div>
+  <script type="module">
+    import { createSession } from '../collab-session.js';
+    import { createWhiteboard } from '../collab-whiteboard.js';
+
+    // Public WebTorrent trackers introduce the browsers; STUN tells each its
+    // public address. Add a TURN server for strict networks.
+    const local = new URLSearchParams(location.search).has('local');
+    const rendezvous = local
+      ? [{ kind: 'broadcast' }]
+      : [{ kind: 'torrent', urls: ['wss://tracker.openwebtorrent.com', 'wss://tracker.webtorrent.dev'] }, { kind: 'manual' }];
+    const iceServers = [{ urls: ['stun:stun.l.google.com:19302', 'stun:stun.cloudflare.com:3478'] }];
+    const me = { name: prompt('Your name?') || 'Someone', color: '#e5484d' };
+
+    const picture = document.getElementById('picture');
+    const img = picture.querySelector('img');
+    // Content units: the picture's own 800 x 450 pixels, whatever its size on screen.
+    const adapter = {
+      element: picture,
+      transform: () => {
+        const s = img.getBoundingClientRect().width / 800;
+        return { a: s, b: 0, c: 0, d: s, e: 0, f: 0 };
+      },
+      onChange: (cb) => {
+        const ro = new ResizeObserver(cb);
+        ro.observe(img);
+        return () => ro.disconnect();
+      },
+    };
+
+    async function begin(role, token) {
+      const session = await createSession({ role, token, protocol: 'collab-demo/1', me, rendezvous, iceServers });
+      const show = () => {
+        document.getElementById('state').textContent = session.state;
+        document.getElementById('people').textContent = session.peers().map((p) => p.name + (p.role === 'host' ? ' (host)' : '')).join(', ');
+      };
+      session.on('peers', show);
+      session.on('state', show);
+      session.on('error', (e) => (document.getElementById('state').textContent = e.message));
+      show();
+      createWhiteboard(picture, { session, adapter });
+      const link = `${location.href.split('#')[0]}#${session.inviteFragment()}`;
+      document.getElementById('link').value = role === 'host' ? link : '';
+      document.getElementById('start').hidden = true;
+    }
+
+    const token = new URLSearchParams(location.hash.slice(1)).get('collab');
+    if (token) {
+      begin('guest', token);
+    }
+    document.getElementById('start').onclick = () => begin('host');
+  </script>
+</body>
+</html>

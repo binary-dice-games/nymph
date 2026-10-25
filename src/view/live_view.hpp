@@ -36,6 +36,11 @@ enum class view_fit {
   width, ///< Lay out at the box width; height scaled to keep the aspect ratio.
   fill, ///< Lay out at the box size.
   scale, ///< Lay out at the source size; scale with CSS to the box width, up or down.
+  /// Lay out at the source size and never scale (the box may clip it): what
+  /// the web editor shows in a live session, so the owner's figure has the
+  /// same layout as the guests' viewers (spec/18_collaboration/DESIGN.md
+  /// section 6.4).
+  natural,
 };
 
 /// @brief Fixed choices of a live view.
@@ -231,6 +236,10 @@ class live_view {
 
   /// @brief Sets the box the view is shown in.
   void resize(view_size size);
+
+  /// @brief Changes how the figure fits the box (view_options::fit); the
+  ///        next frames lay it out again. The view state is kept.
+  void set_fit(view_fit fit);
 
   /// @brief Feeds one pointer event to the figure (pan, zoom, hover); the
   ///        next frames apply it.

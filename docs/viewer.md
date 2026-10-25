@@ -86,7 +86,8 @@ setInterval(() => viewer.setData({ revenue: latestValues() }), 250);
 | `setPng(bytes)` | Shows the source a nymph PNG carries; resolves `false` for a PNG without one (shown as a plain image). |
 | `setTheme(theme)`, `resetView()`, `resize(w, h, ratio)` | [Chart theme](themes.md) override (`''` for the source's; returns a promise, as the theme may fetch a font), back to the source's view, box size (the element and `createViewer` follow their container themselves). |
 | `themes()` | The chart themes: `[{id, name, description, base, dark, background, text_color, palette}]`, for a picker. |
-| `on(event, callback)` | `hover` (pick or `null`), `click` (pick), `view` (every plot, Gantt chart, 3D plot and diagram after a pan, zoom, rotation or legend click settles: ranges, rotation, zoom, hidden series), `error` (an update failed). Returns a function that removes the listener. |
+| `on(event, callback)` | `hover` (pick or `null`), `click` (pick), `view` (every plot, Gantt chart, 3D plot and diagram after a pan, zoom, rotation or legend click settles: ranges, rotation, zoom, hidden series), `figure` (`figureBox()` changed), `error` (an update failed). Returns a function that removes the listener. |
+| `figureBox()` | Where the figure's layout is drawn: `{left, top, width, height, scale}`, CSS pixels from the container's top-left corner, `scale` CSS pixels per layout pixel; `null` before the first frame. For overlays such as the [whiteboard](collaboration.md#embedding-the-packages). |
 | `rendered()` | Resolves when every update so far is on screen. |
 | `info()`, `state()`, `source()` | Rasterizer, description and size; geometry, hovered pick and plot views; the source on screen. |
 | `toYaml()` | The chart's YAML as it is on screen: the source with the current data and the user's zoom, pan, rotation and hidden series saved in its [`view` key](format.md#view). The source as written when the user changed nothing. |
@@ -170,7 +171,9 @@ editor.on('save', () => save(editor.toYaml()));
 | `tool(name, args, {origin})`, `toolDefinitions()` | The editor tools of `nymph mcp` (`editor_state`, `editor_set_fields`, `editor_add_element`, ...), run in the page; changes are attributed to `origin`. |
 | `beginGroup(label, origin)`, `endGroup()` | Several changes as one undo step. |
 | `importCsv(table, csv)`, `targetRect(path, field)`, `focus()`, `destroy()` | |
-| `change` {label, origin, version, modified}, `selection`, `save`, `csv-import` {table}, `csv-export` {table, fileName, csv}, `error` | Events: the page saves, picks and writes files; the module does no I/O. |
+| `figureBox()` | As the viewer's (under the tab bar, left of the panel), plus `area`, the part of the editor the figure is shown in; `null` while a data tab or a source that does not load hides the figure. |
+| `setFit('fill' \| 'natural')`, option `fit` | `fill` (default) lays the figure out at the size of its area; `natural` at the chart's own size, never scaled (the area clips it), as in a live session. |
+| `change` {label, origin, version, modified}, `selection`, `save`, `csv-import` {table}, `csv-export` {table, fileName, csv}, `figure`, `error` | Events: the page saves, picks and writes files; the module does no I/O. |
 
 ### Editing in the window
 

@@ -5,7 +5,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'wasm-unsafe-eval' https://accounts.google.com https://apis.google.com; connect-src 'self' https: http://127.0.0.1:* http://localhost:* ws://127.0.0.1:* ws://localhost:*; img-src 'self' data: blob: https:; style-src 'self' 'unsafe-inline' https://accounts.google.com; frame-src https://docs.google.com https://accounts.google.com https://drive.google.com; worker-src 'self'; font-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'wasm-unsafe-eval' https://accounts.google.com https://apis.google.com; connect-src 'self' https: wss: http://127.0.0.1:* http://localhost:* ws://127.0.0.1:* ws://localhost:*; img-src 'self' data: blob: https:; style-src 'self' 'unsafe-inline' https://accounts.google.com; frame-src https://docs.google.com https://accounts.google.com https://drive.google.com; worker-src 'self'; font-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'">
   <meta name="description" content="Open, view and edit nymph charts in your browser: plots, UML diagrams, flowcharts, Gantt and Sankey charts, UI mockups. Your files stay in this browser.">
   <meta name="color-scheme" content="light dark">
   <meta name="theme-color" content="#0f9f86">
@@ -39,6 +39,7 @@
         <button type="button" class="btn primary caret" id="btn-save-menu" aria-label="More ways to save" aria-haspopup="menu"></button>
       </div>
       <button type="button" class="btn ghost" id="btn-agents" aria-pressed="false" title="Agents working on this chart (Ctrl+Shift+A)" hidden>Agents</button>
+      <button type="button" class="btn ghost collapsible" id="btn-collab" aria-pressed="false" title="Share this chart live and draw on it together (Ctrl+Shift+L)" hidden>Collaborate</button>
       <button type="button" class="btn collapsible" id="btn-share" aria-haspopup="menu">Share</button>
     </div>
     <button type="button" class="btn icon" id="btn-more" aria-label="More" aria-haspopup="menu"></button>
@@ -74,7 +75,7 @@
         </section>
       </div>
       <footer class="foot">
-        <p><strong>Your files stay in this browser.</strong> Nothing is uploaded unless you save to Google Drive. No analytics.</p>
+        <p><strong>Your files stay in this browser.</strong> Nothing is uploaded unless you save to Google Drive or share a chart live. No analytics.</p>
         <p>nymph turns YAML into charts. Install the command-line tool, or use it from Claude, Cursor or Gemini:
           <a href="https://github.com/binary-dice-games/nymph#install" target="_blank" rel="noopener">install</a> ·
           <a href="https://github.com/binary-dice-games/nymph/blob/main/docs/format.md" target="_blank" rel="noopener">the format</a> ·
@@ -89,6 +90,7 @@
       <div class="workarea">
         <div class="stage" id="stage"></div>
         <aside class="dock" id="dock" hidden aria-label="Agents"></aside>
+        <aside class="dock" id="collab-dock" hidden aria-label="Live session"></aside>
       </div>
     </section>
   </main>

@@ -56,6 +56,10 @@ chart format itself.
   Use them only when the user asked for them.
 - If the user stopped you (a write fails with "the user stopped your
   changes"), ask them before changing the chart again.
+- The chart may be shared live (`collab_state`): other people then see
+  each of your changes as you make it. Starting or joining a session is
+  the user's, never yours. A guest's chart (`origin: "collab"`) is someone
+  else's: it cannot be changed from that tab.
 
 ## Errors
 

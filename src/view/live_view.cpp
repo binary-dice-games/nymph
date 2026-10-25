@@ -359,7 +359,7 @@ struct live_view::impl {
     view_geometry g;
     g.layout_width = static_cast<float>(fig->image.width);
     g.layout_height = static_cast<float>(fig->image.height);
-    if (size.width > 0.0f) {
+    if (size.width > 0.0f && options.fit != view_fit::natural) {
       const float to_box = size.width / g.layout_width;
       g.css_scale = options.fit == view_fit::scale ? to_box : std::min(1.0f, to_box);
     }
@@ -994,6 +994,17 @@ std::string live_view::theme_base() const {
 void live_view::resize(view_size size) {
   impl& m = *impl_;
   m.size = size;
+  m.overflowed = false;
+  m.update_geometry();
+  m.pending_frames = kFigureFrames;
+}
+
+void live_view::set_fit(view_fit fit) {
+  impl& m = *impl_;
+  if (m.options.fit == fit) {
+    return;
+  }
+  m.options.fit = fit;
   m.overflowed = false;
   m.update_geometry();
   m.pending_frames = kFigureFrames;

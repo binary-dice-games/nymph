@@ -78,6 +78,15 @@ make long links that some chat apps cut; the app warns and offers the file
 instead. A Drive link works for people the file is shared with.
 **Copy embed code** gives HTML that shows the chart live in any page.
 
+## Live collaboration
+
+**Collaborate** (`Ctrl+Shift+L`) shares the open chart live: people with
+the link see it as you edit it and draw on a whiteboard over it (cursors,
+ink, notes, stickers), browser to browser, with no server. The drawings
+are never saved in the file; **Download PNG with drawings** gives a
+picture with them. Details, privacy and what to do when someone cannot
+connect: [collaboration.md](collaboration.md).
+
 ## Installing and offline
 
 In Chrome or Edge, install the app from the address bar. Installed, it can
@@ -95,6 +104,7 @@ offers **Reload** (it never reloads by itself).
 | `Ctrl+Z`, `Ctrl+Y` | Undo, redo |
 | `Delete`, `Ctrl+D`, `Alt+↑/↓` | Delete, duplicate, move the selected element |
 | `Ctrl+Shift+A` | The Agents panel |
+| `Ctrl+Shift+L` | Share live, or the Live session panel |
 | `?` | All shortcuts |
 
 ## Agents
@@ -152,9 +162,12 @@ builds it, runs the web tests and deploys it on each push to `main` (Settings
 | `index.html`, `app/`, `app.css`, `sw.js`, `manifest.webmanifest` | The app |
 | `nymph-viewer.js`, `nymph-viewer-core.*`, `nymph-viewer.single.js`, `fonts/` | The viewer, at the paths embedders use |
 | `editor/` | The editor module (`nymph-editor.js`, about 1.2 MB gzip), loaded only to edit |
+| `collab/` | The live collaboration packages (`collab-session.js`, `collab-whiteboard.js`, a demo), loaded only for a session ([collaboration.md](collaboration.md)) |
 | `examples/`, `templates/`, `demo/`, `agent/` | Examples, templates, the demo page, agent docs |
 | `version.json`, `config.json` | The build's commit; the provider settings |
 
+`config.json`'s `collab` section has the trackers and STUN / TURN servers
+of live sessions ([collaboration.md](collaboration.md#hosting-and-setup)).
 `config.json`'s `agents` section lists the agent connectors offered:
 `NYMPH_AGENT_CONNECTORS` (CMake, default `webmcp;bridge`) sets it; an empty
 value hides the Agents button. A copy of the app on another address must
