@@ -720,6 +720,11 @@ struct live_view::impl {
     const auto outline = [&](int alpha) {
       return IM_COL32((outline_rgb >> 16) & 0xff, (outline_rgb >> 8) & 0xff, outline_rgb & 0xff, alpha);
     };
+    if (show_limits) {
+      // The image's limit, for every kind of chart: what the PNG will show.
+      ImGui::GetForegroundDrawList()->AddRect(
+          ImVec2(1.0f, 1.0f), ImVec2(geom.layout_width - 1.0f, geom.layout_height - 1.0f), IM_COL32(60, 60, 60, 200), 0.0f, 0, 2.0f);
+    }
     const ImU32 hover_color = outline(200);
     const ImU32 select_color = outline(255);
     if (io.MousePos.x > -FLT_MAX / 2) {
