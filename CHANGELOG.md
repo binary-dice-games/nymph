@@ -60,7 +60,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `nymph view --edit`: choosing a colour for a field that was automatic opens the colour picker at once.
 
 ### Fixed
-
+- Cursor plugin on Windows: the MCP server starts through `bin\nymph.cmd`, which finds Git for Windows' `sh` even when it is not on `PATH`.
 - `nymph view --edit`: after accepting a number with Enter, the next number field no longer ends its edit at the first key.
 - `nymph view --edit`: the image is shown at its own size on a canvas, as in the web editor; changing the image width or height no longer resizes the window.
 - Editor: number fields use ImGui's own drag-or-type control; click one to type a value, repeatedly, without it losing the keyboard.

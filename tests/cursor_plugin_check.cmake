@@ -35,13 +35,14 @@ endforeach()
 # The MCP entry runs the launcher through the plugin root, with "mcp".
 file(READ "${plugin}/mcp.json" mcp)
 string(JSON args GET "${mcp}" mcpServers nymph args)
-string(JSON launcher GET "${mcp}" mcpServers nymph args 0)
-string(JSON last GET "${mcp}" mcpServers nymph args 1)
-if(NOT launcher STREQUAL "\${CURSOR_PLUGIN_ROOT}/bin/nymph" OR NOT last STREQUAL "mcp")
-  fail("mcp.json args are ${args}")
+string(JSON launcher GET "${mcp}" mcpServers nymph command)
+string(JSON first GET "${mcp}" mcpServers nymph args 0)
+if(NOT launcher STREQUAL "\${CURSOR_PLUGIN_ROOT}/bin/nymph" OR NOT first STREQUAL "mcp")
+  fail("mcp.json command is ${launcher}, args ${args}")
 endif()
-if(NOT EXISTS "${plugin}/bin/nymph")
-  fail("bin/nymph is missing")
+# No `sh` command: Windows has none on PATH. bin/nymph.cmd is its entry.
+if(NOT EXISTS "${plugin}/bin/nymph" OR NOT EXISTS "${plugin}/bin/nymph.cmd")
+  fail("bin/nymph or bin/nymph.cmd is missing")
 endif()
 
 # The marketplace lists the plugin by a directory that holds its manifest.
