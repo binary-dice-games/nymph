@@ -385,7 +385,7 @@ EMSCRIPTEN_KEEPALIVE int nymph_editor_open_png(const uint8_t* bytes, int size) {
     }
     editor& e = get();
     e.host.make_current();
-    open_source(e, *source, true, false);
+    open_source(e, *source, true);
     return static_cast<int>(kOk);
   });
 }
