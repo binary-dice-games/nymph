@@ -63,6 +63,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 - Web app: **PNG with drawings** includes drawings made outside the chart image, instead of cutting them off.
 - Cursor plugin on Windows: the MCP server starts through `bin\nymph.cmd`, which finds Git for Windows' `sh` even when it is not on `PATH`.
+- Web app: the live session shows the name you entered when joining instead of "submit".
 - `nymph view --edit`: after accepting a number with Enter, the next number field no longer ends its edit at the first key.
 - `nymph view --edit`: the image is shown at its own size on a canvas, as in the web editor; changing the image width or height no longer resizes the window.
 - Editor: number fields use ImGui's own drag-or-type control; click one to type a value, repeatedly, without it losing the keyboard.
