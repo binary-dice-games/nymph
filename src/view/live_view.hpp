@@ -314,6 +314,10 @@ class live_view {
   ///        Off (the default), nothing differs from a plain view: draw data
   ///        and picks are the same.
   void set_edit_mode(bool on);
+  /// @brief Outlines the image's limit in diagrams and draws what lies past
+  ///        it, dimmed (an editor; off by default so edit mode draws what
+  ///        the PNG shows).
+  void set_show_limits(bool on);
   bool edit_mode() const;
 
   /// @brief The targets under (`x`, `y`), CSS pixels, best first: the

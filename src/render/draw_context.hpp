@@ -286,6 +286,15 @@ class draw_context {
   void set_edit_mode(bool on) {
     edit_mode_ = on;
   }
+  /// @brief Whether a diagram outlines the image's limit and shows what lies
+  ///        outside it (ImUmlDiagramFlags_ShowOutside). Off (the default):
+  ///        edit mode draws what the PNG shows.
+  bool show_limits() const {
+    return show_limits_;
+  }
+  void set_show_limits(bool on) {
+    show_limits_ = on;
+  }
 
   /// @brief Notes that `area` (logical pixels) shows `n`'s text field
   ///        `field`, or `n` as a whole when `field` is empty; the editor
@@ -473,6 +482,7 @@ class draw_context {
   std::vector<ImGuiID> rehidden_;
   bool tooltips_ = true;
   bool edit_mode_ = false;
+  bool show_limits_ = false;
   std::vector<edit_record> targets_;
   std::vector<item_range> item_ranges_;
   std::optional<pick_candidate> candidate_;
