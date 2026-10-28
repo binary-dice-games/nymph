@@ -1,9 +1,9 @@
 // MIT License © 2026 Binary Dice Games
 /// @file number_box.hpp
-/// @brief The editor's widget for a number: a box showing the value that
-///        is typed into after a click, or changed by dragging the mouse
-///        sideways over it (spec/08_view_editor/DESIGN.md section 3, field
-///        widgets). Pure ImGui (public API only), so it runs headless.
+/// @brief The editor's widget for a number: ImGui's own `DragScalar`, set up
+///        from a field's limits (spec/08_view_editor/DESIGN.md section 3,
+///        field widgets). Drag sideways to change the value; a click
+///        without dragging, or Ctrl+click, types it.
 #pragma once
 
 #include <imgui.h>
@@ -12,7 +12,7 @@
 
 namespace bdg::nymph {
 
-/// @brief How a number box reads, steps and limits its value.
+/// @brief How a number box steps and limits its value.
 struct number_box_options {
   bool integer = false; ///< Whole numbers only.
   std::optional<double> min; ///< Lowest value; none when unset.
@@ -20,8 +20,8 @@ struct number_box_options {
   /// Change per pixel dragged; 0 picks one from the limits or the value
   /// (number_box::drag_step()).
   double step = 0.0;
-  /// Shown instead of 0 when set ("auto" for a size that 0 inherits); the
-  /// text field then starts empty, and an empty text changes nothing.
+  /// Shown instead of 0 when set ("auto" for a size that 0 inherits); a drag
+  /// from it starts at `zero_start`, and typing replaces the text.
   const char* zero_text = nullptr;
   /// With zero_text: the value a drag from 0 starts at (the inherited one).
   double zero_start = 0.0;
@@ -34,12 +34,10 @@ enum class number_box_change {
   typed, ///< A typed value was accepted (Enter, Tab or a click elsewhere).
 };
 
-/// @brief A number box. One object serves any number of boxes (one is typed
-///        into at a time); keep it alive across frames.
+/// @brief A number box over `ImGui::DragScalar`. One object serves any number
+///        of boxes; keep it alive across frames.
 ///
-/// Click (press and release without moving) to type a value: Enter, Tab or
-/// a click elsewhere accepts it, Escape cancels it. Drag sideways to change
-/// the value; Shift drags ten times finer, Ctrl ten times coarser.
+/// Shift drags ten times finer, Alt ten times coarser (ImGui's own keys).
 /// Values outside the limits are clamped.
 class number_box {
  public:
@@ -56,32 +54,17 @@ class number_box {
 
   /// @brief The change per pixel a drag starting at `start` makes: a power
   ///        of ten near 1/200 of the limits' span (when the span is known
-  ///        and below 1e5) or of the value's size, at least 0.1 for whole
-  ///        numbers.
+  ///        and below 1e5) or of the value's size, at most one unit for a
+  ///        bounded range and at least 0.1 for whole numbers.
   static double drag_step(double start, const number_box_options& options);
 
   /// @brief `value` clamped to the limits, whole for integers, and rounded
   ///        to a multiple of `step` when `step` > 0.
   static double tidy(double value, const number_box_options& options, double step = 0.0);
 
-  /// @brief The value as the box shows it: the shortest decimal for a
-  ///        number, no fraction for an integer.
-  static std::string format(double value, bool integer);
-
-  /// @brief Reads a typed value ("12", " -1.5e3 ", "2,5" with a comma);
-  ///        nullopt for anything else.
-  static std::optional<double> parse(const std::string& text);
-
  private:
   ImGuiID typing_id_ = 0; ///< The box being typed into.
   int typing_frame_ = 0; ///< The last frame it was drawn in.
-  int typing_start_ = 0; ///< The frame typing began in.
-  bool focus_ = false; ///< Give the keyboard to the typed box this frame.
-  char buffer_[64] = {}; ///< What is typed.
-  ImGuiID drag_id_ = 0; ///< The box being pressed or dragged.
-  bool dragged_ = false; ///< The press moved past the drag threshold.
-  double drag_start_ = 0.0; ///< The value when the press began.
-  double drag_pixels_ = 0.0; ///< Pixels moved since, scaled by the modifiers.
 };
 
 } // namespace bdg::nymph

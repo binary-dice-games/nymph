@@ -62,6 +62,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Editor: number fields use ImGui's own drag-or-type control; click one to type a value, repeatedly, without it losing the keyboard.
+
 - Web editor: choosing a font that is fetched on demand (e.g. Fira Sans Italic) no longer fails with "font is not embedded in this build".
 - Web editor: right-click opens the element menu.
 - Editor panel: Elements, All fields and the log each scroll on their own, with draggable dividers between them.
