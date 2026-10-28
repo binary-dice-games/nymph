@@ -85,6 +85,11 @@ export class Collab {
     return !!this.session && this.session.state !== 'ended';
   }
 
+  /** This tab hosts a running session (opening another chart keeps it). */
+  get hosting() {
+    return this.role === 'host' && this.active && !this.isGuestDocument;
+  }
+
   /** The guest's document is from a session (open or ended). */
   get isGuestDocument() {
     return this.h.app.doc?.origin.kind === 'collab';
@@ -629,6 +634,20 @@ export class Collab {
         writeJson('session', RESUME_KEY, null);
       }
     }
+  }
+
+  /**
+   * Host: another chart was opened. The session stays; guests get the new
+   * chart, and the drawings (which belong to the old chart) are cleared.
+   */
+  documentSwitched(doc) {
+    this.docId = doc.id;
+    this.version = 0;
+    this.lastSent = '';
+    this.wb?.clear();
+    this.sendDoc(null);
+    this.saveResume();
+    this.h.updateTitle();
   }
 
   /** A guest's reload: rejoin the session this tab was in. */

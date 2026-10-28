@@ -45,6 +45,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `nymph view --edit` is an MCP server for AI agents: `nymph mcp` has `editor_*` tools that read and change the chart open in the editor (elements, selection, tables, an image of the view); `--no-mcp` turns it off.
 
 ### Changed
+- Web app: the owner of a live session can open another chart (Open, Recent, the panel's **Switch chart…**) without ending the session; guests follow to the new chart and the drawings are cleared.
 
 - `nymph view --edit` and the web editor: an edit made while an agent's change is in progress is no longer undone together with it.
 - `nymph view --theme`, the viewer element's `theme` attribute and `setTheme()` accept every chart theme, not only `light`, `dark` and `classic`.
