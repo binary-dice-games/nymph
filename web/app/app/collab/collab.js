@@ -221,11 +221,10 @@ export class Collab {
     const { el, dialog, dialogButtons } = this.h.ui;
     const name = await dialog(title, (body, close) => {
       const input = el('input', { type: 'text', maxlength: '40', placeholder: 'Your name', autofocus: true, 'aria-label': 'Your name', autocomplete: 'nickname' });
-      const form = el('form', {}, el('p', {}, 'Others in the session see this name next to your cursor.'), input, dialogButtons(close, [{ label: 'Cancel', value: undefined }, { label: 'Continue', value: 'submit', kind: 'primary' }]));
+      const buttons = dialogButtons(close, [{ label: 'Cancel', value: undefined }]);
+      buttons.append(el('button', { type: 'submit', class: 'btn primary' }, 'Continue'));
+      const form = el('form', {}, el('p', {}, 'Others in the session see this name next to your cursor.'), input, buttons);
       form.onsubmit = (e) => (e.preventDefault(), close(input.value.trim()));
-      const ok = form.querySelector('.primary');
-      ok.type = 'submit';
-      ok.onclick = null;
       body.append(form);
     });
     if (!name) {
