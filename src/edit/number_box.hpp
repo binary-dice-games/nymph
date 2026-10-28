@@ -75,6 +75,7 @@ class number_box {
  private:
   ImGuiID typing_id_ = 0; ///< The box being typed into.
   int typing_frame_ = 0; ///< The last frame it was drawn in.
+  int typing_start_ = 0; ///< The frame typing began in.
   bool focus_ = false; ///< Give the keyboard to the typed box this frame.
   char buffer_[64] = {}; ///< What is typed.
   ImGuiID drag_id_ = 0; ///< The box being pressed or dragged.

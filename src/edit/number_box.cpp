@@ -83,7 +83,10 @@ number_box_change number_box::draw(const char* id, double& value, const number_b
     typing_id_ = 0; // its box was not drawn last frame: gone
   }
 
-  if (typing_id_ == me) {
+  // The text field, once a click asked for typing: a text field until it
+  // lets go of the keyboard. Drawn at `at`.
+  const auto type_into = [&](const ImVec2& at) {
+    ImGui::SetCursorScreenPos(at);
     typing_frame_ = ImGui::GetFrameCount();
     // Typing: a text field until it lets go of the keyboard.
     if (focus_) {
@@ -93,7 +96,9 @@ number_box_change number_box::draw(const char* id, double& value, const number_b
     ImGui::SetNextItemWidth(w);
     ImGui::InputText(
         "##box", buffer_, sizeof(buffer_), ImGuiInputTextFlags_AutoSelectAll | ImGuiInputTextFlags_CharsScientific);
-    if (ImGui::IsItemDeactivated()) {
+    // Never stuck: a field that did not take the keyboard ends typing.
+    const bool lost = !ImGui::IsItemActive() && ImGui::GetFrameCount() > typing_start_ + 2;
+    if (ImGui::IsItemDeactivated() || lost) {
       typing_id_ = 0;
       if (!ImGui::IsKeyPressed(ImGuiKey_Escape, false)) {
         if (const std::optional<double> typed = parse(buffer_)) {
@@ -105,6 +110,10 @@ number_box_change number_box::draw(const char* id, double& value, const number_b
         }
       }
     }
+  };
+
+  if (typing_id_ == me) {
+    type_into(ImGui::GetCursorScreenPos());
     ImGui::PopID();
     return change;
   }
@@ -151,6 +160,7 @@ number_box_change number_box::draw(const char* id, double& value, const number_b
       focus_ = true;
       const bool blank = value == 0.0 && options.zero_text != nullptr;
       std::snprintf(buffer_, sizeof(buffer_), "%s", blank ? "" : format(value, options.integer).c_str());
+      typing_start_ = ImGui::GetFrameCount();
     }
   }
 

@@ -2852,8 +2852,8 @@ void EndDiagram(int kind) {
     }
   }
   dl->PopClipRect();
-  if (d->Flags & ImUmlDiagramFlags_ShowOutside) {
-    // The image's limit, always visible while editing, so the user sees
+  if (outside) {
+    // The diagram's limit while content passes it (the editor outlines the image's own) while editing, so the user sees
     // whether the diagram fits inside it.
     ImVec4 edge = ImGui::GetStyle().Colors[ImGuiCol_Text];
     edge.w = 0.8f;
