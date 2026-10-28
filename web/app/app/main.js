@@ -285,7 +285,8 @@ function updateAddress() {
 
 /** Asks to save or discard unsaved changes, and to end a live session; false to stay. */
 async function confirmLeave({ collab = false } = {}) {
-  if (!collab && app.doc && !(await app.collab.stop({ ask: true }))) {
+  // The host switching charts keeps the live session (see Collab.documentSwitched).
+  if (!collab && app.doc && !app.collab.hosting && !(await app.collab.stop({ ask: true }))) {
     return false;
   }
   if (!app.doc?.modified || app.doc.origin.kind === 'collab') {
@@ -369,7 +370,11 @@ async function openSource(source, name, origin, opts = {}) {
   updateAddress();
   if (origin.kind !== 'collab') {
     remember(doc);
-    app.collab.documentOpened(doc); // resumes this tab's live session after a reload
+    if (app.collab.hosting) {
+      app.collab.documentSwitched(doc); // the session follows the host to the new chart
+    } else {
+      app.collab.documentOpened(doc); // resumes this tab's live session after a reload
+    }
   }
   return true;
 }

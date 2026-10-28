@@ -255,6 +255,9 @@ export class PeoplePanel {
         { class: 'row-buttons' },
         el('button', { type: 'button', class: 'btn small', onclick: () => this.h.act('collab_download_png') }, el('span', { html: icons.image, style: 'display:inline-flex' }), 'PNG with drawings'),
         this.c.role === 'host' && this.c.active
+          ? el('button', { type: 'button', class: 'btn small ghost', title: 'Open another chart; the session and its people stay', onclick: () => this.h.act('app_open_file') }, 'Switch chart…')
+          : null,
+        this.c.role === 'host' && this.c.active
           ? el(
               'button',
               {
