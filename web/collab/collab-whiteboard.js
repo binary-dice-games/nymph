@@ -666,6 +666,12 @@ export class Whiteboard {
     return new XMLSerializer().serializeToString(svg);
   }
 
+  /** The drawings' bounds in content units ({x, y, width, height}), or null when there are none. */
+  contentBounds() {
+    const items = this.model.live();
+    return items.length ? this.bounds(items) : null;
+  }
+
   /** "change" ({source: 'local' | 'remote' | 'load'}), "tool" (name). Returns an unsubscribe function. */
   on(event, cb) {
     if (!this.listeners.has(event)) {

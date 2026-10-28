@@ -75,16 +75,23 @@ function loadImage(url) {
 /**
  * The chart PNG with the drawings over it.
  * @param {Uint8Array} chartPng the chart as toPng() gives it (the whole figure)
- * @param {string} svg the whiteboard's toSvg() over the figure's layout box
+ * @param {string} svg the whiteboard's toSvg() over `box`
+ * @param {{x: number, y: number, width: number, height: number}} box the
+ *        area shown, in layout pixels: the figure (0, 0, size) and any
+ *        drawings outside it
+ * @param {{width: number}} size the figure's layout size (the PNG's scale)
  * @returns {Promise<Uint8Array>} a PNG that carries the chart's YAML
  */
-export async function pngWithDrawings(chartPng, svg) {
+export async function pngWithDrawings(chartPng, svg, box, size) {
   const bitmap = await createImageBitmap(new Blob([chartPng], { type: 'image/png' }));
+  const scale = bitmap.width / size.width;
   const canvas = document.createElement('canvas');
-  canvas.width = bitmap.width;
-  canvas.height = bitmap.height;
+  canvas.width = Math.max(1, Math.ceil(box.width * scale));
+  canvas.height = Math.max(1, Math.ceil(box.height * scale));
   const ctx = canvas.getContext('2d');
-  ctx.drawImage(bitmap, 0, 0);
+  ctx.fillStyle = '#ffffff';
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  ctx.drawImage(bitmap, Math.round(-box.x * scale), Math.round(-box.y * scale));
   const url = URL.createObjectURL(new Blob([svg], { type: 'image/svg+xml' }));
   try {
     const img = await loadImage(url);
