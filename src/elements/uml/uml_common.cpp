@@ -462,7 +462,7 @@ ImUmlDiagramInfo diagram_class::submit(const node& n, draw_context& dc, const re
     // A live view pans and zooms the diagram (spec/04_web_viewer).
     flags = dc.interactive() ? ImUmlDiagramFlags_Interactive : ImUmlDiagramFlags_None;
     if (dc.edit_mode()) {
-      flags |= ImUmlDiagramFlags_CaptureText | ImUmlDiagramFlags_CaptureItems;
+      flags |= ImUmlDiagramFlags_CaptureText | ImUmlDiagramFlags_CaptureItems | ImUmlDiagramFlags_ShowOutside;
       dc.clear_item_ranges(); // what the measuring passes recorded no longer applies
     }
     // The saved view (the `view` key).

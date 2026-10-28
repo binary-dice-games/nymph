@@ -818,34 +818,17 @@ inspector_events inspector::draw(editor_model& model, const std::vector<edit_ele
   }
   ImGui::Separator();
 
-  // The error panel at the bottom takes the height of its text, at most
-  // 40% of the panel; the rest scrolls above it.
+  // Three regions, each with its own scrollbar and a divider between
+  // neighbours: the elements (fixed height, dragged), the fields (the rest)
+  // and the log, which holds the last error (the height of its text, at
+  // most 40% of the panel, until it is dragged).
   const ImGuiStyle& style = ImGui::GetStyle();
-  const auto error_height = [&] {
-    if (error_.empty()) {
-      return 0.0f;
-    }
-    // The child's border and padding, and room for a scrollbar, narrow the text.
-    const float wrap = ImGui::GetContentRegionAvail().x - style.WindowPadding.x * 2.0f - style.ScrollbarSize;
-    const float text = ImGui::CalcTextSize(error_.c_str(), nullptr, false, wrap).y;
-    const float frame = style.WindowPadding.y * 2.0f + style.ChildBorderSize * 2.0f + style.ItemSpacing.y;
-    return std::min(text + frame, ImGui::GetContentRegionAvail().y * 0.4f);
-  };
-  const float reserved = error_height();
-  ImGui::BeginChild("##body", ImVec2(0, reserved > 0.0f ? -(reserved + style.ItemSpacing.y) : 0.0f));
-
-  // The elements.
-  if (section_header("Elements", ImGuiTreeNodeFlags_DefaultOpen)) {
-    ImGui::BeginChild("##elements", ImVec2(0, elements_height_), ImGuiChildFlags_Borders);
-    draw_tree(model, tree, events);
-    ImGui::EndChild();
-    // The divider under the tree: drag it to resize the tree.
-    ImGui::InvisibleButton("##divider", ImVec2(-FLT_MIN, 6.0f));
+  constexpr float kMinRegion = 40.0f;
+  const auto divider = [](const char* id) {
+    // Returns how far the divider was dragged down this frame.
+    ImGui::InvisibleButton(id, ImVec2(-FLT_MIN, 6.0f));
     if (ImGui::IsItemHovered() || ImGui::IsItemActive()) {
       ImGui::SetMouseCursor(ImGuiMouseCursor_ResizeNS);
-    }
-    if (ImGui::IsItemActive()) {
-      elements_height_ = std::clamp(elements_height_ + ImGui::GetIO().MouseDelta.y, 40.0f, 4000.0f);
     }
     const ImVec2 lo = ImGui::GetItemRectMin();
     const ImVec2 hi = ImGui::GetItemRectMax();
@@ -855,9 +838,35 @@ inspector_events inspector::draw(editor_model& model, const std::vector<edit_ele
         ImVec2(hi.x, mid),
         ImGui::GetColorU32(ImGui::IsItemHovered() || ImGui::IsItemActive() ? ImGuiCol_SeparatorActive : ImGuiCol_Separator),
         2.0f);
+    return ImGui::IsItemActive() ? ImGui::GetIO().MouseDelta.y : 0.0f;
+  };
+  const float total = ImGui::GetContentRegionAvail().y;
+  float log_height = 0.0f; // with its divider
+  if (!error_.empty()) {
+    // The child's border and padding, and room for a scrollbar, narrow the text.
+    const float wrap = ImGui::GetContentRegionAvail().x - style.WindowPadding.x * 2.0f - style.ScrollbarSize;
+    const float text = ImGui::CalcTextSize(error_.c_str(), nullptr, false, wrap).y;
+    const float frame = style.WindowPadding.y * 2.0f + style.ChildBorderSize * 2.0f + style.ItemSpacing.y;
+    const float wanted = log_height_ > 0.0f ? log_height_ : std::min(text + frame, total * 0.4f);
+    log_height = std::clamp(wanted, kMinRegion, std::max(kMinRegion, total * 0.8f));
+  }
+  const float log_reserved = log_height > 0.0f ? log_height + 6.0f + style.ItemSpacing.y * 3.0f : 0.0f;
+
+  // The elements.
+  if (section_header("Elements", ImGuiTreeNodeFlags_DefaultOpen)) {
+    // Leaves room for the divider, the fields and the log.
+    const float room = ImGui::GetContentRegionAvail().y - log_reserved - 6.0f - style.ItemSpacing.y * 3.0f;
+    const float shown = std::clamp(elements_height_, kMinRegion, std::max(kMinRegion, room - kMinRegion * 2.0f));
+    ImGui::BeginChild("##elements", ImVec2(0, shown), ImGuiChildFlags_Borders);
+    draw_tree(model, tree, events);
+    ImGui::EndChild();
+    if (const float drag = divider("##divider"); drag != 0.0f) {
+      elements_height_ = std::clamp(shown + drag, kMinRegion, 4000.0f);
+    }
   }
 
-  // The selection.
+  // The fields of the selection, scrolling on their own.
+  ImGui::BeginChild("##fields", ImVec2(0, log_reserved > 0.0f ? -log_reserved : 0.0f));
   if (!model.selection()) {
     ImGui::PushStyleColor(ImGuiCol_Text, ImGui::GetStyle().Colors[ImGuiCol_TextDisabled]);
     ImGui::TextWrapped("Click a text or an element in the figure, or choose one above.");
@@ -903,9 +912,12 @@ inspector_events inspector::draw(editor_model& model, const std::vector<edit_ele
     error_.clear();
   }
 
-  // The error panel, below the fields.
-  if (!error_.empty()) {
-    ImGui::BeginChild("##error", ImVec2(0, 0), ImGuiChildFlags_Borders);
+  // The log, below the fields; its divider moves up and down.
+  if (log_height > 0.0f && !error_.empty()) {
+    if (const float drag = divider("##log_divider"); drag != 0.0f) {
+      log_height_ = std::clamp(log_height - drag, kMinRegion, total * 0.8f);
+    }
+    ImGui::BeginChild("##error", ImVec2(0, log_height), ImGuiChildFlags_Borders);
     ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.85f, 0.2f, 0.2f, 1.0f));
     ImGui::TextWrapped("%s", error_.c_str());
     ImGui::PopStyleColor();

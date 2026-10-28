@@ -289,6 +289,10 @@ class editor_workspace {
   ///        the back buffer as render() would.
   std::vector<uint8_t> capture_figure(int max_width, int& width, int& height, double now_seconds);
 
+  /// @brief Where the layout is drawn inside the figure box (CSS px): (0, 0)
+  ///        when it fills the box, else centred (view_fit::natural).
+  ImVec2 figure_offset() const;
+
  private:
   bool divider(pointer_event::kind type, float x, int button);
   void figure_right_click(pointer_event::kind type, float x, float y, int button, const layout_box& figure);

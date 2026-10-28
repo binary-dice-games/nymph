@@ -439,7 +439,7 @@ export class NymphEditor {
       dx = c.left - box.left;
       dy = c.top - box.top;
     }
-    const area = f.areaWidth ? { left: dx + f.x, top: dy + f.y, width: f.areaWidth, height: f.areaHeight } : null;
+    const area = f.areaWidth ? { left: dx + (f.areaX ?? f.x), top: dy + (f.areaY ?? f.y), width: f.areaWidth, height: f.areaHeight } : null;
     return { left: dx + f.x, top: dy + f.y, width: f.width, height: f.height, scale: f.scale, area };
   }
 
@@ -588,8 +588,10 @@ export class NymphEditor {
       const r = canvas.getBoundingClientRect();
       return { x: e.clientX - r.left, y: e.clientY - r.top };
     };
+    // DOM buttons: 0 primary, 1 middle, 2 secondary; ImGui: 0, 2, 1.
+    const imguiButton = (button) => [0, 2, 1][button] ?? 0;
     const pointer = (type, p, button = 0, wx = 0, wy = 0, touch = 0) => {
-      this.m._nymph_editor_pointer(POINTER[type], p.x, p.y, button, wx, wy, touch);
+      this.m._nymph_editor_pointer(POINTER[type], p.x, p.y, imguiButton(button), wx, wy, touch);
       this.schedule();
     };
     const add = (target, name, fn, opts) => {

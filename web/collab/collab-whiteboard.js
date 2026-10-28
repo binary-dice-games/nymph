@@ -928,10 +928,13 @@ export class Whiteboard {
     }
     this.board.style.clipPath = path;
     this.cursorLayer.style.clipPath = path;
-    // The toolbar sits at the content's top-left corner, inside the box.
-    this.toolbarBox.style.left = `${Math.max(8, Math.round(t.e) + 8)}px`;
-    this.toolbarBox.style.top = `${Math.max(8, Math.round(t.f) + 8)}px`;
-    this.popover.style.left = `${Math.max(8, Math.round(t.e) + 8) + 44}px`;
+    // The toolbar sits at the side of the area the chart is shown in (the
+    // window's edge, below an editor's tab bar), never over the chart.
+    const left = Math.round(clip ? Math.max(0, clip.x) : 0) + 8;
+    const top = Math.round(clip ? Math.max(0, clip.y) : 0) + 8;
+    this.toolbarBox.style.left = `${left}px`;
+    this.toolbarBox.style.top = `${top}px`;
+    this.popover.style.left = `${left + 44}px`;
     for (const c of this.cursors.values()) {
       this.moveCursor(c);
     }

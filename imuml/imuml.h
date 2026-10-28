@@ -120,6 +120,10 @@ enum ImUmlDiagramFlags_ {
   /// which item a click on a shape or an arrow belongs to. Drawing is
   /// unchanged.
   ImUmlDiagramFlags_CaptureItems = 1 << 5,
+  /// For an editor: content panned or zoomed beyond the diagram's rectangle
+  /// is drawn (dimmed) instead of clipped, and the rectangle's limit is
+  /// always outlined, so the user sees what the image leaves out.
+  ImUmlDiagramFlags_ShowOutside = 1 << 6,
 };
 
 /// What an ImUmlTextRun belongs to.

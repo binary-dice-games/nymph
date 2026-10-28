@@ -133,6 +133,7 @@ class inspector {
   char info_buffer_[8192] = {}; ///< Its text.
   float info_split_ = 0.5f; ///< Share of the dialog's height the description box takes.
   float elements_height_ = 220.0f; ///< Height of the elements panel, dragged by the divider.
+  float log_height_ = 0.0f;        ///< Height of the log panel once dragged; 0: fits its text.
   std::string error_;
   std::optional<pending_text> pending_;
   pending_text last_attempt_; ///< The text commit_pending() tried last.

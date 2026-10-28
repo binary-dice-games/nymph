@@ -177,7 +177,7 @@ function setUpCollab() {
     updateTitle: () => updateTitle(),
     // The owner's editor shows the chart's own layout while sharing
     // (spec/18_collaboration/DESIGN.md section 6.4).
-    sessionChanged: () => app.editor?.setFit(app.collab.role === 'host' && app.collab.active ? 'natural' : 'fill'),
+    sessionChanged: () => app.editor?.setFit('natural'),
   });
 }
 
@@ -605,8 +605,9 @@ async function showEditor(source, { sourceLine } = {}) {
         fileName: app.doc.name,
         theme: app.chartTheme,
         appearance: pageAppearance(),
-        // A live session: the chart's own layout, as the guests see it.
-        fit: app.collab?.role === 'host' && app.collab.active ? 'natural' : 'fill',
+        // The chart's own size, as View and the guests of a live session see
+        // it: the image's limits are then the figure's edges.
+        fit: 'natural',
         wasmUrl: wasmUrl('editor/nymph-editor-core.wasm'),
         fontBaseUrl: new URL('fonts/', appBase()).href,
       }),

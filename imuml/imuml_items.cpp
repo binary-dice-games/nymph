@@ -2781,7 +2781,21 @@ void EndDiagram(int kind) {
   }
   info.Zoom = zoom;
   ImDrawList* dl = ImGui::GetWindowDrawList();
-  dl->PushClipRect(bb.Min, bb.Max, true);
+  // The origin of the content, and whether it leaves the rectangle (an
+  // editor shows what is outside, ImUmlDiagramFlags_ShowOutside).
+  const ImVec2 fitted = origin_at(zoom);
+  const ImVec2 content_min(ImFloor(fitted.x + pan.x), ImFloor(fitted.y + pan.y));
+  const ImVec2 content_max = content_min + content * zoom;
+  const bool outside = (d->Flags & ImUmlDiagramFlags_ShowOutside) != 0 &&
+      (content_min.x < bb.Min.x - 0.5f || content_min.y < bb.Min.y + title_h - 0.5f || content_max.x > bb.Max.x + 0.5f ||
+       content_max.y > bb.Max.y + 0.5f);
+  const ImVec2 window_min = dl->GetClipRectMin();
+  const ImVec2 window_max = dl->GetClipRectMax();
+  if (outside) {
+    dl->PushClipRect(window_min, window_max, false);
+  } else {
+    dl->PushClipRect(bb.Min, bb.Max, true);
+  }
   GImUml->CaptureText = (d->Flags & ImUmlDiagramFlags_CaptureText) != 0;
   GImUml->CaptureItems = (d->Flags & ImUmlDiagramFlags_CaptureItems) != 0;
   GImUml->Areas.resize(0);
@@ -2796,7 +2810,7 @@ void EndDiagram(int kind) {
   // Content panned or zoomed away from the fit passes under the title, not
   // over it (at the fit it stays below it: images are unchanged).
   const bool moved = title_h > 0.0f && (pan.x != 0.0f || pan.y != 0.0f || d->ViewZoom != 1.0f);
-  if (moved) {
+  if (moved && !outside) {
     dl->PushClipRect(ImVec2(bb.Min.x, bb.Min.y + title_h), bb.Max, true);
   }
   Painter pt;
@@ -2804,8 +2818,7 @@ void EndDiagram(int kind) {
   pt.D = d;
   pt.Zoom = zoom;
   pt.LW = ImMax(1.0f, d->Style.LineWeight * zoom);
-  const ImVec2 fitted = origin_at(zoom);
-  pt.Origin = ImVec2(ImFloor(fitted.x + pan.x), ImFloor(fitted.y + pan.y));
+  pt.Origin = content_min;
   if (kind == ImUmlDiagramKind_Sequence) {
     DrawSequenceDiagram(pt);
   } else if (kind == ImUmlDiagramKind_Tree) {
@@ -2816,10 +2829,40 @@ void EndDiagram(int kind) {
       FindHovered(pt, edge_count, ImGui::GetIO().MousePos, &info);
     }
   }
-  if (moved) {
+  if (moved && !outside) {
     dl->PopClipRect();
   }
+  if (outside) {
+    // Dim what the image leaves out and outline its limit; the title band
+    // goes back over the content that passed under it.
+    ImVec4 veil = ImGui::GetStyle().Colors[ImGuiCol_WindowBg];
+    veil.w = 0.65f;
+    const ImU32 shade = ImGui::ColorConvertFloat4ToU32(veil);
+    dl->AddRectFilled(window_min, ImVec2(window_max.x, bb.Min.y), shade);
+    dl->AddRectFilled(ImVec2(window_min.x, bb.Max.y), window_max, shade);
+    dl->AddRectFilled(ImVec2(window_min.x, bb.Min.y), ImVec2(bb.Min.x, bb.Max.y), shade);
+    dl->AddRectFilled(ImVec2(bb.Max.x, bb.Min.y), ImVec2(window_max.x, bb.Max.y), shade);
+    if (title_h > 0.0f && moved) {
+      ImVec4 opaque = ImGui::GetStyle().Colors[ImGuiCol_WindowBg];
+      opaque.w = 1.0f;
+      dl->AddRectFilled(bb.Min, ImVec2(bb.Max.x, bb.Min.y + title_h), ImGui::ColorConvertFloat4ToU32(opaque));
+      GImUml->CaptureText = false; // the title was recorded when first drawn
+      TextCentered(dl, tts, 1.0f, (bb.Min.x + bb.Max.x) * 0.5f, bb.Min.y + 2.0f, StrBegin(d, d->Title),
+                   StrEnd(d, d->Title), tts.Col);
+    }
+  }
   dl->PopClipRect();
+  if (d->Flags & ImUmlDiagramFlags_ShowOutside) {
+    // The image's limit, always visible while editing, so the user sees
+    // whether the diagram fits inside it.
+    ImVec4 edge = ImGui::GetStyle().Colors[ImGuiCol_Text];
+    edge.w = 0.8f;
+    // Just inside the rectangle: a root diagram's rectangle is the edge of
+    // the drawing surface, which clips anything outside it.
+    dl->PushClipRect(window_min, window_max, false);
+    dl->AddRect(bb.Min + ImVec2(1, 1), bb.Max - ImVec2(1, 1), ImGui::ColorConvertFloat4ToU32(edge), 0.0f, 0, 2.0f);
+    dl->PopClipRect();
+  }
   d->Edges.resize(edge_count);
   EndRuns(&info);
 }

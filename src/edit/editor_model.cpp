@@ -15,6 +15,7 @@
 #include "edit/source_edit.hpp"
 #include "edit/yaml_text.hpp"
 #include "elements/register_builtin.hpp"
+#include "fonts/fonts_used.hpp"
 #include "render/figure_renderer.hpp"
 #include "schema/element_class.hpp"
 #include "schema/registry.hpp"
@@ -260,7 +261,12 @@ commit_result editor_model::apply(std::string next, const std::string& key, bool
   }
   figure replacement = bind_source(next, builtin_registry());
   try {
-    (void)layout_figure(replacement); // the view refuses a layout that does not fit
+    // The view refuses a layout that does not fit. Fonts the host still has
+    // to fetch (web) cannot be laid out yet; the view re-checks after they
+    // arrive (live_view::set_source, workspace_host::need_fonts()).
+    if (fonts_missing(replacement).empty()) {
+      (void)layout_figure(replacement);
+    }
   } catch (const error& e) {
     bool fitted = false; // an edit may not break a layout that fitted
     try {
