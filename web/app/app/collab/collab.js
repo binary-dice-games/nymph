@@ -690,8 +690,14 @@ export class Collab {
     if (!target || !size || !this.wb) {
       throw new Error('the chart is not shown');
     }
-    const svg = this.wb.toSvg({ x: 0, y: 0, width: size.width, height: size.height });
-    const bytes = await pngWithDrawings(target.toPng(), svg);
+    // The figure plus any drawings outside it.
+    const ink = this.wb.contentBounds();
+    const x0 = Math.min(0, ink?.x ?? 0);
+    const y0 = Math.min(0, ink?.y ?? 0);
+    const x1 = Math.max(size.width, ink ? ink.x + ink.width : 0);
+    const y1 = Math.max(size.height, ink ? ink.y + ink.height : 0);
+    const box = { x: x0, y: y0, width: x1 - x0, height: y1 - y0 };
+    const bytes = await pngWithDrawings(target.toPng(), this.wb.toSvg(box), box, size);
     const name = `${(this.h.app.doc?.name ?? 'chart').replace(/\.(ya?ml|png)$/i, '')}-with-drawings.png`;
     this.h.ui.download(bytes, name, 'image/png');
     return { file: name };

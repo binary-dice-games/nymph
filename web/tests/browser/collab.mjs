@@ -282,6 +282,7 @@ test('a late joiner gets the items; a read-only whiteboard draws nothing', async
   // toSvg: a standalone SVG of the items.
   const svg = await a.evaluate(() => window.wb.toSvg({ x: 0, y: 0, width: 600, height: 400 }));
   assert(svg.startsWith('<svg') && svg.includes('viewBox="0 0 600 400"') && svg.includes('sticker-check'), 'toSvg');
+const cb = await a.evaluate(() => window.wb.contentBounds());  assert(cb && cb.width > 0 && cb.height > 0, 'contentBounds covers the drawings');
   await ctx.close();
 });
 
