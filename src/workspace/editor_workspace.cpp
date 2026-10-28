@@ -18,6 +18,7 @@ namespace bdg::nymph {
 
 namespace {
 
+constexpr float kFigureTopGap = 24.0f; // CSS px above a centred layout, as the app's viewer stage
 constexpr unsigned kColorBufferBit = 0x00004000;
 constexpr unsigned kRgba = 0x1908; // GL_RGBA
 constexpr unsigned kUnsignedByte = 0x1401; // GL_UNSIGNED_BYTE
@@ -234,6 +235,9 @@ void editor_workspace::pointer(const pointer_event& in) {
       panel_->pointer(pointer_event::kind::leave, 0.0f, 0.0f, 0, 0.0f, 0.0f);
     }
     pointer_in_panel_ = false;
+    const ImVec2 off = figure_offset();
+    e.x -= off.x;
+    e.y -= off.y;
     view_.input(e);
     figure_right_click(e.type, e.x, e.y, e.button, figure);
   }
@@ -310,7 +314,8 @@ void editor_workspace::figure_right_click(pointer_event::kind type, float x, flo
   const std::string path = targets.front().element;
   panel_->model().select(edit_target_id{path, ""});
   view_.set_selection(panel_->model().selection());
-  panel_->open_element_menu(path, x + figure.x, y + figure.y);
+  const ImVec2 off = figure_offset();
+  panel_->open_element_menu(path, x + figure.x + off.x, y + figure.y + off.y);
 }
 
 void editor_workspace::set_cursor(cursor_shape shape) {
@@ -491,10 +496,15 @@ void editor_workspace::draw_figure(int pixel_width, int pixel_height) {
     const view_geometry g = view_.geometry();
     const float s = g.css_scale > 0.0f ? g.css_scale : 1.0f;
     const ImVec2 size(box.width / s, box.height / s);
+    const ImVec2 off = figure_offset();
     view_.with_contexts([&] {
-      if (std::fabs(size.x - last_->DisplaySize.x) >= 1.0f || std::fabs(size.y - last_->DisplaySize.y) >= 1.0f) {
+      if (std::fabs(size.x - last_->DisplaySize.x) >= 1.0f || std::fabs(size.y - last_->DisplaySize.y) >= 1.0f || off.x != 0.0f ||
+          off.y != 0.0f) {
         ImDrawData data = *last_;
         data.DisplaySize = size;
+        // The layout is drawn at its offset in the box: the projection's
+        // origin moves the other way.
+        data.DisplayPos = ImVec2(-off.x / s, -off.y / s);
         ImGui_ImplOpenGL3_RenderDrawData(&data);
       } else {
         ImGui_ImplOpenGL3_RenderDrawData(const_cast<ImDrawData*>(last_));
@@ -654,7 +664,23 @@ std::optional<layout_box> editor_workspace::selection_box() const {
     return std::nullopt;
   }
   const layout_box figure = panel_->figure_box();
-  return layout_box{figure.x + t->x, figure.y + t->y, t->width, t->height};
+  const ImVec2 off = figure_offset();
+  return layout_box{figure.x + off.x + t->x, figure.y + off.y + t->y, t->width, t->height};
+}
+
+ImVec2 editor_workspace::figure_offset() const {
+  if (panel_ == nullptr) {
+    return ImVec2(0.0f, 0.0f);
+  }
+  // A layout smaller than its box (view_fit::natural in a live session) sits
+  // where the viewer puts it: centred, a little below the top.
+  const layout_box box = panel_->figure_box();
+  const view_geometry g = view_.geometry();
+  const float s = g.css_scale > 0.0f ? g.css_scale : 1.0f;
+  const float spare_x = box.width - g.layout_width * s;
+  const float spare_y = box.height - g.layout_height * s;
+  return ImVec2(
+      spare_x >= 1.0f ? std::floor(spare_x * 0.5f) : 0.0f, spare_y >= 1.0f ? std::min(kFigureTopGap, std::floor(spare_y * 0.5f)) : 0.0f);
 }
 
 void editor_workspace::fit_to_image() {

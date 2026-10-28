@@ -115,6 +115,16 @@ TEST(number_box, DragStepFollowsTheLimitsOrTheValue) {
   whole.min = 0.0;
   whole.max = 10.0;
   EXPECT_DOUBLE_EQ(number_box::drag_step(2.0, whole), 0.1); // ten pixels per unit
+  whole.min = 16.0;
+  whole.max = 4096.0; // a width: never more than one unit per pixel
+  EXPECT_DOUBLE_EQ(number_box::drag_step(700.0, whole), 1.0);
+  number_box_options wide; // a Plot's width: -1000..8192, not whole
+  wide.min = -1000.0;
+  wide.max = 8192.0;
+  EXPECT_DOUBLE_EQ(number_box::drag_step(700.0, wide), 1.0);
+  number_box_options open_whole;
+  open_whole.integer = true;
+  EXPECT_DOUBLE_EQ(number_box::drag_step(50000.0, open_whole), 100.0);
 }
 
 TEST(number_box, TidyClampsRoundsAndKeepsShortDecimals) {

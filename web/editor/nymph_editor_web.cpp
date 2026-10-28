@@ -622,13 +622,16 @@ EMSCRIPTEN_KEEPALIVE const char* nymph_editor_state() {
       const editor_panel* p = e.ws->panel();
       const layout_box box = p != nullptr ? p->figure_box() : layout_box{0.0f, 0.0f, 1.0f, 1.0f};
       if (g.layout_width > 0.0f && !box.empty() && !e.ws->repairing()) {
+        const ImVec2 off = e.ws->figure_offset();
         j["figure"] = json{
-            {"x", box.x},
-            {"y", box.y},
+            {"x", box.x + off.x},
+            {"y", box.y + off.y},
             {"width", g.layout_width * g.css_scale},
             {"height", g.layout_height * g.css_scale},
             {"scale", g.css_scale}};
         if (p != nullptr) { // the area the figure is shown in (it may clip the figure)
+          j["figure"]["areaX"] = box.x;
+          j["figure"]["areaY"] = box.y;
           j["figure"]["areaWidth"] = box.width;
           j["figure"]["areaHeight"] = box.height;
         }

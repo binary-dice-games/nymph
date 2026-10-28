@@ -9,6 +9,7 @@
 #include "edit/editor_model.hpp"
 #include "edit/field_value.hpp"
 #include "elements/register_builtin.hpp"
+#include "fonts/font_testing.hpp"
 
 namespace bdg::nymph {
 namespace {
@@ -95,6 +96,20 @@ TEST(editor_model, ACommitCanAddAFieldAndClearTakesItAwayAgain) {
   ASSERT_TRUE(m.clear("text_color").ok);
   EXPECT_EQ(m.source().find("text_color"), std::string::npos);
   EXPECT_FALSE(find(m.fields(), "text_color")->written);
+}
+
+TEST(editor_model, AFontTheHostStillHasToFetchIsNotRefused) {
+  // The web build embeds no fonts: the host fetches the one a change names
+  // (workspace_host::need_fonts()), so the commit itself must go through.
+  struct hidden_fonts {
+    hidden_fonts() { hide_embedded_fonts_for_testing(true); }
+    ~hidden_fonts() { hide_embedded_fonts_for_testing(false); }
+  } hidden;
+  editor_model m(kSource);
+  m.select(kLabel);
+  const commit_result r = m.commit("font", encode_text("FiraSans-Italic.ttf"));
+  ASSERT_TRUE(r.ok) << r.error;
+  EXPECT_NE(m.source().find("FiraSans-Italic.ttf"), std::string::npos);
 }
 
 TEST(editor_model, AnInvalidChangeIsRefusedAndChangesNothing) {

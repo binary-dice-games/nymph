@@ -5,6 +5,7 @@
 ///        node or edge), driven with real ImGui mouse events.
 #include <gtest/gtest.h>
 #include <cfloat>
+#include <cmath>
 #include <optional>
 #include "imuml_internal.h"
 #include "render/draw_context.hpp"
@@ -176,6 +177,46 @@ TEST(imuml_interactive, DraggingPansAndADoubleClickFitsAgain) {
   EXPECT_FLOAT_EQ(fitted.ViewZoom, 1.0f);
   ASSERT_EQ(fitted.HoveredNodeId, ImHashStr("A"));
   EXPECT_NEAR(fitted.HoveredMin.x, a->Min.x, 0.5f);
+}
+
+TEST(imuml_interactive, ShowOutsideDrawsPastTheRectangleOnlyWhenAsked) {
+  // A 100 x 100 diagram in a 400 x 300 display, its view put on the content's
+  // top-left corner: the rest of the content falls right and below.
+  const auto drawn_in_rectangle = [](ImUmlDiagramFlags flags) {
+    image_options options;
+    options.width = 400;
+    options.height = 300;
+    options.padding = 0;
+    imgui_contexts contexts;
+    draw_context dc(options);
+    const context_switch on(contexts);
+    configure(*find_theme("light"), "test", ImGuiBackendFlags_RendererHasTextures);
+    load_fonts(dc);
+    int clipped = 0; // draw commands clipped to the rectangle
+    for (int frame = 0; frame < 3; ++frame) {
+      ImGui::GetIO().DisplaySize = ImVec2(400, 300);
+      ImGui::GetIO().DeltaTime = 1.0f / 60.0f;
+      run_figure_frame(options, dc, [&](draw_context&) {
+        ImGui::SetCursorScreenPos(ImVec2(10, 10));
+        ImUml::SetNextDiagramView(1.0f, ImVec2(0.0f, 0.0f));
+        if (ImUml::BeginClassDiagram("##d", ImVec2(100, 100), flags)) {
+          ImUml::Class("A");
+          ImUml::Class("B");
+          ImUml::Relation("B", "A", ImUmlRelationKind_Inheritance);
+          ImUml::EndClassDiagram();
+        }
+        clipped = 0;
+        for (const ImDrawCmd& cmd : ImGui::GetWindowDrawList()->CmdBuffer) {
+          if (cmd.ElemCount > 0 && std::fabs(cmd.ClipRect.z - 110.0f) < 0.5f) {
+            ++clipped;
+          }
+        }
+      });
+    }
+    return clipped;
+  };
+  EXPECT_GT(drawn_in_rectangle(ImUmlDiagramFlags_None), 0); // clipped to the rectangle
+  EXPECT_EQ(drawn_in_rectangle(ImUmlDiagramFlags_ShowOutside), 0); // drawn past it, dimmed
 }
 
 } // namespace

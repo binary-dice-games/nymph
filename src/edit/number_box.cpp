@@ -14,6 +14,11 @@ double number_box::drag_step(double start, const number_box_options& options) {
   const double span = options.min && options.max ? *options.max - *options.min : 0.0;
   const double basis = span > 0.0 && span <= 1e5 ? span / 200.0 : std::max(std::fabs(start), 1.0) / 200.0;
   double step = std::pow(10.0, std::round(std::log10(basis)));
+  if (span > 0.0 && span <= 1e5) {
+    // A wide range (a width of -1000..8192) must not jump by tens per
+    // pixel: at most one unit per pixel; Ctrl drags ten times faster.
+    step = std::min(step, 1.0);
+  }
   if (options.integer) {
     step = std::max(step, 0.1); // ten pixels per unit at the finest
   }

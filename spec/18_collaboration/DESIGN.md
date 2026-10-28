@@ -387,7 +387,12 @@ view's CSS scale). Following a view needs no new call (section 6.3).
 
 The editor also gains `setFit('fill' | 'natural')` (and a `fit` option of
 `createEditor`): `natural` lays the figure out at the chart's own size and
-never scales it, the area clipping what does not fit (section 6.4).
+never scales it, the area clipping what does not fit (section 6.4). A
+figure smaller than its area is centred in it, 24 px below the top, as the
+app's viewer stage shows it (`editor_workspace::figure_offset()`); the
+`figure` entry's `x` / `y` include that offset. The whiteboard's toolbar sits
+at the side of the area the chart is shown in (the stage's edge, below the
+editor's tab bar), never over the chart.
 
 ## 6. nymph Glue
 

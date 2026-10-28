@@ -4,6 +4,7 @@
 ///        drive, headless (no GL): pointer and key routing, the divider,
 ///        shortcuts, and the save and CSV requests it makes of its host.
 #include <gtest/gtest.h>
+#include <cmath>
 #include <string>
 #include <vector>
 #include "workspace/editor_workspace.hpp"
@@ -100,6 +101,21 @@ TEST_F(workspace_fixture, AClickOnTheTitleSelectsIt) {
   ASSERT_TRUE(title);
   const float y0 = ws->panel()->figure_box().y;
   click(title->x + title->width / 2, y0 + title->y + title->height / 2);
+  ASSERT_TRUE(ws->panel()->model().selection());
+  EXPECT_EQ(ws->panel()->model().selection()->element, "root");
+}
+
+TEST_F(workspace_fixture, ANaturalLayoutIsCentredInTheFigureAreaAndStillClickable) {
+  EXPECT_FLOAT_EQ(ws->figure_offset().x, 0.0f); // fill: the layout is the box
+  ws->view().set_fit(view_fit::natural);
+  run_frames();
+  const layout_box box = ws->panel()->figure_box();
+  const ImVec2 off = ws->figure_offset();
+  EXPECT_FLOAT_EQ(off.x, std::floor((box.width - 400.0f) * 0.5f));
+  EXPECT_GT(off.y, 0.0f);
+  const std::optional<edit_target> title = ws->view().target_for("root", "title");
+  ASSERT_TRUE(title);
+  click(off.x + title->x + title->width / 2, box.y + off.y + title->y + title->height / 2);
   ASSERT_TRUE(ws->panel()->model().selection());
   EXPECT_EQ(ws->panel()->model().selection()->element, "root");
 }

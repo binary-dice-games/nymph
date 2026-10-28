@@ -61,6 +61,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `nymph view --edit`: choosing a colour for a field that was automatic opens the colour picker at once.
 
 ### Fixed
+
+- Web editor: choosing a font that is fetched on demand (e.g. Fira Sans Italic) no longer fails with "font is not embedded in this build".
+- Web editor: right-click opens the element menu.
+- Editor panel: Elements, All fields and the log each scroll on their own, with draggable dividers between them.
+- Editor: dragging a whole-number field (width, height, ...) changes it at most one unit per pixel.
+- Web app: in a live session the whiteboard tools sit at the side of the window instead of over the chart, and the owner's editor centres the chart as guests see it.
+- Editor: a UML diagram panned or zoomed past the image shows the part outside dimmed, with the image's limit outlined.
 - Web viewer and web app on phones: after a pinch zoom (especially one ended off the chart), a one-finger drag pans again instead of zooming.
 - Web viewer and web app on phones: a pinch zooms plots, Gantt charts and diagrams as far as the fingers spread, keeps the content under the fingers, and stops when they stop.
 - Web viewer and web app on phones: a pinch no longer clicks, highlights or shows the tooltip of what is under the first finger, and two quick pinches no longer reset a diagram's view.
