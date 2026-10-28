@@ -158,9 +158,11 @@ std::string editor_workspace::show_panel(bool on, bool repair) {
     image_w_ = panel_->model().image().width;
     image_h_ = panel_->model().image().height;
     view_.set_edit_mode(true);
+    view_.set_show_limits(true);
   } else {
     panel_.reset();
     view_.set_edit_mode(false);
+    view_.set_show_limits(false);
     view_.set_selection(std::nullopt);
     pointer_in_panel_ = false;
     panel_drag_ = false;

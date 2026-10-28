@@ -212,6 +212,7 @@ struct live_view::impl {
 
   // Edit mode (spec/08_view_editor/DESIGN.md section 4).
   bool edit_mode = false;
+  bool show_limits = false;
   std::vector<edit_target> edit_targets; ///< Of the last frame, in drawing order.
   std::optional<edit_target_id> selection;
   std::optional<edit_target> edit_click;
@@ -752,6 +753,7 @@ struct live_view::impl {
     // with render_figure()); then they let go for pan and zoom.
     ctx->set_lock_limits(fresh_frames < kFigureFrames);
     ctx->set_edit_mode(edit_mode);
+    ctx->set_show_limits(show_limits);
     ctx->set_pinch(std::exchange(pinch, std::nullopt));
     ++fresh_frames;
     const node& root = fig->root;
@@ -1147,6 +1149,14 @@ void live_view::set_edit_mode(bool on) {
     m.edit_targets.clear();
   }
   m.pending_frames = std::max(m.pending_frames, kInputFrames);
+}
+
+void live_view::set_show_limits(bool on) {
+  impl& m = *impl_;
+  if (m.show_limits != on) {
+    m.show_limits = on;
+    m.pending_frames = std::max(m.pending_frames, kInputFrames);
+  }
 }
 
 bool live_view::edit_mode() const {
