@@ -151,6 +151,14 @@ class edit_toolbar {
   float width_ = 360.0f; ///< The toolbar's size in the last frame.
   float height_ = 44.0f;
   number_box numbers_;
+
+ public:
+  /// @brief Whether a number field of the toolbar is being typed into.
+  bool number_typing() const {
+    return numbers_.typing();
+  }
+
+ private:
   std::string drag_key_; ///< The field being dragged (a number, a custom colour): one undo step.
   std::optional<copied_style> clip_;
   ImUmlContext* shapes_ = nullptr; ///< Shape pictures, made on first use.

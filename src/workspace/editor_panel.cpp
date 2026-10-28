@@ -239,7 +239,7 @@ bool editor_panel::ask_close() {
 }
 
 bool editor_panel::wants_frame() const {
-  return frames_left_ > 0 || inspector_.pending() || (source_shown_ && pane_.waiting());
+  return frames_left_ > 0 || inspector_.pending() || inspector_.number_typing() || toolbar_.number_typing() || (source_shown_ && pane_.waiting());
 }
 
 std::string editor_panel::locked_reason() const {

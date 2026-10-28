@@ -91,6 +91,13 @@ class inspector {
     return pending_.has_value();
   }
 
+  /// @brief Whether a number field is being typed into: frames must keep
+  ///        coming (the field is drawn the frame after the click, and its
+  ///        caret blinks).
+  bool number_typing() const {
+    return numbers_.typing();
+  }
+
   /// @brief Shows `message` in the error panel ("" hides it): a change made
   ///        elsewhere in the window (a table) was refused or accepted.
   void set_error(std::string message) {

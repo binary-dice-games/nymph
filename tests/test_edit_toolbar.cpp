@@ -222,6 +222,23 @@ TEST(number_box, AClickTypesAValueAndEnterAcceptsIt) {
   EXPECT_EQ(rig.changes.front(), number_box_change::typed);
 }
 
+TEST(number_box, ASingleClickStartsTypingOneFrameLaterAndStaysTyping) {
+  box_rig rig;
+  rig.frame();
+  rig.mouse(rig.center.x, rig.center.y);
+  rig.button(true);
+  rig.button(false);
+  rig.frame(); // the one frame the host must still run: the field is drawn in it
+  EXPECT_TRUE(rig.box.typing());
+  for (int i = 0; i < 5; ++i) {
+    rig.frame();
+  }
+  EXPECT_TRUE(rig.box.typing()); // still there: not stuck, not dropped
+  rig.type("77");
+  rig.key(ImGuiKey_Enter);
+  EXPECT_DOUBLE_EQ(rig.value, 77.0);
+}
+
 TEST(number_box, EscapeCancelsTheTypedValueAndLimitsClampIt) {
   box_rig rig;
   rig.options.min = 1.0;
