@@ -1,0 +1,9 @@
+nymph: 1
+description: Gantt chart converted from mermaid.
+image: {width: 800, height: 320}
+source: Converted from a mermaid gantt.
+root:
+  type: GanttChart
+  children:
+    - {type: GanttTask, name: Epoch, start: 1970-01-01, end: 1970-01-02}
+    - {type: GanttTask, name: Next, start: 1970-01-02, duration: 1}

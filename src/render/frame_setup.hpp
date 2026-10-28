@@ -118,6 +118,15 @@ void configure_backend(const char* renderer_name, ImGuiBackendFlags backend_flag
 ///        again to change the theme.
 void configure_style(const theme& t);
 
+/// @brief configure_style() for a figure's options: the styles of
+///        `o.base`, then its chart theme's colours (`o.background` for the
+///        figure, `o.palette` as the plots' default colormap). Safe to call
+///        again.
+void configure_style(const image_options& o);
+
+/// @brief configure() for a figure's options (configure_style(o)).
+void configure(const image_options& o, const char* renderer_name, ImGuiBackendFlags backend_flags);
+
 /// @brief Adds ImGui's built-in font (the default) and every catalog font
 ///        with bytes (embedded or registered) to the current context's
 ///        atlas and registers them in `ctx` by name. Fonts already in

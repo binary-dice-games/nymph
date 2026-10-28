@@ -1,0 +1,36 @@
+nymph: 1
+description: Mind map converted from mermaid.
+image: {width: 1980, height: 320}
+source: Converted from a mermaid mindmap.
+root:
+  type: MindMap
+  children:
+    - type: MindNode
+      text: mindmap
+      children:
+        - type: MindNode
+          text: Origins
+          children:
+            - {type: MindNode, text: Long history}
+            - type: MindNode
+              text: Popularisation
+              children:
+                - {type: MindNode, text: British popular psychology author Tony Buzan}
+        - type: MindNode
+          text: Research
+          children:
+            - {type: MindNode, text: "On effectiveness\nand features"}
+            - type: MindNode
+              text: On Automatic creation
+              children:
+                - type: MindNode
+                  text: Uses
+                  children:
+                    - {type: MindNode, text: Creative techniques}
+                    - {type: MindNode, text: Strategic planning}
+                    - {type: MindNode, text: Argument mapping}
+        - type: MindNode
+          text: Tools
+          children:
+            - {type: MindNode, text: Pen and paper}
+            - {type: MindNode, text: Mermaid}

@@ -383,6 +383,31 @@ TEST_F(cli, FontsListsTheNamesAndPrintsTheLicences) {
   EXPECT_EQ(run({"fonts", "x.ttf"}).code, 2);
 }
 
+TEST_F(cli, ThemesListsThemAndShowsOne) {
+  const run_result all = run({"themes"});
+  EXPECT_EQ(all.code, 0);
+  EXPECT_EQ(all.out.rfind("light ", 0), 0u);
+  EXPECT_NE(all.out.find("\nocean "), std::string::npos);
+  const run_result one = run({"themes", "ocean"});
+  EXPECT_EQ(one.code, 0);
+  EXPECT_NE(one.out.find("base: dark"), std::string::npos);
+  const run_result unknown = run({"themes", "oceans"});
+  EXPECT_EQ(unknown.code, 1);
+  EXPECT_NE(unknown.err.find("did you mean 'ocean'"), std::string::npos);
+}
+
+TEST_F(cli, ThemeOptionWritesTheThemeIntoThePng) {
+  write("t.yaml", "root: {type: Label, text: hi}\n");
+  const run_result r = run({"render", path("t.yaml"), "--theme", "sunset", "--rasterizer", "software"});
+  ASSERT_EQ(r.code, 0) << r.err;
+  const run_result back = run({"extract", path("t.png")});
+  EXPECT_NE(back.out.find("theme: sunset"), std::string::npos) << back.out;
+  EXPECT_EQ(read("t.yaml"), "root: {type: Label, text: hi}\n"); // the input is left as written
+  EXPECT_EQ(run({"check", path("t.yaml"), "--theme", "ocean"}).code, 0);
+  EXPECT_EQ(run({"check", path("t.yaml"), "--theme", "neon"}).code, 1);
+  EXPECT_EQ(run({"schema", "--theme", "ocean"}).code, 2);
+}
+
 // ── Rasterizers (spec/02_opengl_rasterizer, plan step 6) ─────────────────────
 
 #if defined(_WIN32)
@@ -484,6 +509,81 @@ TEST_F(cli, ExplicitOpenGLWithAGPUWritesAnImageWithoutWarning) {
   EXPECT_EQ(r.code, 0);
   EXPECT_EQ(r.err, "");
   EXPECT_EQ(run({"extract", path("chart.png")}).out, kSource);
+}
+
+
+// ── Mermaid (spec/16_mermaid_import/PLAN.md step 3) ─────────────────────────
+
+const char* const kMermaid =
+    "flowchart LR\n"
+    "  A[Start] --> B{Ok?}\n"
+    "  B -->|yes| C\n"
+    "  click A callback\n";
+
+TEST_F(cli, MermaidRendersToAPngCarryingTheConvertedYaml) {
+  write("flow.mmd", kMermaid);
+  const run_result r = run({path("flow.mmd"), "--rasterizer", "software"});
+  ASSERT_EQ(r.code, 0) << r.err;
+  // The warning names the mermaid line; the exit code stays 0.
+  EXPECT_NE(r.err.find("flow.mmd:4:3: warning: click is ignored"), std::string::npos) << r.err;
+  ASSERT_TRUE(exists("flow.png"));
+  const run_result yaml = run({"convert", path("flow.mmd")});
+  ASSERT_EQ(yaml.code, 0) << yaml.err;
+  EXPECT_NE(yaml.out.find("type: Flowchart"), std::string::npos);
+  const run_result extracted = run({path("flow.png")});
+  EXPECT_EQ(extracted.out, yaml.out); // the PNG carries the YAML, never the mermaid
+}
+
+TEST_F(cli, OutputEndingInYamlConverts) {
+  write("flow.mmd", kMermaid);
+  ASSERT_EQ(run({path("flow.mmd"), "-o", path("flow.yaml")}).code, 0);
+  EXPECT_EQ(read("flow.yaml"), run({"convert", path("flow.mmd")}).out);
+  EXPECT_FALSE(exists("flow.png"));
+  ASSERT_EQ(run({"convert", path("flow.mmd"), "-o", path("other.yml")}).code, 0);
+  EXPECT_EQ(read("other.yml"), read("flow.yaml"));
+  EXPECT_EQ(run({"check", path("flow.yaml")}).code, 0);
+  // --rasterizer only renders.
+  EXPECT_EQ(run({path("flow.mmd"), "-o", path("x.yaml"), "--rasterizer", "software"}).code, 2);
+}
+
+TEST_F(cli, MermaidFromStdin) {
+  const run_result r = run({"render", "-", "-o", "-"}, kMermaid);
+  ASSERT_EQ(r.code, 0) << r.err;
+  EXPECT_EQ(r.out.substr(1, 3), "PNG");
+  const run_result c = run({"convert", "-"}, kMermaid);
+  ASSERT_EQ(c.code, 0) << c.err;
+  EXPECT_NE(c.out.find("type: FlowLink"), std::string::npos);
+}
+
+TEST_F(cli, CheckReadsMermaidAndPointsAtItsLines) {
+  write("ok.mmd", "sequenceDiagram\n  A->>B: hi\n");
+  const run_result ok = run({"check", path("ok.mmd")});
+  EXPECT_EQ(ok.code, 0);
+  EXPECT_EQ(ok.out, "");
+  EXPECT_EQ(ok.err, "");
+  write("bad.mmd", "flowchart LR\n  A --> B@{ shape: blob }\n");
+  const run_result bad = run({"check", path("bad.mmd")});
+  EXPECT_EQ(bad.code, 1);
+  EXPECT_NE(bad.err.find("bad.mmd:2:10: unknown mermaid shape 'blob'"), std::string::npos) << bad.err;
+  EXPECT_FALSE(exists("bad.png"));
+}
+
+TEST_F(cli, ConvertPassesYamlAndPngSourcesThrough) {
+  write("chart.yaml", kSource);
+  const run_result y = run({"convert", path("chart.yaml")});
+  ASSERT_EQ(y.code, 0) << y.err;
+  EXPECT_EQ(y.out, kSource);
+  ASSERT_EQ(run({path("chart.yaml"), "--rasterizer", "software"}).code, 0);
+  EXPECT_EQ(run({"convert", path("chart.png")}).out, kSource);
+  write("bad.yaml", "root: {type: Plott}\n");
+  EXPECT_EQ(run({"convert", path("bad.yaml")}).code, 1);
+}
+
+TEST_F(cli, ConvertWritesOnlyYaml) {
+  write("flow.mmd", kMermaid);
+  EXPECT_EQ(run({"convert", path("flow.mmd"), "-o", path("flow.png")}).code, 2);
+  EXPECT_EQ(run({"convert", path("flow.mmd"), "-o", path("flow.mmd2")}).code, 2);
+  EXPECT_FALSE(exists("flow.png"));
 }
 
 } // namespace

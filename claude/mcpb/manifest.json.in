@@ -21,11 +21,31 @@
   "tools": [
     { "name": "render_chart", "description": "Render a nymph chart from its YAML source to a PNG, shown live in the conversation." },
     { "name": "check_chart", "description": "Validate a chart source without drawing it." },
+    { "name": "convert_chart", "description": "Convert a mermaid diagram to nymph YAML." },
     { "name": "extract_chart", "description": "Return the YAML source a nymph PNG carries." },
     { "name": "chart_schema", "description": "The fields of a nymph element type." },
     { "name": "example_chart", "description": "A complete, working source using an element type, to copy and adapt." },
     { "name": "list_fonts", "description": "The font names a chart accepts." },
-    { "name": "list_shapes", "description": "The shape library a chart's nodes can use." }
+    { "name": "list_shapes", "description": "The shape library a chart's nodes can use." },
+    { "name": "list_themes", "description": "The chart themes a chart can use." },
+    { "name": "editor_state", "description": "The chart open in the user's nymph editor: its elements, selection and tables." },
+    { "name": "editor_source", "description": "The whole YAML source of the chart in the editor." },
+    { "name": "editor_element", "description": "One element's fields and children in the editor." },
+    { "name": "editor_table", "description": "A data table's rows in the editor, as CSV." },
+    { "name": "editor_view_image", "description": "A PNG of the figure as the user sees it in the editor." },
+    { "name": "editor_select", "description": "Select an element or show a tab in the editor." },
+    { "name": "editor_set_fields", "description": "Set fields of one element in the editor, as one undo step." },
+    { "name": "editor_add_element", "description": "Add an element to the chart in the editor." },
+    { "name": "editor_remove_element", "description": "Remove an element from the chart in the editor." },
+    { "name": "editor_move_element", "description": "Move an element among its siblings in the editor." },
+    { "name": "editor_set_cells", "description": "Set cells of a data table in the editor." },
+    { "name": "editor_set_table", "description": "Replace or add a data table in the editor, from CSV." },
+    { "name": "editor_remove_table", "description": "Remove a data table in the editor." },
+    { "name": "editor_set_source", "description": "Replace the whole source in the editor, as one undo step." },
+    { "name": "editor_undo", "description": "Undo the last change in the editor." },
+    { "name": "editor_redo", "description": "Redo the last undone change in the editor." },
+    { "name": "web_app_pair", "description": "Connect to the chart the user has open in the nymph web app." },
+    { "name": "web_app_call", "description": "Call a tool of the paired nymph web app by name." }
   ],
   "compatibility": {
     "platforms": ["@NYMPH_MCPB_PLATFORM@"]

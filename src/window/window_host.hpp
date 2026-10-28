@@ -11,28 +11,10 @@
 #include <memory>
 #include <string>
 #include "view/live_view.hpp"
+#include "workspace/workspace_input.hpp"
 
 namespace bdg::nymph {
 
-/// @brief The keys `nymph view` reacts to: its own shortcuts, and what a
-///        text field of the editor panel needs.
-enum class window_key {
-  escape, q, r, s, y, e,
-  enter, tab, backspace, del, left, right, up, down, home, end, page_up, page_down,
-  a, c, v, x, z,
-  other
-};
-
-/// @brief ImGui's key for `key` (ImGuiKey_None for keys ImGui does not
-///        need: the viewer's own letters).
-ImGuiKey imgui_key(window_key key);
-
-/// @brief The modifier keys held with a key.
-struct key_mods {
-  bool ctrl = false;
-  bool shift = false;
-  bool alt = false;
-};
 
 /// @brief What a native_window reports; implemented by the viewer. Called
 ///        from native_window::pump() (and, on Windows, while the window is
@@ -54,6 +36,10 @@ class window_events {
   virtual void on_key(window_key key, key_mods mods, bool down, bool repeat) = 0;
   /// A character was typed (a Unicode code point; never a control code).
   virtual void on_text(char32_t codepoint) = 0;
+  /// The window took (`true`) or lost the keyboard focus.
+  virtual void on_focus(bool focused) {
+    (void)focused;
+  }
 };
 
 /// @brief A window with an OpenGL 3.3 core context, current on the creating
@@ -84,6 +70,13 @@ class native_window {
   virtual void* gl_proc(const char* name) = 0;
   /// @brief The GLSL version line for ImGui's OpenGL3 backend.
   virtual const char* glsl_version() const = 0;
+  /// @brief The pointer's shape while it is over the client area, until the
+  ///        next call.
+  virtual void set_cursor(cursor_shape shape) = 0;
+  /// @brief Makes a pump(true) waiting on another thread return soon. The
+  ///        one function that may be called from any thread, at any time
+  ///        while the window exists.
+  virtual void wake() = 0;
 };
 
 /// @brief Creates the window (hidden) and its context.

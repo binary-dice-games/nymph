@@ -22,6 +22,7 @@
 #include "nymph.hpp"
 #include "render/image.hpp"
 #include "render/soft_rasterizer.hpp"
+#include "themes/theme_catalog.hpp"
 #include "view/live_view.hpp"
 #include "webgl_presenter.hpp"
 
@@ -70,6 +71,28 @@ void json_number(std::string& out, double v) {
   out += buf;
 }
 
+/// `{"kind":...,"warnings":[{line,column,message}...]}` and, with
+/// `source`, the converted source first.
+std::string import_json(const mermaid_import& m, bool with_source) {
+  std::string out = "{";
+  if (with_source) {
+    out += "\"source\":";
+    json_string(out, m.source);
+    out += ',';
+  }
+  out += "\"kind\":";
+  json_string(out, m.kind);
+  out += ",\"warnings\":[";
+  for (size_t i = 0; i < m.warnings.size(); ++i) {
+    out += i == 0 ? "" : ",";
+    out += "{\"line\":" + std::to_string(m.warnings[i].line) + ",\"column\":" + std::to_string(m.warnings[i].column) +
+        ",\"message\":";
+    json_string(out, m.warnings[i].message);
+    out += '}';
+  }
+  return out + "]}";
+}
+
 void json_pick(std::string& out, const std::optional<view_pick>& p) {
   if (!p) {
     out += "null";
@@ -97,6 +120,9 @@ struct viewer {
   live_view view;
   image pixels; ///< The last software frame (WebGL: its size only).
   bool webgl = false;
+  /// What the last set_source() converted from mermaid
+  /// (spec/16_mermaid_import/DESIGN.md section 5.5): JSON, or "null".
+  std::string imported = "null";
   explicit viewer(view_options o) : view(o) {}
 };
 
@@ -253,6 +279,12 @@ EMSCRIPTEN_KEEPALIVE const char* nymph_version() {
 }
 
 /// @brief Every catalog font as JSON: [{name, size, embedded}].
+/// @brief The chart themes as JSON (chart_themes_json()), for pickers.
+EMSCRIPTEN_KEEPALIVE const char* nymph_themes() {
+  scratch() = chart_themes_json();
+  return scratch().c_str();
+}
+
 EMSCRIPTEN_KEEPALIVE const char* nymph_font_catalog() {
   std::string& j = scratch();
   j = "[";
@@ -332,7 +364,17 @@ EMSCRIPTEN_KEEPALIVE void nymph_viewer_destroy(int handle) {
 /// @brief set_source(): 0, 1 (error) or 2 (fonts needed), with last_error().
 EMSCRIPTEN_KEEPALIVE int nymph_viewer_set_source(int handle, const char* text, int size, int reset_view) {
   return guarded([&] {
-    get(handle).view.set_source(std::string_view(text, static_cast<size_t>(size)), reset_view != 0);
+    viewer& v = get(handle);
+    const std::string_view source(text, static_cast<size_t>(size));
+    if (is_mermaid(source)) {
+      // Mermaid is converted here; the viewer holds nymph YAML.
+      const mermaid_import m = import_mermaid(source);
+      v.view.set_source(m.source, reset_view != 0);
+      v.imported = import_json(m, false);
+    } else {
+      v.view.set_source(source, reset_view != 0);
+      v.imported = "null";
+    }
     return kOk;
   });
 }
@@ -349,6 +391,7 @@ EMSCRIPTEN_KEEPALIVE int nymph_viewer_set_data(int handle, const char* text, int
 ///        nymph source.
 EMSCRIPTEN_KEEPALIVE int nymph_viewer_set_png(int handle, const uint8_t* bytes, int size, int reset_view) {
   return guarded([&] {
+    get(handle).imported = "null";
     const bool nymph =
         get(handle).view.set_png(std::span<const uint8_t>(bytes, static_cast<size_t>(size)), reset_view != 0);
     return nymph ? kOk : kPlainPng;
@@ -383,6 +426,14 @@ nymph_viewer_pointer(int handle, int type, float x, float y, int button, float w
     e.wheel_y = wheel_y;
     e.touch = touch != 0;
     get(handle).view.input(e);
+    return kOk;
+  });
+}
+
+/// @brief One two-finger pinch step (live_view::pinch()), CSS pixels.
+EMSCRIPTEN_KEEPALIVE int nymph_viewer_pinch(int handle, float from_x, float from_y, float to_x, float to_y, float scale) {
+  return guarded([&] {
+    get(handle).view.pinch(from_x, from_y, to_x, to_y, scale);
     return kOk;
   });
 }
@@ -512,6 +563,7 @@ EMSCRIPTEN_KEEPALIVE const char* nymph_viewer_state(int handle) {
     j += std::string(",\"hasFigure\":") + (v.has_figure() ? "true" : "false");
     j += std::string(",\"wantsFrame\":") + (v.wants_frame() ? "true" : "false");
     j += std::string(",\"wantsKeyboard\":") + (v.wants_keyboard() ? "true" : "false");
+    j += std::string(",\"viewChanged\":") + (v.view_changed() ? "true" : "false");
     j += ",\"uiRevision\":" + std::to_string(v.ui_revision());
     j += ",\"description\":";
     json_string(j, v.description());
@@ -575,6 +627,30 @@ EMSCRIPTEN_KEEPALIVE const char* nymph_viewer_state(int handle) {
       j += "]}";
     }
     j += "]}";
+    return kOk;
+  });
+  return j.c_str();
+}
+
+/// @brief What the last set_source() converted from mermaid, as JSON
+///        `{kind, warnings}`, or "null" for a nymph source.
+EMSCRIPTEN_KEEPALIVE const char* nymph_viewer_imported(int handle) {
+  std::string& j = scratch();
+  j = "null";
+  guarded([&] {
+    j = get(handle).imported;
+    return kOk;
+  });
+  return j.c_str();
+}
+
+/// @brief Converts a mermaid diagram: JSON `{source, kind, warnings}`, or ""
+///        with last_error() (kind "source", the mermaid line and column).
+EMSCRIPTEN_KEEPALIVE const char* nymph_import_mermaid(const char* text, int size) {
+  std::string& j = scratch();
+  j.clear();
+  guarded([&] {
+    j = import_json(import_mermaid(std::string_view(text, static_cast<size_t>(size))), true);
     return kOk;
   });
   return j.c_str();

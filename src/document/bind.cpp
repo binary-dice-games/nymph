@@ -6,6 +6,8 @@
 #include <cmath>
 #include <cstdint>
 #include <limits>
+#include <map>
+#include <stdexcept>
 #include <optional>
 #include <string>
 #include <vector>
@@ -18,6 +20,7 @@
 #include "render/text_style.hpp"
 #include "schema/convert.hpp"
 #include "schema/element_class.hpp"
+#include "themes/theme_catalog.hpp"
 
 namespace bdg::nymph {
 
@@ -38,9 +41,27 @@ bool is_array(field_type t) {
   return t == field_type::number_array || t == field_type::integer_array;
 }
 
+/// Fields inherited by everything inside the element that writes them (and
+/// from the image): a bare theme rule for one of them is the image's.
+bool is_text_style_field(std::string_view name) {
+  return name == "font" || name == "font_size" || name == "text_color";
+}
+
 class binder {
  public:
   binder(const registry& reg, const data_set* data) : reg_(reg), data_(data) {}
+
+  /// The theme for the fields the source leaves out; `at` is where the
+  /// source names it, for errors in its values.
+  void set_theme(const chart_theme* theme, source_pos at) {
+    theme_ = theme;
+    theme_at_ = at;
+  }
+
+  /// A field the image writes, which a theme then leaves to it everywhere.
+  void written_above(const std::string& field) {
+    ++written_above_[field];
+  }
 
   /// Binds element `n`. `parent` is null for `root`. `explicitly_set`
   /// receives which fields the source wrote.
@@ -54,6 +75,15 @@ class binder {
     out.line = n.line;
     out.column = n.column;
     std::vector<bool> set(cls.fields().size(), false);
+    // What this element writes passes down: a theme leaves those fields of
+    // its descendants to inherit it.
+    std::vector<std::string> writes;
+    for (const yaml_node& key : n.keys) {
+      if (key.text != "type" && key.text != "children" && cls.field_index(key.text) >= 0) {
+        writes.push_back(key.text);
+        ++written_above_[key.text];
+      }
+    }
     for (size_t i = 0; i < n.keys.size(); ++i) {
       const yaml_node& key = n.keys[i];
       const yaml_node& val = n.children[i];
@@ -78,6 +108,12 @@ class binder {
       out.values[static_cast<size_t>(index)] = field_value(cls, cls.fields()[static_cast<size_t>(index)], val);
       out.field_pos[static_cast<size_t>(index)] = source_pos{val.line, val.column};
       set[static_cast<size_t>(index)] = true;
+    }
+    apply_theme(cls, set, out);
+    for (const std::string& w : writes) {
+      if (--written_above_[w] == 0) {
+        written_above_.erase(w);
+      }
     }
     cls.check(out);
     if (explicitly_set != nullptr) {
@@ -361,8 +397,38 @@ class binder {
     return out;
   }
 
+  /// Gives every field the element leaves out the theme's value, unless
+  /// an enclosing element (or the image) writes that field.
+  void apply_theme(const element_class& cls, const std::vector<bool>& set, node& out) const {
+    if (theme_ == nullptr) {
+      return;
+    }
+    for (size_t i = 0; i < set.size(); ++i) {
+      const field_desc& f = cls.fields()[i];
+      if (set[i] || written_above_.contains(f.name)) {
+        continue;
+      }
+      const theme_rule* rule = theme_->rule_for(cls, f.name, !is_text_style_field(f.name));
+      if (rule == nullptr) {
+        continue;
+      }
+      try {
+        out.values[i] = convert_value(rule->value, f, std::string(cls.name()) + "." + f.name);
+      } catch (const error& e) {
+        throw error(
+            theme_at_.line,
+            theme_at_.column,
+            "theme '" + theme_->id + "', " + rule->key + " (its line " + std::to_string(rule->value.line) +
+                "): " + e.what());
+      }
+    }
+  }
+
   const registry& reg_;
   const data_set* data_;
+  const chart_theme* theme_ = nullptr;
+  source_pos theme_at_;
+  std::map<std::string, int, std::less<>> written_above_;
 };
 
 // ── Top level ────────────────────────────────────────────────────────────────
@@ -371,53 +437,86 @@ class binder {
 /// looked at (spec/01_core_features/DESIGN.md section 3).
 constexpr std::string_view kTopKeys[] = {"nymph", "description", "image", "root", "data", "source", "view"};
 constexpr std::string_view kImageKeys[] =
-    {"width", "height", "scale", "theme", "padding", "font", "font_size", "text_color"};
+    {"width", "height", "scale", "theme", "padding", "font", "font_size", "text_color", "background", "palette"};
 
 int image_int(const yaml_node& v, const field_desc& f) {
   return static_cast<int>(std::get<int64_t>(convert_value(v, f, "image." + f.name)));
 }
 
-image_options bind_image(const yaml_node& image) {
-  if (!image.is_mapping()) {
-    fail(image, "'image' must be a mapping, like {width: 800, height: 500}");
-  }
+/// Sets image option `key` (not `theme`) from `v`; `what` prefixes messages.
+void bind_image_option(image_options& out, const yaml_node& key, const yaml_node& v) {
   static const field_desc width = int_field("width", 800, "", value_range{16, 4096});
   static const field_desc height = int_field("height", 500, "", value_range{16, 4096});
   static const field_desc scale = int_field("scale", 1, "", value_range{1, 4});
   static const field_desc padding = int_field("padding", 8, "", value_range{0, 2048});
+  static const field_desc color = color_field("color", "");
+  if (key.text == "width") {
+    out.width = image_int(v, width);
+  } else if (key.text == "height") {
+    out.height = image_int(v, height);
+  } else if (key.text == "scale") {
+    out.scale = image_int(v, scale);
+  } else if (key.text == "padding") {
+    out.padding = image_int(v, padding);
+  } else if (key.text == "font") {
+    static const field_desc font = text_style_fields()[0];
+    out.font = std::get<std::string>(convert_value(v, font, "image.font"));
+  } else if (key.text == "font_size") {
+    static const field_desc size = number_field("font_size", 16.0, "", value_range{1, kMaxFontSize});
+    out.font_size = std::get<double>(convert_value(v, size, "image.font_size"));
+  } else if (key.text == "text_color") {
+    out.text_color = std::get<std::string>(convert_value(v, color, "image.text_color"));
+  } else if (key.text == "background") {
+    out.background = std::get<std::string>(convert_value(v, color, "image.background"));
+  } else if (key.text == "palette") {
+    if (!v.is_sequence()) {
+      fail(v, "image.palette must be a list of colours, like [\"#4c72b0\", \"#dd8452\"]");
+    }
+    out.palette.clear();
+    for (const yaml_node& c : v.children) {
+      std::string text = std::get<std::string>(convert_value(c, color, "image.palette"));
+      if (text.empty()) {
+        fail(c, "image.palette: an empty colour; give every series colour as \"#RRGGBB\"");
+      }
+      out.palette.push_back(std::move(text));
+    }
+  } else {
+    fail(
+        key,
+        "image has no option '" + key.text + "'" + did_you_mean(key.text, kImageKeys) +
+            " (options: width, height, scale, theme, padding, font, font_size, text_color, background, palette)");
+  }
+}
+
+/// The source's `image` options; `written` receives the keys it writes.
+image_options bind_image(const yaml_node& image, std::vector<std::string>& written) {
+  if (!image.is_mapping()) {
+    fail(image, "'image' must be a mapping, like {width: 800, height: 500}");
+  }
   image_options out;
   for (size_t i = 0; i < image.keys.size(); ++i) {
     const yaml_node& key = image.keys[i];
     const yaml_node& v = image.children[i];
-    if (key.text == "width") {
-      out.width = image_int(v, width);
-    } else if (key.text == "height") {
-      out.height = image_int(v, height);
-    } else if (key.text == "scale") {
-      out.scale = image_int(v, scale);
-    } else if (key.text == "padding") {
-      out.padding = image_int(v, padding);
-    } else if (key.text == "font") {
-      static const field_desc font = text_style_fields()[0];
-      out.font = std::get<std::string>(convert_value(v, font, "image.font"));
-    } else if (key.text == "font_size") {
-      static const field_desc size = number_field("font_size", 16.0, "", value_range{1, kMaxFontSize});
-      out.font_size = std::get<double>(convert_value(v, size, "image.font_size"));
-    } else if (key.text == "text_color") {
-      static const field_desc color = color_field("text_color", "");
-      out.text_color = std::get<std::string>(convert_value(v, color, "image.text_color"));
-    } else if (key.text == "theme") {
+    written.push_back(key.text);
+    if (key.text == "theme") {
       if (!v.is_scalar() || !is_known_theme(v.text)) {
-        fail(v, "image.theme: unknown theme '" + v.text + "' (one of: light, dark, classic)");
+        std::vector<std::string> names;
+        for (const chart_theme& t : chart_themes()) {
+          names.push_back(t.id);
+        }
+        fail(v, "image.theme: unknown theme '" + v.text + "'" + did_you_mean(v.text, names) + " (themes: " +
+                chart_theme_list() + ")");
       }
       out.theme = v.text;
     } else {
-      fail(
-          key,
-          "image has no option '" + key.text + "'" + did_you_mean(key.text, kImageKeys) +
-              " (options: width, height, scale, theme, padding, font, font_size, text_color)");
+      bind_image_option(out, key, v);
     }
   }
+  return out;
+}
+
+/// The size checks of the image options, once the theme's are in.
+void check_image(const image_options& out, const yaml_node& image) {
   const yaml_node& at_scale = image.find("scale") ? *image.find("scale") : image;
   if (out.width * out.scale > 8192 || out.height * out.scale > 8192) {
     fail(
@@ -430,7 +529,6 @@ image_options bind_image(const yaml_node& image) {
         image.find("padding") ? *image.find("padding") : image,
         "image.padding leaves no room in a " + std::to_string(out.width) + "x" + std::to_string(out.height) + " image");
   }
-  return out;
 }
 
 } // namespace
@@ -495,7 +593,10 @@ data_replacement replace_top_level(std::string_view source, std::string_view key
   return r;
 }
 
-figure bind_source(std::string_view source, const registry& reg) {
+figure bind_source(std::string_view source, const registry& reg, const bind_options& options) {
+  if (!options.theme.empty() && !is_known_theme(options.theme)) {
+    throw std::invalid_argument("unknown theme '" + options.theme + "' (themes: " + chart_theme_list() + ")");
+  }
   if (source.size() > kMaxSourceBytes) {
     throw error(0, 0, "the source is larger than 16 MiB");
   }
@@ -524,14 +625,39 @@ figure bind_source(std::string_view source, const registry& reg) {
     }
     out.description = description->text;
   }
-  if (const yaml_node* image = doc.find("image")) {
-    out.image = bind_image(*image);
+  std::vector<std::string> image_written;
+  source_pos theme_at;
+  const yaml_node empty_image = parse_yaml("{}");
+  const yaml_node* image = doc.find("image");
+  if (image != nullptr) {
+    out.image = bind_image(*image, image_written);
     for (size_t i = 0; i < image->keys.size(); ++i) {
       if (image->keys[i].text == "font") {
         out.image_font_pos = {image->children[i].line, image->children[i].column};
       }
+      if (image->keys[i].text == "theme") {
+        theme_at = {image->children[i].line, image->children[i].column};
+      }
     }
   }
+  if (!options.theme.empty()) {
+    out.image.theme = options.theme;
+  }
+  if (options.custom_theme != nullptr) {
+    out.image.theme = options.custom_theme->id;
+  }
+  const chart_theme* theme =
+      options.custom_theme != nullptr ? options.custom_theme : find_chart_theme(out.image.theme);
+  out.image.base = theme->base;
+  // The theme's image options, for those the source leaves out.
+  for (const auto& [key, v] : theme->image) {
+    if (std::find(image_written.begin(), image_written.end(), key) == image_written.end()) {
+      yaml_node name;
+      name.text = key;
+      bind_image_option(out.image, name, v);
+    }
+  }
+  check_image(out.image, image != nullptr ? *image : empty_image);
   data_set data;
   const yaml_node* data_node = doc.find("data");
   if (data_node != nullptr) {
@@ -542,6 +668,12 @@ figure bind_source(std::string_view source, const registry& reg) {
     throw error(1, 1, "missing 'root': the element to draw, like root: {type: Plot, children: [...]}");
   }
   binder b(reg, data_node != nullptr ? &data : nullptr);
+  b.set_theme(theme, theme_at);
+  for (const std::string& key : image_written) {
+    if (is_text_style_field(key)) {
+      b.written_above(key);
+    }
+  }
   std::vector<bool> set;
   out.root = b.element(*root, nullptr, &set);
   out.root.cls->adjust_root(out.root, set);

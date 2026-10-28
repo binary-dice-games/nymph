@@ -64,6 +64,7 @@ window.addEventListener('message', (event) => {
 const chartBox = document.getElementById('chart');
 const message = document.getElementById('message');
 const fullscreenButton = document.getElementById('fullscreen');
+const openAppButton = document.getElementById('open-app');
 
 /** What tests (and a curious user's console) can look at. */
 const app = { viewer: null, host: null, displayMode: 'inline', error: null, lastContext: null };
@@ -210,6 +211,8 @@ async function showResult(result) {
     await app.viewer.rendered();
     message.textContent = '';
     app.error = null;
+    app.source = source;
+    openAppButton.hidden = false;
   } catch (e) {
     showFallback(result, `The live chart could not be shown (${e?.message ?? e}); this is the rendered image.`);
   }
@@ -250,6 +253,61 @@ fullscreenButton.addEventListener('click', async () => {
   } catch {
     // The host refused; stay as we are.
   }
+});
+
+// ── Open in the web app (spec/17_agent_connectors/DESIGN.md section 7.3) ─────
+
+/** The `y=` value of a share link: deflate-raw, base64url (web/app/app/share.js). */
+async function encodeSource(source) {
+  const stream = new Blob([new TextEncoder().encode(source)]).stream().pipeThrough(new CompressionStream('deflate-raw'));
+  const bytes = new Uint8Array(await new Response(stream).arrayBuffer());
+  let s = '';
+  for (let i = 0; i < bytes.length; i += 0x8000) {
+    s += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
+  }
+  return btoa(s).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+}
+
+/**
+ * Opens the chart on screen in the web app, paired with this same nymph mcp
+ * (web_app_pair), so the agent in the chat goes on editing it there. Without
+ * the host's open-link request, the link is shown to copy.
+ */
+openAppButton.addEventListener('click', async () => {
+  const source = app.viewer?.toYaml?.() ?? app.source;
+  if (typeof source !== 'string') {
+    return;
+  }
+  let url;
+  try {
+    const pairing = await request('tools/call', { name: 'web_app_pair', arguments: {} });
+    const { code, link } = pairing?.structuredContent ?? {};
+    if (pairing?.isError || typeof link !== 'string' || typeof code !== 'string') {
+      throw new Error(pairing?.content?.[0]?.text ?? 'this nymph cannot pair with the web app');
+    }
+    url = `${link.split('#')[0]}#y=${await encodeSource(source)}&pair=${encodeURIComponent(code)}`;
+  } catch (e) {
+    message.textContent = `Could not open the web app: ${e?.message ?? e}`;
+    reportSize();
+    return;
+  }
+  app.openedLink = url;
+  try {
+    const result = await request('ui/open-link', { url });
+    if (result?.isError) {
+      throw new Error('refused');
+    }
+    message.textContent = '';
+  } catch {
+    message.textContent = `Open this link to edit the chart in the nymph web app (it works once, for 5 minutes):\n${url}`;
+    try {
+      await navigator.clipboard.writeText(url);
+      message.textContent += '\n(Copied.)';
+    } catch {
+      // a sandboxed frame may not reach the clipboard
+    }
+  }
+  reportSize();
 });
 
 // ── Start ─────────────────────────────────────────────────────────────────────

@@ -6,6 +6,7 @@
 #include <algorithm>
 #include <filesystem>
 #include <fstream>
+#include <regex>
 #include <set>
 #include <sstream>
 #include <string>
@@ -121,6 +122,41 @@ TEST(docs, ExamplesMdQuotesEveryExampleVerbatim) {
     const std::vector<uint8_t> bytes(png.begin(), png.end());
     EXPECT_EQ(extract_source(bytes).value_or(""), read_file(path))
         << "re-render with: nymph examples/" << name << ".yaml";
+  }
+}
+
+
+// ── examples/mermaid/ (spec/16_mermaid_import/PLAN.md step 13) ──────────────
+
+/// A source with its measured image size taken out (layout floats may
+/// differ by compiler).
+std::string without_image_size(const std::string& source) {
+  return std::regex_replace(source, std::regex(R"(image: \{width: \d+, height: \d+\})"), "image: {}");
+}
+
+TEST(docs, MermaidExamplesConvertCleanlyAndAreQuoted) {
+  const std::string page = read_file(kSourceDir / "docs" / "examples.md");
+  std::vector<fs::path> sources;
+  for (const fs::directory_entry& e : fs::directory_iterator(kSourceDir / "examples" / "mermaid")) {
+    if (e.path().extension() == ".mmd") {
+      sources.push_back(e.path());
+    }
+  }
+  ASSERT_EQ(sources.size(), 10u); // one per mermaid kind nymph reads
+  for (const fs::path& path : sources) {
+    SCOPED_TRACE(path.filename().string());
+    std::string text = read_file(path);
+    text.erase(std::remove(text.begin(), text.end(), '\r'), text.end());
+    const mermaid_import m = import_mermaid(text);
+    EXPECT_TRUE(m.warnings.empty()) << m.warnings.front().message;
+    EXPECT_FALSE(render_png(m.source).empty());
+    const std::string name = path.stem().string();
+    EXPECT_NE(page.find("```mermaid\n" + text + "```\n"), std::string::npos);
+    EXPECT_NE(page.find("](../examples/mermaid/" + name + ".png)"), std::string::npos);
+    const std::string png = read_file(kSourceDir / "examples" / "mermaid" / (name + ".png"));
+    const std::vector<uint8_t> bytes(png.begin(), png.end());
+    EXPECT_EQ(without_image_size(extract_source(bytes).value_or("")), without_image_size(m.source))
+        << "re-render with: nymph examples/mermaid/" << name << ".mmd";
   }
 }
 

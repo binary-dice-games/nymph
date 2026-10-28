@@ -1,0 +1,104 @@
+<!doctype html>
+<!-- MIT License © 2026 Binary Dice Games -->
+<!-- The nymph web app (spec/15_web_app/DESIGN.md): open, view and edit nymph charts in the browser. -->
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'wasm-unsafe-eval' https://accounts.google.com https://apis.google.com; connect-src 'self' https: wss: http://127.0.0.1:* http://localhost:* ws://127.0.0.1:* ws://localhost:*; img-src 'self' data: blob: https:; style-src 'self' 'unsafe-inline' https://accounts.google.com; frame-src https://docs.google.com https://accounts.google.com https://drive.google.com; worker-src 'self'; font-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'">
+  <meta name="description" content="Open, view and edit nymph charts in your browser: plots, UML diagrams, flowcharts, Gantt and Sankey charts, UI mockups. Your files stay in this browser.">
+  <meta name="color-scheme" content="light dark">
+  <meta name="theme-color" content="#0f9f86">
+  <title>nymph — view and edit charts</title>
+  <link rel="icon" href="icon.png">
+  <link rel="apple-touch-icon" href="icon.png">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="stylesheet" href="app.css">
+</head>
+<body>
+  <div id="progress" class="progress" hidden><div></div></div>
+
+  <header class="bar" id="bar">
+    <button class="brand" id="home" type="button" title="Start page" aria-label="nymph: start page">
+      <img src="icon.png" alt="" width="28" height="28"><span>nymph</span>
+    </button>
+    <div class="doc-title" id="doc-title" hidden>
+      <span class="origin" id="doc-origin" aria-hidden="true"></span>
+      <input id="doc-name" class="doc-name" aria-label="File name" spellcheck="false" autocomplete="off">
+      <span class="dot" id="doc-dot" title="Unsaved changes" hidden></span>
+    </div>
+    <div class="spacer"></div>
+    <div class="actions" id="doc-actions" hidden>
+      <div class="segmented" role="group" aria-label="Mode">
+        <button type="button" id="mode-view" aria-pressed="true">View</button>
+        <button type="button" id="mode-edit" aria-pressed="false">Edit</button>
+      </div>
+      <div class="split">
+        <button type="button" class="btn primary" id="btn-save" title="Save (Ctrl+S)">Save</button>
+        <button type="button" class="btn primary caret" id="btn-save-menu" aria-label="More ways to save" aria-haspopup="menu"></button>
+      </div>
+      <button type="button" class="btn ghost" id="btn-agents" aria-pressed="false" title="Agents working on this chart (Ctrl+Shift+A)" hidden>Agents</button>
+      <button type="button" class="btn ghost collapsible" id="btn-collab" aria-pressed="false" title="Share this chart live and draw on it together (Ctrl+Shift+L)" hidden>Collaborate</button>
+      <button type="button" class="btn collapsible" id="btn-share" aria-haspopup="menu">Share</button>
+    </div>
+    <button type="button" class="btn icon" id="btn-more" aria-label="More" aria-haspopup="menu"></button>
+  </header>
+
+  <main id="main">
+    <section id="start" class="start" aria-label="Open a chart">
+      <div class="hero">
+        <div class="drop" id="drop-zone">
+          <h1>Open a nymph chart</h1>
+          <p class="lead">A nymph YAML file, or a PNG that carries one. View it live, edit it, save it, share it.</p>
+          <div class="open-buttons" id="open-buttons">
+            <button type="button" class="btn primary large" data-command="app_open_file">Open file…</button>
+            <button type="button" class="btn large" data-command="app_open_url_dialog">From URL…</button>
+            <button type="button" class="btn large" id="btn-drive" data-command="app_open_drive" hidden>Google Drive</button>
+            <button type="button" class="btn large" id="btn-new" data-command="app_new_dialog">New chart</button>
+          </div>
+          <p class="hint">or drop a file anywhere, or paste YAML or an image</p>
+        </div>
+      </div>
+      <div class="sections">
+        <section class="recent" id="recent-section" hidden>
+          <div class="section-head"><h2>Recent</h2><button type="button" class="link" id="recent-clear">Clear</button></div>
+          <ul class="cards" id="recent-list"></ul>
+        </section>
+        <section id="templates-section">
+          <div class="section-head"><h2>Start from a template</h2></div>
+          <ul class="cards" id="template-list"></ul>
+        </section>
+        <section id="examples-section">
+          <div class="section-head"><h2>Examples</h2></div>
+          <ul class="cards small" id="example-list"></ul>
+        </section>
+      </div>
+      <footer class="foot">
+        <p><strong>Your files stay in this browser.</strong> Nothing is uploaded unless you save to Google Drive or share a chart live. No analytics.</p>
+        <p>nymph turns YAML into charts. Install the command-line tool, or use it from Claude, Cursor or Gemini:
+          <a href="https://github.com/binary-dice-games/nymph#install" target="_blank" rel="noopener">install</a> ·
+          <a href="https://github.com/binary-dice-games/nymph/blob/main/docs/format.md" target="_blank" rel="noopener">the format</a> ·
+          <a href="https://github.com/binary-dice-games/nymph" target="_blank" rel="noopener">GitHub</a> ·
+          <a href="demo/">demo page</a>
+        </p>
+      </footer>
+    </section>
+
+    <section id="doc" class="doc" hidden aria-label="Chart">
+      <div class="banner" id="banner" role="status" hidden></div>
+      <div class="workarea">
+        <div class="stage" id="stage"></div>
+        <aside class="dock" id="dock" hidden aria-label="Agents"></aside>
+        <aside class="dock" id="collab-dock" hidden aria-label="Live session"></aside>
+      </div>
+    </section>
+  </main>
+
+  <div class="drop-overlay" id="drop-overlay" hidden><div>Drop to open</div></div>
+  <div class="toasts" id="toasts" aria-live="polite"></div>
+  <input type="file" id="file-input" accept=".yaml,.yml,.png,application/x-yaml,text/yaml,image/png" hidden>
+  <input type="file" id="csv-input" accept=".csv,text/csv" hidden>
+
+  <script type="module" src="app/main.js"></script>
+</body>
+</html>

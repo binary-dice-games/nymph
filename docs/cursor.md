@@ -95,6 +95,15 @@ Whether it does, and whether Cursor lets it run WebAssembly, is
 *unverified*; where it does not, you get the PNG, which every result
 carries.
 
+## The web app
+
+Cursor's agent can work on the chart open in the [web app](web-app.md#agents)
+through the same `nymph mcp`: ask it to "connect to the nymph web app",
+then type the code it gives under **Agents > Connect an agent** (or open
+its link). The app's tools then join the agent's list; whether Cursor
+re-reads the list when a server changes it (`tools/list_changed`) is
+*unverified*: if not, the agent reaches them through `web_app_call`.
+
 ## Limits
 
 - Cursor's cloud and background agents run on a remote machine with no

@@ -1,0 +1,15 @@
+nymph: 1
+description: Gantt chart converted from mermaid.
+image: {width: 800, height: 320}
+source: Converted from a mermaid gantt.
+root:
+  type: GanttChart
+  children:
+    - {type: GanttTask, name: Before sections, start: 2026-03-01 09:00, duration: 0.0625}
+    - type: GanttSection
+      name: Day one
+      children:
+        - {type: GanttTask, id: t1, name: Morning, start: 2026-03-02 09:00, duration: 0.125}
+        - {type: GanttTask, name: Lunch, after: [t1], duration: 0.041667}
+        - {type: GanttTask, name: Week, start: 2026-03-02 13:00, duration: 7}
+        - {type: GanttTask, name: Weeks, start: 2026-03-09 13:00, duration: 3.5}

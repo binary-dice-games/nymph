@@ -18,6 +18,8 @@
 #include "nymph.hpp"
 #include "png/png_meta.hpp"
 #include "shapes/shape_catalog.hpp"
+#include "edit/source_edit.hpp"
+#include "themes/theme_catalog.hpp"
 
 namespace bdg::nymph::embedded {
 extern const unsigned char cli_examples[];
@@ -220,6 +222,34 @@ std::string source_of(const bytes_t& input, const std::string& path) {
   return *source;
 }
 
+loaded_source load_source_text(std::string_view text) {
+  loaded_source loaded;
+  if (is_mermaid(text)) {
+    mermaid_import imported = import_mermaid(text);
+    loaded.source = std::move(imported.source);
+    loaded.mermaid_kind = std::move(imported.kind);
+    loaded.warnings = std::move(imported.warnings);
+  } else {
+    loaded.source = std::string(text);
+  }
+  return loaded;
+}
+
+loaded_source load_source(const bytes_t& input, const std::string& path) {
+  if (is_png(input)) {
+    return {source_of(input, path), {}, {}};
+  }
+  return load_source_text(as_text(input));
+}
+
+std::string warning_text(const std::string& label, const import_warning& w) {
+  std::string text = label;
+  if (w.line > 0) {
+    text += ":" + std::to_string(w.line) + ":" + std::to_string(w.column);
+  }
+  return text + ": warning: " + w.message;
+}
+
 std::string fonts_text() {
   std::string text = std::string(kDefaultFontName) + "\n";
   for (const font_entry& f : font_catalog()) {
@@ -234,6 +264,47 @@ std::string shapes_listing(const std::string& name) {
   } catch (const std::invalid_argument& e) {
     throw cli_failure{"shapes", e.what()};
   }
+}
+
+namespace {
+
+[[noreturn]] void unknown_theme(const std::string& command, const std::string& name) {
+  std::vector<std::string> names;
+  for (const chart_theme& t : chart_themes()) {
+    names.push_back(t.id);
+  }
+  throw cli_failure{command, "unknown theme '" + name + "'" + did_you_mean(name, names) + " (themes: " +
+                                 chart_theme_list() + ")"};
+}
+
+} // namespace
+
+std::string themes_listing(const std::string& name) {
+  if (!name.empty()) {
+    for (const embedded_file& f : embedded_themes()) {
+      if (f.name == name) {
+        return std::string(f.text());
+      }
+    }
+    unknown_theme("themes", name);
+  }
+  size_t width = 0;
+  for (const chart_theme& t : chart_themes()) {
+    width = std::max(width, t.id.size());
+  }
+  std::string text;
+  for (const chart_theme& t : chart_themes()) {
+    text += t.id + std::string(width + 2 - t.id.size(), ' ') + t.name + " (" + (t.dark ? "dark" : "light") +
+        "): " + t.description + "\n";
+  }
+  return text;
+}
+
+std::string source_with_theme(std::string_view source, const std::string& theme) {
+  if (!is_known_theme(theme)) {
+    unknown_theme("--theme", theme);
+  }
+  return set_field(source, "image", "theme", theme);
 }
 
 std::string schema_type_text(const std::string& type) {

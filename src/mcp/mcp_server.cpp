@@ -3,6 +3,7 @@
 /// @brief The stdio loop of `nymph mcp` and its arguments.
 #include "mcp/mcp_server.hpp"
 #include <exception>
+#include <mutex>
 #include <istream>
 #include <ostream>
 #include <string>
@@ -51,7 +52,15 @@ bool blank(const std::string& line) {
 } // namespace
 
 int run_mcp(std::istream& in, std::ostream& out, std::ostream& log, const server_options& options) {
-  session s(options);
+  // Responses come from this thread, notifications from the web bridge's.
+  std::mutex out_mtx;
+  server_options with_notify = options;
+  with_notify.notify = [&out, &out_mtx](const json& message) {
+    const std::lock_guard<std::mutex> lock(out_mtx);
+    out << to_line(message) << '\n';
+    out.flush();
+  };
+  session s(with_notify);
   std::string line;
   while (std::getline(in, line)) {
     if (!line.empty() && line.back() == '\r') {
@@ -70,6 +79,7 @@ int run_mcp(std::istream& in, std::ostream& out, std::ostream& log, const server
       response = make_error(id, rpc_code::internal_error, std::string("internal error: ") + e.what());
     }
     if (response) {
+      const std::lock_guard<std::mutex> lock(out_mtx);
       out << to_line(*response) << '\n';
       out.flush();
       if (!out) {

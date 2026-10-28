@@ -1,0 +1,13 @@
+name: Paper
+description: Off-white page, serif type and muted ink colours, like a printed report.
+base: light
+image:
+  background: "#fdfcf8"
+  text_color: "#222222"
+  font: PT_Serif-Web-Regular.ttf
+  palette: ["#1f3a5f", "#a23e48", "#3d7068", "#c07f00", "#6b4e71", "#5c6b73"]
+fields:
+  figure:line_color: "#333333"
+  figure:fill_color: "#ffffff"
+  Note:fill_color: "#f7f2dc"
+  plot2d.item:line_weight: 1.5

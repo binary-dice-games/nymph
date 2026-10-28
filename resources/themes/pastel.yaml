@@ -1,0 +1,14 @@
+name: Pastel
+description: Airy white with soft pastel series and periwinkle diagram lines.
+base: light
+image:
+  background: "#fbfbff"
+  text_color: "#3b3f5c"
+  font: FiraSans-Regular.ttf
+  palette: ["#8fb8ff", "#ff9f9f", "#9ee6a8", "#ffc98b", "#b8a9ff", "#7fd8d8"]
+fields:
+  figure:line_color: "#7d8cc4"
+  figure:fill_color: "#eef2ff"
+  Note:fill_color: "#fff6d6"
+  plot2d.item:line_weight: 2
+  PlotBars:fill_alpha: 0.85

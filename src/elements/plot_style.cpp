@@ -48,8 +48,8 @@ const name_table& colormap_names() {
   return t;
 }
 
-std::vector<field_desc> series_fields(std::vector<field_desc> own) {
-  std::vector<field_desc> fields{
+std::vector<field_desc> series_fields(series_style s, std::vector<field_desc> own) {
+  std::vector<field_desc> shared{
       text_field("label", "", "Series name shown in the plot legend."),
       color_field(
           "color",
@@ -57,8 +57,8 @@ std::vector<field_desc> series_fields(std::vector<field_desc> own) {
           "Empty (default) takes the next colour of the plot's colormap."),
       color_field(
           "fill_color",
-          "Colour of filled areas (bar faces, shaded regions, surfaces) as \"#RRGGBB\" or \"#RRGGBBAA\". "
-          "Empty (default) uses color."),
+          "Colour of filled areas (bar faces, shaded regions, surfaces) and marker faces as \"#RRGGBB\" or "
+          "\"#RRGGBBAA\". Empty (default) uses color."),
       number_field(
           "line_weight", 1.0, "Line thickness in pixels (lines, bar edges, marker edges).", value_range{0.0, 32.0}),
       number_field(
@@ -75,6 +75,12 @@ std::vector<field_desc> series_fields(std::vector<field_desc> own) {
       number_field(
           "marker_size", 0.0, "Marker radius in pixels. 0 (default) keeps the automatic size.", value_range{0.0, 64.0}),
   };
+  std::vector<field_desc> fields;
+  for (size_t i = 0; i < shared.size(); ++i) {
+    if ((s & (1u << i)) != 0) {
+      fields.push_back(std::move(shared[i]));
+    }
+  }
   for (field_desc& f : own) {
     fields.push_back(std::move(f));
   }

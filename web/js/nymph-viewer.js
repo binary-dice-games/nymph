@@ -13,6 +13,8 @@
 
 const FIT = { source: 0, width: 1, fill: 2, scale: 3 };
 const POINTER = { move: 0, down: 1, up: 2, wheel: 3, leave: 4 };
+/** CSS pixels a finger moves before it presses the chart (a pan). */
+const TOUCH_SLOP = 6;
 const STATUS = { ok: 0, error: 1, fontsNeeded: 2, plainPng: 3 };
 
 /** The menu's and About panel's styles, added to the page once. */
@@ -46,6 +48,32 @@ function injectStyle() {
 .nymph-about button { font: inherit; padding: 4px 14px; border-radius: 4px; border: 1px solid var(--nv-line);
   background: var(--nv-hover); color: inherit; cursor: pointer; }`;
   document.head.appendChild(style);
+}
+
+/**
+ * The reset-view button's style, in the document or the shadow root that
+ * holds the chart (a page's styles do not reach into a shadow root).
+ * @param {Document|ShadowRoot} root
+ */
+function injectResetStyle(root) {
+  const parent = root.nodeType === 11 ? root : root.head; // 11: a shadow root
+  if (!parent || parent.querySelector(':scope > style.nymph-reset-style')) {
+    return;
+  }
+  const style = document.createElement('style');
+  style.className = 'nymph-reset-style';
+  style.textContent = `
+.nymph-reset { position: absolute; z-index: 1; box-sizing: border-box; width: 32px; height: 32px; margin: 0; padding: 0;
+  display: grid; place-items: center; color: #3a3a3a; background: rgba(255,255,255,.92);
+  border: 1px solid rgba(0,0,0,.18); border-radius: 6px; box-shadow: 0 1px 3px rgba(0,0,0,.12); cursor: pointer; }
+.nymph-reset[hidden] { display: none; }
+.nymph-reset:hover, .nymph-reset:focus-visible { background: #e8eefc; outline: none; }
+@media (pointer: coarse) { .nymph-reset { width: 40px; height: 40px; } }
+@media (prefers-color-scheme: dark) {
+  .nymph-reset { color: #e6e6e6; background: rgba(38,38,38,.92); border-color: rgba(255,255,255,.2); }
+  .nymph-reset:hover, .nymph-reset:focus-visible { background: #34405a; }
+}`;
+  parent.appendChild(style);
 }
 
 /** A problem in a nymph source (or a failed update). */
@@ -147,6 +175,20 @@ class Core {
     return JSON.parse(this.string(this.m._nymph_last_error())) ?? { message: 'unknown error' };
   }
 
+  /**
+   * Converts a mermaid diagram to a nymph source (spec/16_mermaid_import).
+   * @param {string} text the mermaid diagram
+   * @returns {{source: string, kind: string, warnings: {line: number, column: number, message: string}[]}}
+   * @throws {NymphError} with the mermaid line and column
+   */
+  importMermaid(text) {
+    const json = this.withString(text, (ptr, size) => this.string(this.m._nymph_import_mermaid(ptr, size)));
+    if (json === '') {
+      throw new NymphError(this.lastError());
+    }
+    return JSON.parse(json);
+  }
+
   /** Fetches and registers the fonts `names`, each once per page. */
   async ensureFonts(names) {
     await Promise.all(
@@ -184,7 +226,7 @@ let corePromise = null;
  * inline `about:srcdoc` frame) fails only when a font is needed
  * (spec/06_claude_integration/DESIGN.md section 4.3).
  */
-function fetchFrom(base, here) {
+export function fetchFrom(base, here) {
   return async (name) => {
     let baseUrl;
     try {
@@ -266,13 +308,21 @@ export class NymphViewer {
     this.lastHover = 'null';
     this.lastView = '';
     this.buttonsDown = 0;
+    /** @type {Set<number>} pointers pressed on the chart and not yet released */
+    this.pressed = new Set();
     /** @type {Map<number, {x: number, y: number}>} touches, for pinch zoom */
     this.touches = new Map();
     this.pinchDistance = 0;
+    /** A finger down but not yet pressed on the chart: {id, x, y, touch}. */
+    this.pendingTouch = null;
+    /** The fingers' midpoint at the last pinch step. */
+    this.pinchMiddle = { x: 0, y: 0 };
     /** @type {Array<() => void>} undoes listeners and observers */
     this.cleanup = [];
     /** A setData() not yet applied, which later calls replace. */
     this.dataSlot = null;
+    /** @type {HTMLButtonElement|null} shown while the user has moved the view */
+    this.resetButton = null;
   }
 
   // ── Events ─────────────────────────────────────────────────────────────────
@@ -280,7 +330,8 @@ export class NymphViewer {
   /**
    * Listens to `hover` (the pick under the pointer, or null), `click` (a
    * pick clicked), `view` (every plot's area and ranges after a pan or
-   * zoom settles) or `error` (an update made by the element failed).
+   * zoom settles), `figure` (figureBox() changed) or `error` (an update
+   * made by the element failed).
    * @returns {() => void} removes the listener
    */
   on(event, callback) {
@@ -315,10 +366,14 @@ export class NymphViewer {
     const canvas = document.createElement('canvas');
     canvas.style.display = 'block';
     canvas.setAttribute('role', 'img');
-    // Vertical one-finger drags still scroll the page; everything else
-    // (horizontal drags, pinches) reaches the chart.
-    canvas.style.touchAction = 'pan-y';
+    // A touch gesture that starts on the chart belongs to the chart alone:
+    // the page neither scrolls nor zooms under it. With touchScroll,
+    // vertical one-finger swipes scroll the page instead.
+    canvas.style.touchAction = this.options.touchScroll ? 'pan-y' : 'none';
     container.appendChild(canvas);
+    if (this.options.resetButton !== false) {
+      this.addResetButton(container);
+    }
     this.container = container;
     this.canvas = canvas;
     this.ctx2d = canvas.getContext('2d');
@@ -327,9 +382,63 @@ export class NymphViewer {
     this.fitToContainer();
   }
 
+  /**
+   * @private A button in the chart's bottom-right corner, shown while the
+   * user has moved the view, that resets it (as GitHub's diagrams do).
+   */
+  addResetButton(container) {
+    injectResetStyle(container.getRootNode());
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'nymph-reset';
+    b.title = 'Reset view';
+    b.setAttribute('aria-label', 'Reset view');
+    b.hidden = true;
+    // Four corners: back to the whole chart.
+    b.innerHTML =
+      '<svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" fill="none" stroke="currentColor" ' +
+      'stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M2 6V2h4M10 2h4v4M14 10v4h-4M6 14H2v-4"/></svg>';
+    b.addEventListener('click', () => {
+      b.hidden = true;
+      this.resetView();
+      this.canvas?.focus();
+    });
+    container.appendChild(b);
+    this.resetButton = b;
+    this.cleanup.push(() => {
+      b.remove();
+      this.resetButton = null;
+    });
+  }
+
+  /**
+   * @private Shows the reset button while the view is changed, at the
+   * canvas's bottom-right corner (offsets share the canvas's offset parent,
+   * so the container's own styles stay as the page set them).
+   */
+  placeResetButton(state) {
+    const b = this.resetButton;
+    const c = this.canvas;
+    if (!b || !c) {
+      return;
+    }
+    const show = state.hasFigure && state.viewChanged && c.offsetParent !== null;
+    b.hidden = !show;
+    if (show) {
+      const inset = 8;
+      b.style.left = `${c.offsetLeft + c.offsetWidth - b.offsetWidth - inset}px`;
+      b.style.top = `${c.offsetTop + c.offsetHeight - b.offsetHeight - inset}px`;
+    }
+  }
+
   /** @private Pointer, wheel and touch input on the canvas. */
   listenToInput(canvas) {
-    const at = (e) => ({ x: e.offsetX, y: e.offsetY, touch: e.pointerType === 'touch' });
+    // From the canvas box, not offsetX / offsetY: mobile browsers report
+    // those inconsistently for touch pointers (and while the page moves).
+    const at = (e) => {
+      const box = canvas.getBoundingClientRect();
+      return { x: e.clientX - box.left, y: e.clientY - box.top, touch: e.pointerType === 'touch' };
+    };
     // DOM buttons: 0 primary, 1 middle, 2 secondary; ImGui: 0, 2, 1.
     const button = (e) => [0, 2, 1][e.button] ?? 0;
     const add = (type, fn, options) => {
@@ -338,36 +447,72 @@ export class NymphViewer {
     };
     add('pointerdown', (e) => {
       canvas.setPointerCapture(e.pointerId);
-      ++this.buttonsDown;
+      if (e.pointerType === 'touch' && e.isPrimary) {
+        // The only finger on the screen: touches still listed lost their
+        // release (a gesture ended off the chart, or the browser dropped the
+        // event). Left there, they would turn this one-finger pan into a pinch.
+        this.forgetTouches();
+      }
+      this.pressed.add(e.pointerId);
+      this.buttonsDown = this.pressed.size;
       this.closeMenu();
       if (e.button === 2) {
         this.rightDown = { x: e.clientX, y: e.clientY };
       }
       if (e.pointerType === 'touch') {
-        this.touches.set(e.pointerId, { x: e.offsetX, y: e.offsetY });
+        const first = this.touches.values().next().value;
+        const p = at(e);
+        this.touches.set(e.pointerId, { x: p.x, y: p.y });
         if (this.touches.size === 2) {
-          this.pinchDistance = this.touchDistance();
-          this.pointer('up', { ...at(e), button: 0 }); // the first finger's drag ends: a pinch starts
+          this.startPinch();
+          if (this.pendingTouch) {
+            // The first finger never pressed: no click, no double click.
+            this.pendingTouch = null;
+          } else {
+            // The first finger's drag ends where that finger is (not at the
+            // second one, which would pan the chart by the gap).
+            this.pointer('up', { ...first, button: 0, touch: true });
+          }
+          // No hover or tooltip under a finger while the pinch goes on.
+          this.pointer('leave');
           return;
         }
         if (this.touches.size > 2) {
           return;
         }
+        // A finger presses once it moves (a pan) or lifts (a tap), so a
+        // second finger can still make it a pinch without a click.
+        this.pendingTouch = { id: e.pointerId, ...p };
+        return;
       }
       this.pointer('down', { ...at(e), button: button(e) });
     });
     add('pointermove', (e) => {
       if (e.pointerType === 'touch' && this.touches.has(e.pointerId)) {
-        this.touches.set(e.pointerId, { x: e.offsetX, y: e.offsetY });
+        const p = at(e);
+        this.touches.set(e.pointerId, { x: p.x, y: p.y });
         if (this.touches.size === 2) {
           this.pinch();
           return;
+        }
+        const pending = this.pendingTouch;
+        if (pending?.id === e.pointerId) {
+          if (Math.hypot(p.x - pending.x, p.y - pending.y) < TOUCH_SLOP) {
+            return;
+          }
+          this.pendingTouch = null;
+          this.pointer('down', { ...pending, button: 0 });
         }
       }
       this.pointer('move', at(e));
     });
     const release = (e) => {
-      this.buttonsDown = Math.max(0, this.buttonsDown - 1);
+      // Once per press: lostpointercapture follows pointerup, and stands in
+      // for it when the browser never sends it.
+      if (!this.pressed.delete(e.pointerId)) {
+        return;
+      }
+      this.buttonsDown = this.pressed.size;
       // A right click that did not drag (a drag box-zooms a plot) opens the menu.
       if (e.type === 'pointerup' && e.button === 2 && this.rightDown && this.options.menu !== false) {
         const moved = Math.hypot(e.clientX - this.rightDown.x, e.clientY - this.rightDown.y);
@@ -376,10 +521,21 @@ export class NymphViewer {
         }
       }
       this.rightDown = null;
+      if (this.pendingTouch?.id === e.pointerId) {
+        // A tap: press where the finger went down (a cancelled one is no tap).
+        if (e.type === 'pointerup') {
+          this.pointer('down', { ...this.pendingTouch, button: 0 });
+        }
+        this.pendingTouch = null;
+      }
       const pinching = this.touches.size >= 2;
       this.touches.delete(e.pointerId);
       if (!pinching) {
         this.pointer('up', { ...at(e), button: button(e) });
+      }
+      if (this.touches.size === 2) {
+        // A third finger lifted: the pinch goes on from these two.
+        this.startPinch();
       }
       if (e.pointerType === 'touch' && this.touches.size === 0) {
         this.pointer('leave');
@@ -387,6 +543,7 @@ export class NymphViewer {
     };
     add('pointerup', release);
     add('pointercancel', release);
+    add('lostpointercapture', release);
     add('pointerleave', (e) => {
       if (!canvas.hasPointerCapture(e.pointerId)) {
         this.pointer('leave');
@@ -407,6 +564,14 @@ export class NymphViewer {
       },
       { passive: false },
     );
+    if (!this.options.touchScroll) {
+      // Browsers that do not fully honour touch-action (older iOS Safari)
+      // would still scroll or zoom the page: the touches stay the chart's.
+      // Pointer events, which drive the chart, still fire.
+      const keep = (e) => e.cancelable && e.preventDefault();
+      add('touchstart', keep, { passive: false });
+      add('touchmove', keep, { passive: false });
+    }
     add('contextmenu', (e) => {
       // nymph's menu opens on release instead (the press may start a box
       // zoom); without it, the browser's menu stays outside plots.
@@ -451,26 +616,50 @@ export class NymphViewer {
     canvas.tabIndex = 0; // reachable from the keyboard: the menu key, text fields
   }
 
+  /** @private Drops every listed touch, as if all fingers had lifted. */
+  forgetTouches() {
+    for (const id of this.touches.keys()) {
+      this.pressed.delete(id);
+    }
+    this.buttonsDown = this.pressed.size;
+    this.touches.clear();
+    this.pendingTouch = null;
+    this.pinchDistance = 0;
+  }
+
   /** @private */
   touchDistance() {
     const [a, b] = [...this.touches.values()];
     return Math.hypot(a.x - b.x, a.y - b.y);
   }
 
-  /** @private Two fingers moving apart or together: wheel zoom at their centre. */
+  /** @private The two fingers' midpoint. */
+  touchMiddle() {
+    const [a, b] = [...this.touches.values()];
+    return { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
+  }
+
+  /** @private Two fingers down: later steps are measured from here. */
+  startPinch() {
+    this.pinchDistance = this.touchDistance();
+    this.pinchMiddle = this.touchMiddle();
+  }
+
+  /**
+   * @private Two fingers moved: the content under their old midpoint goes
+   * under the new one, zoomed by how far apart they moved (the content
+   * stays under the fingers).
+   */
   pinch() {
     const distance = this.touchDistance();
-    if (this.pinchDistance > 0 && distance > 0) {
-      const [a, b] = [...this.touches.values()];
-      const x = (a.x + b.x) / 2, y = (a.y + b.y) / 2;
-      // One wheel notch zooms by about 1.2.
-      const notches = Math.log(distance / this.pinchDistance) / Math.log(1.2);
-      if (Math.abs(notches) >= 0.05) {
-        this.pointer('move', { x, y, touch: true });
-        this.pointer('wheel', { x, y, wheelY: notches, touch: true });
-        this.pinchDistance = distance;
-      }
+    const middle = this.touchMiddle();
+    if (this.pinchDistance > 0 && distance > 0 && this.handle !== 0) {
+      const from = this.pinchMiddle;
+      this.core.m._nymph_viewer_pinch(this.handle, from.x, from.y, middle.x, middle.y, distance / this.pinchDistance);
+      this.schedule();
     }
+    this.pinchDistance = distance;
+    this.pinchMiddle = middle;
   }
 
   /** @private Size, pixel ratio, visibility and colour scheme of the page. */
@@ -496,7 +685,7 @@ export class NymphViewer {
     this.cleanup.push(() => window.removeEventListener('resize', ratio));
     if (this.options.theme === 'auto' && typeof matchMedia !== 'undefined') {
       const dark = matchMedia('(prefers-color-scheme: dark)');
-      const apply = () => this.setTheme(dark.matches ? 'dark' : 'light');
+      const apply = () => this.setTheme(dark.matches ? 'dark' : 'light').catch(() => {});
       dark.addEventListener('change', apply);
       this.cleanup.push(() => dark.removeEventListener('change', apply));
       apply();
@@ -577,14 +766,45 @@ export class NymphViewer {
     const g = this.state().geometry;
     c.style.width = `${g.layoutWidth * g.cssScale}px`;
     c.style.height = `${g.layoutHeight * g.cssScale}px`;
+    this.geometry = g;
+    const key = `${g.layoutWidth},${g.layoutHeight},${g.cssScale}`;
+    if (key !== this.lastFigure) {
+      this.lastFigure = key;
+      this.emit('figure', this.figureBox());
+    }
   }
 
-  /** @private Fires hover and click after a frame, and view once a pan or zoom settles. */
+  /**
+   * Where the figure's layout is drawn: `{left, top, width, height, scale}`,
+   * CSS pixels from the container's top-left corner, `scale` CSS pixels per
+   * layout pixel; null before the first frame or with no figure
+   * (spec/18_collaboration/DESIGN.md section 5.3). The `figure` event
+   * fires when it changes.
+   */
+  figureBox() {
+    const g = this.geometry;
+    if (!this.canvas || !this.container || !g || this.handle === 0 || this.plainImage) {
+      return null;
+    }
+    const c = this.canvas.getBoundingClientRect();
+    const box = this.container.getBoundingClientRect();
+    return { left: c.left - box.left, top: c.top - box.top, width: g.layoutWidth * g.cssScale, height: g.layoutHeight * g.cssScale, scale: g.cssScale };
+  }
+
+  /**
+   * @private Fires hover and click after a frame, and view once a pan or
+   * zoom settles; shows or hides the reset button.
+   */
   afterFrame() {
-    if (this.listeners.size === 0) {
+    if (this.listeners.size === 0 && !this.resetButton) {
       return;
     }
     const state = this.state();
+    this.placeResetButton(state);
+    if (this.listeners.size === 0) {
+      this.pendingClick = null;
+      return;
+    }
     const hover = JSON.stringify(state.hovered);
     if (hover !== this.lastHover) {
       this.lastHover = hover;
@@ -645,7 +865,7 @@ export class NymphViewer {
     this.handle = this.core.m._nymph_viewer_create(FIT[this.options.fit ?? 'source'] ?? 0, this.options.tooltips === false ? 0 : 1, 0);
     this.webgl = false;
     if (this.themeOverride) {
-      this.setTheme(this.themeOverride);
+      this.setTheme(this.themeOverride).catch(() => {});
     }
     this.boxKey = undefined; // the new handle has no size yet
     this.fitToContainer();
@@ -663,7 +883,7 @@ export class NymphViewer {
     }
     const src = this.options.src;
     const base = src ? decodeURIComponent(new URL(src, location.href).pathname.split('/').pop() || '') : '';
-    return base.replace(/\.(ya?ml|png)$/i, '') || 'chart';
+    return base.replace(/\.(ya?ml|png|mmd|mermaid)$/i, '') || 'chart';
   }
 
   /** Saves the chart as `kind`: "png" (what is on screen) or "yaml" (toYaml()). */
@@ -811,12 +1031,20 @@ export class NymphViewer {
   /** What the viewer is showing and how. */
   info() {
     const s = this.handle === 0 ? null : this.state();
-    return {
+    const info = {
       rasterizer: this.webgl ? 'webgl' : 'software',
       hasFigure: s?.hasFigure ?? false,
       description: s?.description ?? '',
       size: s ? { width: s.geometry.layoutWidth * s.geometry.cssScale, height: s.geometry.layoutHeight * s.geometry.cssScale } : { width: 0, height: 0 },
     };
+    // A mermaid source was converted: its kind and what nymph dropped.
+    const imported = this.handle === 0 ? null : JSON.parse(this.core.string(this.core.m._nymph_viewer_imported(this.handle)));
+    if (imported) {
+      info.importedFrom = 'mermaid';
+      info.mermaidKind = imported.kind;
+      info.warnings = imported.warnings;
+    }
+    return info;
   }
 
   /** @private Runs `call` (returning a status) after earlier updates, fetching fonts as asked. */
@@ -883,8 +1111,9 @@ export class NymphViewer {
   }
 
   /**
-   * Shows `yaml`.
-   * @param {string} yaml a nymph source
+   * Shows `yaml`. A mermaid diagram is converted to a nymph source first
+   * (source(), toYaml() and the saved files are then that YAML).
+   * @param {string} yaml a nymph source, or a mermaid diagram
    * @param {{resetView?: boolean}} [options] drop the zoom of the previous chart
    */
   setSource(yaml, { resetView = false } = {}) {
@@ -926,14 +1155,40 @@ export class NymphViewer {
     );
   }
 
-  /** Overrides the source's theme: "light", "dark", "classic", or "" for the source's own. */
+  /**
+   * Overrides the source's chart theme (one of themes(): "light", "dark",
+   * "ocean", ...), or "" for the source's own. Applied after earlier
+   * updates; resolves once shown, fetching any font the theme uses, and
+   * rejects with a NymphError (the previous theme stays).
+   */
   setTheme(theme) {
     this.checkAlive();
-    if (this.core.withCString(theme, (ptr) => this.core.m._nymph_viewer_set_theme(this.handle, ptr)) !== STATUS.ok) {
-      throw new NymphError(this.core.lastError());
-    }
-    this.themeOverride = theme;
-    this.schedule();
+    const run = async () => {
+      for (let attempt = 0; attempt < 4; ++attempt) {
+        this.checkAlive();
+        const status = this.core.withCString(theme, (ptr) => this.core.m._nymph_viewer_set_theme(this.handle, ptr));
+        if (status === STATUS.ok) {
+          this.themeOverride = theme;
+          this.schedule();
+          return;
+        }
+        const info = this.core.lastError();
+        if (status !== STATUS.fontsNeeded) {
+          throw new NymphError(info);
+        }
+        await this.core.ensureFonts(info.fonts);
+      }
+      throw new NymphError({ kind: 'fonts', message: 'fonts were registered but are still missing' });
+    };
+    const result = this.queue.then(run, run);
+    this.queue = result.catch(() => {});
+    result.catch((e) => this.emit('error', e));
+    return result;
+  }
+
+  /** The chart themes: [{id, name, description, base, dark, background, text_color, palette}]. */
+  themes() {
+    return JSON.parse(this.core.string(this.core.m._nymph_themes()));
   }
 
   /** Sets the box the chart is shown in: CSS pixels and the device pixel ratio. */
@@ -1093,6 +1348,8 @@ export class NymphViewer {
  * @param {'source'|'light'|'dark'|'classic'|'auto'} [options.theme] the source's theme (default), a fixed one, or the page's colour scheme
  * @param {boolean} [options.menu] the right-click menu: save as PNG / YAML, about (default true)
  * @param {string} [options.fileName] the name files are saved under, without extension (default: from `src`, or "chart")
+ * @param {boolean} [options.resetButton] a button in the chart's corner, shown once the user pans or zooms, that resets the view (default true)
+ * @param {boolean} [options.touchScroll] a vertical one-finger swipe on the chart scrolls the page (default false: every touch gesture that starts on the chart goes to the chart only)
  * @returns {Promise<NymphViewer>}
  */
 export async function createViewer(container, options = {}) {
@@ -1105,7 +1362,7 @@ export async function createViewer(container, options = {}) {
   }
   const viewer = new NymphViewer(core, handle, options);
   if (options.theme && options.theme !== 'source' && options.theme !== 'auto') {
-    viewer.setTheme(options.theme);
+    await viewer.setTheme(options.theme);
   }
   if (container != null) {
     viewer.mount(container);
@@ -1116,6 +1373,18 @@ export async function createViewer(container, options = {}) {
     await viewer.setPng(options.png);
   }
   return viewer;
+}
+
+/**
+ * Converts a mermaid diagram to a nymph source without drawing it
+ * (spec/16_mermaid_import/DESIGN.md section 5.5).
+ * @param {string} text the mermaid diagram
+ * @param {object} [options] as loadNymph()
+ * @returns {Promise<{source: string, kind: string, warnings: {line: number, column: number, message: string}[]}>}
+ */
+export async function importMermaid(text, options = {}) {
+  const core = await loadNymph(options);
+  return core.importMermaid(text);
 }
 
 // ── <nymph-viewer> ────────────────────────────────────────────────────────────
@@ -1134,14 +1403,14 @@ function isPng(bytes) {
 }
 
 /**
- * `<nymph-viewer src="chart.yaml|chart.png" fit theme tooltips>`, or with
+ * `<nymph-viewer src="chart.yaml|chart.png|diagram.mmd" fit theme tooltips>`, or with
  * the YAML as its text (what a markdown renderer can emit for a
  * ```nymph fenced block). Its `viewer` property is the NymphViewer; it
  * re-dispatches the viewer's events as `nymph-hover`, `nymph-click`,
  * `nymph-view` and `nymph-error`.
  */
 export class NymphViewerElement extends (typeof HTMLElement === 'undefined' ? class {} : HTMLElement) {
-  static observedAttributes = ['src', 'fit', 'theme', 'tooltips', 'menu'];
+  static observedAttributes = ['src', 'fit', 'theme', 'tooltips', 'menu', 'reset-button', 'touch-scroll'];
 
   constructor() {
     super();
@@ -1169,7 +1438,7 @@ export class NymphViewerElement extends (typeof HTMLElement === 'undefined' ? cl
       return;
     }
     if (name === 'theme' && this.viewer && after !== 'auto') {
-      this.viewer.setTheme(after === 'source' || after === null ? '' : after);
+      this.viewer.setTheme(after === 'source' || after === null ? '' : after).catch(() => {});
       return;
     }
     this.reload();
@@ -1209,6 +1478,8 @@ export class NymphViewerElement extends (typeof HTMLElement === 'undefined' ? cl
           theme: this.getAttribute('theme') ?? 'source',
           tooltips: this.getAttribute('tooltips') !== 'false',
           menu: this.getAttribute('menu') !== 'false',
+          resetButton: this.getAttribute('reset-button') !== 'false',
+          touchScroll: this.hasAttribute('touch-scroll') && this.getAttribute('touch-scroll') !== 'false',
           src: src ?? undefined,
         });
         this.viewer = viewer;

@@ -465,6 +465,9 @@ ImUmlDiagramInfo diagram_class::submit(const node& n, draw_context& dc, const re
       flags |= ImUmlDiagramFlags_CaptureText | ImUmlDiagramFlags_CaptureItems;
       dc.clear_item_ranges(); // what the measuring passes recorded no longer applies
     }
+    if (dc.show_limits()) {
+      flags |= ImUmlDiagramFlags_ShowOutside;
+    }
     // The saved view (the `view` key).
     if (const element_view* v = dc.view_of(n); v != nullptr && dc.apply_view() && (v->zoom || v->center)) {
       const float nan = std::numeric_limits<float>::quiet_NaN();
@@ -472,6 +475,9 @@ ImUmlDiagramInfo diagram_class::submit(const node& n, draw_context& dc, const re
           v->zoom ? static_cast<float>(*v->zoom) : 1.0f,
           v->center ? ImVec2(static_cast<float>((*v->center)[0]), static_cast<float>((*v->center)[1]))
                     : ImVec2(nan, nan));
+    }
+    if (const std::optional<pinch_gesture> p = dc.take_pinch(*r)) {
+      ImUml::SetNextDiagramPinch(p->from, p->to, p->scale);
     }
     ImGui::SetCursorScreenPos(r->min);
   }

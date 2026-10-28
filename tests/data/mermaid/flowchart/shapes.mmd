@@ -1,0 +1,8 @@
+flowchart LR
+  box[Box] --> rounded(Rounded) --> stadium([Stadium]) --> sub[[Subroutine]]
+  cyl[(Cylinder)] --> circle((Circle)) --> dbl(((Double))) --> asym>Asymmetric]
+  diamond{Diamond} --> hex{{Hexagon}} --> lean[/Lean right/] --> leanl[\Lean left\]
+  trap[/Trapezoid\] --> trapt[\Inverted/] --> plain
+  doc@{ shape: doc, label: "A document" } --> docs@{ shape: docs, label: "Documents" }
+  delay@{ shape: delay } --> cloud@{ shape: cloud, label: "Cloud" } --> db@{ shape: cyl }
+  bolt@{ shape: bolt } --> q["Quoted (with brackets)"]

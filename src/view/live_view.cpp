@@ -21,6 +21,7 @@
 #include "edit/image_fields.hpp"
 #include "edit/source_edit.hpp"
 #include "document/bind.hpp"
+#include "elements/plot_pick.hpp"
 #include "elements/register_builtin.hpp"
 #include "fonts/fonts_used.hpp"
 #include "layout/layout.hpp"
@@ -28,6 +29,7 @@
 #include "render/draw_context.hpp"
 #include "render/figure_renderer.hpp"
 #include "render/frame_setup.hpp"
+#include "themes/theme_catalog.hpp"
 
 namespace bdg::nymph {
 
@@ -185,6 +187,7 @@ struct live_view::impl {
   view_options options;
   view_size size;
   std::string theme_override;
+  unsigned outline_rgb = 0x288cff; ///< set_outline_color()
 
   std::unique_ptr<figure> fig;
   std::string source;
@@ -197,10 +200,19 @@ struct live_view::impl {
   /// and the paths the user changed (they are saved by source_with_view()).
   view_map last_states;
   std::set<std::string> touched;
+  /// The view to start from instead of the source's `view` key: the view
+  /// on screen carried to renamed paths (set_source() with a rename).
+  view_map start_views;
   int input_frames_left = 0;
+  /// The pinch steps fed since the last frame, added up (logical pixels).
+  std::optional<pinch_gesture> pinch;
+  /// Zoom of pinches no plot or diagram took, not yet sent as a whole wheel
+  /// notch (3D plots).
+  float pinch_notches = 0.0f;
 
   // Edit mode (spec/08_view_editor/DESIGN.md section 4).
   bool edit_mode = false;
+  bool show_limits = false;
   std::vector<edit_target> edit_targets; ///< Of the last frame, in drawing order.
   std::optional<edit_target_id> selection;
   std::optional<edit_target> edit_click;
@@ -211,7 +223,7 @@ struct live_view::impl {
   image_options frame_options; ///< What draw_context sees; updated in place.
   std::unique_ptr<draw_context> ctx;
   texture_store textures;
-  std::string applied_theme; ///< Theme the contexts are configured with.
+  std::string applied_theme; ///< style_key() the contexts are configured with.
   ImU32 clear = IM_COL32(255, 255, 255, 255);
 
   std::function<void()> on_create; ///< set_context_hooks()
@@ -250,10 +262,33 @@ struct live_view::impl {
 
   const std::string& effective_theme() const {
     static const std::string kLight = "light";
-    if (!theme_override.empty()) {
-      return theme_override;
+    if (fig) {
+      return fig->image.theme; // bound with the override, if any
     }
-    return fig ? fig->image.theme : kLight;
+    return theme_override.empty() ? kLight : theme_override;
+  }
+
+  /// The options the styles come from: the figure's (its theme applied),
+  /// or the override's base colours before there is a figure.
+  image_options style_options() const {
+    if (fig) {
+      return fig->image;
+    }
+    image_options o;
+    if (const chart_theme* t = find_chart_theme(effective_theme())) {
+      o.base = t->base;
+    }
+    return o;
+  }
+
+  /// What configure_style() depends on, to notice a change.
+  std::string style_key() const {
+    const image_options o = style_options();
+    std::string key = o.base + "|" + o.background;
+    for (const std::string& c : o.palette) {
+      key += "|" + c;
+    }
+    return key;
   }
 
   ImGuiBackendFlags backend_flags() const {
@@ -270,9 +305,9 @@ struct live_view::impl {
     ctx->set_interactive(true);
     ctx->set_tooltips(options.tooltips);
     const context_switch on(*contexts);
-    applied_theme = effective_theme();
+    applied_theme = style_key();
     configure_backend("nymph_live_view", backend_flags(), options.cpu_textures);
-    configure_style(*find_theme(applied_theme));
+    configure_style(style_options());
     load_fonts(*ctx);
     update_clear_color();
     install_clipboard();
@@ -305,11 +340,11 @@ struct live_view::impl {
   /// Re-applies the theme's styles if it changed; call with the contexts
   /// current.
   void apply_theme() {
-    if (applied_theme == effective_theme()) {
+    if (applied_theme == style_key()) {
       return;
     }
-    applied_theme = effective_theme();
-    configure_style(*find_theme(applied_theme));
+    applied_theme = style_key();
+    configure_style(style_options());
     update_clear_color();
   }
 
@@ -325,7 +360,7 @@ struct live_view::impl {
     view_geometry g;
     g.layout_width = static_cast<float>(fig->image.width);
     g.layout_height = static_cast<float>(fig->image.height);
-    if (size.width > 0.0f) {
+    if (size.width > 0.0f && options.fit != view_fit::natural) {
       const float to_box = size.width / g.layout_width;
       g.css_scale = options.fit == view_fit::scale ? to_box : std::min(1.0f, to_box);
     }
@@ -370,7 +405,6 @@ struct live_view::impl {
     frame_options.width = static_cast<int>(g.layout_width);
     frame_options.height = static_cast<int>(g.layout_height);
     frame_options.scale = 1; // the framebuffer scale goes to ImGui directly
-    frame_options.theme = effective_theme();
   }
 
   /// What a recorded view would save, rounded to what matters on screen.
@@ -427,6 +461,36 @@ struct live_view::impl {
     return v;
   }
 
+  /// A pinch that no 2D plot or diagram took (a 3D plot, or none) zooms
+  /// with the wheel, a whole notch (about 1.2) at a time.
+  void wheel_untaken_pinch() {
+    const std::optional<pinch_gesture> left = ctx->pinch();
+    ctx->set_pinch(std::nullopt);
+    if (!left) {
+      return;
+    }
+    pinch_notches += std::log(left->scale) / std::log(1.2f);
+    const float whole = std::trunc(pinch_notches);
+    if (whole != 0.0f) {
+      ImGuiIO& io = ImGui::GetIO();
+      io.AddMousePosEvent(left->to.x, left->to.y);
+      io.AddMouseWheelEvent(0.0f, whole);
+      pinch_notches -= whole;
+    }
+  }
+
+  /// Counts a drawn frame. ImGui takes queued input a step per frame (a
+  /// move, then a wheel, ...): frames go on until the queue is empty, or a
+  /// pinch's last zoom steps would wait for the next touch and zoom it
+  /// instead of panning.
+  void end_frame() {
+    --pending_frames;
+    if (!ImGui::GetCurrentContext()->InputEventsQueue.empty()) {
+      pending_frames = std::max(pending_frames, kInputFrames);
+      input_frames_left = kInputFrames + 1;
+    }
+  }
+
   /// Notes the elements whose view changed in the frames after an input.
   void track_changes() {
     view_map now;
@@ -462,6 +526,53 @@ struct live_view::impl {
       }
     }
     return out;
+  }
+
+  /// The view to save: the source's `view` entries (or the carried ones),
+  /// with what the user changed since (plots' state, user-interface elements') over them.
+  view_map saved_views(const std::map<std::string, const node*, std::less<>>& nodes) const {
+    // After a rename the carried view is the base: it holds the source's
+    // entries and what the user had changed before.
+    view_map saved = start_views.empty() ? fig->views : start_views;
+    for (const std::string& path : touched) {
+      if (const auto it = last_states.find(path); it != last_states.end()) {
+        saved[path] = it->second;
+      }
+    }
+    // User-interface elements keep what the user changed in their state.
+    for (const auto& [path, v] : ui_changes(nodes)) {
+      element_view& entry = saved[path];
+      // Merged over the source's own entry: a window moved now keeps a size
+      // saved before.
+      if (v.position) {
+        entry.position = v.position;
+      }
+      if (v.size) {
+        entry.size = v.size;
+      }
+      if (v.scroll) {
+        entry.scroll = v.scroll;
+      }
+      if (v.collapsed) {
+        entry.collapsed = v.collapsed;
+      }
+      if (v.closed) {
+        entry.closed = v.closed;
+      }
+      if (v.flag) {
+        entry.flag = v.flag;
+      }
+      if (v.index) {
+        entry.index = v.index;
+      }
+      if (v.numbers) {
+        entry.numbers = v.numbers;
+      }
+      if (v.text) {
+        entry.text = v.text;
+      }
+    }
+    return saved;
   }
 
   /// Bumps ui_revision when the UI state the user changed differs from the
@@ -606,8 +717,16 @@ struct live_view::impl {
     const auto to_logical = [&](const edit_target& t) {
       return std::pair<ImVec2, ImVec2>{ImVec2(t.x / s, t.y / s), ImVec2((t.x + t.width) / s, (t.y + t.height) / s)};
     };
-    const ImU32 hover_color = IM_COL32(40, 140, 255, 200);
-    const ImU32 select_color = IM_COL32(40, 140, 255, 255);
+    const auto outline = [&](int alpha) {
+      return IM_COL32((outline_rgb >> 16) & 0xff, (outline_rgb >> 8) & 0xff, outline_rgb & 0xff, alpha);
+    };
+    if (show_limits) {
+      // The image's limit, for every kind of chart: what the PNG will show.
+      ImGui::GetForegroundDrawList()->AddRect(
+          ImVec2(1.0f, 1.0f), ImVec2(geom.layout_width - 1.0f, geom.layout_height - 1.0f), IM_COL32(60, 60, 60, 200), 0.0f, 0, 2.0f);
+    }
+    const ImU32 hover_color = outline(200);
+    const ImU32 select_color = outline(255);
     if (io.MousePos.x > -FLT_MAX / 2) {
       const std::vector<edit_target> under = targets_at_css(io.MousePos.x * s, io.MousePos.y * s);
       if (!under.empty()) {
@@ -634,11 +753,13 @@ struct live_view::impl {
     io.DeltaTime = static_cast<float>(std::clamp(step, 1e-4, 0.25));
     last_time = now;
     ctx->begin_frame();
-    ctx->set_views(&fig->views, &paths);
+    ctx->set_views(start_views.empty() ? &fig->views : &start_views, &paths);
     // Source limits stay fixed while fresh contexts settle (static parity
     // with render_figure()); then they let go for pan and zoom.
     ctx->set_lock_limits(fresh_frames < kFigureFrames);
     ctx->set_edit_mode(edit_mode);
+    ctx->set_show_limits(show_limits);
+    ctx->set_pinch(std::exchange(pinch, std::nullopt));
     ++fresh_frames;
     const node& root = fig->root;
     // In edit mode a click selects; it must not move ImGui's focus away from
@@ -662,6 +783,7 @@ struct live_view::impl {
       ImGui::FocusWindow(focused_before);
     }
     wants_keyboard = io.WantTextInput;
+    wheel_untaken_pinch();
     track_ui_changes();
     hovered.reset();
     if (const std::optional<pick>& p = ctx->hovered()) {
@@ -732,9 +854,33 @@ live_view::~live_view() = default;
 live_view::live_view(live_view&&) noexcept = default;
 live_view& live_view::operator=(live_view&&) noexcept = default;
 
+void live_view::set_source_moved(std::string_view source, const path_rename& rename) {
+  impl& m = *impl_;
+  if (!m.fig) {
+    set_source(source);
+    return;
+  }
+  // The view on screen, under the paths its elements have in `source`.
+  view_map carried;
+  for (auto& [path, v] : m.saved_views(element_paths(m.fig->root))) {
+    if (const std::optional<std::string> to = rename(path)) {
+      carried[*to] = v;
+    }
+  }
+  std::set<std::string> touched;
+  for (const std::string& path : m.touched) {
+    if (const std::optional<std::string> to = rename(path)) {
+      touched.insert(*to);
+    }
+  }
+  set_source(source, true); // throws before anything changes
+  m.start_views = std::move(carried);
+  m.touched = std::move(touched); // still the user's changes: a save keeps them
+}
+
 void live_view::set_source(std::string_view source, bool reset_view) {
   impl& m = *impl_;
-  figure f = bind_source(source, builtin_registry());
+  figure f = bind_source(source, builtin_registry(), bind_options{m.theme_override});
   if (std::vector<std::string> missing = fonts_missing(f); !missing.empty()) {
     throw fonts_needed(std::move(missing));
   }
@@ -766,6 +912,7 @@ void live_view::set_source(std::string_view source, bool reset_view) {
   m.last_states.clear();
   if (reset_view) {
     m.touched.clear();
+    m.start_views.clear();
   }
   m.overflowed = false;
   if (reset_view) {
@@ -774,6 +921,8 @@ void live_view::set_source(std::string_view source, bool reset_view) {
     const context_switch on(*m.contexts);
     load_fonts(*m.ctx); // fonts registered since the last update
     m.apply_theme();
+    // Series colours as the new source gives them, not as they were.
+    m.ctx->set_rehidden(forget_plot_items());
   }
   m.update_geometry();
   m.pending_frames = kFigureFrames;
@@ -815,10 +964,24 @@ bool live_view::set_png(std::span<const uint8_t> png, bool reset_view) {
 
 void live_view::set_theme(std::string theme) {
   impl& m = *impl_;
-  if (!theme.empty() && find_theme(theme) == nullptr) {
-    throw std::invalid_argument("unknown theme '" + theme + "' (themes: light, dark, classic)");
+  if (!theme.empty() && !is_known_theme(theme)) {
+    throw std::invalid_argument("unknown theme '" + theme + "' (themes: " + chart_theme_list() + ")");
   }
+  if (theme == m.theme_override) {
+    return;
+  }
+  const std::string previous = m.theme_override;
   m.theme_override = std::move(theme);
+  if (m.fig) {
+    // The theme fills the fields the source leaves out: bind again.
+    try {
+      set_source(std::string(m.source), false);
+    } catch (...) {
+      m.theme_override = previous;
+      throw;
+    }
+    return;
+  }
   {
     const context_switch on(*m.contexts);
     m.apply_theme();
@@ -831,9 +994,24 @@ std::string live_view::theme() const {
   return impl_->effective_theme();
 }
 
+std::string live_view::theme_base() const {
+  return impl_->style_options().base;
+}
+
 void live_view::resize(view_size size) {
   impl& m = *impl_;
   m.size = size;
+  m.overflowed = false;
+  m.update_geometry();
+  m.pending_frames = kFigureFrames;
+}
+
+void live_view::set_fit(view_fit fit) {
+  impl& m = *impl_;
+  if (m.options.fit == fit) {
+    return;
+  }
+  m.options.fit = fit;
   m.overflowed = false;
   m.update_geometry();
   m.pending_frames = kFigureFrames;
@@ -859,6 +1037,27 @@ void live_view::input(const pointer_event& e) {
   }
   m.pending_frames = std::max(m.pending_frames, kInputFrames);
   m.input_frames_left = kInputFrames + 1; // ImPlot applies some changes a frame late
+}
+
+void live_view::pinch(float from_x, float from_y, float to_x, float to_y, float scale) {
+  impl& m = *impl_;
+  if (!(scale > 0.0f) || !std::isfinite(scale)) {
+    return;
+  }
+  const float s = m.geom.css_scale > 0.0f ? m.geom.css_scale : 1.0f;
+  const ImVec2 from(from_x / s, from_y / s);
+  const ImVec2 to(to_x / s, to_y / s);
+  if (m.pinch) {
+    // This step after the pending one: the content under the first `from`
+    // goes under `to` moved by how far the steps' points differ, scaled.
+    pinch_gesture& p = *m.pinch;
+    p.to = ImVec2(to.x + (p.to.x - from.x) * scale, to.y + (p.to.y - from.y) * scale);
+    p.scale *= scale;
+  } else {
+    m.pinch = pinch_gesture{from, to, scale};
+  }
+  m.pending_frames = std::max(m.pending_frames, kInputFrames);
+  m.input_frames_left = kInputFrames + 1;
 }
 
 void live_view::input_key(const key_event& e) {
@@ -892,6 +1091,10 @@ uint64_t live_view::ui_revision() const {
 
 bool live_view::wants_keyboard() const {
   return impl_->wants_keyboard;
+}
+
+bool live_view::view_changed() const {
+  return !impl_->touched.empty();
 }
 
 void live_view::set_clipboard_hooks(
@@ -953,6 +1156,14 @@ void live_view::set_edit_mode(bool on) {
   m.pending_frames = std::max(m.pending_frames, kInputFrames);
 }
 
+void live_view::set_show_limits(bool on) {
+  impl& m = *impl_;
+  if (m.show_limits != on) {
+    m.show_limits = on;
+    m.pending_frames = std::max(m.pending_frames, kInputFrames);
+  }
+}
+
 bool live_view::edit_mode() const {
   return impl_->edit_mode;
 }
@@ -963,6 +1174,15 @@ std::vector<edit_target> live_view::targets_at(float x, float y) const {
 
 std::optional<edit_target> live_view::target_for(std::string_view element, std::string_view field) const {
   return impl_->edit_mode ? impl_->find_target(element, field) : std::nullopt;
+}
+
+void live_view::set_outline_color(unsigned rgb) {
+  impl& m = *impl_;
+  if (m.outline_rgb == rgb) {
+    return;
+  }
+  m.outline_rgb = rgb;
+  m.pending_frames = std::max(m.pending_frames, 1);
 }
 
 void live_view::set_selection(std::optional<edit_target_id> selection) {
@@ -1001,7 +1221,7 @@ const ImDrawData* live_view::frame(double now_seconds) {
   try {
     const context_switch on(*m.contexts);
     m.run_frame(now_seconds);
-    --m.pending_frames;
+    m.end_frame();
     return ImGui::GetDrawData();
   } catch (const error&) {
     // The frame is left open: these contexts cannot be used again.
@@ -1017,7 +1237,7 @@ const ImDrawData* live_view::frame(double now_seconds) {
   }
   const context_switch on(*m.contexts);
   m.run_frame(now_seconds);
-  --m.pending_frames;
+  m.end_frame();
   return ImGui::GetDrawData();
 }
 
@@ -1066,50 +1286,12 @@ std::string live_view::source_with_view() const {
   if (!m.fig) {
     return m.source;
   }
-  view_map saved = m.fig->views;
-  for (const std::string& path : m.touched) {
-    if (const auto it = m.last_states.find(path); it != m.last_states.end()) {
-      saved[path] = it->second;
-    }
-  }
-  // User-interface elements keep what the user changed in their state.
   const auto nodes = element_paths(m.fig->root);
   std::map<std::string, view_kind, std::less<>> kinds;
   for (const auto& [path, n] : nodes) {
     kinds[path] = n->cls->viewable();
   }
-  for (const auto& [path, v] : m.ui_changes(nodes)) {
-    element_view& entry = saved[path];
-    // Merged over the source's own entry: a window moved now keeps a size
-    // saved before.
-    if (v.position) {
-      entry.position = v.position;
-    }
-    if (v.size) {
-      entry.size = v.size;
-    }
-    if (v.scroll) {
-      entry.scroll = v.scroll;
-    }
-    if (v.collapsed) {
-      entry.collapsed = v.collapsed;
-    }
-    if (v.closed) {
-      entry.closed = v.closed;
-    }
-    if (v.flag) {
-      entry.flag = v.flag;
-    }
-    if (v.index) {
-      entry.index = v.index;
-    }
-    if (v.numbers) {
-      entry.numbers = v.numbers;
-    }
-    if (v.text) {
-      entry.text = v.text;
-    }
-  }
+  const view_map saved = m.saved_views(nodes);
   const std::string text = write_view(saved, kinds);
   if (text == write_view(m.fig->views, kinds)) {
     return m.source; // nothing changed: the source as written

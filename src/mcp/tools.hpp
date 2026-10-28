@@ -8,28 +8,16 @@
 #include <functional>
 #include <map>
 #include <memory>
+#include <optional>
 #include <string>
 #include <vector>
 #include "mcp/json_rpc.hpp"
+#include "mcp/editor_tools.hpp"
 #include "mcp/server_options.hpp"
+#include "mcp/tool.hpp"
 #include "nymph.hpp"
 
 namespace bdg::nymph::mcp {
-
-/// @brief A failure the agent should read and fix: becomes a tool result
-///        with `isError` and this text.
-class tool_error : public std::runtime_error {
- public:
-  using std::runtime_error::runtime_error;
-};
-
-/// @brief One tool: its `tools/list` entry and its handler.
-struct tool {
-  json definition; ///< name, title, description, inputSchema, ...
-  /// Runs the tool on validated-as-object arguments and returns a
-  /// CallToolResult. Throws tool_error for a problem to report.
-  std::function<json(const json& arguments)> handler;
-};
 
 /// @brief The server's tools, and the renderers they share.
 ///
@@ -58,6 +46,13 @@ class tool_registry {
   ///         `arguments` that is not an object, or an unknown tool.
   json call(const json& params);
 
+  /// @brief Tools that come and go (the paired web app's): `list` gives
+  ///        their `tools/list` entries, appended after the registry's own;
+  ///        `call` runs one by name, returning nullopt for a name it does
+  ///        not know. Registry tools of the same name win.
+  void set_dynamic(std::function<json()> list,
+                   std::function<std::optional<json>(const std::string&, const json&)> call);
+
   /// @brief The renderer for `r`, created on first use.
   renderer& renderer_for(rasterizer r);
 
@@ -68,6 +63,8 @@ class tool_registry {
  private:
   server_options options_;
   std::vector<tool> tools_;
+  std::function<json()> dynamic_list_;
+  std::function<std::optional<json>(const std::string&, const json&)> dynamic_call_;
   std::map<rasterizer, std::unique_ptr<renderer>> renderers_;
 };
 
@@ -77,7 +74,8 @@ class tool_registry {
 ///        the app-only viewer_font (DESIGN.md section 4.2).
 void add_builtin_tools(tool_registry& registry);
 
-/// @brief A result with one text block, and `isError` when `error`.
-json text_result(const std::string& text, bool error = false);
+/// @brief Adds the editor tools (editor_tools.hpp) to `registry`, each
+///        running through `run`.
+void add_editor_tools(tool_registry& registry, editor_runner run);
 
 } // namespace bdg::nymph::mcp

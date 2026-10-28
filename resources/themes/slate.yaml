@@ -1,0 +1,13 @@
+name: Slate
+description: Charcoal grey background, cool blue and teal series, steel diagram lines.
+base: dark
+image:
+  background: "#1f2428"
+  text_color: "#d8dee4"
+  font: FiraSans-Regular.ttf
+  palette: ["#58a6ff", "#3fb950", "#d29922", "#f778ba", "#a5d6ff", "#ff7b72"]
+fields:
+  figure:line_color: "#8fa1b3"
+  figure:fill_color: "#2b3137"
+  Note:fill_color: "#33302a"
+  plot2d.item:line_weight: 2

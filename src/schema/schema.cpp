@@ -217,17 +217,23 @@ std::string registry::names_accepting(std::string_view slot) const {
   return out;
 }
 
-std::string registry::names_taken_by(const element_class& parent) const {
+std::vector<const element_class*> registry::classes_taken_by(const element_class& parent) const {
   // In the order of the parent's slots, then by name, each class once.
-  std::string out;
   std::vector<const element_class*> listed;
   for (const std::string& slot : parent.accepts()) {
     for (const auto& [name, cls] : classes_) {
       if (cls->fills_slot(slot) && std::find(listed.begin(), listed.end(), cls.get()) == listed.end()) {
         listed.push_back(cls.get());
-        out += (out.empty() ? "" : ", ") + name;
       }
     }
+  }
+  return listed;
+}
+
+std::string registry::names_taken_by(const element_class& parent) const {
+  std::string out;
+  for (const element_class* cls : classes_taken_by(parent)) {
+    out += (out.empty() ? "" : ", ") + std::string(cls->name());
   }
   return out;
 }

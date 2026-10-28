@@ -2,10 +2,15 @@
 /// @file plot_pick.cpp
 /// @brief Picks inside an open ImPlot plot.
 #include "elements/plot_pick.hpp"
+#include <implot3d_internal.h> // forget_plot_items(): the 3D plots' items
 #include <implot_internal.h> // the current plot's axes, ticks and items
 #include <algorithm>
 #include <cmath>
 #include <cstdio>
+#include <cstring>
+#include <optional>
+#include <variant>
+#include <vector>
 #include "core/dates.hpp"
 #include "schema/element_class.hpp"
 
@@ -222,6 +227,9 @@ void sync_hidden(draw_context& dc, const char* label) {
   if (item == nullptr) {
     return;
   }
+  if (dc.take_rehidden(item->ID)) {
+    item->Show = false;
+  }
   if (const node* plot = dc.current_plot(); plot != nullptr && dc.apply_view()) {
     if (const element_view* v = dc.view_of(*plot);
         v != nullptr && std::find(v->hidden.begin(), v->hidden.end(), label) != v->hidden.end()) {
@@ -233,6 +241,34 @@ void sync_hidden(draw_context& dc, const char* label) {
   }
 }
 
+std::vector<ImGuiID> forget_plot_items() {
+  std::vector<ImGuiID> hidden;
+  if (ImPlotContext* gp = ImPlot::GetCurrentContext(); gp != nullptr) {
+    for (int i = 0; i < gp->Plots.GetBufSize(); ++i) {
+      ImPlotItemGroup& items = gp->Plots.GetByIndex(i)->Items;
+      for (int k = 0; k < items.GetItemCount(); ++k) {
+        if (const ImPlotItem* item = items.GetItemByIndex(k); !item->Show) {
+          hidden.push_back(item->ID);
+        }
+      }
+      items.Reset();
+      items.MarkerIdx = 0;
+    }
+  }
+  if (ImPlot3DContext* gp = ImPlot3D::GetCurrentContext(); gp != nullptr) {
+    for (int i = 0; i < gp->Plots.GetBufSize(); ++i) {
+      ImPlot3DItemGroup& items = gp->Plots.GetByIndex(i)->Items;
+      for (int k = 0; k < items.GetItemCount(); ++k) {
+        if (const ImPlot3DItem* item = items.GetItemByIndex(k); !item->Show) {
+          hidden.push_back(item->ID);
+        }
+      }
+      items.Reset();
+    }
+  }
+  return hidden;
+}
+
 void finish_picks(draw_context& dc, ImDrawList* dl) {
   std::optional<pick_candidate> c = dc.take_pick_candidate();
   if (!c) {
@@ -240,6 +276,35 @@ void finish_picks(draw_context& dc, ImDrawList* dl) {
   }
   draw_pick(dc, *c, dl);
   dc.set_hovered(std::move(c->hit));
+}
+
+void pinch_current_plot(draw_context& dc) {
+  ImPlotPlot* plot = ImPlot::GetCurrentPlot();
+  if (plot == nullptr || (plot->Flags & ImPlotFlags_NoInputs) != 0) {
+    return;
+  }
+  const ImRect& area = plot->PlotRect;
+  const std::optional<pinch_gesture> p = dc.take_pinch({area.Min, area.Max});
+  if (!p || !(p->scale > 0.0f)) {
+    return;
+  }
+  for (int i = 0; i < ImAxis_COUNT; ++i) {
+    ImPlotAxis& axis = plot->Axes[i];
+    if (!axis.Enabled || axis.IsInputLocked()) {
+      continue;
+    }
+    const float from = axis.Vertical ? p->from.y : p->from.x;
+    const float to = axis.Vertical ? p->to.y : p->to.x;
+    const float lo = axis.Vertical ? area.Min.y : area.Min.x;
+    const float hi = axis.Vertical ? area.Max.y : area.Max.x;
+    // The new range, as pixels of today's axis: `from` ends up at `to`.
+    // PixelsToPlot() follows the axis scale (log, symlog, time).
+    const double a = axis.PixelsToPlot(from + (lo - to) / p->scale);
+    const double b = axis.PixelsToPlot(from + (hi - to) / p->scale);
+    if (std::isfinite(a) && std::isfinite(b) && a != b) {
+      axis.SetRange(a, b);
+    }
+  }
 }
 
 void finish_plot_picks(draw_context& dc) {
@@ -252,6 +317,50 @@ void finish_plot_picks(draw_context& dc) {
   ImPlot::PopPlotClipRect();
   dc.set_hovered(std::move(c->hit));
 }
+
+namespace {
+
+/// The series of `plot` that legend entry `shown` belongs to: the one with
+/// that `label`, else one whose `labels` (pie slices, one per line) holds
+/// it; nullptr for none.
+const node* legend_owner(const node& plot, const std::string& shown, bool children) {
+  if (!children) {
+    return nullptr;
+  }
+  for (const node& c : plot.children) {
+    const int label = c.cls->field_index("label");
+    if (label >= 0) {
+      const auto* text = std::get_if<std::string>(&c.values[static_cast<size_t>(label)]);
+      if (text != nullptr && display_label(text->c_str()) == shown) {
+        return &c;
+      }
+    }
+  }
+  for (const node& c : plot.children) {
+    const int labels = c.cls->field_index("labels");
+    if (labels < 0) {
+      continue;
+    }
+    const value& v = c.values[static_cast<size_t>(labels)];
+    if (const auto* list = std::get_if<std::vector<std::string>>(&v)) {
+      if (std::find(list->begin(), list->end(), shown) != list->end()) {
+        return &c;
+      }
+    } else if (const auto* text = std::get_if<std::string>(&v)) {
+      size_t start = 0;
+      while (start <= text->size()) {
+        const size_t end = std::min(text->find('\n', start), text->size());
+        if (text->compare(start, end - start, shown) == 0) {
+          return &c;
+        }
+        start = end + 1;
+      }
+    }
+  }
+  return nullptr;
+}
+
+} // namespace
 
 void record_plot_texts(draw_context& dc, const plot_texts& texts, const ImPlotPlot* plot) {
   if (!dc.edit_mode() || plot == nullptr || texts.element == nullptr) {
@@ -296,6 +405,42 @@ void record_plot_texts(draw_context& dc, const plot_texts& texts, const ImPlotPl
   const ImRect& legend = plot->Items.Legend.Rect;
   if (!texts.legend_field.empty() && plot->Items.GetLegendCount() > 0 && (plot->Flags & ImPlotFlags_NoLegend) == 0 && legend.GetWidth() > 0.0f) {
     dc.record_target(n, texts.legend_field, {legend.Min, legend.Max}, "legend");
+    // Each entry selects the series it names (a pie chart: one of its slices).
+    // ImPlot leaves the entries' own rectangles empty: lay them out as its
+    // legend does (rows of one text line, or one row when horizontal).
+    ImPlotItemGroup& items = const_cast<ImPlotItemGroup&>(plot->Items); // its getters are not const
+    const ImPlotStyle& style = ImPlot::GetStyle();
+    const float line = ImGui::GetTextLineHeight();
+    const bool horizontal = (items.Legend.Flags & ImPlotLegendFlags_Horizontal) != 0;
+    ImVec2 at(legend.Min.x + style.LegendInnerPadding.x, legend.Min.y + style.LegendInnerPadding.y);
+    std::vector<int> order(static_cast<size_t>(items.GetLegendCount()));
+    for (size_t i = 0; i < order.size(); ++i) {
+      order[i] = static_cast<int>(i);
+    }
+    if ((items.Legend.Flags & ImPlotLegendFlags_Sort) != 0) {
+      std::stable_sort(order.begin(), order.end(), [&](int a, int b) {
+        return std::strcmp(items.GetLegendLabel(a), items.GetLegendLabel(b)) < 0;
+      });
+    }
+    for (const int i : order) {
+      const char* label = items.GetLegendLabel(i);
+      const std::string shown = display_label(label);
+      const float width = line + style.LegendInnerPadding.x + text_size(shown).x;
+      const ImVec2 lo = at;
+      const ImVec2 hi(horizontal ? at.x + width : legend.Max.x - style.LegendInnerPadding.x, at.y + line);
+      if (horizontal) {
+        at.x += width + style.LegendSpacing.x;
+      } else {
+        at.y += line + style.LegendSpacing.y;
+      }
+      if (shown.empty()) {
+        continue;
+      }
+      if (const node* child = legend_owner(n, shown, texts.element_children)) {
+        const bool by_label = child->cls->field_index("label") >= 0;
+        dc.record_target(*child, by_label ? "label" : "", {lo, hi}, shown);
+      }
+    }
   }
 }
 

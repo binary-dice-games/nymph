@@ -1,0 +1,15 @@
+nymph: 1
+description: Flowchart converted from mermaid.
+image: {width: 370, height: 320}
+source: Converted from a mermaid flowchart.
+root:
+  type: Flowchart
+  direction: LeftRight
+  children:
+    - {type: FlowNode, id: A, color: "#333333", fill_color: "#FF9966"}
+    - {type: FlowNode, id: B, fill_color: "#ADD8E6", text_color: "#000080"}
+    - {type: FlowNode, id: C, fill_color: "#ADD8E6", text_color: "#000080"}
+    - {type: FlowNode, id: D, fill_color: "#FF0000"}
+    - {type: FlowLink, from: A, to: B, color: "#FFFF33", text_color: "#FF0000"}
+    - {type: FlowLink, from: B, to: C, color: "#808080"}
+    - {type: FlowLink, from: C, to: D, color: "#808080"}

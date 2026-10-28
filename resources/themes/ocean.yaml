@@ -1,0 +1,14 @@
+name: Ocean
+description: Deep navy background, sea-green and coral series, soft blue diagram lines.
+base: dark
+image:
+  background: "#0f2233"
+  text_color: "#dce6f0"
+  font: FiraSans-Regular.ttf
+  palette: ["#4cc9b0", "#ff8c69", "#7fb3ff", "#ffd166", "#c792ea", "#9be564"]
+fields:
+  figure:line_color: "#5fa8d3"
+  figure:fill_color: "#16324a"
+  Note:fill_color: "#24405a"
+  plot2d.item:line_weight: 2
+  PlotBars:fill_alpha: 0.9

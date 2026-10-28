@@ -74,13 +74,18 @@
       send({ method: 'ui/notifications/tool-result', params: host.result });
     } else if (m.method === 'tools/call') {
       host.toolCalls.push(m.params);
+      const pairing = { code: '41234-K7QM-2XPD', link: 'https://app.test/nymph/#pair=41234-K7QM-2XPD', port: 41234, expiresInSeconds: 300 };
       const result =
         m.params.name === 'viewer_font'
           ? await viewerFont(m.params.arguments?.name)
-          : { isError: true, content: [{ type: 'text', text: `the App may not call ${m.params.name}` }] };
+          : m.params.name === 'web_app_pair'
+            ? { content: [{ type: 'text', text: 'Pairing code' }], structuredContent: pairing }
+            : { isError: true, content: [{ type: 'text', text: `the App may not call ${m.params.name}` }] };
       send({ id: m.id, result });
     } else if (m.method === 'ui/notifications/size-changed') {
       host.sizes.push(m.params);
+    } else if (m.method === 'ui/open-link') {
+      send(host.noOpenLink ? { id: m.id, error: { code: -32601, message: 'not supported' } } : { id: m.id, result: {} });
     } else if (m.method === 'ui/request-display-mode') {
       send({ id: m.id, result: { mode: m.params.mode } });
     } else if (m.id !== undefined) {
@@ -89,7 +94,8 @@
   });
 
   /** Loads the App with this host context, to be sent `result` once it is ready. */
-  window.hostStart = async ({ context, result, failFonts = false }) => {
+  window.hostStart = async ({ context, result, failFonts = false, noOpenLink = false }) => {
+    host.noOpenLink = noOpenLink;
     host.context = context;
     host.result = result;
     host.failFonts = failFonts;

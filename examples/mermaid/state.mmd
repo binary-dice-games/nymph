@@ -1,0 +1,14 @@
+---
+title: Media player
+---
+stateDiagram-v2
+    [*] --> Stopped
+    Stopped --> Playing : play
+    state Active {
+        [*] --> Playing
+        Playing --> Paused : pause
+        Paused --> Playing : play
+    }
+    Paused --> Stopped : stop
+    Stopped --> [*] : eject
+    note right of Paused : remembers the position

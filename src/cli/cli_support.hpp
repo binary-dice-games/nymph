@@ -10,6 +10,7 @@
 #include <string>
 #include <string_view>
 #include <vector>
+#include "nymph.hpp"
 
 namespace bdg::nymph {
 
@@ -45,6 +46,26 @@ std::string_view as_text(const bytes_t& bytes);
 /// @throws cli_failure for a corrupt PNG or a PNG without a nymph source.
 std::string source_of(const bytes_t& input, const std::string& path);
 
+/// @brief The nymph source of an input and how it was obtained
+///        (spec/16_mermaid_import/DESIGN.md section 3, `load_source()`).
+struct loaded_source {
+  std::string source;                   ///< nymph YAML
+  std::string mermaid_kind;             ///< the mermaid keyword when converted, else empty
+  std::vector<import_warning> warnings; ///< what the mermaid import dropped
+};
+
+/// @brief The nymph source of `input`: the source a nymph PNG carries,
+///        mermaid converted (import_mermaid()), or the text itself.
+/// @throws cli_failure as source_of(); nymph::error positioned in the
+///         mermaid for a mermaid problem.
+loaded_source load_source(const bytes_t& input, const std::string& path);
+
+/// @brief The same for text (no PNG): mermaid converted, else as is.
+loaded_source load_source_text(std::string_view text);
+
+/// @brief One warning as `<label>:<line>:<column>: warning: <message>`.
+std::string warning_text(const std::string& label, const import_warning& w);
+
 /// @brief `nymph fonts`: `default` and every catalog font, one per line,
 ///        those this build does not embed marked `(not embedded)`.
 std::string fonts_text();
@@ -53,6 +74,18 @@ std::string fonts_text();
 ///        every shape as "category/name", or the details of one.
 /// @throws cli_failure for an unknown shape name.
 std::string shapes_listing(const std::string& name);
+
+/// @brief The `nymph themes [<name>]` text (also the MCP tool
+///        `list_themes`): every chart theme, one per line ("ocean  Ocean
+///        (dark): ..."), or the YAML file of the one named.
+/// @throws cli_failure for an unknown theme name.
+std::string themes_listing(const std::string& name);
+
+/// @brief `source` with `image.theme` set to `theme` (`--theme`), every
+///        other byte as written.
+/// @throws cli_failure for an unknown theme; nymph::error for a source
+///         that does not parse.
+std::string source_with_theme(std::string_view source, const std::string& theme);
 
 /// @brief `nymph schema <type>`: the reference of one element type.
 /// @throws cli_failure (file "schema") for an unknown type, with the

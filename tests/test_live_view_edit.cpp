@@ -18,6 +18,7 @@
 #include <vector>
 #include "core/error.hpp"
 #include "document/bind.hpp"
+#include "edit/editor_model.hpp"
 #include "document/view.hpp"
 #include "elements/register_builtin.hpp"
 #include "live_view_driver.hpp"
@@ -258,8 +259,11 @@ TEST(live_view_edit, PlotTextsAreTargetsWithTheirFields) {
   EXPECT_EQ(x_label.text, "month");
 
   // Each one is found by a click on its centre, before the plot itself.
+  // The legend by its frame: its entries select their series.
   for (const edit_target& t : {title, x_label, y_label, y2_label, legend}) {
-    const std::vector<edit_target> hit = d.v.targets_at(t.x + t.width / 2, t.y + t.height / 2);
+    const bool frame = t.field == "legend_location";
+    const std::vector<edit_target> hit =
+        d.v.targets_at(frame ? t.x + 1 : t.x + t.width / 2, frame ? t.y + 1 : t.y + t.height / 2);
     ASSERT_FALSE(hit.empty()) << t.field;
     EXPECT_EQ(hit.front().field, t.field);
     EXPECT_EQ(hit.front().element, "root");
@@ -276,6 +280,31 @@ TEST(live_view_edit, PlotTextsAreTargetsWithTheirFields) {
   const std::vector<edit_target> inside = d.v.targets_at(plot.x + plot.width / 2, plot.y + plot.height / 2);
   ASSERT_FALSE(inside.empty());
   EXPECT_EQ(inside.front().field, "");
+}
+
+TEST(live_view_edit, LegendEntriesSelectTheirSeries) {
+  driven_view d(kLabelled, 480, 320);
+  d.v.set_edit_mode(true);
+  d.run();
+  for (const char* path : {"root/children/0", "root/children/1"}) {
+    const std::optional<edit_target> entry = d.v.target_for(path, "label");
+    ASSERT_TRUE(entry) << path;
+    EXPECT_EQ(entry->type, "PlotLine");
+    const std::vector<edit_target> hit = d.v.targets_at(entry->x + entry->width / 2, entry->y + entry->height / 2);
+    ASSERT_FALSE(hit.empty());
+    EXPECT_EQ(hit.front().element, path);
+    EXPECT_EQ(hit.front().field, "label");
+  }
+  EXPECT_EQ(d.v.target_for("root/children/0", "label")->text, "revenue");
+
+  // A pie chart's slices select the chart.
+  driven_view pie(
+      "root: {type: Plot, title: P, children: [{type: PlotPieChart, values: [1, 2], labels: \"a\\nb\"}]}\n");
+  pie.v.set_edit_mode(true);
+  pie.run();
+  const std::optional<edit_target> slice = pie.v.target_for("root/children/0", "");
+  ASSERT_TRUE(slice);
+  EXPECT_EQ(slice->type, "PlotPieChart");
 }
 
 TEST(live_view_edit, APlotWithoutATitleOffersNoTitleTarget) {
@@ -568,6 +597,14 @@ TEST(live_view_edit, TheThemeIsTheOneTheFigureIsDrawnWith) {
   EXPECT_EQ(v.theme(), "classic"); // the override wins
   v.set_theme("");
   EXPECT_EQ(v.theme(), "dark");
+  // A chart theme binds the source again: its base colours draw it.
+  v.set_theme("sunset");
+  EXPECT_EQ(v.theme(), "sunset");
+  EXPECT_EQ(v.theme_base(), "light");
+  v.set_theme("midnight");
+  EXPECT_EQ(v.theme_base(), "dark");
+  EXPECT_THROW(v.set_theme("neon"), std::invalid_argument);
+  EXPECT_EQ(v.theme(), "midnight");
 }
 
 /// Set NYMPH_EDIT_DUMP to a directory to look at the outlines by eye.
@@ -586,6 +623,133 @@ TEST(live_view_edit, DumpOutlinesForInspection) {
     const std::vector<uint8_t> png = encode_png(img, "", "");
     std::ofstream out(std::string(dir) + "/" + field + ".png", std::ios::binary);
     out.write(reinterpret_cast<const char*>(png.data()), static_cast<std::streamsize>(png.size()));
+  }
+}
+
+TEST(live_view_edit, AnEmptyLabelInARootLayoutDrawsInEditMode) {
+  driven_view d("root: {type: VerticalLayout, children: [{type: Label}]}\n");
+  d.v.set_edit_mode(true);
+  d.run();
+  EXPECT_NE(d.last, nullptr);
+}
+
+TEST(live_view_edit, ALabelAfterAnOrgChartAndGanttDrawsInEditMode) {
+  driven_view d(
+      "root: {type: VerticalLayout, children: ["
+      "{type: OrgChart, title: Acme, children: [{type: Person, id: a, name: Ana}]}, "
+      "{type: GanttChart, children: [{type: GanttTask, name: Task, start: 0, duration: 1}]}, "
+      "{type: Label}]}\n");
+  d.v.set_edit_mode(true);
+  d.run();
+  EXPECT_NE(d.last, nullptr);
+}
+
+TEST(live_view_edit, AnImageInARootLayoutDrawsInEditMode) {
+  driven_view d("root: {type: VerticalLayout, children: [{type: Label, text: a}, {type: Image}]}\n");
+  d.v.set_edit_mode(true);
+  d.v.set_selection(edit_target_id{"root/children/1", ""});
+  d.run();
+  ASSERT_NE(d.last, nullptr);
+  const auto list = d.v.element_list();
+  EXPECT_EQ(list.size(), 4u);
+}
+
+TEST(live_view_edit, ASourceTheModelAcceptsShowsInTheView) {
+  editor_model m(
+      "image: {width: 400, height: 100}\n"
+      "root: {type: VerticalLayout, children: [{type: Label, text: a}]}\n");
+  driven_view d(m.source());
+  // An Image does not fit: refused, so the model never holds what the view cannot show.
+  const commit_result r = m.add_element("root", kAppend, "Image");
+  EXPECT_FALSE(r.ok);
+  EXPECT_NO_THROW(d.v.set_source(m.source()));
+}
+
+
+// ── Style edits redraw ───────────────────────────────────────────────────────
+
+/// A plot with one series of `type`, its `style` fields and `body`.
+std::string styled_plot(const std::string& type, const std::string& body, const std::string& style) {
+  const std::string plot = type.rfind("Plot3D", 0) == 0 ? "Plot3D" : "Plot";
+  return "image: {width: 300, height: 200}\n"
+         "root:\n"
+         "  type: " +
+         plot +
+         "\n"
+         "  children:\n"
+         "    - {type: " +
+         type + ", label: s, " + body + (style.empty() ? "" : ", " + style) + "}\n";
+}
+
+/// Editing a series' style in an open view draws what a fresh view of the
+/// edited source draws: nothing kept from the first source wins.
+TEST(live_view_edit, StyleEditsInAnOpenViewMatchAFreshView) {
+  const std::string xy = "xs: [0, 1, 2, 3], ys: [1, 3, 2, 4]";
+  const std::vector<std::pair<std::string, std::string>> series{
+      {"PlotLine", xy},
+      {"PlotScatter", xy},
+      {"PlotBars", xy},
+      {"PlotShaded", xy},
+      {"PlotStems", xy},
+      {"PlotHistogram", "values: [1, 2, 2, 3, 3, 3]"},
+      {"PlotInfLines", "values: [1, 2]"},
+      {"Plot3DLine", "xs: [0, 1], ys: [0, 1], zs: [0, 1]"},
+      {"Plot3DScatter", "xs: [0, 1], ys: [0, 1], zs: [0, 1]"},
+  };
+  const std::vector<std::pair<std::string, std::string>> edits{
+      {"", "color: \"#00FF00\""},
+      {"color: \"#00FF00\"", "color: \"#FF0000\""},
+      {"color: \"#00FF00\"", ""},
+      {"", "fill_color: \"#FF00FF\""},
+      {"", "line_weight: 5"},
+  };
+  for (const auto& [type, body] : series) {
+    for (const auto& [before, after] : edits) {
+      const std::string field = (after.empty() ? before : after).substr(0, (after.empty() ? before : after).find(':'));
+      if (builtin_registry().find(type)->field_index(field) < 0) {
+        continue; // not a field of this series type
+      }
+      SCOPED_TRACE(type + ": [" + before + "] -> [" + after + "]");
+      driven_view edited(styled_plot(type, body, before));
+      edited.v.set_source(styled_plot(type, body, after));
+      edited.run();
+      driven_view fresh(styled_plot(type, body, after));
+      const image a = rasterized(edited);
+      const image b = rasterized(fresh);
+      EXPECT_TRUE(a.rgba == b.rgba);
+    }
+  }
+}
+
+
+/// A legend entry hidden in the open view stays hidden through an edit.
+TEST(live_view_edit, AHiddenSeriesStaysHiddenThroughAnEdit) {
+  for (const std::string type : {"PlotLine", "Plot3DLine"}) {
+    SCOPED_TRACE(type);
+    const bool flat = type == "PlotLine";
+    const std::string body = flat ? "xs: [0, 1, 2], ys: [1, 3, 2]" : "xs: [0, 1, 2], ys: [1, 3, 2], zs: [0, 1, 2]";
+    const std::string plot = flat ? "Plot" : "Plot3D";
+    const auto source = [&](const std::string& color) {
+      return "image: {width: 300, height: 200}\n"
+             "root:\n"
+             "  type: " +
+          plot +
+          "\n"
+          "  children:\n"
+          "    - {type: " +
+          type + ", label: a, " + body + ", color: \"" + color +
+          "\"}\n"
+          "    - {type: " +
+          type + ", label: b, " + body +
+          "}\n"
+          "view:\n"
+          "  root: {hidden: [a]}\n";
+    };
+    driven_view d(source("#00FF00"));
+    ASSERT_EQ(d.plot().hidden, std::vector<std::string>{"a"});
+    d.v.set_source(source("#FF0000"));
+    d.run();
+    EXPECT_EQ(d.plot().hidden, std::vector<std::string>{"a"});
   }
 }
 

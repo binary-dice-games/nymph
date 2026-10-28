@@ -1,0 +1,13 @@
+name: Sunset
+description: Warm cream background, orange, rose and plum series, terracotta diagram lines.
+base: light
+image:
+  background: "#fff7ef"
+  text_color: "#4a2c22"
+  font: FiraSans-Regular.ttf
+  palette: ["#f3722c", "#e05780", "#7b2d8b", "#f9c74f", "#43aa8b", "#577590"]
+fields:
+  figure:line_color: "#c2552d"
+  figure:fill_color: "#ffe3cc"
+  Note:fill_color: "#fff1b8"
+  plot2d.item:line_weight: 2

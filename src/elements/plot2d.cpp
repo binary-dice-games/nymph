@@ -143,12 +143,6 @@ doubles index_xs(size_t count) {
   return xs;
 }
 
-ImPlotSpec item_spec(const node& n) {
-  ImPlotSpec spec;
-  apply_item_style(spec, n);
-  return spec;
-}
-
 // ── Plot ─────────────────────────────────────────────────────────────────────
 
 namespace plot_field {
@@ -460,14 +454,18 @@ class plot_class : public element_class {
       }
       const int64_t location = n.get<int64_t>(legend_location);
       const int64_t lflags = n.get<int64_t>(legend_flags);
-      if (location >= 0 || lflags != 0) {
+      // In the editor a click on a legend entry selects its series instead
+      // of hiding it (the buttons draw the same either way).
+      const ImPlotLegendFlags edit_flags = dc.edit_mode() ? ImPlotLegendFlags_NoButtons : 0;
+      if (location >= 0 || lflags != 0 || edit_flags != 0) {
         ImPlot::SetupLegend(
             static_cast<ImPlotLocation>(location < 0 ? int64_t{ImPlotLocation_NorthWest} : location),
-            static_cast<ImPlotLegendFlags>(lflags));
+            static_cast<ImPlotLegendFlags>(lflags) | edit_flags);
       }
       dc.set_current_plot(&n);
       dc.draw_children(n);
       finish_plot_picks(dc);
+      pinch_current_plot(dc);
       dc.record_current_plot(n, y2);
       dc.set_current_plot(nullptr);
       const ImPlotPlot* open_plot = dc.edit_mode() ? ImPlot::GetCurrentPlot() : nullptr;
@@ -518,8 +516,8 @@ class plot_class : public element_class {
 // ── Series base ──────────────────────────────────────────────────────────────
 
 /// The shared series fields, `own`, then `y_axis` (last).
-std::vector<field_desc> series_fields_2d(std::vector<field_desc> own) {
-  std::vector<field_desc> f = series_fields(std::move(own));
+std::vector<field_desc> series_fields_2d(series_style style, std::vector<field_desc> own) {
+  std::vector<field_desc> f = series_fields(style, std::move(own));
   f.push_back(enum_field(
       "y_axis",
       kOnY1,
@@ -530,16 +528,17 @@ std::vector<field_desc> series_fields_2d(std::vector<field_desc> own) {
 }
 
 /// Base of the 2D series: draws its node against the Y axis chosen by
-/// `y_axis` through plot().
+/// `y_axis` through plot(). Takes the shared fields in `style`.
 class series_class : public element_class {
  public:
-  series_class(std::string name, std::vector<field_desc> own, std::string description)
+  series_class(std::string name, series_style style, std::vector<field_desc> own, std::string description)
       : element_class(
             std::move(name),
             kPlot2dItemSlot,
             {},
-            series_fields_2d(std::move(own)),
+            series_fields_2d(style, std::move(own)),
             std::move(description) + "  Must be a child of a Plot element."),
+        style_(style),
         y_axis_(fields().size() - 1) {}
 
   /// Whether `n` is drawn against the plot's second Y axis.
@@ -563,12 +562,36 @@ class series_class : public element_class {
     }
   }
 
-  /// The legend labels of the items `n` plots. Default: its `label`.
+  /// The legend labels of the items `n` plots. Default: its `label`, if
+  /// it takes one.
   virtual std::vector<std::string> legend_labels(const node& n) const {
+    if ((style_ & style::label) == 0) {
+      return {};
+    }
     return {n.get<std::string>(item_field::label)};
   }
 
  protected:
+  /// The ImPlotSpec of `n`'s style fields.
+  ImPlotSpec item_spec(const node& n) const {
+    ImPlotSpec spec;
+    apply_item_style(spec, n, style_);
+    return spec;
+  }
+
+  /// `n`'s `color`, which the series must take (style::color).
+  const std::string& color_of(const node& n) const {
+    return n.get<std::string>(style_index(style_, style::color));
+  }
+
+  /// The colour a series without its own `color` takes when it belongs to
+  /// the series drawn just before it (error bars, annotations, tags): that
+  /// series' colour, or transparent (alpha 0) when it is the plot's first.
+  ImVec4 color_or_last_item(const node& n) const {
+    const std::string& color = color_of(n);
+    return color.empty() ? ImPlot::GetLastItemColor() : parse_hex_color(color);
+  }
+
   /// Draws `n` inside the open plot, against the axes already selected.
   virtual void plot(const node& n, draw_context& dc) const = 0;
 
@@ -590,6 +613,7 @@ class series_class : public element_class {
   }
 
  private:
+  series_style style_;
   size_t y_axis_; ///< Index of the `y_axis` field (the last).
 };
 
@@ -603,21 +627,9 @@ bool any_child_on_y2(const node& plot) {
   return false;
 }
 
-/// The colour a series without its own `color` takes when it belongs to
-/// the series drawn just before it (error bars, annotations, tags): that
-/// series' colour, or transparent (alpha 0) when it is the plot's first.
-ImVec4 color_or_last_item(const node& n) {
-  const std::string& color = n.get<std::string>(item_field::color);
-  return color.empty() ? ImPlot::GetLastItemColor() : parse_hex_color(color);
-}
-
 // ── xs / ys series ───────────────────────────────────────────────────────────
 
 enum class xy_kind { line, scatter, stairs, stems, shaded, digital, bars, bars_h };
-
-constexpr size_t kXs = item_field::first_own;
-constexpr size_t kYs = kXs + 1;
-constexpr size_t kExtra = kYs + 1; // stems.ref, shaded.ys2, bars.bar_size
 
 std::vector<field_desc> xy_fields(std::vector<field_desc> extra) {
   std::vector<field_desc> f{
@@ -639,23 +651,41 @@ std::vector<field_desc> bar_fields() {
   };
 }
 
+/// The shared fields each kind draws with: lines and markers, or fills.
+series_style xy_style(xy_kind kind) {
+  switch (kind) {
+    case xy_kind::shaded:
+      return style::label | style::color | style::fill_color | style::fill_alpha;
+    case xy_kind::digital:
+    case xy_kind::bars:
+    case xy_kind::bars_h:
+      return style::filled;
+    default:
+      return style::all;
+  }
+}
+
 class xy_series : public series_class {
  public:
   xy_series(std::string name, xy_kind kind, std::vector<field_desc> fields, std::string description)
-      : series_class(std::move(name), std::move(fields), std::move(description)), kind_(kind) {}
+      : series_class(std::move(name), xy_style(kind), std::move(fields), std::move(description)),
+        kind_(kind),
+        xs_(first_own(xy_style(kind))),
+        ys_(xs_ + 1),
+        extra_(ys_ + 1) {}
 
   void check(const node& n) const override {
-    require_values(n, kYs);
-    require_same_length(n, kXs, kYs);
+    require_values(n, ys_);
+    require_same_length(n, xs_, ys_);
     if (kind_ == xy_kind::shaded) {
-      require_same_length(n, kExtra, kYs); // ys2
+      require_same_length(n, extra_, ys_); // ys2
     }
   }
 
   void plot(const node& n, draw_context& dc) const override {
-    const doubles& ys = n.get<doubles>(kYs);
-    const doubles generated = n.get<doubles>(kXs).empty() ? index_xs(ys.size()) : doubles{};
-    const doubles& xs = generated.empty() ? n.get<doubles>(kXs) : generated;
+    const doubles& ys = n.get<doubles>(ys_);
+    const doubles generated = n.get<doubles>(xs_).empty() ? index_xs(ys.size()) : doubles{};
+    const doubles& xs = generated.empty() ? n.get<doubles>(xs_) : generated;
     const char* label = str(n, item_field::label);
     const int count = count_of(ys);
     ImPlotSpec spec = item_spec(n);
@@ -670,14 +700,14 @@ class xy_series : public series_class {
         ImPlot::PlotStairs(label, xs.data(), ys.data(), count, spec);
         break;
       case xy_kind::stems:
-        ImPlot::PlotStems(label, xs.data(), ys.data(), count, n.get<double>(kExtra), spec);
+        ImPlot::PlotStems(label, xs.data(), ys.data(), count, n.get<double>(extra_), spec);
         break;
       case xy_kind::shaded: {
-        const doubles& ys2 = n.get<doubles>(kExtra);
+        const doubles& ys2 = n.get<doubles>(extra_);
         if (!ys2.empty()) {
           ImPlot::PlotShaded(label, xs.data(), ys.data(), ys2.data(), count, spec);
         } else {
-          ImPlot::PlotShaded(label, xs.data(), ys.data(), count, n.get<double>(kExtra + 1), spec);
+          ImPlot::PlotShaded(label, xs.data(), ys.data(), count, n.get<double>(extra_ + 1), spec);
         }
         break;
       }
@@ -689,12 +719,12 @@ class xy_series : public series_class {
         if (kind_ == xy_kind::bars_h) {
           spec.Flags = ImPlotBarsFlags_Horizontal;
         }
-        if (n.get<doubles>(kXs).empty()) {
+        if (n.get<doubles>(xs_).empty()) {
           // ImPlot's values overload, as wish does: bars at 0, 1, 2, ... with
           // ys as heights (or, horizontal, as lengths).
-          ImPlot::PlotBars(label, ys.data(), count, n.get<double>(kExtra), 0.0, spec);
+          ImPlot::PlotBars(label, ys.data(), count, n.get<double>(extra_), 0.0, spec);
         } else {
-          ImPlot::PlotBars(label, xs.data(), ys.data(), count, n.get<double>(kExtra), spec);
+          ImPlot::PlotBars(label, xs.data(), ys.data(), count, n.get<double>(extra_), spec);
         }
         break;
     }
@@ -705,7 +735,7 @@ class xy_series : public series_class {
     // Bars: "Draws horizontal bars at each ys[i] with length xs[i]"; without
     // xs, bars at 0, 1, 2, ... of ys[i].
     const bool h = kind_ == xy_kind::bars_h;
-    const bool own_xs = !n.get<doubles>(kXs).empty();
+    const bool own_xs = !n.get<doubles>(xs_).empty();
     const auto pos = [&](int i) { return own_xs ? (h ? ys[i] : xs[i]) : static_cast<double>(i); };
     const auto len = [&](int i) { return own_xs && h ? xs[i] : ys[i]; };
     offer_bars(
@@ -713,7 +743,7 @@ class xy_series : public series_class {
         n,
         label,
         count,
-        n.get<double>(kExtra),
+        n.get<double>(extra_),
         h,
         [&](int i) { return bar_shape{pos(i), std::min(0.0, len(i)), std::max(0.0, len(i))}; },
         [&](int i, pick& p) {
@@ -726,6 +756,8 @@ class xy_series : public series_class {
 
  private:
   xy_kind kind_;
+  const size_t xs_, ys_; ///< Indices of `xs` and `ys`.
+  const size_t extra_; ///< Index of the field after ys: stems.ref, shaded.ys2, bars.bar_size.
 };
 
 // ── Histograms ───────────────────────────────────────────────────────────────
@@ -734,12 +766,14 @@ const char* const kBinsHelp = "-1 = square root, -2 = Sturges, -3 = Rice, -4 = S
 
 class histogram_class : public series_class {
  public:
-  static constexpr size_t values = item_field::first_own, bins = values + 1, cumulative = values + 2,
+  static constexpr series_style kStyle = style::filled;
+  static constexpr size_t values = first_own(kStyle), bins = values + 1, cumulative = values + 2,
                           density = values + 3, range_min = values + 4, range_max = values + 5;
 
   histogram_class()
       : series_class(
             "PlotHistogram",
+            kStyle,
             {
                 numbers_field("values", "Array of sample values to bin into the histogram."),
                 int_field("bins", -1, std::string("Number of bins.  ") + kBinsHelp, value_range{-4, 100000}),
@@ -809,11 +843,13 @@ class histogram_class : public series_class {
 
 class histogram2d_class : public series_class {
  public:
-  static constexpr size_t xs = item_field::first_own, ys = xs + 1, x_bins = xs + 2, y_bins = xs + 3;
+  static constexpr series_style kStyle = style::label;
+  static constexpr size_t xs = first_own(kStyle), ys = xs + 1, x_bins = xs + 2, y_bins = xs + 3;
 
   histogram2d_class()
       : series_class(
             "PlotHistogram2D",
+            kStyle,
             {
                 numbers_field("xs", "Array of sample X coordinates."),
                 numbers_field("ys", "Array of sample Y coordinates (must match xs in length)."),
@@ -917,13 +953,15 @@ class histogram2d_class : public series_class {
 
 class heatmap_class : public series_class {
  public:
-  static constexpr size_t values = item_field::first_own, rows = values + 1, cols = values + 2, scale_min = values + 3,
+  static constexpr series_style kStyle = style::label;
+  static constexpr size_t values = first_own(kStyle), rows = values + 1, cols = values + 2, scale_min = values + 3,
                           scale_max = values + 4, format = values + 5, x_min = values + 6, x_max = values + 7,
                           y_min = values + 8, y_max = values + 9;
 
   heatmap_class()
       : series_class(
             "PlotHeatmap",
+            kStyle,
             {
                 numbers_field("values", "Flattened row-major data array of size rows x cols."),
                 int_field("rows", 1, "Number of rows in the 2-D grid.", value_range{1, 10000}),
@@ -1016,12 +1054,14 @@ std::vector<std::string> split_lines(const std::string& text) {
 
 class pie_class : public series_class {
  public:
-  static constexpr size_t labels = item_field::first_own, values = labels + 1, x = labels + 2, y = labels + 3,
+  static constexpr series_style kStyle = 0;
+  static constexpr size_t labels = first_own(kStyle), values = labels + 1, x = labels + 2, y = labels + 3,
                           radius = labels + 4, normalize = labels + 5, label_fmt = labels + 6, angle0 = labels + 7;
 
   pie_class()
       : series_class(
             "PlotPieChart",
+            kStyle,
             {
                 text_field("labels", "", "Newline-separated list of slice labels, one per entry in the values array."),
                 numbers_field(
@@ -1151,12 +1191,14 @@ class pie_class : public series_class {
 
 class text_class : public series_class {
  public:
-  static constexpr size_t text = item_field::first_own, x = text + 1, y = text + 2, offset_x = text + 3,
+  static constexpr series_style kStyle = 0;
+  static constexpr size_t text = first_own(kStyle), x = text + 1, y = text + 2, offset_x = text + 3,
                           offset_y = text + 4;
 
   text_class()
       : series_class(
             "PlotText",
+            kStyle,
             {
                 text_field("text", "", "The string to display at the (x, y) plot coordinate."),
                 number_field("x", 0.0, "X coordinate in plot (data) space."),
@@ -1186,11 +1228,13 @@ class text_class : public series_class {
 
 class inf_lines_class : public series_class {
  public:
-  static constexpr size_t values = item_field::first_own, horizontal = values + 1;
+  static constexpr series_style kStyle = style::label | style::color | style::line_weight;
+  static constexpr size_t values = first_own(kStyle), horizontal = values + 1;
 
   inf_lines_class()
       : series_class(
             "PlotInfLines",
+            kStyle,
             {
                 numbers_field(
                     "values",
@@ -1218,12 +1262,14 @@ class inf_lines_class : public series_class {
 
 class annotation_class : public series_class {
  public:
-  static constexpr size_t text = item_field::first_own, x = text + 1, y = text + 2, offset_x = text + 3,
+  static constexpr series_style kStyle = style::color;
+  static constexpr size_t text = first_own(kStyle), x = text + 1, y = text + 2, offset_x = text + 3,
                           offset_y = text + 4, clamp = text + 5;
 
   annotation_class()
       : series_class(
             "PlotAnnotation",
+            kStyle,
             {
                 text_field("text", "", "Text in the callout box. Empty (default) shows the point's coordinates."),
                 number_field("x", 0.0, "X coordinate of the point the callout marks, in plot (data) space."),
@@ -1261,11 +1307,13 @@ const name_table& tag_axis_names() {
 
 class tag_class : public series_class {
  public:
-  static constexpr size_t value = item_field::first_own, axis = value + 1, text = value + 2;
+  static constexpr series_style kStyle = style::color;
+  static constexpr size_t value = first_own(kStyle), axis = value + 1, text = value + 2;
 
   tag_class()
       : series_class(
             "PlotTag",
+            kStyle,
             {
                 number_field("value", 0.0, "Position of the tag on its axis, in data units."),
                 enum_field(
@@ -1303,12 +1351,14 @@ class tag_class : public series_class {
 
 class error_bars_class : public series_class {
  public:
-  static constexpr size_t xs = item_field::first_own, ys = xs + 1, err = xs + 2, neg = xs + 3, pos = xs + 4,
+  static constexpr series_style kStyle = style::label | style::color | style::line_weight;
+  static constexpr size_t xs = first_own(kStyle), ys = xs + 1, err = xs + 2, neg = xs + 3, pos = xs + 4,
                           horizontal = xs + 5, cap_size = xs + 6;
 
   error_bars_class()
       : series_class(
             "PlotErrorBars",
+            kStyle,
             {
                 numbers_field("xs", "X coordinates, one per point. If empty, 0, 1, 2, ... are used."),
                 numbers_field("ys", "Y coordinates the bars are centred on, one per point."),
@@ -1353,7 +1403,7 @@ class error_bars_class : public series_class {
     const doubles generated = n.get<doubles>(xs).empty() ? index_xs(y.size()) : doubles{};
     const doubles& x = generated.empty() ? n.get<doubles>(xs) : generated;
     ImPlotSpec spec = item_spec(n);
-    if (n.get<std::string>(item_field::color).empty()) {
+    if (color_of(n).empty()) {
       // The previous series' colour; ImPlot's error-bar colour when none.
       if (const ImVec4 last = ImPlot::GetLastItemColor(); last.w > 0.0f) {
         spec.LineColor = last;
@@ -1407,12 +1457,14 @@ class error_bars_class : public series_class {
 
 class bar_groups_class : public series_class {
  public:
-  static constexpr size_t labels = item_field::first_own, values = labels + 1, group_size = labels + 2,
+  static constexpr series_style kStyle = style::fill_alpha;
+  static constexpr size_t labels = first_own(kStyle), values = labels + 1, group_size = labels + 2,
                           shift = labels + 3, horizontal = labels + 4, stacked = labels + 5;
 
   bar_groups_class()
       : series_class(
             "PlotBarGroups",
+            kStyle,
             {
                 texts_field("labels", "Name of each series of bars (its legend entry), one per bar in a group."),
                 numbers_field(
@@ -1431,8 +1483,8 @@ class bar_groups_class : public series_class {
                     false,
                     "When true, a group's bars are stacked into one bar instead of side by side."),
             },
-            "Draws groups of bars, one bar per label in each group, coloured in turn from the plot's colormap "
-            "(color and fill_color are ignored). Groups sit at 0, 1, 2, ...: name them with the Plot's x_ticks "
+            "Draws groups of bars, one bar per label in each group, coloured in turn from the plot's colormap. "
+            "Groups sit at 0, 1, 2, ...: name them with the Plot's x_ticks "
             "and x_tick_labels (y_ when horizontal).") {}
 
   void check(const node& n) const override {
@@ -1471,10 +1523,7 @@ class bar_groups_class : public series_class {
     for (const std::string& s : names) {
       ids.push_back(s.c_str());
     }
-    ImPlotSpec spec = item_spec(n);
-    const ImPlotSpec automatic;
-    spec.LineColor = automatic.LineColor; // each label takes its own colormap colour
-    spec.FillColor = automatic.FillColor;
+    ImPlotSpec spec = item_spec(n); // fill_alpha: each label takes its own colormap colour
     spec.Flags = (n.get<bool>(horizontal) ? ImPlotBarGroupsFlags_Horizontal : 0) |
         (n.get<bool>(stacked) ? ImPlotBarGroupsFlags_Stacked : 0);
     ImPlot::PlotBarGroups(

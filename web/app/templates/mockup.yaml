@@ -1,0 +1,15 @@
+nymph: 1
+description: A user interface mockup - a sign-in window.
+image: {width: 420, height: 300, padding: 0}
+root:
+  type: Window
+  title: Sign in
+  children:
+    - {type: Text, text: Welcome back.}
+    - {type: InputText, label: Email, value: ada@example.com}
+    - {type: InputText, label: Password, value: secret, flags: Password}
+    - {type: Checkbox, label: Remember me, value: true}
+    - {type: Separator}
+    - {type: Button, label: Sign in}
+    - {type: SameLine}
+    - {type: Button, label: Cancel}

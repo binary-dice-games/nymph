@@ -112,7 +112,7 @@ function compareImages(a, b) {
 
 const fontRequests = new Map(); // name -> count
 const corruptFonts = new Set();
-const { createViewer, NymphError } = await import(pathToFileURL(join(webDir, 'nymph-viewer.js')).href);
+const { createViewer, importMermaid, NymphError } = await import(pathToFileURL(join(webDir, 'nymph-viewer.js')).href);
 
 async function viewer(source, options = {}) {
   return createViewer(null, {
@@ -344,6 +344,57 @@ test('user-interface widgets take the pointer and the keyboard', async () => {
   v.key('Escape', false, 0);
   settle(v, clock);
   assertEq(v.state().wantsKeyboard, false, 'Escape leaves the field');
+  v.destroy();
+});
+
+// ── Mermaid (spec/16_mermaid_import/PLAN.md step 6) ─────────────────────────
+
+/** The golden files of tests/data/mermaid: [mmd path, expected yaml]. */
+async function mermaidCases() {
+  const root = join(sourceDir, 'tests', 'data', 'mermaid');
+  const cases = [];
+  for (const kind of (await readdir(root)).sort()) {
+    for (const file of (await readdir(join(root, kind))).sort()) {
+      if (file.endsWith('.yaml')) {
+        const base = join(root, kind, file.slice(0, -5));
+        cases.push([`${base}.mmd`, await readFile(`${base}.yaml`, 'utf8')]);
+      }
+    }
+  }
+  return cases;
+}
+
+const withoutSize = (yaml) => yaml.replace(/\r/g, '').replace(/image: \{width: \d+, height: \d+\}/, 'image: {}');
+
+test('the module converts mermaid exactly as the native tool', async () => {
+  const cases = await mermaidCases();
+  assert(cases.length >= 20, `only ${cases.length} mermaid cases`);
+  for (const [mmd, expected] of cases) {
+    const text = (await readFile(mmd, 'utf8')).replace(/\r/g, '');
+    const result = await importMermaid(text);
+    assertEq(withoutSize(result.source), withoutSize(expected), mmd);
+  }
+});
+
+test('setSource takes mermaid and the viewer holds the YAML', async () => {
+  const mermaid = 'flowchart LR\n  A --> B\n  click A callback\n';
+  const v = await viewer(mermaid);
+  const { source, kind, warnings } = await importMermaid(mermaid);
+  assertEq(kind, 'flowchart', 'kind');
+  assertEq(warnings.length, 1, 'one warning');
+  assertEq(warnings[0].line, 3, 'warning line');
+  assertEq(v.source(), source, 'source');
+  assert(v.toYaml().startsWith('nymph: 1\n'), 'toYaml writes YAML');
+  const info = v.info();
+  assertEq(info.importedFrom, 'mermaid', 'importedFrom');
+  assertEq(info.mermaidKind, 'flowchart', 'mermaidKind');
+  await v.setSource('root: {type: Label, text: ok}\n');
+  assertEq(v.info().importedFrom, undefined, 'a YAML source is not imported');
+  let error = null;
+  await v.setSource('flowchart LR\n  A --> B@{ shape: blob }\n').catch((e) => (error = e));
+  assert(error instanceof NymphError, 'expected a NymphError');
+  assertEq(error.line, 2, 'line');
+  assertEq(error.column, 10, 'column');
   v.destroy();
 });
 

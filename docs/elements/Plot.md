@@ -54,13 +54,7 @@ Goes in: Plot.
 
 | Field | Type | Default | Description |
 |---|---|---|---|
-| `label` | text | `""` | Series name shown in the plot legend. |
 | `color` | colour | `""` | Series colour as "#RRGGBB" or "#RRGGBBAA", used for its lines, fills and markers. Empty (default) takes the next colour of the plot's colormap. |
-| `fill_color` | colour | `""` | Colour of filled areas (bar faces, shaded regions, surfaces) as "#RRGGBB" or "#RRGGBBAA". Empty (default) uses color. |
-| `line_weight` | number | `1` | Line thickness in pixels (lines, bar edges, marker edges). (0 to 32) |
-| `fill_alpha` | number | `-1` | Opacity of fills from 0 (transparent) to 1 (opaque). -1 (default) keeps the series type's own default. (-1 to 1) |
-| `marker` | name | `Default` | Point marker: None, Auto, Circle, Square, Diamond, Up, Down, Left, Right, Cross, Plus or Asterisk. Default keeps the series type's own choice (markers on a scatter, none on a line). (one of: Default, None, Auto, Circle, Square, Diamond, Up, Down, Left, Right, Cross, Plus, Asterisk) |
-| `marker_size` | number | `0` | Marker radius in pixels. 0 (default) keeps the automatic size. (0 to 64) |
 | `text` | text | `""` | Text in the callout box. Empty (default) shows the point's coordinates. |
 | `x` | number | `0` | X coordinate of the point the callout marks, in plot (data) space. |
 | `y` | number | `0` | Y coordinate of the point the callout marks, in plot (data) space. |
@@ -71,19 +65,13 @@ Goes in: Plot.
 
 ## PlotBarGroups
 
-Draws groups of bars, one bar per label in each group, coloured in turn from the plot's colormap (color and fill_color are ignored). Groups sit at 0, 1, 2, ...: name them with the Plot's x_ticks and x_tick_labels (y_ when horizontal).  Must be a child of a Plot element.
+Draws groups of bars, one bar per label in each group, coloured in turn from the plot's colormap. Groups sit at 0, 1, 2, ...: name them with the Plot's x_ticks and x_tick_labels (y_ when horizontal).  Must be a child of a Plot element.
 
 Goes in: Plot.
 
 | Field | Type | Default | Description |
 |---|---|---|---|
-| `label` | text | `""` | Series name shown in the plot legend. |
-| `color` | colour | `""` | Series colour as "#RRGGBB" or "#RRGGBBAA", used for its lines, fills and markers. Empty (default) takes the next colour of the plot's colormap. |
-| `fill_color` | colour | `""` | Colour of filled areas (bar faces, shaded regions, surfaces) as "#RRGGBB" or "#RRGGBBAA". Empty (default) uses color. |
-| `line_weight` | number | `1` | Line thickness in pixels (lines, bar edges, marker edges). (0 to 32) |
 | `fill_alpha` | number | `-1` | Opacity of fills from 0 (transparent) to 1 (opaque). -1 (default) keeps the series type's own default. (-1 to 1) |
-| `marker` | name | `Default` | Point marker: None, Auto, Circle, Square, Diamond, Up, Down, Left, Right, Cross, Plus or Asterisk. Default keeps the series type's own choice (markers on a scatter, none on a line). (one of: Default, None, Auto, Circle, Square, Diamond, Up, Down, Left, Right, Cross, Plus, Asterisk) |
-| `marker_size` | number | `0` | Marker radius in pixels. 0 (default) keeps the automatic size. (0 to 64) |
 | `labels` | list of texts | `[]` | Name of each series of bars (its legend entry), one per bar in a group. |
 | `values` | list of numbers | `[]` | Bar values, one row per group: the first row (one value per label) is group 0, the next group 1, and so on. [$a, $b] gives this layout from the columns a and b. |
 | `group_size` | number | `0.67` | Width of a group (all its bars together), in plot units. (0 to 16) |
@@ -102,11 +90,9 @@ Goes in: Plot.
 |---|---|---|---|
 | `label` | text | `""` | Series name shown in the plot legend. |
 | `color` | colour | `""` | Series colour as "#RRGGBB" or "#RRGGBBAA", used for its lines, fills and markers. Empty (default) takes the next colour of the plot's colormap. |
-| `fill_color` | colour | `""` | Colour of filled areas (bar faces, shaded regions, surfaces) as "#RRGGBB" or "#RRGGBBAA". Empty (default) uses color. |
+| `fill_color` | colour | `""` | Colour of filled areas (bar faces, shaded regions, surfaces) and marker faces as "#RRGGBB" or "#RRGGBBAA". Empty (default) uses color. |
 | `line_weight` | number | `1` | Line thickness in pixels (lines, bar edges, marker edges). (0 to 32) |
 | `fill_alpha` | number | `-1` | Opacity of fills from 0 (transparent) to 1 (opaque). -1 (default) keeps the series type's own default. (-1 to 1) |
-| `marker` | name | `Default` | Point marker: None, Auto, Circle, Square, Diamond, Up, Down, Left, Right, Cross, Plus or Asterisk. Default keeps the series type's own choice (markers on a scatter, none on a line). (one of: Default, None, Auto, Circle, Square, Diamond, Up, Down, Left, Right, Cross, Plus, Asterisk) |
-| `marker_size` | number | `0` | Marker radius in pixels. 0 (default) keeps the automatic size. (0 to 64) |
 | `xs` | list of numbers | `[]` | Array of bar X positions.  If empty, bars are placed at 0, 1, 2, ... using the ys values only. |
 | `ys` | list of numbers | `[]` | Array of bar heights (or lengths for horizontal bars). |
 | `bar_size` | number | `0.67` | Width (or height for horizontal) of each bar in plot units. (0 to 16) |
@@ -122,11 +108,9 @@ Goes in: Plot.
 |---|---|---|---|
 | `label` | text | `""` | Series name shown in the plot legend. |
 | `color` | colour | `""` | Series colour as "#RRGGBB" or "#RRGGBBAA", used for its lines, fills and markers. Empty (default) takes the next colour of the plot's colormap. |
-| `fill_color` | colour | `""` | Colour of filled areas (bar faces, shaded regions, surfaces) as "#RRGGBB" or "#RRGGBBAA". Empty (default) uses color. |
+| `fill_color` | colour | `""` | Colour of filled areas (bar faces, shaded regions, surfaces) and marker faces as "#RRGGBB" or "#RRGGBBAA". Empty (default) uses color. |
 | `line_weight` | number | `1` | Line thickness in pixels (lines, bar edges, marker edges). (0 to 32) |
 | `fill_alpha` | number | `-1` | Opacity of fills from 0 (transparent) to 1 (opaque). -1 (default) keeps the series type's own default. (-1 to 1) |
-| `marker` | name | `Default` | Point marker: None, Auto, Circle, Square, Diamond, Up, Down, Left, Right, Cross, Plus or Asterisk. Default keeps the series type's own choice (markers on a scatter, none on a line). (one of: Default, None, Auto, Circle, Square, Diamond, Up, Down, Left, Right, Cross, Plus, Asterisk) |
-| `marker_size` | number | `0` | Marker radius in pixels. 0 (default) keeps the automatic size. (0 to 64) |
 | `xs` | list of numbers | `[]` | Array of bar X positions.  If empty, bars are placed at 0, 1, 2, ... using the ys values only. |
 | `ys` | list of numbers | `[]` | Array of bar heights (or lengths for horizontal bars). |
 | `bar_size` | number | `0.67` | Width (or height for horizontal) of each bar in plot units. (0 to 16) |
@@ -142,11 +126,9 @@ Goes in: Plot.
 |---|---|---|---|
 | `label` | text | `""` | Series name shown in the plot legend. |
 | `color` | colour | `""` | Series colour as "#RRGGBB" or "#RRGGBBAA", used for its lines, fills and markers. Empty (default) takes the next colour of the plot's colormap. |
-| `fill_color` | colour | `""` | Colour of filled areas (bar faces, shaded regions, surfaces) as "#RRGGBB" or "#RRGGBBAA". Empty (default) uses color. |
+| `fill_color` | colour | `""` | Colour of filled areas (bar faces, shaded regions, surfaces) and marker faces as "#RRGGBB" or "#RRGGBBAA". Empty (default) uses color. |
 | `line_weight` | number | `1` | Line thickness in pixels (lines, bar edges, marker edges). (0 to 32) |
 | `fill_alpha` | number | `-1` | Opacity of fills from 0 (transparent) to 1 (opaque). -1 (default) keeps the series type's own default. (-1 to 1) |
-| `marker` | name | `Default` | Point marker: None, Auto, Circle, Square, Diamond, Up, Down, Left, Right, Cross, Plus or Asterisk. Default keeps the series type's own choice (markers on a scatter, none on a line). (one of: Default, None, Auto, Circle, Square, Diamond, Up, Down, Left, Right, Cross, Plus, Asterisk) |
-| `marker_size` | number | `0` | Marker radius in pixels. 0 (default) keeps the automatic size. (0 to 64) |
 | `xs` | list of numbers | `[]` | Array of X coordinates, one per data point. If empty, 0, 1, 2, ... are used. |
 | `ys` | list of numbers | `[]` | Array of Y coordinates, one per data point. |
 | `y_axis` | name | `Y1` | Y axis the series is drawn against: Y1 (default, left) or Y2, the plot's second Y axis on the right, for a quantity in other units. Y2's range, scale and ticks are the Plot's y2_ fields. (one of: Y1, Y2) |
@@ -161,11 +143,7 @@ Goes in: Plot.
 |---|---|---|---|
 | `label` | text | `""` | Series name shown in the plot legend. |
 | `color` | colour | `""` | Series colour as "#RRGGBB" or "#RRGGBBAA", used for its lines, fills and markers. Empty (default) takes the next colour of the plot's colormap. |
-| `fill_color` | colour | `""` | Colour of filled areas (bar faces, shaded regions, surfaces) as "#RRGGBB" or "#RRGGBBAA". Empty (default) uses color. |
 | `line_weight` | number | `1` | Line thickness in pixels (lines, bar edges, marker edges). (0 to 32) |
-| `fill_alpha` | number | `-1` | Opacity of fills from 0 (transparent) to 1 (opaque). -1 (default) keeps the series type's own default. (-1 to 1) |
-| `marker` | name | `Default` | Point marker: None, Auto, Circle, Square, Diamond, Up, Down, Left, Right, Cross, Plus or Asterisk. Default keeps the series type's own choice (markers on a scatter, none on a line). (one of: Default, None, Auto, Circle, Square, Diamond, Up, Down, Left, Right, Cross, Plus, Asterisk) |
-| `marker_size` | number | `0` | Marker radius in pixels. 0 (default) keeps the automatic size. (0 to 64) |
 | `xs` | list of numbers | `[]` | X coordinates, one per point. If empty, 0, 1, 2, ... are used. |
 | `ys` | list of numbers | `[]` | Y coordinates the bars are centred on, one per point. |
 | `err` | list of numbers | `[]` | Symmetric error of each point: its bar spans ys - err to ys + err (xs when horizontal). Leave empty and give neg and pos for asymmetric errors. |
@@ -184,12 +162,6 @@ Goes in: Plot.
 | Field | Type | Default | Description |
 |---|---|---|---|
 | `label` | text | `""` | Series name shown in the plot legend. |
-| `color` | colour | `""` | Series colour as "#RRGGBB" or "#RRGGBBAA", used for its lines, fills and markers. Empty (default) takes the next colour of the plot's colormap. |
-| `fill_color` | colour | `""` | Colour of filled areas (bar faces, shaded regions, surfaces) as "#RRGGBB" or "#RRGGBBAA". Empty (default) uses color. |
-| `line_weight` | number | `1` | Line thickness in pixels (lines, bar edges, marker edges). (0 to 32) |
-| `fill_alpha` | number | `-1` | Opacity of fills from 0 (transparent) to 1 (opaque). -1 (default) keeps the series type's own default. (-1 to 1) |
-| `marker` | name | `Default` | Point marker: None, Auto, Circle, Square, Diamond, Up, Down, Left, Right, Cross, Plus or Asterisk. Default keeps the series type's own choice (markers on a scatter, none on a line). (one of: Default, None, Auto, Circle, Square, Diamond, Up, Down, Left, Right, Cross, Plus, Asterisk) |
-| `marker_size` | number | `0` | Marker radius in pixels. 0 (default) keeps the automatic size. (0 to 64) |
 | `values` | list of numbers | `[]` | Flattened row-major data array of size rows x cols. |
 | `rows` | integer | `1` | Number of rows in the 2-D grid. (1 to 10000) |
 | `cols` | integer | `1` | Number of columns in the 2-D grid. (1 to 10000) |
@@ -212,11 +184,9 @@ Goes in: Plot.
 |---|---|---|---|
 | `label` | text | `""` | Series name shown in the plot legend. |
 | `color` | colour | `""` | Series colour as "#RRGGBB" or "#RRGGBBAA", used for its lines, fills and markers. Empty (default) takes the next colour of the plot's colormap. |
-| `fill_color` | colour | `""` | Colour of filled areas (bar faces, shaded regions, surfaces) as "#RRGGBB" or "#RRGGBBAA". Empty (default) uses color. |
+| `fill_color` | colour | `""` | Colour of filled areas (bar faces, shaded regions, surfaces) and marker faces as "#RRGGBB" or "#RRGGBBAA". Empty (default) uses color. |
 | `line_weight` | number | `1` | Line thickness in pixels (lines, bar edges, marker edges). (0 to 32) |
 | `fill_alpha` | number | `-1` | Opacity of fills from 0 (transparent) to 1 (opaque). -1 (default) keeps the series type's own default. (-1 to 1) |
-| `marker` | name | `Default` | Point marker: None, Auto, Circle, Square, Diamond, Up, Down, Left, Right, Cross, Plus or Asterisk. Default keeps the series type's own choice (markers on a scatter, none on a line). (one of: Default, None, Auto, Circle, Square, Diamond, Up, Down, Left, Right, Cross, Plus, Asterisk) |
-| `marker_size` | number | `0` | Marker radius in pixels. 0 (default) keeps the automatic size. (0 to 64) |
 | `values` | list of numbers | `[]` | Array of sample values to bin into the histogram. |
 | `bins` | integer | `-1` | Number of bins.  -1 = square root, -2 = Sturges, -3 = Rice, -4 = Scott (ImPlotBin), >0 = explicit count. (-4 to 1e+05) |
 | `cumulative` | true/false | `false` | When true, renders a cumulative distribution instead. |
@@ -234,12 +204,6 @@ Goes in: Plot.
 | Field | Type | Default | Description |
 |---|---|---|---|
 | `label` | text | `""` | Series name shown in the plot legend. |
-| `color` | colour | `""` | Series colour as "#RRGGBB" or "#RRGGBBAA", used for its lines, fills and markers. Empty (default) takes the next colour of the plot's colormap. |
-| `fill_color` | colour | `""` | Colour of filled areas (bar faces, shaded regions, surfaces) as "#RRGGBB" or "#RRGGBBAA". Empty (default) uses color. |
-| `line_weight` | number | `1` | Line thickness in pixels (lines, bar edges, marker edges). (0 to 32) |
-| `fill_alpha` | number | `-1` | Opacity of fills from 0 (transparent) to 1 (opaque). -1 (default) keeps the series type's own default. (-1 to 1) |
-| `marker` | name | `Default` | Point marker: None, Auto, Circle, Square, Diamond, Up, Down, Left, Right, Cross, Plus or Asterisk. Default keeps the series type's own choice (markers on a scatter, none on a line). (one of: Default, None, Auto, Circle, Square, Diamond, Up, Down, Left, Right, Cross, Plus, Asterisk) |
-| `marker_size` | number | `0` | Marker radius in pixels. 0 (default) keeps the automatic size. (0 to 64) |
 | `xs` | list of numbers | `[]` | Array of sample X coordinates. |
 | `ys` | list of numbers | `[]` | Array of sample Y coordinates (must match xs in length). |
 | `x_bins` | integer | `-1` | Bin count for X.  -1 = square root, -2 = Sturges, -3 = Rice, -4 = Scott (ImPlotBin), >0 = explicit count. (-4 to 1e+05) |
@@ -256,11 +220,7 @@ Goes in: Plot.
 |---|---|---|---|
 | `label` | text | `""` | Series name shown in the plot legend. |
 | `color` | colour | `""` | Series colour as "#RRGGBB" or "#RRGGBBAA", used for its lines, fills and markers. Empty (default) takes the next colour of the plot's colormap. |
-| `fill_color` | colour | `""` | Colour of filled areas (bar faces, shaded regions, surfaces) as "#RRGGBB" or "#RRGGBBAA". Empty (default) uses color. |
 | `line_weight` | number | `1` | Line thickness in pixels (lines, bar edges, marker edges). (0 to 32) |
-| `fill_alpha` | number | `-1` | Opacity of fills from 0 (transparent) to 1 (opaque). -1 (default) keeps the series type's own default. (-1 to 1) |
-| `marker` | name | `Default` | Point marker: None, Auto, Circle, Square, Diamond, Up, Down, Left, Right, Cross, Plus or Asterisk. Default keeps the series type's own choice (markers on a scatter, none on a line). (one of: Default, None, Auto, Circle, Square, Diamond, Up, Down, Left, Right, Cross, Plus, Asterisk) |
-| `marker_size` | number | `0` | Marker radius in pixels. 0 (default) keeps the automatic size. (0 to 64) |
 | `values` | list of numbers | `[]` | Array of axis positions at which to draw lines.  When horizontal is false these are X positions (vertical lines); when horizontal is true these are Y positions (horizontal lines). |
 | `horizontal` | true/false | `false` | When false, draws vertical lines at each X value.  When true, draws horizontal lines at each Y value. |
 | `y_axis` | name | `Y1` | Y axis the series is drawn against: Y1 (default, left) or Y2, the plot's second Y axis on the right, for a quantity in other units. Y2's range, scale and ticks are the Plot's y2_ fields. (one of: Y1, Y2) |
@@ -275,7 +235,7 @@ Goes in: Plot.
 |---|---|---|---|
 | `label` | text | `""` | Series name shown in the plot legend. |
 | `color` | colour | `""` | Series colour as "#RRGGBB" or "#RRGGBBAA", used for its lines, fills and markers. Empty (default) takes the next colour of the plot's colormap. |
-| `fill_color` | colour | `""` | Colour of filled areas (bar faces, shaded regions, surfaces) as "#RRGGBB" or "#RRGGBBAA". Empty (default) uses color. |
+| `fill_color` | colour | `""` | Colour of filled areas (bar faces, shaded regions, surfaces) and marker faces as "#RRGGBB" or "#RRGGBBAA". Empty (default) uses color. |
 | `line_weight` | number | `1` | Line thickness in pixels (lines, bar edges, marker edges). (0 to 32) |
 | `fill_alpha` | number | `-1` | Opacity of fills from 0 (transparent) to 1 (opaque). -1 (default) keeps the series type's own default. (-1 to 1) |
 | `marker` | name | `Default` | Point marker: None, Auto, Circle, Square, Diamond, Up, Down, Left, Right, Cross, Plus or Asterisk. Default keeps the series type's own choice (markers on a scatter, none on a line). (one of: Default, None, Auto, Circle, Square, Diamond, Up, Down, Left, Right, Cross, Plus, Asterisk) |
@@ -292,13 +252,6 @@ Goes in: Plot.
 
 | Field | Type | Default | Description |
 |---|---|---|---|
-| `label` | text | `""` | Series name shown in the plot legend. |
-| `color` | colour | `""` | Series colour as "#RRGGBB" or "#RRGGBBAA", used for its lines, fills and markers. Empty (default) takes the next colour of the plot's colormap. |
-| `fill_color` | colour | `""` | Colour of filled areas (bar faces, shaded regions, surfaces) as "#RRGGBB" or "#RRGGBBAA". Empty (default) uses color. |
-| `line_weight` | number | `1` | Line thickness in pixels (lines, bar edges, marker edges). (0 to 32) |
-| `fill_alpha` | number | `-1` | Opacity of fills from 0 (transparent) to 1 (opaque). -1 (default) keeps the series type's own default. (-1 to 1) |
-| `marker` | name | `Default` | Point marker: None, Auto, Circle, Square, Diamond, Up, Down, Left, Right, Cross, Plus or Asterisk. Default keeps the series type's own choice (markers on a scatter, none on a line). (one of: Default, None, Auto, Circle, Square, Diamond, Up, Down, Left, Right, Cross, Plus, Asterisk) |
-| `marker_size` | number | `0` | Marker radius in pixels. 0 (default) keeps the automatic size. (0 to 64) |
 | `labels` | text | `""` | Newline-separated list of slice labels, one per entry in the values array. |
 | `values` | list of numbers | `[]` | Array of slice magnitudes.  When normalize is false, values are used as-is; when true, they are normalized to sum to 1. |
 | `x` | number | `0.5` | X coordinate of the pie center in plot (data) units [0, 1]. (0 to 1) |
@@ -319,7 +272,7 @@ Goes in: Plot.
 |---|---|---|---|
 | `label` | text | `""` | Series name shown in the plot legend. |
 | `color` | colour | `""` | Series colour as "#RRGGBB" or "#RRGGBBAA", used for its lines, fills and markers. Empty (default) takes the next colour of the plot's colormap. |
-| `fill_color` | colour | `""` | Colour of filled areas (bar faces, shaded regions, surfaces) as "#RRGGBB" or "#RRGGBBAA". Empty (default) uses color. |
+| `fill_color` | colour | `""` | Colour of filled areas (bar faces, shaded regions, surfaces) and marker faces as "#RRGGBB" or "#RRGGBBAA". Empty (default) uses color. |
 | `line_weight` | number | `1` | Line thickness in pixels (lines, bar edges, marker edges). (0 to 32) |
 | `fill_alpha` | number | `-1` | Opacity of fills from 0 (transparent) to 1 (opaque). -1 (default) keeps the series type's own default. (-1 to 1) |
 | `marker` | name | `Default` | Point marker: None, Auto, Circle, Square, Diamond, Up, Down, Left, Right, Cross, Plus or Asterisk. Default keeps the series type's own choice (markers on a scatter, none on a line). (one of: Default, None, Auto, Circle, Square, Diamond, Up, Down, Left, Right, Cross, Plus, Asterisk) |
@@ -338,11 +291,8 @@ Goes in: Plot.
 |---|---|---|---|
 | `label` | text | `""` | Series name shown in the plot legend. |
 | `color` | colour | `""` | Series colour as "#RRGGBB" or "#RRGGBBAA", used for its lines, fills and markers. Empty (default) takes the next colour of the plot's colormap. |
-| `fill_color` | colour | `""` | Colour of filled areas (bar faces, shaded regions, surfaces) as "#RRGGBB" or "#RRGGBBAA". Empty (default) uses color. |
-| `line_weight` | number | `1` | Line thickness in pixels (lines, bar edges, marker edges). (0 to 32) |
+| `fill_color` | colour | `""` | Colour of filled areas (bar faces, shaded regions, surfaces) and marker faces as "#RRGGBB" or "#RRGGBBAA". Empty (default) uses color. |
 | `fill_alpha` | number | `-1` | Opacity of fills from 0 (transparent) to 1 (opaque). -1 (default) keeps the series type's own default. (-1 to 1) |
-| `marker` | name | `Default` | Point marker: None, Auto, Circle, Square, Diamond, Up, Down, Left, Right, Cross, Plus or Asterisk. Default keeps the series type's own choice (markers on a scatter, none on a line). (one of: Default, None, Auto, Circle, Square, Diamond, Up, Down, Left, Right, Cross, Plus, Asterisk) |
-| `marker_size` | number | `0` | Marker radius in pixels. 0 (default) keeps the automatic size. (0 to 64) |
 | `xs` | list of numbers | `[]` | Array of X coordinates, one per data point. If empty, 0, 1, 2, ... are used. |
 | `ys` | list of numbers | `[]` | Array of Y coordinates, one per data point. |
 | `ys2` | list of numbers | `[]` | Second Y array for a band between ys and ys2.  Leave empty to shade between ys and ref. |
@@ -359,7 +309,7 @@ Goes in: Plot.
 |---|---|---|---|
 | `label` | text | `""` | Series name shown in the plot legend. |
 | `color` | colour | `""` | Series colour as "#RRGGBB" or "#RRGGBBAA", used for its lines, fills and markers. Empty (default) takes the next colour of the plot's colormap. |
-| `fill_color` | colour | `""` | Colour of filled areas (bar faces, shaded regions, surfaces) as "#RRGGBB" or "#RRGGBBAA". Empty (default) uses color. |
+| `fill_color` | colour | `""` | Colour of filled areas (bar faces, shaded regions, surfaces) and marker faces as "#RRGGBB" or "#RRGGBBAA". Empty (default) uses color. |
 | `line_weight` | number | `1` | Line thickness in pixels (lines, bar edges, marker edges). (0 to 32) |
 | `fill_alpha` | number | `-1` | Opacity of fills from 0 (transparent) to 1 (opaque). -1 (default) keeps the series type's own default. (-1 to 1) |
 | `marker` | name | `Default` | Point marker: None, Auto, Circle, Square, Diamond, Up, Down, Left, Right, Cross, Plus or Asterisk. Default keeps the series type's own choice (markers on a scatter, none on a line). (one of: Default, None, Auto, Circle, Square, Diamond, Up, Down, Left, Right, Cross, Plus, Asterisk) |
@@ -378,7 +328,7 @@ Goes in: Plot.
 |---|---|---|---|
 | `label` | text | `""` | Series name shown in the plot legend. |
 | `color` | colour | `""` | Series colour as "#RRGGBB" or "#RRGGBBAA", used for its lines, fills and markers. Empty (default) takes the next colour of the plot's colormap. |
-| `fill_color` | colour | `""` | Colour of filled areas (bar faces, shaded regions, surfaces) as "#RRGGBB" or "#RRGGBBAA". Empty (default) uses color. |
+| `fill_color` | colour | `""` | Colour of filled areas (bar faces, shaded regions, surfaces) and marker faces as "#RRGGBB" or "#RRGGBBAA". Empty (default) uses color. |
 | `line_weight` | number | `1` | Line thickness in pixels (lines, bar edges, marker edges). (0 to 32) |
 | `fill_alpha` | number | `-1` | Opacity of fills from 0 (transparent) to 1 (opaque). -1 (default) keeps the series type's own default. (-1 to 1) |
 | `marker` | name | `Default` | Point marker: None, Auto, Circle, Square, Diamond, Up, Down, Left, Right, Cross, Plus or Asterisk. Default keeps the series type's own choice (markers on a scatter, none on a line). (one of: Default, None, Auto, Circle, Square, Diamond, Up, Down, Left, Right, Cross, Plus, Asterisk) |
@@ -396,13 +346,7 @@ Goes in: Plot.
 
 | Field | Type | Default | Description |
 |---|---|---|---|
-| `label` | text | `""` | Series name shown in the plot legend. |
 | `color` | colour | `""` | Series colour as "#RRGGBB" or "#RRGGBBAA", used for its lines, fills and markers. Empty (default) takes the next colour of the plot's colormap. |
-| `fill_color` | colour | `""` | Colour of filled areas (bar faces, shaded regions, surfaces) as "#RRGGBB" or "#RRGGBBAA". Empty (default) uses color. |
-| `line_weight` | number | `1` | Line thickness in pixels (lines, bar edges, marker edges). (0 to 32) |
-| `fill_alpha` | number | `-1` | Opacity of fills from 0 (transparent) to 1 (opaque). -1 (default) keeps the series type's own default. (-1 to 1) |
-| `marker` | name | `Default` | Point marker: None, Auto, Circle, Square, Diamond, Up, Down, Left, Right, Cross, Plus or Asterisk. Default keeps the series type's own choice (markers on a scatter, none on a line). (one of: Default, None, Auto, Circle, Square, Diamond, Up, Down, Left, Right, Cross, Plus, Asterisk) |
-| `marker_size` | number | `0` | Marker radius in pixels. 0 (default) keeps the automatic size. (0 to 64) |
 | `value` | number | `0` | Position of the tag on its axis, in data units. |
 | `axis` | name | `Y` | Axis the tag sits on: Y (default; the left axis, or the right one with y_axis: Y2) or X. (one of: X, Y) |
 | `text` | text | `""` | Text in the tag. Empty (default) shows the value, formatted like the tick labels. |
@@ -416,13 +360,6 @@ Goes in: Plot.
 
 | Field | Type | Default | Description |
 |---|---|---|---|
-| `label` | text | `""` | Series name shown in the plot legend. |
-| `color` | colour | `""` | Series colour as "#RRGGBB" or "#RRGGBBAA", used for its lines, fills and markers. Empty (default) takes the next colour of the plot's colormap. |
-| `fill_color` | colour | `""` | Colour of filled areas (bar faces, shaded regions, surfaces) as "#RRGGBB" or "#RRGGBBAA". Empty (default) uses color. |
-| `line_weight` | number | `1` | Line thickness in pixels (lines, bar edges, marker edges). (0 to 32) |
-| `fill_alpha` | number | `-1` | Opacity of fills from 0 (transparent) to 1 (opaque). -1 (default) keeps the series type's own default. (-1 to 1) |
-| `marker` | name | `Default` | Point marker: None, Auto, Circle, Square, Diamond, Up, Down, Left, Right, Cross, Plus or Asterisk. Default keeps the series type's own choice (markers on a scatter, none on a line). (one of: Default, None, Auto, Circle, Square, Diamond, Up, Down, Left, Right, Cross, Plus, Asterisk) |
-| `marker_size` | number | `0` | Marker radius in pixels. 0 (default) keeps the automatic size. (0 to 64) |
 | `text` | text | `""` | The string to display at the (x, y) plot coordinate. |
 | `x` | number | `0` | X coordinate in plot (data) space. |
 | `y` | number | `0` | Y coordinate in plot (data) space. |

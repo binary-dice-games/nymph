@@ -1,0 +1,19 @@
+nymph: 1
+description: A bar chart comparing five teams.
+image: {width: 720, height: 420}
+root:
+  type: Plot
+  title: Open tickets by team
+  y_label: tickets
+  x_ticks: [0, 1, 2, 3, 4]
+  x_tick_labels: $team
+  y_min: 0
+  children:
+    - {type: PlotBars, label: open, ys: $open, bar_size: 0.6}
+data: |
+  team, open
+  Web, 14
+  Mobile, 9
+  API, 21
+  Data, 6
+  Infra, 11

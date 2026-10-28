@@ -5,6 +5,7 @@
 
 #include <imgui.h>
 #include <implot.h>
+#include <algorithm>
 #include <array>
 #include <cstdint>
 #include <map>
@@ -12,6 +13,7 @@
 #include <string>
 #include <string_view>
 #include <unordered_map>
+#include <utility>
 #include <vector>
 #include "document/view.hpp"
 #include "render/image_options.hpp"
@@ -30,6 +32,16 @@ struct rect {
   float height() const {
     return max.y - min.y;
   }
+};
+
+/// @brief Two fingers moved since the last frame (a pinch), in logical
+///        pixels: the content under `from` goes under `to`, scaled by
+///        `scale` (above 1 zooms in). See spec/04_web_viewer/DESIGN.md
+///        section 4, "Input mapping".
+struct pinch_gesture {
+  ImVec2 from;
+  ImVec2 to;
+  float scale = 1.0f;
 };
 
 /// @brief What a live view reads back about one 2D plot after a frame: its
@@ -179,6 +191,25 @@ class draw_context {
     pending_hidden_.clear();
   }
 
+  /// @brief Item IDs (ImPlot and ImPlot3D) that were hidden when the live
+  ///        view dropped its plots' items for a new source
+  ///        (forget_plot_items()); each is hidden again the next time it
+  ///        is plotted.
+  void set_rehidden(std::vector<ImGuiID> ids) {
+    rehidden_ = std::move(ids);
+  }
+
+  /// @brief Whether item `id` was hidden before the items were dropped;
+  ///        true only the first time it is asked.
+  bool take_rehidden(ImGuiID id) {
+    const auto it = std::find(rehidden_.begin(), rehidden_.end(), id);
+    if (it == rehidden_.end()) {
+      return false;
+    }
+    rehidden_.erase(it);
+    return true;
+  }
+
   /// @brief Notes that legend entry `label` of the current plot is hidden.
   void record_hidden(const std::string& label) {
     if (interactive_) {
@@ -255,6 +286,15 @@ class draw_context {
   void set_edit_mode(bool on) {
     edit_mode_ = on;
   }
+  /// @brief Whether a diagram outlines the image's limit and shows what lies
+  ///        outside it (ImUmlDiagramFlags_ShowOutside). Off (the default):
+  ///        edit mode draws what the PNG shows.
+  bool show_limits() const {
+    return show_limits_;
+  }
+  void set_show_limits(bool on) {
+    show_limits_ = on;
+  }
 
   /// @brief Notes that `area` (logical pixels) shows `n`'s text field
   ///        `field`, or `n` as a whole when `field` is empty; the editor
@@ -298,6 +338,26 @@ class draw_context {
     if (interactive_) {
       input_areas_.push_back(r);
     }
+  }
+
+  /// @brief Set by the live view before a frame: the pinch to apply, or none.
+  void set_pinch(std::optional<pinch_gesture> pinch) {
+    pinch_ = pinch;
+  }
+
+  /// @brief The frame's pinch when it started inside `area`; it is then
+  ///        taken (the first plot or diagram under the fingers applies it).
+  std::optional<pinch_gesture> take_pinch(const rect& area) {
+    if (!pinch_ || pinch_->from.x < area.min.x || pinch_->from.x > area.max.x || pinch_->from.y < area.min.y ||
+        pinch_->from.y > area.max.y) {
+      return std::nullopt;
+    }
+    return std::exchange(pinch_, std::nullopt);
+  }
+
+  /// @brief The frame's pinch not yet taken by any plot or diagram.
+  const std::optional<pinch_gesture>& pinch() const {
+    return pinch_;
   }
 
   /// @brief The input areas recorded in this frame.
@@ -419,14 +479,17 @@ class draw_context {
   const std::unordered_map<const node*, std::string>* paths_ = nullptr;
   const node* current_plot_ = nullptr;
   std::vector<std::string> pending_hidden_;
+  std::vector<ImGuiID> rehidden_;
   bool tooltips_ = true;
   bool edit_mode_ = false;
+  bool show_limits_ = false;
   std::vector<edit_record> targets_;
   std::vector<item_range> item_ranges_;
   std::optional<pick_candidate> candidate_;
   std::optional<pick> hovered_;
   std::vector<plot_view_record> views_;
   std::vector<rect> input_areas_;
+  std::optional<pinch_gesture> pinch_;
   std::vector<plot_view_record> previous_views_;
   std::unordered_map<const node*, rect> rects_;
   std::map<std::string, ImFont*, std::less<>> fonts_;

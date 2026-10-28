@@ -179,10 +179,11 @@ by the 8192 px limit of `render_frames()`.
 
 ### Theme
 
-`theme` is `source` (default: `image.theme`), `light`, `dark`, `classic`,
-or `auto` (light or dark from the page's `prefers-color-scheme`, followed
-live). It overrides `image.theme` only; colours written in the source
-stay.
+`theme` is `source` (default: `image.theme`), any chart theme id
+(`light`, `dark`, `ocean`, ...; spec/01_core_features/DESIGN.md section 3,
+"Themes"), or `auto` (light or dark from the page's `prefers-color-scheme`,
+followed live). It overrides `image.theme` only (the source is bound again
+with it); values written in the source stay.
 
 ### Updates
 
@@ -409,6 +410,7 @@ class live_view {
   void set_theme(std::string theme);           // "" = the source's image.theme
   void resize(view_size size);
   void input(const pointer_event& event);
+  void pinch(float from_x, float from_y, float to_x, float to_y, float scale); // two fingers
   void reset_view();
 
   /// Runs one frame if one is due; returns its draw data or nullptr.
@@ -485,7 +487,9 @@ pays nothing:
 
 (Later: `ImUml::SetNextDiagramView(zoom, center)` sets the view of the
 next diagram drawn, with or without the flag, for the saved view; the
-info reports `ViewCenter`.)
+info reports `ViewCenter`. `ImUml::SetNextDiagramPinch(from, to, scale)`
+applies a two-finger pinch to the next interactive diagram drawn. Content
+panned or zoomed away from the fit is clipped below the title.)
 
 
 ImUml fits each diagram to its rectangle (UML DESIGN, fit-to-rectangle
@@ -528,7 +532,7 @@ createViewer(container: HTMLElement, options?: {
   source?: string;            // YAML text
   png?: Uint8Array;           // or a nymph PNG
   fit?: "source" | "width" | "fill" | "scale";
-  theme?: "source" | "light" | "dark" | "classic" | "auto";
+  theme?: "source" | "auto" | string; // a chart theme id (docs/themes.md)
   tooltips?: boolean;         // default true
   rasterizer?: "auto" | "webgl" | "software"; // default auto
   menu?: boolean;             // the right-click menu, default true
@@ -545,7 +549,8 @@ class NymphViewer {
   setData(tables: object): Promise<void>;
   resetView(): void;
   on(event: "hover" | "click" | "view" | "error", cb: (detail) => void): () => void;
-  setTheme(theme: "light" | "dark" | "classic" | ""): void;
+  setTheme(theme: string): Promise<void>; // a chart theme id, "" = the source's; fetches its fonts
+  themes(): ThemeInfo[];
   rendered(): Promise<void>;  // every update so far applied and drawn, nothing due
   state(): object;            // geometry, hovered, plot views (as the events report them)
   source(): string;           // with setData applied
@@ -580,10 +585,48 @@ class NymphError extends Error { line: number; column: number; }
   capture during drags; `wheel` with `preventDefault()` only while the
   pointer is over a plot or diagram that takes input
   (`live_view::takes_wheel()`), so page scrolling is not hijacked over
-  labels and margins; a two-finger pinch becomes wheel zoom at its centre
-  (about 1.2 per notch); a double tap is a double click. The canvas has
-  `touch-action: pan-y`: a vertical one-finger swipe scrolls the page, a
-  horizontal one pans the chart.
+  labels and margins; a two-finger pinch is its own input
+  (`live_view::pinch()`, `nymph_viewer_pinch`), not wheel notches: each
+  step sends the fingers' old and new midpoints and the ratio of their
+  distances, the steps between two frames add up into one, and the plot
+  (every axis that takes input, through ImPlot's own pixel-to-value
+  mapping, so log and time axes work) or diagram under the old midpoint
+  sets its view so the content under the fingers stays under them and
+  zooms exactly as far as they spread. Wheel notches would not do:
+  ImPlot zooms a fixed step per wheel event whatever its size, and ImGui
+  takes one queued wheel event per frame, so a pinch overshot and kept
+  zooming after the fingers stopped. A 3D plot (ImPlot3D) still gets whole
+  wheel notches (about 1.2 each) from a pinch no 2D plot or diagram took.
+  A finger presses the chart only once it moves 6 CSS pixels (a pan,
+  pressed where it went down) or lifts (a tap): a second finger before
+  then makes a pinch with no press at all, so a pinch never clicks a pick
+  or adds up to a double click (which resets a diagram's view), and the
+  pointer leaves the chart while two fingers are down (no hover or tooltip
+  under a finger during a pinch).
+- **Reset button.** A `<button>` after the canvas, positioned at the
+  canvas's bottom-right corner from the canvas's offsets (the button and
+  the canvas share an offset parent, so the container's styles stay the
+  page's), shown while `live_view::view_changed()` (the user moved a
+  plot or diagram since the source or the last reset) and calling
+  `resetView()`. Its style goes into the document or the shadow root that
+  holds the chart. On by default (on phones the double tap is the only
+  other way back); `resetButton: false` / `reset-button="false"` hide it.
+  A double tap is a double click. The canvas has
+  `touch-action: none` (and cancels `touchstart` / `touchmove` for
+  browsers that ignore it): a gesture that starts on the chart is the
+  chart's alone, since the page scrolling under a captured finger moved
+  the chart too and fed it large jumps. The `touchScroll` option
+  (`touch-scroll` attribute) restores `touch-action: pan-y` for pages
+  where a vertical swipe must scroll. Positions come from `clientX` /
+  `clientY` against the canvas box, not `offsetX` / `offsetY`, which
+  mobile browsers report inconsistently for touch. Each press is released
+  once (`pointerup`, `pointercancel` or `lostpointercapture`), and the
+  first finger of a new gesture (`isPrimary`) drops any touch still
+  listed, so a release the browser never sent (a pinch ended off the
+  chart) cannot make the next one-finger drag a pinch. `live_view` keeps
+  drawing frames while ImGui's input queue holds events: ImGui takes them
+  a step per frame, and a pinch's last zoom steps must not wait for the
+  next touch.
 - **Scheduling.** `requestAnimationFrame` only while some viewer
   `wants_frame()`; `ResizeObserver` for size and pixel-ratio changes;
   `IntersectionObserver` pauses viewers off screen.

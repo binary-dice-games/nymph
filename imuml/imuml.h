@@ -120,6 +120,10 @@ enum ImUmlDiagramFlags_ {
   /// which item a click on a shape or an arrow belongs to. Drawing is
   /// unchanged.
   ImUmlDiagramFlags_CaptureItems = 1 << 5,
+  /// For an editor: content panned or zoomed beyond the diagram's rectangle
+  /// is drawn (dimmed) instead of clipped, and the rectangle's limit is
+  /// always outlined, so the user sees what the image leaves out.
+  ImUmlDiagramFlags_ShowOutside = 1 << 6,
 };
 
 /// What an ImUmlTextRun belongs to.
@@ -818,5 +822,11 @@ IMGUI_API bool GetItemCounts(int* nodes, int* edges, int* events);
 /// content on that axis. Applies with or without ImUmlDiagramFlags_Interactive
 /// (a saved view drawn into an image); with it, the user moves on from there.
 IMGUI_API void SetNextDiagramView(float zoom, const ImVec2& center);
+/// Pinches the next diagram drawn with ImUmlDiagramFlags_Interactive (screen
+/// pixels): the content under `from` moves under `to`, and the zoom is
+/// multiplied by `scale` (kept within 0.25 to 8). For hosts that read
+/// two-finger gestures themselves; dropped by a diagram that is not
+/// interactive.
+IMGUI_API void SetNextDiagramPinch(const ImVec2& from, const ImVec2& to, float scale);
 
 } // namespace ImUml

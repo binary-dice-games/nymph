@@ -1,0 +1,2 @@
+3:1: front matter 'config' is ignored (nymph's own fields set the look)
+6:1: %%{init}%% directives are ignored (nymph's own fields set the look)

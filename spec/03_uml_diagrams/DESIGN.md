@@ -942,5 +942,5 @@ prints one.
   layouts stacked and separated by dashed lines.
 - **Dragging nodes** in ImUml for live ImGui programs (pan, zoom and
   hover exist: section 6, "Interaction"); hover in sequence diagrams.
-- **A mermaid importer** (`nymph import diagram.mmd`) that writes the
-  equivalent YAML, if agents ask for it.
+- **A mermaid importer** that writes the equivalent YAML: designed in
+  [16_mermaid_import](../16_mermaid_import/DESIGN.md).

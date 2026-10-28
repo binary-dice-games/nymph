@@ -9,6 +9,7 @@
 #include <string>
 #include <string_view>
 #include "view/live_view.hpp"
+#include "workspace/workspace_input.hpp"
 
 namespace bdg::nymph {
 
@@ -22,13 +23,17 @@ struct view_args {
   std::string input; ///< A YAML file or a nymph PNG.
   std::string theme; ///< "light", "dark", "classic", or "" for the source's own.
   bool edit = false; ///< `--edit`: open with the editor panel (the E key shows it too).
+  /// `--no-mcp`: no MCP server for agents while editing
+  /// (spec/14_editor_workspace/DESIGN.md section 7).
+  bool no_mcp = false;
   view_fit fit = view_fit::fill; ///< How the layout follows the window.
 };
 
 /// @brief What `nymph view` shows, checked: ready for a window.
 struct view_request {
   view_args args;
-  std::string source; ///< The YAML (the one a nymph PNG carries, for a PNG).
+  std::string source; ///< The YAML (the one a nymph PNG carries, for a PNG; converted, for mermaid).
+  std::string mermaid_kind; ///< The mermaid keyword when the input was mermaid, else empty.
   int width = 0; ///< The layout size of the source (`image`), CSS pixels.
   int height = 0;
 };
@@ -49,7 +54,7 @@ view_args parse_view_args(std::span<const std::string_view> args);
 ///        its layout.
 /// @throws cli_failure for a missing or unreadable file, a corrupt PNG or
 ///         one without a nymph source; nymph::error (with its position) for
-///         a problem in the source; std::runtime_error for fonts this build
+///         a problem in the source or the mermaid; std::runtime_error for fonts this build
 ///         lacks.
 view_request prepare_view(const view_args& args);
 
@@ -63,6 +68,11 @@ window_size initial_window_size(int width, int height, int available_width, int 
 ///        (never `input` itself).
 std::string view_save_path(const std::string& input, std::string_view extension);
 
+/// @brief Where the editor's Save writes: the input itself, or for a
+///        mermaid input `<name>.yaml` next to it (nymph never writes
+///        mermaid: spec/16_mermaid_import/DESIGN.md section 5.3).
+std::string edit_save_path(const std::string& input, bool from_mermaid);
+
 /// @brief `nymph view <in> ...`: checks the input, then runs the window until
 ///        it is closed.
 /// @param args The arguments after `view`.
@@ -70,18 +80,6 @@ std::string view_save_path(const std::string& input, std::string_view extension)
 ///         the source's line and column included); 2 for bad arguments
 ///         (message and usage on `err`).
 int run_view_cli(std::span<const std::string_view> args, std::ostream& err);
-
-/// @brief Who gets a key in `nymph view`.
-enum class key_route {
-  panel, ///< The editor panel's text field or dialog.
-  figure, ///< A text field of the figure (UI mockups, spec/09_ui_mockups).
-  viewer, ///< The viewer's shortcuts (Esc, Q, R, S, Y, E).
-};
-
-/// @brief The panel first while it has the keyboard, then the figure while
-///        one of its text fields does, else the viewer's shortcuts: typing
-///        "q" in a field never closes the window.
-key_route route_key(bool panel_has_keyboard, bool figure_has_keyboard);
 
 /// @brief The usage text of `nymph view`.
 const char* view_usage();

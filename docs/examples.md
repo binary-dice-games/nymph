@@ -1615,3 +1615,246 @@ root:
         - {type: Image, image: landscape, width: 266, height: 126, fit: cover, tint: "#3B8A4A", background: "#E7F3E9", label: "fit: cover"}
         - {type: Image, image: cross, width: 266, height: 126, label: "cross stretches"}
 ```
+
+## From mermaid
+
+These are mermaid diagrams in [`examples/mermaid/`](../examples/mermaid) and the
+PNGs nymph draws from them. Each PNG carries the nymph YAML converted from
+the mermaid (`nymph convert examples/mermaid/flowchart.mmd` prints it), never
+the mermaid itself. See [mermaid.md](mermaid.md) for what each kind maps to.
+
+### Flowchart
+
+A pipeline with every link style, a decision, a class colouring the last node and a front-matter title.
+
+![Flowchart from mermaid](../examples/mermaid/flowchart.png)
+
+[`examples/mermaid/flowchart.mmd`](../examples/mermaid/flowchart.mmd):
+
+```mermaid
+---
+title: Deploy pipeline
+---
+flowchart LR
+  push([Push to main]) ==> build[Build] --> ok{Tests pass?}
+  ok -->|yes| deploy[[Deploy]] --> db[(Migrate DB)]
+  ok -->|no| fix(Fix and<br>push again) -.-> build
+  db --> done((Done))
+  classDef good fill:#d4f4dd,stroke:#2e7d32
+  class done good
+```
+
+### Sequence diagram
+
+Actors and a database participant, activations with `+` / `-`, an `alt` / `else` fragment, numbering and a note.
+
+![Sequence diagram from mermaid](../examples/mermaid/sequence.png)
+
+[`examples/mermaid/sequence.mmd`](../examples/mermaid/sequence.mmd):
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor User
+    participant Web as Web app
+    participant DB@{ "type" : "database" }
+    User->>+Web: POST /login
+    alt valid password
+        Web->>+DB: load user
+        DB-->>-Web: row
+    else otherwise
+        Web->>Web: log failure
+    end
+    Web-->>-User: 200 OK
+    Note over User,Web: session cookie set
+```
+
+### Class diagram
+
+An abstract class with its stereotype, members in blocks, inheritance and an aggregation with multiplicities.
+
+![Class diagram from mermaid](../examples/mermaid/class.png)
+
+[`examples/mermaid/class.mmd`](../examples/mermaid/class.mmd):
+
+```mermaid
+---
+title: Animals
+---
+classDiagram
+    Animal <|-- Duck
+    Animal <|-- Fish
+    Pond "1" o-- "*" Duck : has
+    class Animal {
+      <<abstract>>
+      +String name
+      +int age
+      +makeSound()*
+    }
+    class Duck {
+      +String beakColor
+      +swim()
+    }
+    class Fish {
+      -int sizeInFeet
+      -canEat()
+    }
+```
+
+### State diagram
+
+Start and end states, a composite state that takes `Playing` from the line above it, and a note.
+
+![State diagram from mermaid](../examples/mermaid/state.png)
+
+[`examples/mermaid/state.mmd`](../examples/mermaid/state.mmd):
+
+```mermaid
+---
+title: Media player
+---
+stateDiagram-v2
+    [*] --> Stopped
+    Stopped --> Playing : play
+    state Active {
+        [*] --> Playing
+        Playing --> Paused : pause
+        Paused --> Playing : play
+    }
+    Paused --> Stopped : stop
+    Stopped --> [*] : eject
+    note right of Paused : remembers the position
+```
+
+### ER diagram
+
+Crow's foot cardinalities, attribute blocks with keys, and a quoted relationship label.
+
+![ER diagram from mermaid](../examples/mermaid/er.png)
+
+[`examples/mermaid/er.mmd`](../examples/mermaid/er.mmd):
+
+```mermaid
+---
+title: Shop database
+---
+erDiagram
+    CUSTOMER ||--o{ ORDER : places
+    ORDER ||--|{ LINE : contains
+    PRODUCT ||--o{ LINE : "ordered in"
+    CUSTOMER {
+        int id PK
+        string email UK
+        string name
+    }
+    ORDER {
+        int id PK
+        int customer_id FK
+        date placed
+    }
+    LINE {
+        int order_id PK, FK
+        int product_id PK, FK
+        int quantity
+    }
+    PRODUCT {
+        int id PK
+        string name
+    }
+```
+
+### Gantt chart
+
+Sections, `after` dependencies, statuses and milestones; nymph writes each task's dates.
+
+![Gantt chart from mermaid](../examples/mermaid/gantt.png)
+
+[`examples/mermaid/gantt.mmd`](../examples/mermaid/gantt.mmd):
+
+```mermaid
+gantt
+    title Release 2.0
+    dateFormat YYYY-MM-DD
+    section Design
+    Write spec   :done, spec, 2026-03-02, 4d
+    Review       :done, review, after spec, 2d
+    section Build
+    API          :active, api, after review, 6d
+    UI           :crit, ui, after review, 8d
+    Code freeze  :milestone, freeze, after api ui, 0d
+    section Ship
+    QA           :qa, after freeze, 5d
+    Release      :milestone, after qa, 0d
+```
+
+### Pie chart
+
+The slices become a `data` table.
+
+![Pie chart from mermaid](../examples/mermaid/pie.png)
+
+[`examples/mermaid/pie.mmd`](../examples/mermaid/pie.mmd):
+
+```mermaid
+pie title Browser share
+    "Chrome" : 63
+    "Safari" : 20
+    "Firefox" : 6
+    "Other" : 11
+```
+
+### Mind map
+
+Indentation gives the tree.
+
+![Mind map from mermaid](../examples/mermaid/mindmap.png)
+
+[`examples/mermaid/mindmap.mmd`](../examples/mermaid/mindmap.mmd):
+
+```mermaid
+mindmap
+  root((Launch plan))
+    Marketing
+      Blog
+      Video
+    Engineering
+      Backend
+      Frontend
+    QA
+      Regression
+      Load test
+```
+
+### Sankey diagram
+
+The CSV rows become a `data` table.
+
+![Sankey diagram from mermaid](../examples/mermaid/sankey.png)
+
+[`examples/mermaid/sankey.mmd`](../examples/mermaid/sankey.mmd):
+
+```mermaid
+sankey-beta
+Gas,Power,30
+Gas,Heat,20
+Coal,Power,50
+Power,Homes,45
+Power,Industry,35
+```
+
+### XY chart
+
+A bar and a line series over categories, with a fixed Y range.
+
+![XY chart from mermaid](../examples/mermaid/xychart.png)
+
+[`examples/mermaid/xychart.mmd`](../examples/mermaid/xychart.mmd):
+
+```mermaid
+xychart-beta
+    title "Sales revenue"
+    x-axis [jan, feb, mar, apr, may, jun]
+    y-axis "Revenue (kUSD)" 0 --> 12
+    bar [5, 6, 7.5, 8.2, 9.5, 10.5]
+    line [4, 5.5, 7, 8, 9, 11]
+```

@@ -36,6 +36,11 @@ enum class view_fit {
   width, ///< Lay out at the box width; height scaled to keep the aspect ratio.
   fill, ///< Lay out at the box size.
   scale, ///< Lay out at the source size; scale with CSS to the box width, up or down.
+  /// Lay out at the source size and never scale (the box may clip it): what
+  /// the web editor shows in a live session, so the owner's figure has the
+  /// same layout as the guests' viewers (spec/18_collaboration/DESIGN.md
+  /// section 6.4).
+  natural,
 };
 
 /// @brief Fixed choices of a live view.
@@ -186,6 +191,18 @@ class live_view {
   ///         way the previous figure stays.
   void set_source(std::string_view source, bool reset_view = false);
 
+  /// @brief Maps an element path of the figure on screen to its path in a
+  ///        new source; nullopt for an element the new source removed.
+  using path_rename = std::function<std::optional<std::string>(std::string_view)>;
+
+  /// @brief set_source() for a source whose elements moved (an insert, a
+  ///        removal, the root wrapped in a layout): each element's view state
+  ///        (zoom, pan, hidden series, a moved window) follows it to its new
+  ///        path, as a saved view does when a file is opened
+  ///        (spec/14_editor_workspace/DESIGN.md section 7).
+  /// @throws As set_source(); the previous figure and its state stay.
+  void set_source_moved(std::string_view source, const path_rename& rename);
+
   /// @brief Replaces the figure's data with `data_yaml` (the value of a
   ///        top-level `data` key, as YAML or JSON) and keeps the rest of
   ///        the source and the view state.
@@ -201,22 +218,42 @@ class live_view {
   ///         stays); as set_source().
   bool set_png(std::span<const uint8_t> png, bool reset_view = true);
 
-  /// @brief Overrides `image.theme`: "light", "dark", "classic", or "" for
-  ///        the source's own.
-  /// @throws std::invalid_argument for an unknown theme.
+  /// @brief Overrides `image.theme` with a chart theme
+  ///        (themes/theme_catalog.hpp: "light", "dark", "ocean", ...), or ""
+  ///        for the source's own. The figure is bound again: the theme
+  ///        fills the fields the source leaves out.
+  /// @throws std::invalid_argument for an unknown theme; as set_source()
+  ///         when the source does not bind with it (the override stays).
   void set_theme(std::string theme);
 
-  /// @brief The theme the figure is drawn with: the override of
+  /// @brief The chart theme the figure is drawn with: the override of
   ///        set_theme(), else the source's `image.theme`; "light" without a
   ///        figure.
   std::string theme() const;
 
+  /// @brief The base colours of theme(): "light", "dark" or "classic".
+  std::string theme_base() const;
+
   /// @brief Sets the box the view is shown in.
   void resize(view_size size);
+
+  /// @brief Changes how the figure fits the box (view_options::fit); the
+  ///        next frames lay it out again. The view state is kept.
+  void set_fit(view_fit fit);
 
   /// @brief Feeds one pointer event to the figure (pan, zoom, hover); the
   ///        next frames apply it.
   void input(const pointer_event& event);
+
+  /// @brief Feeds a two-finger pinch step, in CSS pixels: the content under
+  ///        `from` (the fingers' previous midpoint) goes under `to` (their
+  ///        midpoint now), zoomed by `scale` (their distance now over
+  ///        before; above 1 zooms in). Steps between two frames add up, and
+  ///        the plot or diagram under `from` applies them in the next frame
+  ///        (spec/04_web_viewer/DESIGN.md section 4, "Input mapping"); a 3D
+  ///        plot gets whole wheel notches instead. A `scale` that is not
+  ///        above 0 is ignored.
+  void pinch(float from_x, float from_y, float to_x, float to_y, float scale);
 
   /// @brief Feeds one key to the figure (user-interface widgets: a text
   ///        field, Ctrl+click on a slider; spec/09_ui_mockups/DESIGN.md
@@ -230,6 +267,12 @@ class live_view {
   ///        last frame): keys and text then belong to the figure, not to the
   ///        host's shortcuts.
   bool wants_keyboard() const;
+
+  /// @brief Whether the user moved a plot, Gantt chart, 3D plot or diagram
+  ///        (pan, zoom, rotation, hidden series) since the source was set
+  ///        with a view reset or reset_view() ran (after the last frame):
+  ///        hosts offer a way back while it is true.
+  bool view_changed() const;
 
   /// @brief A number that changes whenever the state the user changed of a
   ///        user-interface element changes (what source_with_view() would
@@ -271,6 +314,10 @@ class live_view {
   ///        Off (the default), nothing differs from a plain view: draw data
   ///        and picks are the same.
   void set_edit_mode(bool on);
+  /// @brief Outlines the image's limit in diagrams and draws what lies past
+  ///        it, dimmed (an editor; off by default so edit mode draws what
+  ///        the PNG shows).
+  void set_show_limits(bool on);
   bool edit_mode() const;
 
   /// @brief The targets under (`x`, `y`), CSS pixels, best first: the
@@ -289,6 +336,10 @@ class live_view {
   ///        gone after set_source() is dropped.
   void set_selection(std::optional<edit_target_id> selection);
   const std::optional<edit_target_id>& selection() const;
+
+  /// @brief The colour of the selection and hover outlines in edit mode,
+  ///        0xRRGGBB (the editor's accent; blue by default).
+  void set_outline_color(unsigned rgb);
 
   /// @brief The image options ("image", type "Image"), then every element of
   ///        the figure in drawing order with its depth, for a tree list. A

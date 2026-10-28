@@ -125,21 +125,29 @@ std::vector<std::string> sorted(std::vector<std::string> v) {
   return v;
 }
 
-/// Fields of wish's PlotItem base, inherited by every series, plus the 2D
-/// series' `y_axis`.
-std::vector<std::string> with_item_fields(std::vector<std::string> own) {
-  own.insert(
-      own.end(),
-      {"label=''",
-       "color=''",
-       "fill_color=''",
-       "line_weight=1",
-       "fill_alpha=-1",
-       "marker=-3",
-       "marker_size=0",
-       "y_axis=0"});
+/// The shared fields of wish's PlotItem base a series takes (`taken`, by
+/// name; default all), plus the 2D series' `y_axis`.
+std::vector<std::string> with_item_fields(
+    std::vector<std::string> own,
+    const std::vector<std::string>& taken =
+        {"label", "color", "fill_color", "line_weight", "fill_alpha", "marker", "marker_size"}) {
+  const std::map<std::string, std::string> shared{
+      {"label", "label=''"},
+      {"color", "color=''"},
+      {"fill_color", "fill_color=''"},
+      {"line_weight", "line_weight=1"},
+      {"fill_alpha", "fill_alpha=-1"},
+      {"marker", "marker=-3"},
+      {"marker_size", "marker_size=0"}};
+  for (const std::string& name : taken) {
+    own.push_back(shared.at(name));
+  }
+  own.push_back("y_axis=0");
   return sorted(own);
 }
+
+/// The shared fields of filled series without markers (bars, digital).
+const std::vector<std::string> kFilled{"label", "color", "fill_color", "line_weight", "fill_alpha"};
 
 TEST(plot2d, SchemaIsPinned) {
   // Started from wish's src/ui/plot_elements/*.cpp registrations, plus
@@ -184,14 +192,16 @@ TEST(plot2d, SchemaIsPinned) {
       {"PlotLine", with_item_fields({"xs=[]", "ys=[]"})},
       {"PlotScatter", with_item_fields({"xs=[]", "ys=[]"})},
       {"PlotStairs", with_item_fields({"xs=[]", "ys=[]"})},
-      {"PlotDigital", with_item_fields({"xs=[]", "ys=[]"})},
+      {"PlotDigital", with_item_fields({"xs=[]", "ys=[]"}, kFilled)},
       {"PlotStems", with_item_fields({"xs=[]", "ys=[]", "ref=0"})},
-      {"PlotShaded", with_item_fields({"xs=[]", "ys=[]", "ys2=[]", "ref=0"})},
-      {"PlotBars", with_item_fields({"xs=[]", "ys=[]", "bar_size=0.67"})},
-      {"PlotBarsH", with_item_fields({"xs=[]", "ys=[]", "bar_size=0.67"})},
+      {"PlotShaded",
+       with_item_fields({"xs=[]", "ys=[]", "ys2=[]", "ref=0"}, {"label", "color", "fill_color", "fill_alpha"})},
+      {"PlotBars", with_item_fields({"xs=[]", "ys=[]", "bar_size=0.67"}, kFilled)},
+      {"PlotBarsH", with_item_fields({"xs=[]", "ys=[]", "bar_size=0.67"}, kFilled)},
       {"PlotHistogram",
-       with_item_fields({"values=[]", "bins=-1", "cumulative=false", "density=false", "range_min=0", "range_max=0"})},
-      {"PlotHistogram2D", with_item_fields({"xs=[]", "ys=[]", "x_bins=-1", "y_bins=-1"})},
+       with_item_fields(
+           {"values=[]", "bins=-1", "cumulative=false", "density=false", "range_min=0", "range_max=0"}, kFilled)},
+      {"PlotHistogram2D", with_item_fields({"xs=[]", "ys=[]", "x_bins=-1", "y_bins=-1"}, {"label"})},
       {"PlotHeatmap",
        with_item_fields(
            {"values=[]",
@@ -203,7 +213,8 @@ TEST(plot2d, SchemaIsPinned) {
             "x_min=0",
             "x_max=1",
             "y_min=0",
-            "y_max=1"})},
+            "y_max=1"},
+           {"label"})},
       {"PlotPieChart",
        with_item_fields(
            {"labels=''",
@@ -213,17 +224,23 @@ TEST(plot2d, SchemaIsPinned) {
             "radius=0.4",
             "normalize=false",
             "label_fmt='%.1f%%'",
-            "angle0=90"})},
+            "angle0=90"},
+           {})},
       {"PlotText",
        with_item_fields(
-           {"font=''", "font_size=0", "text_color=''", "text=''", "x=0", "y=0", "offset_x=0", "offset_y=0"})},
-      {"PlotInfLines", with_item_fields({"values=[]", "horizontal=false"})},
-      {"PlotAnnotation", with_item_fields({"text=''", "x=0", "y=0", "offset_x=10", "offset_y=-10", "clamp=true"})},
-      {"PlotTag", with_item_fields({"value=0", "axis=1", "text=''"})},
+           {"font=''", "font_size=0", "text_color=''", "text=''", "x=0", "y=0", "offset_x=0", "offset_y=0"}, {})},
+      {"PlotInfLines", with_item_fields({"values=[]", "horizontal=false"}, {"label", "color", "line_weight"})},
+      {"PlotAnnotation",
+       with_item_fields({"text=''", "x=0", "y=0", "offset_x=10", "offset_y=-10", "clamp=true"}, {"color"})},
+      {"PlotTag", with_item_fields({"value=0", "axis=1", "text=''"}, {"color"})},
       {"PlotErrorBars",
-       with_item_fields({"xs=[]", "ys=[]", "err=[]", "neg=[]", "pos=[]", "horizontal=false", "cap_size=4"})},
+       with_item_fields(
+           {"xs=[]", "ys=[]", "err=[]", "neg=[]", "pos=[]", "horizontal=false", "cap_size=4"},
+           {"label", "color", "line_weight"})},
       {"PlotBarGroups",
-       with_item_fields({"labels=[]", "values=[]", "group_size=0.67", "shift=0", "horizontal=false", "stacked=false"})},
+       with_item_fields(
+           {"labels=[]", "values=[]", "group_size=0.67", "shift=0", "horizontal=false", "stacked=false"},
+           {"fill_alpha"})},
   };
   for (const auto& [type, fields] : expected) {
     EXPECT_EQ(schema_of(type), fields) << type;
@@ -305,6 +322,26 @@ TEST(plot2d, SeriesColourAndWeightAreUsed) {
   const image plain = render(std::string(kLine) + "}\n");
   EXPECT_GT(count_color(red, {255, 0, 0, 255}), 100u);
   EXPECT_EQ(count_color(plain, {255, 0, 0, 255}), 0u);
+}
+
+TEST(plot2d, FillColorFillsMarkerFaces) {
+  const std::string line = std::string(kLine) + ", color: \"#0000FF\", marker: Circle, marker_size: 8";
+  const image filled = render(line + ", fill_color: \"#FF0000\"}\n");
+  EXPECT_GT(count_color(filled, {255, 0, 0, 255}), 50u);
+  EXPECT_EQ(count_color(render(line + "}\n"), {255, 0, 0, 255}), 0u);
+}
+
+TEST(plot2d, StyleFieldsASeriesDoesNotDrawWithAreRefused) {
+  // ImPlot draws heatmaps, pies and texts without them: refused, not ignored.
+  for (const char* series :
+       {"{type: PlotHeatmap, values: [1], color: \"#FF0000\"}",
+        "{type: PlotPieChart, labels: a, values: [1], fill_color: \"#FF0000\"}",
+        "{type: PlotText, text: t, line_weight: 2}",
+        "{type: PlotBars, ys: [1], marker: Circle}",
+        "{type: PlotBarGroups, labels: [a], values: [1], color: \"#FF0000\"}"}) {
+    const error e = source_error(std::string("root:\n  type: Plot\n  children:\n    - ") + series + "\n");
+    EXPECT_NE(std::string(e.what()).find("has no field"), std::string::npos) << e.what();
+  }
 }
 
 TEST(plot2d, AxisLimitsAndFlagsChangeTheImage) {

@@ -11,6 +11,7 @@ import { readFile } from 'node:fs/promises';
 import { createServer } from 'node:http';
 import { createRequire } from 'node:module';
 import { extname, join, normalize } from 'node:path';
+import { pathToFileURL } from 'node:url';
 
 const [webDir, sourceDir] = process.argv.slice(2);
 if (!webDir || !sourceDir) {
@@ -77,14 +78,20 @@ const server = createServer(async (req, res) => {
     }
     return;
   }
+  // The build's own files first (examples/index.json is generated), then
+  // the examples and resources of the sources.
   const fromSource = path.startsWith('/examples/') || path.startsWith('/resources/');
-  const file = fromSource ? join(sourceDir, normalize(path)) : join(webDir, normalize(path));
-  try {
-    const body = await readFile(file);
-    res.writeHead(200, { 'content-type': TYPES[extname(file)] ?? 'application/octet-stream' }).end(body);
-  } catch {
-    res.writeHead(404).end('not found');
+  const files = fromSource ? [join(webDir, normalize(path)), join(sourceDir, normalize(path))] : [join(webDir, normalize(path))];
+  for (const file of files) {
+    try {
+      const body = await readFile(file);
+      res.writeHead(200, { 'content-type': TYPES[extname(file)] ?? 'application/octet-stream' }).end(body);
+      return;
+    } catch {
+      // the next place
+    }
   }
+  res.writeHead(404).end('not found');
 });
 await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
 const base = `http://127.0.0.1:${server.address().port}`;
@@ -353,6 +360,160 @@ test('the wheel zooms a plot without scrolling the page, and scrolls it elsewher
   await page.close();
 });
 
+/** A page with touch input, the plot at its top and room to scroll below. */
+async function touchPage() {
+  const page = await browser.newPage({ viewport: { width: 1000, height: 800 }, deviceScaleFactor: 1, hasTouch: true });
+  page.on('pageerror', (e) => console.log(`     page error: ${e.message}`));
+  await page.goto(`${base}/test.html`);
+  await page.waitForFunction(() => window.nymphReady === true);
+  await plotPage(page);
+  await page.evaluate(() => {
+    const spacer = document.createElement('div');
+    spacer.style.height = '3000px';
+    document.body.appendChild(spacer);
+  });
+  const cdp = await page.context().newCDPSession(page);
+  /** Sends one touch event; `points` are the fingers down, as [x, y]. */
+  const touch = (type, points) =>
+    cdp.send('Input.dispatchTouchEvent', { type, touchPoints: points.map(([x, y], id) => ({ x, y, id })) });
+  return { page, touch };
+}
+
+test('a one-finger drag on the chart pans it and never scrolls the page', async () => {
+  const { page, touch } = await touchPage();
+  assert((await page.evaluate(() => window.v.canvas.style.touchAction)) === 'none', 'touch-action');
+  const a = await page.evaluate(() => window.at(2, 5));
+  await touch('touchStart', [[a.x, a.y]]);
+  for (let i = 1; i <= 8; ++i) {
+    await touch('touchMove', [[a.x - i * 6, a.y - i * 10]]); // mostly vertical: was a page scroll
+  }
+  await touch('touchEnd', []);
+  await settleIn(page);
+  const r = await page.evaluate(() => ({ scroll: window.scrollY, p: window.v.state().views[0] }));
+  assert(r.scroll === 0, `the page scrolled to ${r.scroll}`);
+  // 48 px left and 80 px up of a 4 by 10 range: a pan, not a jump out of view.
+  assert(r.p.xMin > 0.1 && r.p.xMin < 2 && Math.abs(r.p.xMax - r.p.xMin - 4) < 1e-6, `x ${r.p.xMin} to ${r.p.xMax}`);
+  assert(r.p.yMin > -5 && r.p.yMin < 0 && Math.abs(r.p.yMax - r.p.yMin - 10) < 1e-6, `y ${r.p.yMin} to ${r.p.yMax}`);
+  await page.close();
+});
+
+test('a pinch on the chart zooms at its centre and never scrolls the page', async () => {
+  const { page, touch } = await touchPage();
+  const c = await page.evaluate(() => window.at(2, 5));
+  await touch('touchStart', [[c.x - 20, c.y]]);
+  await touch('touchStart', [[c.x - 20, c.y], [c.x + 20, c.y]]);
+  for (let i = 1; i <= 8; ++i) {
+    await touch('touchMove', [[c.x - 20 - i * 5, c.y + i * 4], [c.x + 20 + i * 5, c.y + i * 4]]);
+  }
+  await touch('touchEnd', [[c.x + 60, c.y + 32]]);
+  await touch('touchEnd', []);
+  await settleIn(page);
+  const r = await page.evaluate(() => ({ scroll: window.scrollY, p: window.v.state().views[0] }));
+  assert(r.scroll === 0, `the page scrolled to ${r.scroll}`);
+  // The fingers moved from 40 px apart to 120: three times closer in.
+  const width = r.p.xMax - r.p.xMin, height = r.p.yMax - r.p.yMin;
+  assert(Math.abs(width - 4 / 3) < 0.03, `x range ${width}`);
+  assert(Math.abs(height - 10 / 3) < 0.07, `y range ${height}`);
+  // The point first under the fingers' midpoint is under it at the end
+  // (give or take the plot area moving as the tick labels widen).
+  const now = await page.evaluate(() => window.at(2, 5));
+  assert(Math.abs(now.x - c.x) < 5 && Math.abs(now.y - (c.y + 32)) < 1.5, `(2, 5) at ${now.x}, ${now.y}; fingers at ${c.x}, ${c.y + 32}`);
+  await page.close();
+});
+
+test('pinching out then in follows the fingers, with no zoom left over after the gesture', async () => {
+  const { page, touch } = await touchPage();
+  const c = await page.evaluate(() => window.at(2, 5));
+  await touch('touchStart', [[c.x - 20, c.y]]);
+  await touch('touchStart', [[c.x - 20, c.y], [c.x + 20, c.y]]);
+  // Apart to 160 px and back to 80, faster than frames are drawn.
+  const steps = [...Array.from({ length: 14 }, (_, i) => 20 + (i + 1) * 5), ...Array.from({ length: 8 }, (_, i) => 90 - (i + 1) * 5)];
+  for (const half of steps) {
+    await touch('touchMove', [[c.x - half, c.y], [c.x + half, c.y]]);
+  }
+  await touch('touchEnd', [[c.x + 50, c.y]]);
+  await touch('touchEnd', []);
+  await settleIn(page);
+  const end = await page.evaluate(() => window.v.state().views[0]);
+  // 40 px to 100: 2.5 times closer in, no more.
+  assert(Math.abs(end.xMax - end.xMin - 4 / 2.5) < 0.03, `x range ${end.xMax - end.xMin}`);
+  await new Promise((r) => setTimeout(r, 300));
+  await settleIn(page);
+  const later = await page.evaluate(() => window.v.state().views[0]);
+  assert(later.xMin === end.xMin && later.xMax === end.xMax, `still zooming after the gesture: ${end.xMin}..${end.xMax} to ${later.xMin}..${later.xMax}`);
+  await page.close();
+});
+
+test('a pinch over a diagram node neither clicks nor hovers it; a tap clicks it', async () => {
+  const { page, touch } = await touchPage();
+  await page.evaluate(async () => {
+    await window.v.setSource('image: {width: 400, height: 300}\nroot:\n  type: ClassDiagram\n  children:\n    - {type: Class, id: Animal}\n');
+    await window.v.rendered();
+    window.events.length = 0;
+  });
+  const c = await page.evaluate(() => {
+    const p = window.v.state().views[0];
+    const box = window.v.canvas.getBoundingClientRect();
+    return { x: box.left + p.x + p.width / 2, y: box.top + p.y + p.height / 2 };
+  });
+  await touch('touchStart', [[c.x, c.y]]);
+  await touch('touchStart', [[c.x, c.y], [c.x + 40, c.y]]);
+  for (let i = 1; i <= 4; ++i) {
+    await touch('touchMove', [[c.x - i * 5, c.y], [c.x + 40 + i * 5, c.y]]);
+  }
+  await settleIn(page);
+  const during = await page.evaluate(() => window.v.state().hovered);
+  await touch('touchEnd', [[c.x + 60, c.y]]);
+  await touch('touchEnd', []);
+  await settleIn(page);
+  const r = await page.evaluate(() => ({ zoom: window.v.state().views[0].zoom, clicks: window.events.filter((e) => e.e === 'click').length }));
+  assert(during === null, `hovered during the pinch: ${JSON.stringify(during)}`);
+  assert(r.clicks === 0, `${r.clicks} clicks`);
+  assert(Math.abs(r.zoom - 2) < 1e-3, `zoom ${r.zoom}`); // 40 px apart to 80
+  await touch('touchStart', [[c.x, c.y]]);
+  await touch('touchEnd', []);
+  await settleIn(page);
+  const clicks = await page.evaluate(() => window.events.filter((e) => e.e === 'click').length);
+  assert(clicks === 1, `a tap made ${clicks} clicks`);
+  await page.close();
+});
+
+test('after a fast pinch whose finger release is lost, a one-finger drag pans and does not zoom', async () => {
+  const { page, touch } = await touchPage();
+  const c = await page.evaluate(() => window.at(2, 5));
+  // A pinch ended off the chart: sent faster than frames (its zoom steps
+  // queue up), and the browser never reports one finger lifting.
+  await page.evaluate(({ x, y }) => {
+    const canvas = window.v.canvas;
+    canvas.setPointerCapture = () => {}; // made-up pointers cannot be captured
+    const send = (type, pointerId, isPrimary, px) =>
+      canvas.dispatchEvent(new PointerEvent(type, { pointerId, isPrimary, pointerType: 'touch', clientX: px, clientY: y, bubbles: true }));
+    const box = canvas.getBoundingClientRect();
+    x += box.left;
+    y += box.top;
+    send('pointerdown', 101, true, x - 20);
+    send('pointerdown', 102, false, x + 20);
+    for (let i = 1; i <= 8; ++i) {
+      send('pointermove', 101, true, x - 20 - i * 5);
+      send('pointermove', 102, false, x + 20 + i * 5);
+    }
+    send('pointerup', 102, false, x + 60);
+  }, c);
+  await settleIn(page);
+  const before = await page.evaluate(() => window.v.state().views[0]);
+  await touch('touchStart', [[c.x, c.y]]);
+  for (let i = 1; i <= 8; ++i) {
+    await touch('touchMove', [[c.x - i * 10, c.y]]);
+  }
+  await touch('touchEnd', []);
+  await settleIn(page);
+  const after = await page.evaluate(() => window.v.state().views[0]);
+  const width = (p) => p.xMax - p.xMin;
+  assert(Math.abs(width(after) - width(before)) < 1e-6, `zoomed: x range ${width(before)} to ${width(after)}`);
+  assert(after.xMin > before.xMin, `not panned: xMin ${before.xMin} to ${after.xMin}`);
+  await page.close();
+});
+
 test('clicking a point fires click with its pick', async () => {
   const page = await openPage();
   await plotPage(page);
@@ -579,6 +740,43 @@ test('right-click saves PNG and YAML with the view on screen', async () => {
   await page.close();
 });
 
+test('the reset button shows once the view moves, sits in the corner and resets it', async () => {
+  const page = await openPage();
+  await plotPage(page);
+  const button = () =>
+    page.evaluate(() => {
+      const b = window.v.container.querySelector('button.nymph-reset');
+      const r = b.getBoundingClientRect();
+      const c = window.v.canvas.getBoundingClientRect();
+      return { hidden: b.hidden, right: c.right - r.right, bottom: c.bottom - r.bottom, label: b.getAttribute('aria-label') };
+    });
+  assert((await button()).hidden, 'shown before any pan');
+  const a = await page.evaluate(() => window.at(2, 5));
+  await page.mouse.move(a.x, a.y);
+  await page.mouse.down();
+  await page.mouse.move(a.x - 60, a.y + 20, { steps: 4 });
+  await page.mouse.up();
+  await settleIn(page);
+  const shown = await button();
+  assert(!shown.hidden, 'hidden after a pan');
+  assert(shown.label === 'Reset view', `label ${shown.label}`);
+  assert(Math.abs(shown.right - 8) < 1 && Math.abs(shown.bottom - 8) < 1, `at ${shown.right}, ${shown.bottom} from the corner`);
+  assert((await page.evaluate(() => window.v.state().views[0].xMin)) > 0.1, 'not panned');
+  await page.click('button.nymph-reset');
+  await settleIn(page);
+  const r = await page.evaluate(() => window.v.state().views[0]);
+  assert(r.xMin === 0 && r.xMax === 4 && r.yMin === 0 && r.yMax === 10, `view ${r.xMin}..${r.xMax}, ${r.yMin}..${r.yMax}`);
+  assert((await button()).hidden, 'still shown after the reset');
+  await page.close();
+});
+
+test('resetButton: false adds no reset button', async () => {
+  const page = await openPage();
+  await plotPage(page, PLOT, { resetButton: false });
+  assert((await page.evaluate(() => window.v.container.querySelectorAll('button').length)) === 0, 'a button');
+  await page.close();
+});
+
 test('a right-drag box-zooms and opens no menu', async () => {
   const page = await openPage();
   await plotPage(page);
@@ -664,7 +862,7 @@ async function renderResult(name) {
  * The host page with the App loaded and sent `result`; resolves once the App
  * shows a chart or gave up. `requests` collects the App frame's requests.
  */
-async function openApp({ context = { theme: 'light', displayMode: 'inline', availableDisplayModes: ['inline', 'fullscreen'] }, result, failFonts = false }) {
+async function openApp({ context = { theme: 'light', displayMode: 'inline', availableDisplayModes: ['inline', 'fullscreen'] }, result, failFonts = false, noOpenLink = false }) {
   const page = await browser.newPage({ viewport: { width: 1000, height: 1300 }, deviceScaleFactor: 1 });
   page.on('pageerror', (e) => console.log(`     page error: ${e.message}`));
   await page.addInitScript(helpers);
@@ -676,7 +874,7 @@ async function openApp({ context = { theme: 'light', displayMode: 'inline', avai
   });
   await page.goto(`${base}/mcp_host.html`);
   await page.waitForFunction(() => window.hostReady === true);
-  await page.evaluate((options) => window.hostStart(options), { context, result, failFonts });
+  await page.evaluate((options) => window.hostStart(options), { context, result, failFonts, noOpenLink });
   // The App frame is sandboxed (an opaque origin): reach it through Playwright.
   let frame = null;
   for (const until = Date.now() + 30000; !frame && Date.now() < until; ) {
@@ -788,6 +986,28 @@ test('the MCP App asks the host for full screen', async () => {
 
   const plain = await openApp({ context: { theme: 'light' }, result: await renderResult('line') });
   assert(await plain.frame.evaluate(() => document.getElementById('fullscreen').hidden), 'no button without full screen');
+  await plain.page.close();
+});
+
+test('the MCP App opens the chart in the web app, paired (spec/17_agent_connectors step 9)', async () => {
+  const { page, frame } = await openApp({ result: await renderResult('line') });
+  assert(await frame.isVisible('#open-app'), 'the button shows with a chart');
+  await frame.click('#open-app');
+  await page.waitForFunction(() => window.host.messages.some((m) => m.method === 'ui/open-link'));
+  const calls = await page.evaluate(() => window.host.toolCalls.map((c) => c.name));
+  assert(calls.includes('web_app_pair'), `asked nymph mcp to pair: ${calls}`);
+  const url = await page.evaluate(() => window.host.messages.find((m) => m.method === 'ui/open-link').params.url);
+  const m = /^https:\/\/app\.test\/nymph\/#y=([A-Za-z0-9_-]+)&pair=41234-K7QM-2XPD$/.exec(url);
+  assert(m, url);
+  const { decodeSource } = await import(pathToFileURL(join(sourceDir, 'web', 'app', 'app', 'share.js')).href);
+  const decoded = await decodeSource(m[1]);
+  assert(decoded.includes('type: Plot') && decoded.startsWith((await readFile(join(sourceDir, 'examples', 'line.yaml'), 'utf8')).slice(0, 40)), 'the chart is in the link');
+  await page.close();
+
+  const plain = await openApp({ result: await renderResult('line'), noOpenLink: true });
+  await plain.frame.click('#open-app');
+  await plain.frame.waitForFunction(() => document.getElementById('message').textContent.includes('Open this link'));
+  assert((await plain.frame.textContent('#message')).includes('#y='), 'the link is shown');
   await plain.page.close();
 });
 

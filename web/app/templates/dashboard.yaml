@@ -1,0 +1,38 @@
+nymph: 1
+description: A small dashboard - a heading, an area chart of visitors and a pie chart of their sources.
+image: {width: 960, height: 520}
+root:
+  type: VerticalLayout
+  spacing: 8
+  children:
+    - {type: Label, text: Weekly report, font_size: 22}
+    - type: HorizontalLayout
+      spacing: 8
+      height: -1
+      children:
+        - type: Plot
+          title: Visitors
+          width: -1
+          height: -1
+          flags: NoLegend
+          children:
+            - {type: PlotShaded, label: visitors, ys: $visitors}
+            - {type: PlotLine, label: visitors, ys: $visitors, line_weight: 2}
+        - type: Plot
+          title: Sources
+          width: 340
+          height: -1
+          flags: Equal|NoMouseText
+          x_flags: NoDecorations
+          y_flags: NoDecorations
+          children:
+            - {type: PlotPieChart, labels: "search\nsocial\ndirect", values: [52, 28, 20], label_fmt: "%.0f%%"}
+data: |
+  visitors
+  320
+  410
+  390
+  520
+  610
+  480
+  450

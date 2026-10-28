@@ -1,0 +1,14 @@
+nymph: 1
+description: Entity-relationship diagram converted from mermaid.
+image: {width: 600, height: 320}
+source: Converted from a mermaid erDiagram.
+root:
+  type: ERDiagram
+  direction: LeftRight
+  children:
+    - {type: Entity, id: p, name: Person}
+    - {type: Entity, id: CAR, fill_color: "#99CCFF"}
+    - {type: Entity, id: NAMED DRIVER}
+    - {type: Relationship, from: p, to: CAR, from_cardinality: OneOrMore, to_cardinality: ZeroOrMore, label: drives}
+    - {type: Relationship, from: CAR, to: NAMED DRIVER, from_cardinality: ExactlyOne, to_cardinality: ZeroOrOne, label: is insured for, identifying: false}
+    - {type: Relationship, from: NAMED DRIVER, to: p, from_cardinality: OneOrMore, to_cardinality: ExactlyOne, label: is}

@@ -9,3 +9,8 @@ source, call `chart_schema` for the fields of each element type you add,
 then call `render_chart` and look at the PNG it returns. The nymph skill
 and the nymph MCP server's instructions give the source format. When the
 user wants the chart kept, pass `output_path` (a `.png`) and keep the YAML.
+
+For a diagram (flowchart, sequence, class, state, ER, Gantt, mind map,
+...) you may write mermaid instead: `render_chart` takes it as `source`
+and draws it. Revise the mermaid until the user is satisfied, then call
+`convert_chart` to get the nymph YAML and make further changes there.

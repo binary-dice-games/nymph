@@ -1,0 +1,66 @@
+nymph: 1
+description: Class diagram converted from mermaid.
+image: {width: 1579, height: 320}
+source: Converted from a mermaid classDiagram.
+root:
+  type: ClassDiagram
+  direction: RightLeft
+  children:
+    - {type: Class, id: classA}
+    - {type: Class, id: classB}
+    - {type: Class, id: classC}
+    - {type: Class, id: classD}
+    - {type: Class, id: classE}
+    - {type: Class, id: classF}
+    - {type: Class, id: classG}
+    - {type: Class, id: classH}
+    - {type: Class, id: classI}
+    - {type: Class, id: classJ}
+    - {type: Class, id: classK}
+    - {type: Class, id: classL}
+    - {type: Class, id: classM}
+    - {type: Class, id: classN}
+    - {type: Class, id: classO}
+    - {type: Class, id: classP}
+    - {type: Class, id: classQ}
+    - {type: Class, id: classR}
+    - {type: Class, id: classS}
+    - {type: Class, id: classT}
+    - {type: Class, id: classU}
+    - {type: Class, id: classV}
+    - {type: Class, id: classW}
+    - {type: Class, id: classX}
+    - {type: Class, id: classY}
+    - {type: Class, id: classZ}
+    - {type: Class, id: Customer}
+    - {type: Class, id: Ticket}
+    - {type: Class, id: Student}
+    - {type: Class, id: Course}
+    - {type: Class, id: Animal}
+    - {type: Class, id: Zebra}
+    - {type: Class, id: Foo}
+    - {type: Class, id: Bar}
+    - {type: Class, id: Shape, generic: T, fill_color: "#FF9966"}
+    - {type: Class, id: Square, fill_color: "#FF9966"}
+    - {type: Class, id: Weird, name: A label}
+    - {type: Class, id: Flyer, kind: Interface}
+    - {type: Class, id: Color, kind: Enum, attributes: [RED, GREEN]}
+    - {type: Class, id: Service}
+    - {type: Class, id: Triangle, fill_color: "#FF99FF"}
+    - {type: ClassRelation, from: classB, to: classA, kind: Inheritance}
+    - {type: ClassRelation, from: classC, to: classD, kind: Composition}
+    - {type: ClassRelation, from: classE, to: classF, kind: Aggregation}
+    - {type: ClassRelation, from: classH, to: classG, kind: DirectedAssociation}
+    - {type: ClassRelation, from: classI, to: classJ}
+    - {type: ClassRelation, from: classL, to: classK, kind: Dependency}
+    - {type: ClassRelation, from: classN, to: classM, kind: Realization}
+    - {type: ClassRelation, from: classO, to: classP, kind: Dependency}
+    - {type: ClassRelation, from: classQ, to: classR, kind: Inheritance, label: extends}
+    - {type: ClassRelation, from: classT, to: classS, kind: Composition}
+    - {type: ClassRelation, from: classV, to: classU, kind: Aggregation}
+    - {type: ClassRelation, from: classW, to: classX, kind: DirectedAssociation}
+    - {type: ClassRelation, from: classY, to: classZ, kind: Dependency}
+    - {type: ClassRelation, from: Customer, to: Ticket, kind: DirectedAssociation, label: buys, from_label: 1, to_label: "*"}
+    - {type: ClassRelation, from: Course, to: Student, kind: Aggregation, from_label: 1, to_label: 1..*}
+    - {type: ClassRelation, from: Animal, to: Zebra, kind: Inheritance}
+    - {type: ClassRelation, from: Square, to: Shape, kind: Realization}

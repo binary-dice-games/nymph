@@ -1,0 +1,31 @@
+sequenceDiagram
+    box Aqua Group
+    participant Alice
+    participant John
+    end
+    autonumber 10 5
+    loop Every minute
+        John-->>Alice: Great!
+    end
+    opt Extra response
+        Alice->>John: Thanks
+    end
+    par Alice to Bob
+        Alice->>Bob: Hello guys!
+    and Alice to John
+        Alice->>John: Hello guys!
+    end
+    critical Establish a connection
+        Alice-->Bob: connect
+    option Network timeout
+        Alice-->Alice: Log error
+    end
+    break when the booking process fails
+        Alice-->Bob: show failure
+    end
+    rect rgb(191, 223, 255)
+        Alice->>John: in a box
+    end
+    Note left of Alice: left
+    Note right of John: right
+    link Alice: Dashboard @ https://dashboard.contoso.com/alice

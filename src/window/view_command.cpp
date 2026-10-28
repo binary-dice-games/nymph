@@ -9,6 +9,8 @@
 #include <sstream>
 #include "cli/cli_support.hpp"
 #include "core/error.hpp"
+#include "render/image_options.hpp"
+#include "themes/theme_catalog.hpp"
 #include "window/viewer_window.hpp"
 
 namespace bdg::nymph {
@@ -16,12 +18,15 @@ namespace bdg::nymph {
 namespace {
 
 constexpr const char* kViewUsage =
-    "usage: nymph view <in> [--theme light|dark|classic] [--fit source|width|fill] [--edit]\n"
+    "usage: nymph view <in> [--theme <theme>] [--fit source|width|fill] [--edit [--no-mcp]]\n"
     "  opens <in> (a YAML file or a nymph PNG) in a window: drag to pan, wheel to zoom,\n"
     "  hover for values, double-click to fit. Keys: R resets the view, S saves the image on\n"
     "  screen as <in>.view.png, Y saves its YAML as <in>.view.yaml, Esc or Q closes.\n"
     "  --edit (or the E key) opens the editor panel: click a text or an element in the\n"
-    "  figure, change its text, font, size, colour or any other field; Undo and Redo.\n";
+    "  figure, change its text, font, size, colour or any other field; Undo and Redo.\n"
+    "  Right-click an element (in the figure or the tree) to add, move or delete elements;\n"
+    "  the tabs over the figure edit the data tables. While editing, AI agents using\n"
+    "  `nymph mcp` can read and change the chart (editor_* tools); --no-mcp turns that off.\n";
 
 constexpr int kMinWindowWidth = 240;
 constexpr int kMinWindowHeight = 160;
@@ -39,15 +44,17 @@ view_args parse_view_args(std::span<const std::string_view> args) {
     const std::string_view a = args[i];
     if (a == "--theme") {
       if (i + 1 >= args.size()) {
-        throw view_usage_error{"--theme needs light, dark or classic"};
+        throw view_usage_error{"--theme needs a theme (" + chart_theme_list() + ")"};
       }
       const std::string_view value = args[++i];
-      if (value != "light" && value != "dark" && value != "classic") {
-        throw view_usage_error{"unknown theme '" + std::string(value) + "' (themes: light, dark, classic)"};
+      if (!is_known_theme(value)) {
+        throw view_usage_error{"unknown theme '" + std::string(value) + "' (themes: " + chart_theme_list() + ")"};
       }
       o.theme = std::string(value);
     } else if (a == "--edit") {
       o.edit = true;
+    } else if (a == "--no-mcp") {
+      o.no_mcp = true;
     } else if (a == "--fit") {
       if (i + 1 >= args.size()) {
         throw view_usage_error{"--fit needs source, width or fill"};
@@ -84,7 +91,12 @@ view_request prepare_view(const view_args& args) {
   const bytes_t input = read_input(args.input, no_stdin);
   view_request r;
   r.args = args;
-  r.source = source_of(input, args.input);
+  loaded_source loaded = load_source(input, args.input);
+  r.source = std::move(loaded.source);
+  r.mermaid_kind = std::move(loaded.mermaid_kind);
+  for (const import_warning& w : loaded.warnings) {
+    std::cerr << "nymph: " << warning_text(label_of(args.input), w) << "\n";
+  }
   // Bind and lay the source out the way the window will, so that every
   // problem is reported before a window opens; the same view says how big
   // the layout is.
@@ -119,6 +131,19 @@ std::string view_save_path(const std::string& input, std::string_view extension)
   return out.string();
 }
 
+std::string edit_save_path(const std::string& input, bool from_mermaid) {
+  if (!from_mermaid) {
+    return input;
+  }
+  namespace fs = std::filesystem;
+  fs::path out(input);
+  out.replace_extension(".yaml");
+  if (out == fs::path(input)) {
+    out.replace_extension(".nymph.yaml"); // mermaid in a .yaml file: never over it
+  }
+  return out.string();
+}
+
 int run_view_cli(std::span<const std::string_view> args, std::ostream& err) {
   for (const std::string_view a : args) {
     if (a == "--help" || a == "-h") {
@@ -149,13 +174,6 @@ int run_view_cli(std::span<const std::string_view> args, std::ostream& err) {
     err << "nymph: " << label << ": " << e.what() << "\n";
   }
   return 1;
-}
-
-key_route route_key(bool panel_has_keyboard, bool figure_has_keyboard) {
-  if (panel_has_keyboard) {
-    return key_route::panel;
-  }
-  return figure_has_keyboard ? key_route::figure : key_route::viewer;
 }
 
 } // namespace bdg::nymph

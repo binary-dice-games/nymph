@@ -1,0 +1,38 @@
+nymph: 1
+description: Flowchart converted from mermaid.
+image: {width: 401, height: 882}
+source: Converted from a mermaid flowchart.
+root:
+  type: Flowchart
+  children:
+    - type: FlowGroup
+      id: one
+      children:
+        - {type: FlowNode, id: a2}
+        - {type: FlowNode, id: a1}
+    - type: FlowGroup
+      id: two
+      title: Second group
+      children:
+        - {type: FlowNode, id: b1}
+        - {type: FlowNode, id: b2}
+        - type: FlowGroup
+          id: inner
+          title: Inner group
+          children:
+            - {type: FlowNode, id: i1}
+            - {type: FlowNode, id: i2}
+    - type: FlowGroup
+      id: three
+      children:
+        - {type: FlowNode, id: c1}
+        - {type: FlowNode, id: c2}
+    - {type: FlowLink, from: c1, to: a2}
+    - {type: FlowLink, from: a1, to: a2}
+    - {type: FlowLink, from: b1, to: b2}
+    - {type: FlowLink, from: i1, to: i2}
+    - {type: FlowLink, from: b2, to: i1}
+    - {type: FlowLink, from: c1, to: c2}
+    - {type: FlowLink, from: one, to: two}
+    - {type: FlowLink, from: three, to: two}
+    - {type: FlowLink, from: two, to: c2}

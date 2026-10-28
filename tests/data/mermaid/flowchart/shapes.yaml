@@ -1,0 +1,45 @@
+nymph: 1
+description: Flowchart converted from mermaid.
+image: {width: 1407, height: 320}
+source: Converted from a mermaid flowchart.
+root:
+  type: Flowchart
+  direction: LeftRight
+  children:
+    - {type: FlowNode, id: box, text: Box}
+    - {type: FlowNode, id: rounded, text: Rounded, shape: Rounded}
+    - {type: FlowNode, id: stadium, text: Stadium, shape: Stadium}
+    - {type: FlowNode, id: sub, text: Subroutine, shape: Subroutine}
+    - {type: FlowNode, id: cyl, text: Cylinder, shape: Cylinder}
+    - {type: FlowNode, id: circle, text: Circle, shape: Circle}
+    - {type: FlowNode, id: dbl, text: Double, shape: Circle}
+    - {type: FlowNode, id: asym, text: Asymmetric, symbol: banner}
+    - {type: FlowNode, id: diamond, text: Diamond, shape: Diamond}
+    - {type: FlowNode, id: hex, text: Hexagon, shape: Hexagon}
+    - {type: FlowNode, id: lean, text: Lean right, shape: Parallelogram}
+    - {type: FlowNode, id: leanl, text: Lean left, shape: Parallelogram}
+    - {type: FlowNode, id: trap, text: Trapezoid, symbol: trapezoid}
+    - {type: FlowNode, id: trapt, text: Inverted, symbol: trapezoid}
+    - {type: FlowNode, id: plain}
+    - {type: FlowNode, id: doc, text: A document, symbol: document}
+    - {type: FlowNode, id: docs, text: Documents, symbol: multi_document}
+    - {type: FlowNode, id: delay, symbol: delay}
+    - {type: FlowNode, id: cloud, text: Cloud, symbol: cloud}
+    - {type: FlowNode, id: db, shape: Cylinder}
+    - {type: FlowNode, id: bolt}
+    - {type: FlowNode, id: q, text: Quoted (with brackets)}
+    - {type: FlowLink, from: box, to: rounded}
+    - {type: FlowLink, from: rounded, to: stadium}
+    - {type: FlowLink, from: stadium, to: sub}
+    - {type: FlowLink, from: cyl, to: circle}
+    - {type: FlowLink, from: circle, to: dbl}
+    - {type: FlowLink, from: dbl, to: asym}
+    - {type: FlowLink, from: diamond, to: hex}
+    - {type: FlowLink, from: hex, to: lean}
+    - {type: FlowLink, from: lean, to: leanl}
+    - {type: FlowLink, from: trap, to: trapt}
+    - {type: FlowLink, from: trapt, to: plain}
+    - {type: FlowLink, from: doc, to: docs}
+    - {type: FlowLink, from: delay, to: cloud}
+    - {type: FlowLink, from: cloud, to: db}
+    - {type: FlowLink, from: bolt, to: q}

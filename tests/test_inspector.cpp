@@ -113,7 +113,7 @@ TEST(inspector, EachFieldTypeGetsItsWidget) {
         case field_type::number_array:
         case field_type::integer_array:
         case field_type::text_array:
-          EXPECT_EQ(k, widget_kind::read_only);
+          EXPECT_EQ(k, widget_kind::list);
           ++lists;
           break;
         default:
@@ -243,6 +243,85 @@ TEST(inspector, FlushWithNothingTypedDoesNothing) {
   editor_model model(kSource);
   inspector panel;
   EXPECT_FALSE(panel.flush(model).source);
+}
+
+// ── List fields and columns (spec/14_editor_workspace) ───────────────────────
+
+const char* const kBars =
+    "root:\n"
+    "  type: Plot\n"
+    "  children:\n"
+    "    - {type: PlotBars, label: revenue, xs: $monthly:month, ys: $monthly:revenue}\n"
+    "    - type: PlotBars\n"
+    "      label: cost\n"
+    "      ys:\n"
+    "        - 1\n"
+    "        - 3\n"
+    "data:\n"
+    "  monthly: |\n"
+    "    month, revenue, cost\n"
+    "    1, 92, 40\n"
+    "    2, 88, 45\n"
+    "  regions:\n"
+    "    \"unit price\": [1, 2]\n";
+
+std::string written(const editor_model& m, const std::string& field) {
+  for (const editable_field& f : m.fields()) {
+    if (f.desc->name == field) {
+      return f.source_text;
+    }
+  }
+  return "?";
+}
+
+TEST(inspector, ListFieldsShowTheirSourceText) {
+  editor_model m(kBars);
+  m.select(edit_target_id{"root/children/0", ""});
+  EXPECT_EQ(written(m, "ys"), "$monthly:revenue");
+  EXPECT_EQ(written(m, "label"), "revenue");
+  m.select(edit_target_id{"root/children/1", ""});
+  EXPECT_EQ(written(m, "ys"), "[1, 3]"); // a block list, on one line
+  EXPECT_EQ(written(m, "xs"), ""); // not written
+}
+
+TEST(inspector, ColumnReferencesNameEveryColumn) {
+  editor_model m(kBars);
+  EXPECT_EQ(
+      m.column_references(),
+      (std::vector<std::string>{"$monthly:month", "$monthly:revenue", "$monthly:cost", "$regions:unit price"}));
+}
+
+TEST(inspector, AListTakesAColumnALiteralListOrNothing) {
+  editor_model m(kBars);
+  m.select(edit_target_id{"root/children/1", ""});
+  inspector panel;
+  inspector_events e = panel.edit_list(m, "ys", "$monthly:cost");
+  ASSERT_TRUE(e.source) << panel.error();
+  EXPECT_NE(m.source().find("      ys: $monthly:cost\n"), std::string::npos) << m.source();
+  e = panel.edit_list(m, "xs", "$monthly:month");
+  ASSERT_TRUE(e.source) << panel.error();
+  e = panel.edit_list(m, "ys", "[5, 6]");
+  ASSERT_TRUE(e.source) << panel.error();
+  EXPECT_EQ(written(m, "ys"), "[5, 6]");
+  e = panel.edit_list(m, "xs", "  ");
+  ASSERT_TRUE(e.source); // cleared
+  EXPECT_EQ(written(m, "xs"), "");
+  // A column that is not there is refused, and nothing changes.
+  const std::string before = m.source();
+  e = panel.edit_list(m, "ys", "$monthly:nope");
+  EXPECT_FALSE(e.source);
+  EXPECT_FALSE(panel.error().empty());
+  EXPECT_EQ(m.source(), before);
+}
+
+TEST(inspector, GroupedBarsTakeSeveralColumns) {
+  editor_model m(
+      "root:\n  type: Plot\n  children:\n    - {type: PlotBarGroups, labels: [a, b], values: [1, 2, 3, 4]}\n"
+      "data: |\n  revenue, cost\n  92, 40\n  88, 45\n");
+  m.select(edit_target_id{"root/children/0", ""});
+  inspector panel;
+  ASSERT_TRUE(panel.edit_list(m, "values", "[$revenue, $cost]").source) << panel.error();
+  EXPECT_EQ(written(m, "values"), "[$revenue, $cost]");
 }
 
 } // namespace

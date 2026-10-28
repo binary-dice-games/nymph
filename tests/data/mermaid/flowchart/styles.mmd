@@ -1,0 +1,12 @@
+flowchart LR
+  A:::hot --> B --> C
+  C --> D
+  classDef hot fill:#f96,stroke:#333,stroke-width:4px
+  classDef cool fill:lightblue,color:rgb(0,0,128)
+  classDef default fill:#eee
+  class B,C cool
+  style D fill:red,stroke-dasharray: 5 5
+  linkStyle 0 stroke:#ff3,color:red
+  linkStyle default stroke:gray
+  click A "https://example.com" "tooltip"
+  class Z cool

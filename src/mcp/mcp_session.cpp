@@ -2,6 +2,8 @@
 /// @file mcp_session.cpp
 /// @brief The MCP lifecycle and method dispatch.
 #include "mcp/mcp_session.hpp"
+#include "mcp/editor_bridge.hpp"
+#include "mcp/web_bridge.hpp"
 #include <algorithm>
 #include <array>
 #include <exception>
@@ -32,7 +34,27 @@ std::span<const std::string_view> supported_protocol_versions() {
 }
 
 session::session(server_options options) : tools_(std::make_unique<tool_registry>(options)) {
-  add_builtin_tools(*tools_);
+  if (options.builtin_tools) {
+    add_builtin_tools(*tools_);
+    // The chart open in the web app (spec/17_agent_connectors): nothing is
+    // opened until web_app_pair.
+    web_bridge_options web;
+    web.app_url = options.web_app_url;
+    web.origins = options.web_app_origins;
+    web.call_timeout = options.web_call_timeout;
+    web_ = std::make_shared<web_bridge>(std::move(web), [notify = options.notify] {
+      if (notify) {
+        notify(json{{"jsonrpc", "2.0"}, {"method", "notifications/tools/list_changed"}});
+      }
+    });
+    // The chart open in a running editor (spec/14_editor_workspace), or in
+    // a paired web app tab.
+    add_editor_bridge(*tools_, std::make_shared<editor_bridge>(options.editors_dir, web_));
+    add_web_app_tools(*tools_, web_);
+  }
+  if (options.extra_tools) {
+    options.extra_tools(*tools_);
+  }
 }
 
 session::~session() = default;
@@ -89,15 +111,21 @@ json session::initialize(const json& params) {
   const std::string asked = params["protocolVersion"].get<std::string>();
   const auto match = std::find(kProtocolVersions.begin(), kProtocolVersions.end(), asked);
   protocol_version_ = std::string(match != kProtocolVersions.end() ? *match : kProtocolVersions.front());
+  if (web_ && params.contains("clientInfo") && params["clientInfo"].is_object()) {
+    web_->set_client(params["clientInfo"].value("name", std::string()));
+  }
   return json{
       {"protocolVersion", protocol_version_},
       {"capabilities",
        {
-           {"tools", {{"listChanged", false}}},
+           {"tools", {{"listChanged", web_ != nullptr}}},
            {"resources", {{"subscribe", false}, {"listChanged", false}}},
        }},
-      {"serverInfo", {{"name", "nymph"}, {"title", "nymph"}, {"version", std::string(version())}}},
-      {"instructions", server_instructions()},
+      {"serverInfo",
+       {{"name", tools_->options().server_name},
+        {"title", tools_->options().server_name},
+        {"version", std::string(version())}}},
+      {"instructions", tools_->options().instructions.empty() ? server_instructions() : tools_->options().instructions},
   };
 }
 

@@ -33,6 +33,8 @@ example across machines): OpenGL output can differ slightly between GPUs.
 | `nymph chart.yaml -o out.png` | Writes `out.png`. |
 | `nymph chart.png` | Prints the YAML stored in a nymph PNG (`-o FILE` writes it). |
 | `nymph check chart.yaml` | Validates without drawing; prints nothing when valid. |
+| `nymph diagram.mmd` | Draws a mermaid diagram (converted to nymph YAML inside the PNG). |
+| `nymph convert diagram.mmd -o diagram.yaml` | Writes the nymph YAML of a mermaid diagram (or of any input). |
 | `nymph render - -o out.png` | Reads the YAML from standard input. |
 | `nymph schema PlotLine` | Lists one element's fields, defaults and allowed values. |
 | `nymph fonts` | Lists the font names `font:` accepts. |
@@ -64,6 +66,74 @@ To change an existing nymph image when you no longer have its source, run
 YAML has a `source` key, read it first: it says how the data was made, so
 you can rerun that prompt, query or code for fresh data instead of
 guessing. Keep `source` up to date when you change the data.
+
+## Starting from mermaid
+
+Diagrams (flowchart, sequence, class, state, ER, Gantt, pie, mind map,
+Sankey, xychart) may be drafted in mermaid instead of YAML: nymph reads
+mermaid wherever it reads YAML, detected by its content, converts it and
+draws the result. It never writes mermaid.
+
+1. Write the mermaid and draw it: `render_chart` with it as `source` (or
+   `nymph diagram.mmd`). Warnings name what nymph dropped (`click`,
+   icons, ...); errors give the line and column in the mermaid.
+2. Revise the mermaid until the user is satisfied (`editor_set_source`
+   takes mermaid for a chart open in the editor).
+3. Convert: `convert_chart` (`output_path` ending in `.yaml`) or `nymph
+   convert diagram.mmd -o diagram.yaml`. Keep and edit that YAML from now
+   on: it declares every node explicitly, and nymph's fields (colours,
+   fonts, shapes, layout hints, sizes) refine the look.
+
+A PNG drawn from mermaid carries the converted YAML. Plots, dashboards
+and user interfaces have no mermaid form: write them in YAML.
+[mermaid.md](mermaid.md) lists what each mermaid kind becomes and what is
+dropped.
+
+## The chart open in the editor
+
+When the user has a chart open in the nymph editor (`nymph view --edit
+chart.yaml`), `nymph mcp` also offers `editor_*` tools that work on that
+chart as the user would: every change is checked like any source, shows at
+once and can be undone in the editor.
+
+1. `editor_state`: the file, a `version`, every element by path (with its
+   type, label and `id`), the **selection** (its path, written fields and
+   the child types it takes), the data tables and the view on screen.
+   "This", "the selected node" mean the selection.
+2. Change it: `editor_add_element` (`parent`, `type`, `fields`, e.g. a
+   `FlowLink` with `{"from": "cart", "to": "purchases"}`),
+   `editor_set_fields` (`path`, `fields`; `null` clears one, `"$col"` is a
+   column reference), `editor_remove_element` (`with_references` also
+   removes the links that name it), `editor_move_element`,
+   `editor_set_cells` / `editor_set_table` for data. Pass the
+   `expected_version` from `editor_state`: if the user changed the chart
+   meanwhile the change is refused, so read the state again.
+3. `editor_view_image` shows what the user sees.
+
+A refused change names the problem as the loader does and changes nothing.
+With several editors open, `editor` (a file name or process id) chooses
+one; without an open editor the tools say so: use `render_chart` instead.
+While the user is fixing source text that does not load, changes are
+refused ("the user is editing the source"): wait and read the state again.
+
+### The chart open in the web app
+
+The nymph web app is a browser tab; `nymph mcp` reaches the chart open
+there once the user pairs it. Call `web_app_pair`: it returns a one-time
+code (`48213-K7QM-2XPD`, valid once for 5 minutes) and a link. The user
+types the code in the app (Agents > Connect an agent) or opens the link.
+Then the app's own tools join yours (`document_state`, `document_set_source`,
+`document_image`, `app_set_mode`, `app_read_guide`, ...), and the
+`editor_*` tools work on the tab (`editor: "web:<file name>"` picks one
+of several). If they do not appear in your tool list, call them through
+`web_app_call` (`name`, `arguments`). Read `app_read_guide` with
+`web-app` first: it explains View and Edit modes, change groups
+(`document_begin_change` / `document_end_change`, one undo step for the
+user) and what the user is asked to confirm.
+
+To let a user look at or edit a chart in the browser without installing
+anything, give them a link to the web app: `https://binary-dice-games.github.io/nymph/?url=<the raw URL of the YAML or PNG>`
+(add `&mode=edit` to open the editor).
 
 ## Source format
 
@@ -124,11 +194,13 @@ Rules that cause most errors:
 | `width` | `800` | Width in pixels, 16 to 4096. |
 | `height` | `500` | Height in pixels, 16 to 4096. |
 | `scale` | `1` | 1 to 4. The PNG has `width*scale` by `height*scale` pixels with the same layout, only sharper. Use `2` for images shown large. |
-| `theme` | `light` | `light`, `dark` or `classic`. |
+| `theme` | `light` | Chart theme: `light`, `dark`, `classic`, `forest`, `midnight`, `ocean`, `paper`, `pastel`, `slate`, `sunset`. It sets background, fonts, series colours and diagram colours for every field the chart leaves out; values the chart writes win. |
 | `padding` | `8` | Empty pixels around the chart. |
 | `font` | `default` | Font of all text, by file name; see "Fonts and text style". |
 | `font_size` | `16` | Text size in pixels, 1 to 96. |
 | `text_color` | theme | Colour of all text, `"#RRGGBB"` in quotes. |
+| `background` | theme | Background colour of the image, `"#RRGGBB"` in quotes. |
+| `palette` | theme | Series colours taken in turn, `["#RRGGBB", ...]` (each in quotes). |
 
 ### `root`
 
@@ -255,7 +327,9 @@ Several flags are joined with `|`: `flags: NoLegend|NoTitle`.
 ### 2D series (children of a `Plot`)
 
 Every series has a `label` (its legend name) and the style fields in
-"Colours and style".
+"Colours and style" that it is drawn with, except the ones that draw
+texts or several legend entries (`PlotText`, `PlotAnnotation`, `PlotTag`,
+`PlotPieChart`, `PlotBarGroups`), which have no `label`.
 
 | Type | Fields besides `label` | Draws |
 |---|---|---|
@@ -300,19 +374,19 @@ plot's second Y axis on the right (see the `y2_` fields of `Plot`).
 | `Plot3DTriangle` | `xs`, `ys`, `zs` | Filled triangles; every 3 points make one. |
 | `Plot3DQuad` | `xs`, `ys`, `zs` | Filled quads; every 4 points make one. |
 | `Plot3DMesh` | `xs`, `ys`, `zs`, `indices` | A triangle mesh; `indices` lists 3 point numbers (from 0) per triangle. |
-| `Plot3DText` | `text`, `x`, `y`, `z`, `angle`, `offset_x`, `offset_y` | A text label at a 3D coordinate. |
+| `Plot3DText` | `text`, `x`, `y`, `z`, `angle`, `offset_x`, `offset_y` (no `label`) | A text label at a 3D coordinate. |
 
 ### Colours and style
 
 Without any of these, series are coloured automatically in turn from the
 plot's `colormap`.
 
-Fields on every series, 2D and 3D:
+Fields of the series, 2D and 3D, that draw lines, fills or markers:
 
 | Field | Default | Meaning |
 |---|---|---|
 | `color` | automatic | The series colour, for its lines, fills and markers. |
-| `fill_color` | same as `color` | A different colour for filled areas (bar faces, shaded regions). |
+| `fill_color` | same as `color` | A different colour for filled areas (bar faces, shaded regions) and marker faces. |
 | `line_weight` | `1` | Line thickness in pixels. |
 | `fill_alpha` | automatic | Opacity of fills, from 0 (transparent) to 1 (solid). |
 | `marker` | none on lines, circles on scatters | `None`, `Circle`, `Square`, `Diamond`, `Up`, `Down`, `Left`, `Right`, `Cross`, `Plus`, `Asterisk`. |
@@ -321,8 +395,16 @@ Fields on every series, 2D and 3D:
 **Colours are written `"#RRGGBB"` or `"#RRGGBBAA"`, always in quotes.**
 Colour names such as `red` are not accepted.
 
-`PlotHeatmap`, `PlotHistogram2D`, `PlotPieChart`, `PlotBarGroups`,
-`PlotText` and `Plot3DText` ignore these fields. Heatmap cells, pie
+A series takes only the fields it is drawn with; any other is an error.
+`PlotLine`, `PlotScatter`, `PlotStairs`, `PlotStems` and every 3D series
+but `Plot3DText` take them all. `PlotBars`, `PlotBarsH`, `PlotHistogram`
+and `PlotDigital` take all but `marker` and `marker_size`; `PlotShaded`
+takes `color`, `fill_color` and `fill_alpha`; `PlotErrorBars` and
+`PlotInfLines` take `color` and `line_weight`; `PlotAnnotation` and
+`PlotTag` take `color`; `PlotBarGroups` takes `fill_alpha`.
+
+`PlotHeatmap`, `PlotHistogram2D`, `PlotPieChart`, `PlotText` and
+`Plot3DText` take none of them (`PlotText` has `text_color`). Heatmap cells, pie
 slices, bar groups and surfaces are coloured by the plot's `colormap`
 instead (a `ColorScale` shows what the colours of a heatmap mean):
 

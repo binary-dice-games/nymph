@@ -1,0 +1,32 @@
+nymph: 1
+description: "State diagram converted from mermaid: Vehicle."
+image: {width: 1028, height: 320}
+source: Converted from a mermaid stateDiagram-v2.
+root:
+  type: StateDiagram
+  title: Vehicle
+  direction: LeftRight
+  children:
+    - {type: State, id: start, kind: Initial}
+    - {type: State, id: Still, name: "parked\nengine off"}
+    - type: State
+      id: Moving
+      children:
+        - {type: State, id: Moving_start, kind: Initial}
+        - {type: State, id: Slow}
+        - {type: State, id: Fast}
+        - {type: State, id: Moving_end, kind: Final}
+        - {type: Transition, from: Moving_start, to: Slow}
+        - {type: Transition, from: Slow, to: Fast, label: speed up}
+        - {type: Transition, from: Fast, to: Slow}
+        - {type: Transition, from: Fast, to: Moving_end}
+    - {type: State, id: Crash, name: Crashed hard}
+    - {type: State, id: end, kind: Final}
+    - {type: Transition, from: start, to: Still}
+    - {type: Transition, from: Still, to: end}
+    - {type: Transition, from: Still, to: Moving, label: push}
+    - {type: Transition, from: Moving, to: Still}
+    - {type: Transition, from: Moving, to: Crash}
+    - {type: Transition, from: Crash, to: end}
+    - {type: Note, text: resting, attach: [Still]}
+    - {type: Note, text: "call the\ninsurance", attach: [Crash]}

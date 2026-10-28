@@ -6,7 +6,11 @@
 ///        X11 and GLX declarations are nymph's own (no X or GL header is
 ///        needed), so nothing is linked
 ///        (spec/04_web_viewer/DESIGN.md section 10).
+#include <fcntl.h>
+#include <poll.h>
+#include <unistd.h>
 #include <algorithm>
+#include <cerrno>
 #include <cstdint>
 #include <cstring>
 #include <string>
@@ -115,11 +119,13 @@ union XEvent {
   long pad[24];
 };
 
-constexpr int KeyPress = 2, KeyRelease = 3, ButtonPress = 4, ButtonRelease = 5, MotionNotify = 6, LeaveNotify = 8, Expose = 12,
-              DestroyNotify = 17, ConfigureNotify = 22, ClientMessage = 33;
+constexpr int KeyPress = 2, KeyRelease = 3, ButtonPress = 4, ButtonRelease = 5, MotionNotify = 6, LeaveNotify = 8,
+              FocusIn = 9, FocusOut = 10, Expose = 12, DestroyNotify = 17, ConfigureNotify = 22, ClientMessage = 33;
 constexpr long KeyPressMask = 1L << 0, KeyReleaseMask = 1L << 1, ButtonPressMask = 1L << 2, ButtonReleaseMask = 1L << 3,
                LeaveWindowMask = 1L << 5, PointerMotionMask = 1L << 6, ExposureMask = 1L << 15,
-               StructureNotifyMask = 1L << 17;
+               StructureNotifyMask = 1L << 17, FocusChangeMask = 1L << 21;
+// X cursor font shapes (X11/cursorfont.h)
+constexpr unsigned kCursorArrow = 68, kCursorResizeH = 108, kCursorText = 152;
 constexpr unsigned long CWBorderPixel = 1UL << 3, CWEventMask = 1UL << 11, CWColormap = 1UL << 13;
 constexpr unsigned long kKeysymEscape = 0xff1b, kKeysymBackSpace = 0xff08, kKeysymTab = 0xff09,
                         kKeysymReturn = 0xff0d, kKeysymHome = 0xff50, kKeysymLeft = 0xff51, kKeysymUp = 0xff52,
@@ -170,6 +176,10 @@ struct x11_api {
   int (*XDisplayHeight)(XDisplay*, int) = nullptr;
   unsigned long (*XLookupKeysym)(void*, int) = nullptr;
   x_error_handler (*XSetErrorHandler)(x_error_handler) = nullptr;
+  unsigned long (*XCreateFontCursor)(XDisplay*, unsigned) = nullptr;
+  int (*XDefineCursor)(XDisplay*, XWindow, unsigned long) = nullptr;
+  int (*XFreeCursor)(XDisplay*, unsigned long) = nullptr;
+  int (*XConnectionNumber)(XDisplay*) = nullptr;
 
   GLXFBConfig*(*glXChooseFBConfig)(XDisplay*, int, const int*, int*) = nullptr;
   XVisualInfo*(*glXGetVisualFromFBConfig)(XDisplay*, GLXFBConfig) = nullptr;
@@ -219,6 +229,10 @@ struct x11_api {
     need(x11, "XDisplayHeight", XDisplayHeight);
     need(x11, "XLookupKeysym", XLookupKeysym);
     need(x11, "XSetErrorHandler", XSetErrorHandler);
+    need(x11, "XCreateFontCursor", XCreateFontCursor);
+    need(x11, "XDefineCursor", XDefineCursor);
+    need(x11, "XFreeCursor", XFreeCursor);
+    need(x11, "XConnectionNumber", XConnectionNumber);
     need(gl, "glXChooseFBConfig", glXChooseFBConfig);
     need(gl, "glXGetVisualFromFBConfig", glXGetVisualFromFBConfig);
     need(gl, "glXGetProcAddressARB", glXGetProcAddressARB);
@@ -273,7 +287,7 @@ class x11_window : public native_window {
     XSetWindowAttributes attrs{};
     attrs.colormap = colormap_;
     attrs.event_mask = KeyPressMask | KeyReleaseMask | ButtonPressMask | ButtonReleaseMask | LeaveWindowMask | PointerMotionMask |
-        ExposureMask | StructureNotifyMask;
+        ExposureMask | StructureNotifyMask | FocusChangeMask;
     width_ = 640;
     height_ = 480;
     window_ = a.XCreateWindow(
@@ -294,6 +308,15 @@ class x11_window : public native_window {
         static_cast<int>(sizeof(kClass)));
     set_icon();
     create_context(config);
+    // wake(): another thread writes a byte that pump(true) polls for beside the display.
+    if (::pipe(wake_pipe_) == 0) {
+      for (const int fd : wake_pipe_) {
+        ::fcntl(fd, F_SETFL, ::fcntl(fd, F_GETFL) | O_NONBLOCK);
+        ::fcntl(fd, F_SETFD, FD_CLOEXEC);
+      }
+    } else {
+      wake_pipe_[0] = wake_pipe_[1] = -1;
+    }
     ready_ = true;
   }
 
@@ -313,7 +336,17 @@ class x11_window : public native_window {
     if (colormap_ != 0) {
       a.XFreeColormap(display_, colormap_);
     }
+    for (const unsigned long cursor : cursors_) {
+      if (cursor != 0) {
+        a.XFreeCursor(display_, cursor);
+      }
+    }
     a.XCloseDisplay(display_);
+    for (const int fd : wake_pipe_) {
+      if (fd >= 0) {
+        ::close(fd);
+      }
+    }
   }
 
   void make_current() override {
@@ -365,10 +398,17 @@ class x11_window : public native_window {
   bool pump(bool block) override {
     x11_api& a = api();
     a.XFlush(display_);
-    if (block && !closed_) {
-      XEvent e;
-      a.XNextEvent(display_, &e); // waits for the next event
-      handle(e);
+    if (block && !closed_ && a.XPending(display_) == 0) {
+      // Wait for the display or for wake(), whichever comes first.
+      pollfd fds[2] = {{a.XConnectionNumber(display_), POLLIN, 0}, {wake_pipe_[0], POLLIN, 0}};
+      const nfds_t count = wake_pipe_[0] >= 0 ? 2 : 1;
+      while (::poll(fds, count, -1) < 0 && errno == EINTR) {
+      }
+      if (count == 2 && (fds[1].revents & POLLIN) != 0) {
+        char drain[64];
+        while (::read(wake_pipe_[0], drain, sizeof(drain)) > 0) {
+        }
+      }
     }
     while (!closed_ && a.XPending(display_) > 0) {
       XEvent e;
@@ -385,6 +425,28 @@ class x11_window : public native_window {
   }
   const char* glsl_version() const override {
     return "#version 330";
+  }
+  void set_cursor(cursor_shape shape) override {
+    const size_t index = static_cast<size_t>(shape);
+    if (index == cursor_index_) {
+      return;
+    }
+    x11_api& a = api();
+    if (cursors_[index] == 0) {
+      const unsigned font_shape = shape == cursor_shape::resize_horizontal ? kCursorResizeH
+          : shape == cursor_shape::text                                     ? kCursorText
+                                                                            : kCursorArrow;
+      cursors_[index] = a.XCreateFontCursor(display_, font_shape);
+    }
+    a.XDefineCursor(display_, window_, cursors_[index]);
+    a.XFlush(display_);
+    cursor_index_ = index;
+  }
+  void wake() override {
+    if (wake_pipe_[1] >= 0) {
+      const char byte = 1;
+      [[maybe_unused]] const ssize_t written = ::write(wake_pipe_[1], &byte, 1); // full pipe: a wake is pending anyway
+    }
   }
 
  private:
@@ -473,6 +535,9 @@ class x11_window : public native_window {
       case 'c':
       case 'C':
         return window_key::c;
+      case 'd':
+      case 'D':
+        return window_key::d;
       case 'v':
       case 'V':
         return window_key::v;
@@ -482,6 +547,15 @@ class x11_window : public native_window {
       case 'z':
       case 'Z':
         return window_key::z;
+      case 'f':
+      case 'F':
+        return window_key::f;
+      case 'h':
+      case 'H':
+        return window_key::h;
+      case 'u':
+      case 'U':
+        return window_key::u;
       case kKeysymReturn:
       case kKeysymKpEnter:
         return window_key::enter;
@@ -536,6 +610,10 @@ class x11_window : public native_window {
         break;
       case LeaveNotify:
         events_.on_pointer(pointer_event::kind::leave, 0.0f, 0.0f, 0, 0.0f, 0.0f);
+        break;
+      case FocusIn:
+      case FocusOut:
+        events_.on_focus(e.type == FocusIn);
         break;
       case ButtonPress:
       case ButtonRelease: {
@@ -612,6 +690,9 @@ class x11_window : public native_window {
   int screen_h_ = 0;
   bool ready_ = false;
   bool closed_ = false;
+  int wake_pipe_[2] = {-1, -1}; ///< wake() writes to [1]; pump(true) polls [0].
+  unsigned long cursors_[3] = {0, 0, 0}; ///< Created on first use, by cursor_shape.
+  size_t cursor_index_ = 0; ///< The shape defined on the window (arrow: the default).
 };
 
 } // namespace

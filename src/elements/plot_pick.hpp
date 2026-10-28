@@ -12,6 +12,7 @@
 #include <functional>
 #include <optional>
 #include <string>
+#include <vector>
 #include "render/draw_context.hpp"
 #include "schema/node.hpp"
 
@@ -99,10 +100,27 @@ void finish_picks(draw_context& dc, ImDrawList* dl);
 ///        and PNGs and fresh live views run several frames first.
 void sync_hidden(draw_context& dc, const char* label);
 
+/// @brief Drops the items of every 2D and 3D plot in the current ImPlot
+///        and ImPlot3D contexts, and with them the colours ImPlot gave
+///        them, so the next frame gives each series its colour as a fresh
+///        render does. ImPlot keeps an item's colour for as long as the
+///        item lives: without this a live view keeps showing a colour the
+///        new source no longer sets. For the live view, on a new source.
+/// @return The IDs of the items that were hidden, for
+///         draw_context::set_rehidden().
+std::vector<ImGuiID> forget_plot_items();
+
 /// @brief Ends picking for the open plot: takes the best candidate, draws
 ///        its highlight ring and (when enabled) the tooltip, and makes it
 ///        the frame's hovered pick. Call before EndPlot().
 void finish_plot_picks(draw_context& dc);
+
+/// @brief Applies the frame's pinch (draw_context::take_pinch()) to the
+///        open plot when it started inside its plot area: every axis that
+///        takes input gets the range that keeps the content under the
+///        fingers' first midpoint under their new one, scaled by the
+///        pinch. Takes effect next frame. Call before EndPlot().
+void pinch_current_plot(draw_context& dc);
 
 /// @brief The texts of a plot as ImPlot placed them.
 struct plot_texts {
@@ -113,12 +131,15 @@ struct plot_texts {
   std::string y2_label;
   bool has_y2 = false;
   std::string legend_field = "legend_location"; ///< The field of the legend's location; "" for none.
+  /// Legend entries select the element's children that they name (series).
+  bool element_children = true;
 };
 
 /// @brief In edit mode, records the plot's title, axis labels and legend
 ///        as edit targets (fields `title`, `x_label`, `y_label`,
 ///        `y2_label`, `legend_location`; spec/08_view_editor/DESIGN.md
-///        section 4). Call right after EndPlot(), with the pointer
+///        section 4), and each legend entry as a target of the series it
+///        names (its `label`; a pie chart's slice selects the chart). Call right after EndPlot(), with the pointer
 ///        ImPlot::GetCurrentPlot() returned before it.
 void record_plot_texts(draw_context& dc, const plot_texts& texts, const ImPlotPlot* plot);
 

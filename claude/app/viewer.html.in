@@ -33,7 +33,7 @@
 </style>
 </head>
 <body>
-<div id="bar"><button id="fullscreen" type="button" hidden>Full screen</button></div>
+<div id="bar"><button id="open-app" type="button" title="Edit this chart in the nymph web app, with the agent connected" hidden>Open in the web app</button><button id="fullscreen" type="button" hidden>Full screen</button></div>
 <div id="chart"></div>
 <div id="message">Waiting for the chart...</div>
 <script type="module">

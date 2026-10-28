@@ -52,12 +52,34 @@ async function chartCount(tabId) {
   return stored[key] ?? 0;
 }
 
+/** Each tab's latest showTab() run; runs for a tab wait for each other. */
+const showing = new Map();
+
 /**
- * Shows a tab's state on the button: icon, badge and title.
+ * Shows a tab's state on the button: icon, badge and title. Runs for the
+ * same tab go one after another, so an older run, which read the count or
+ * settings before a change, cannot write its stale badge after a newer one.
+ * @param {number} tabId
+ * @param {string|undefined} url the tab's URL
+ * @return {Promise<void>} settles when this run has painted the button
+ */
+function showTab(tabId, url) {
+  const run = (showing.get(tabId) ?? Promise.resolve()).then(() => paintTab(tabId, url)).catch(() => {});
+  showing.set(tabId, run);
+  run.then(() => {
+    if (showing.get(tabId) === run) {
+      showing.delete(tabId);
+    }
+  });
+  return run;
+}
+
+/**
+ * Reads a tab's state and paints the button; see showTab().
  * @param {number} tabId
  * @param {string|undefined} url the tab's URL
  */
-async function showTab(tabId, url) {
+async function paintTab(tabId, url) {
   const origin = runnableOrigin(url);
   try {
     if (!origin) {

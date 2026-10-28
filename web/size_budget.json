@@ -1,0 +1,7 @@
+{
+  "_comment": "Most gzip -9 bytes of each module (spec/15_web_app/DESIGN.md section 6), as Node's zlib at level 9 counts them, re-measured in CI after mermaid import (spec/16_mermaid_import): the viewer plus 2 %, the editor plus 10 %; the collaboration packages (spec/18_collaboration) their size plus about 15 %.",
+  "nymph-viewer-core.wasm": 960705,
+  "editor/nymph-editor-core.wasm": 1408215,
+  "site/collab/collab-session.js": 15500,
+  "site/collab/collab-whiteboard.js": 17500
+}

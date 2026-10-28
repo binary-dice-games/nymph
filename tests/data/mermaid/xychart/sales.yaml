@@ -1,0 +1,24 @@
+nymph: 1
+description: "Chart converted from mermaid: Sales Revenue."
+image: {width: 800, height: 450}
+source: Converted from a mermaid xychart-beta.
+root:
+  type: Plot
+  title: Sales Revenue
+  y_label: Revenue (in $)
+  x_ticks: [0, 1, 2, 3, 4, 5]
+  x_tick_labels: [jan, feb, mar, apr, may, jun]
+  y_min: 4000
+  y_max: 11000
+  flags: NoLegend
+  children:
+    - {type: PlotBars, label: bar1, xs: $x, ys: $bar1}
+    - {type: PlotLine, label: line1, xs: $x, ys: $line1}
+data: |
+  x, bar1, line1
+  0, 5000, 5000
+  1, 6000, 6000
+  2, 7500, 7500
+  3, 8200, 8200
+  4, 9500, 9500
+  5, 10500, 10500

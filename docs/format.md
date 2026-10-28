@@ -47,11 +47,13 @@ Any other key is an error.
 |---|---|---|
 | `width`, `height` | `800`, `500` | Size in pixels, 16 to 4096. |
 | `scale` | `1` | 1 to 4. The PNG is `width*scale` x `height*scale` pixels with the same layout, only sharper. |
-| `theme` | `light` | `light`, `dark` or `classic`. |
+| `theme` | `light` | A [chart theme](themes.md): `light`, `dark`, `classic`, `forest`, `midnight`, `ocean`, `paper`, `pastel`, `slate`, `sunset`. It fills every field and image option the chart leaves out. |
 | `padding` | `8` | Empty pixels between the image edge and `root`. |
 | `font` | `default` | Font of all text, by file name (see "Fonts and text style"). |
 | `font_size` | `16` | Text size in pixels, 1 to 96. |
 | `text_color` | theme | Colour of all text, `"#RRGGBB"`. |
+| `background` | theme | Background of the image, `"#RRGGBB"`. |
+| `palette` | theme | Colours series take in turn when they set none, `["#RRGGBB", ...]`. |
 
 ## Elements
 

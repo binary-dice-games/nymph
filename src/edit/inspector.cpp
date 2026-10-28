@@ -3,19 +3,25 @@
 /// @brief The editor's panel (see inspector.hpp).
 #include "edit/inspector.hpp"
 #include <imgui.h>
+#include <imgui_internal.h> // ImGuiContext::ColorPickerRef
 #include <algorithm>
 #include <array>
 #include <cfloat>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <optional>
 #include <string>
 #include <type_traits>
 #include <variant>
 #include "edit/element_icons.hpp"
 #include "edit/field_value.hpp"
+#include "edit/image_fields.hpp"
+#include "edit/number_box.hpp"
+#include "edit/panel_widgets.hpp"
 #include "fonts/embedded_fonts.hpp"
 #include "schema/element_class.hpp"
+#include "themes/theme_catalog.hpp"
 
 namespace bdg::nymph {
 
@@ -62,6 +68,8 @@ std::string preview(const value& v) {
     for (size_t i = 0; i < items.size() && i < 8; ++i) {
       if constexpr (std::is_same_v<std::decay_t<decltype(items[i])>, std::string>) {
         out += (i ? ", " : "") + items[i];
+      } else if constexpr (std::is_same_v<std::decay_t<decltype(items[i])>, double>) {
+        out += (i ? ", " : "") + encode_number(items[i]); // 1.5, not 1.500000
       } else {
         out += (i ? ", " : "") + std::to_string(items[i]);
       }
@@ -120,15 +128,67 @@ widget_kind widget_for(const field_desc& f) {
     case field_type::number_array:
     case field_type::integer_array:
     case field_type::text_array:
-      return widget_kind::read_only;
+      return widget_kind::list;
   }
   return widget_kind::read_only;
+}
+
+namespace {
+
+/// A "columns" button whose menu lists every column of the data as a
+/// reference. @return The one chosen, or "".
+std::string column_picker(const editor_model& model) {
+  std::string chosen;
+  ImGui::SameLine();
+  if (ImGui::SmallButton("columns")) {
+    ImGui::OpenPopup("##columns");
+  }
+  ImGui::SetItemTooltip("Take the values from a column of the data.");
+  if (ImGui::BeginPopup("##columns")) {
+    const std::vector<std::string> refs = model.column_references();
+    if (refs.empty()) {
+      ImGui::TextDisabled("No data: add a table with the + tab.");
+    }
+    for (const std::string& ref : refs) {
+      if (ImGui::Selectable(ref.c_str())) {
+        chosen = ref;
+      }
+    }
+    ImGui::EndPopup();
+  }
+  return chosen;
+}
+
+/// "Go to data" for a field that names a column: its table and column.
+std::optional<std::pair<std::string, std::string>> data_of(const std::string& reference) {
+  if (reference.size() < 2 || reference[0] != '$') {
+    return std::nullopt;
+  }
+  const std::string ref = reference.substr(1);
+  const size_t colon = ref.find(':');
+  return colon == std::string::npos ? std::make_pair(std::string(), ref)
+                                    : std::make_pair(ref.substr(0, colon), ref.substr(colon + 1));
+}
+
+} // namespace
+
+inspector_events inspector::edit_list(editor_model& model, const std::string& field, const std::string& yaml) {
+  inspector_events events;
+  const size_t a = yaml.find_first_not_of(" \t");
+  const std::string text = a == std::string::npos ? std::string() : yaml.substr(a, yaml.find_last_not_of(" \t") - a + 1);
+  if (text.empty()) {
+    note(model.clear(field), events);
+  } else {
+    note(model.commit(field, text, false, /*replace_binding=*/true), events);
+  }
+  return events;
 }
 
 void inspector::note(const commit_result& r, inspector_events& events) {
   if (r.ok) {
     error_.clear();
     events.source = r.source;
+    events.paths.then(r.paths);
     return;
   }
   error_ = r.error;
@@ -192,7 +252,7 @@ void inspector::draw_field(editor_model& model, const editable_field& f, bool fo
   if (!d.description.empty()) {
     ImGui::SetItemTooltip("%s", d.description.c_str());
   }
-  if (f.written && f.bound_to.empty()) {
+  if (f.written && (f.bound_to.empty() || widget_for(d) == widget_kind::list)) {
     ImGui::SameLine();
     if (ImGui::SmallButton("reset")) {
       note(model.clear(d.name), events);
@@ -205,7 +265,9 @@ void inspector::draw_field(editor_model& model, const editable_field& f, bool fo
   }
 
   ImGui::SetNextItemWidth(-FLT_MIN);
-  const widget_kind kind = f.bound_to.empty() ? widget_for(d) : widget_kind::read_only;
+  const widget_kind kind = widget_for(d) == widget_kind::list ? widget_kind::list
+      : f.bound_to.empty()                                    ? widget_for(d)
+                                                              : widget_kind::read_only;
   switch (kind) {
     case widget_kind::checkbox: {
       bool v = std::get<bool>(f.current);
@@ -218,23 +280,24 @@ void inspector::draw_field(editor_model& model, const editable_field& f, bool fo
     case widget_kind::number: {
       const bool is_int = kind == widget_kind::integer;
       double v = is_int ? static_cast<double>(std::get<int64_t>(f.current)) : std::get<double>(f.current);
-      double lo = d.limits ? d.limits->min : 0.0, hi = d.limits ? d.limits->max : 0.0;
-      const double span = d.limits ? hi - lo : 100.0;
-      const float speed = static_cast<float>(is_int ? std::max(1.0, span / 200.0) : std::max(span / 400.0, 0.01));
-      bool changed = false;
-      if (is_int) {
-        int64_t iv = static_cast<int64_t>(v);
-        int64_t ilo = static_cast<int64_t>(lo), ihi = static_cast<int64_t>(hi);
-        changed = ImGui::DragScalar("##v", ImGuiDataType_S64, &iv, speed, d.limits ? &ilo : nullptr, d.limits ? &ihi : nullptr);
-        v = static_cast<double>(iv);
-      } else {
-        changed = ImGui::DragScalar("##v", ImGuiDataType_Double, &v, speed, d.limits ? &lo : nullptr, d.limits ? &hi : nullptr, "%.6g");
+      number_box_options options;
+      options.integer = is_int;
+      if (d.limits) {
+        options.min = d.limits->min;
+        options.max = d.limits->max;
       }
-      if (changed) {
-        note(model.commit(d.name, is_int ? encode_int(static_cast<int64_t>(v)) : encode_number(v), drag_key_ == key), events);
-        drag_key_ = key;
+      if (d.name == "font_size" && element != kImagePath) {
+        options.zero_text = "auto (inherited)";
+        options.zero_start = model.inherited_font_size();
       }
-      if (ImGui::IsItemDeactivated() && drag_key_ == key) {
+      const number_box_change changed = numbers_.draw("##v", v, options);
+      if (changed != number_box_change::none) {
+        // A drag is one undo step however many values it goes through.
+        const bool merge = changed == number_box_change::dragged && drag_key_ == key;
+        note(model.commit(d.name, is_int ? encode_int(static_cast<int64_t>(v)) : encode_number(v), merge), events);
+        drag_key_ = changed == number_box_change::dragged ? key : std::string();
+      }
+      if (!ImGui::IsMouseDown(ImGuiMouseButton_Left) && drag_key_ == key) {
         drag_key_.clear();
       }
       break;
@@ -295,8 +358,18 @@ void inspector::draw_field(editor_model& model, const editable_field& f, bool fo
       if (current.empty() || !parse_color(current, rgba)) {
         if (ImGui::Button("automatic: click to choose")) {
           note(model.commit(d.name, *encode_color(kDefaultColor)), events);
+          open_picker_key_ = key; // the starting colour may look like the automatic one: choose at once
         }
       } else {
+        if (open_picker_key_ == key) {
+          // As a click on ColorEdit4's swatch does: inside its ID, with the
+          // colour it started from.
+          open_picker_key_.clear();
+          ImGui::PushID("##v");
+          ImGui::OpenPopup("picker");
+          ImGui::PopID();
+          ImGui::GetCurrentContext()->ColorPickerRef = ImVec4(rgba[0], rgba[1], rgba[2], rgba[3]);
+        }
         ImGui::SetNextItemWidth(-FLT_MIN);
         if (ImGui::ColorEdit4(
                 "##v",
@@ -339,10 +412,61 @@ void inspector::draw_field(editor_model& model, const editable_field& f, bool fo
       }
       break;
     }
+    case widget_kind::list: {
+      // The list as YAML, committed when the field is left (Enter, Tab, a click).
+      const bool typing = list_key_ == key;
+      char scratch[sizeof(list_buffer_)];
+      char* buffer = typing ? list_buffer_ : scratch;
+      if (!typing) {
+        std::snprintf(scratch, sizeof(scratch), "%s", f.source_text.c_str());
+      }
+      ImGui::SetNextItemWidth(-ImGui::CalcTextSize("columns").x - ImGui::GetStyle().FramePadding.x * 2.0f -
+                              ImGui::GetStyle().ItemSpacing.x);
+      ImGui::InputTextWithHint("##v", "[1, 2, 3] or $table:column", buffer, sizeof(list_buffer_));
+      if (ImGui::IsItemActivated()) {
+        list_key_ = key;
+        std::snprintf(list_buffer_, sizeof(list_buffer_), "%s", f.source_text.c_str());
+      }
+      if (ImGui::IsItemDeactivatedAfterEdit() && list_key_ == key) {
+        const std::string typed = list_buffer_;
+        if (typed != f.source_text) {
+          const inspector_events e = edit_list(model, d.name, typed);
+          events.source = e.source;
+          events.paths.then(e.paths);
+        }
+      }
+      if (ImGui::IsItemDeactivated() && list_key_ == key) {
+        list_key_.clear();
+      }
+      if (const std::string ref = column_picker(model); !ref.empty()) {
+        const inspector_events e = edit_list(model, d.name, ref);
+        events.source = e.source;
+      }
+      // What it holds now, and the way to its data.
+      ImGui::TextDisabled("%s", preview(f.current).c_str());
+      if (const auto data = data_of(f.bound_to)) {
+        ImGui::SameLine();
+        if (ImGui::SmallButton("Go to data")) {
+          events.show_data = data;
+        }
+      }
+      break;
+    }
     case widget_kind::read_only: {
       if (!f.bound_to.empty()) {
         const std::string shown = std::holds_alternative<std::string>(f.current) ? std::get<std::string>(f.current) : "";
         ImGui::TextDisabled("%s", f.bound_to.c_str());
+        ImGui::SameLine();
+        if (ImGui::SmallButton("Go to data")) {
+          // "$t:col" or "$col": the table and the column to show.
+          const std::string ref = f.bound_to.substr(1);
+          const size_t colon = ref.find(':');
+          events.show_data = colon == std::string::npos ? std::make_pair(std::string(), ref)
+                                                        : std::make_pair(ref.substr(0, colon), ref.substr(colon + 1));
+        }
+        if (const std::string ref = column_picker(model); !ref.empty()) {
+          note(model.commit(d.name, ref, false, true), events);
+        }
         ImGui::TextWrapped("%s", shown.c_str());
         if (d.type == field_type::text && ImGui::SmallButton("replace by this text")) {
           note(model.commit(d.name, encode_text(shown), false, true), events);
@@ -357,6 +481,43 @@ void inspector::draw_field(editor_model& model, const editable_field& f, bool fo
     }
   }
   ImGui::PopID();
+}
+
+void inspector::drag_drop(editor_model& model, const edit_element& e, bool open, inspector_events& events) {
+  constexpr const char* kPayload = "nymph_element";
+  if (e.depth > 0 && ImGui::BeginDragDropSource(ImGuiDragDropFlags_SourceAllowNullID)) {
+    ImGui::SetDragDropPayload(kPayload, e.path.c_str(), e.path.size() + 1);
+    ImGui::TextUnformatted(e.type.c_str());
+    ImGui::EndDragDropSource();
+  }
+  if (!ImGui::BeginDragDropTarget()) {
+    return;
+  }
+  const ImGuiPayload* payload =
+      ImGui::AcceptDragDropPayload(kPayload, ImGuiDragDropFlags_AcceptBeforeDelivery | ImGuiDragDropFlags_AcceptNoDrawDefaultRect);
+  if (payload != nullptr) {
+    const std::string dragged(static_cast<const char*>(payload->Data));
+    const ImVec2 lo = ImGui::GetItemRectMin();
+    const ImVec2 hi = ImGui::GetItemRectMax();
+    const float fraction = (ImGui::GetMousePos().y - lo.y) / std::max(hi.y - lo.y, 1.0f);
+    if (const std::optional<drop_place> place = plan_drop(model, dragged, e, fraction, open)) {
+      // The line shows where it lands: above or below the row, or a frame round it.
+      const bool into = place->parent == e.path;
+      const bool above = fraction < 0.5f;
+      const ImU32 color = ImGui::GetColorU32(ImGuiCol_DragDropTarget);
+      ImDrawList* list = ImGui::GetWindowDrawList();
+      if (into) {
+        list->AddRect(lo, hi, color, 0.0f, 0, 2.0f);
+      } else {
+        const float y = above ? lo.y : hi.y;
+        list->AddLine(ImVec2(lo.x, y), ImVec2(hi.x, y), color, 2.0f);
+      }
+      if (payload->IsDelivery()) {
+        menu_.drop(model, dragged, *place, events);
+      }
+    }
+  }
+  ImGui::EndDragDropTarget();
 }
 
 void inspector::draw_tree(editor_model& model, const std::vector<edit_element>& tree, inspector_events& events) {
@@ -399,6 +560,12 @@ void inspector::draw_tree(editor_model& model, const std::vector<edit_element>& 
       events.select = edit_target_id{e.path, ""};
       revealed_ = e.path; // already in view
     }
+    const bool visible_children = !leaf && node_open;
+    drag_drop(model, e, visible_children, events);
+    menu_.row(model, e, events);
+    if (events.select && events.select->element == e.path) {
+      revealed_ = e.path; // a right-click selects too: in view, no scroll
+    }
     if (is_selected && reveal) {
       ImGui::SetScrollHereY(0.5f);
     }
@@ -427,6 +594,159 @@ void inspector::draw_tree(editor_model& model, const std::vector<edit_element>& 
   }
 }
 
+namespace {
+
+/// "#RRGGBB[AA]" as ImGui's colour, opaque grey for anything else.
+ImU32 swatch_color(const std::string& text) {
+  float rgba[4];
+  return parse_color(text, rgba) ? ImGui::ColorConvertFloat4ToU32(ImVec4(rgba[0], rgba[1], rgba[2], rgba[3]))
+                                 : IM_COL32(128, 128, 128, 255);
+}
+
+/// A theme's swatch in `[lo, hi)`: its background, a line in its text
+/// colour and a dot per series colour.
+void draw_swatch(ImDrawList* dl, ImVec2 lo, ImVec2 hi, const chart_theme& t) {
+  const float rounding = 6.0f;
+  dl->AddRectFilled(lo, hi, swatch_color(t.background), rounding);
+  dl->AddRect(lo, hi, ImGui::GetColorU32(ImGuiCol_Border), rounding);
+  const float h = hi.y - lo.y;
+  const float pad = h * 0.18f;
+  dl->AddRectFilled(
+      ImVec2(lo.x + pad, lo.y + pad), ImVec2(lo.x + (hi.x - lo.x) * 0.55f, lo.y + pad + h * 0.12f),
+      swatch_color(t.text_color), 2.0f);
+  const size_t dots = std::min<size_t>(t.palette.size(), 5);
+  const float r = h * 0.13f;
+  for (size_t i = 0; i < dots; ++i) {
+    const ImVec2 c(lo.x + pad + r + static_cast<float>(i) * r * 2.6f, hi.y - pad - r);
+    dl->AddCircleFilled(c, r, swatch_color(t.palette[i]));
+  }
+}
+
+} // namespace
+
+void inspector::draw_themes(editor_model& model, inspector_events& events) {
+  constexpr const char* kThemePopup = "##themes";
+  if (!ImGui::BeginPopup(kThemePopup)) {
+    return;
+  }
+  ImGui::TextDisabled("Theme: the colours, fonts and series palette of what the chart leaves out.");
+  const std::string current = model.image().theme;
+  const ImGuiStyle& style = ImGui::GetStyle();
+  const float row_h = ImGui::GetTextLineHeight() * 2.0f + style.FramePadding.y * 2.0f;
+  const float swatch_w = row_h * 1.6f;
+  for (const chart_theme& t : chart_themes()) {
+    ImGui::PushID(t.id.c_str());
+    const ImVec2 at = ImGui::GetCursorScreenPos();
+    const bool chosen = ImGui::Selectable("##theme", t.id == current, 0, ImVec2(360.0f, row_h));
+    ImDrawList* dl = ImGui::GetWindowDrawList();
+    const ImVec2 lo(at.x + style.FramePadding.x * 0.5f, at.y + style.FramePadding.y * 0.5f);
+    draw_swatch(dl, lo, ImVec2(lo.x + swatch_w, at.y + row_h - style.FramePadding.y * 0.5f), t);
+    const float text_x = lo.x + swatch_w + style.ItemSpacing.x * 1.5f;
+    dl->AddText(ImVec2(text_x, at.y + style.FramePadding.y), ImGui::GetColorU32(ImGuiCol_Text), t.name.c_str());
+    dl->PushClipRect(at, ImVec2(at.x + 360.0f, at.y + row_h), true);
+    dl->AddText(
+        ImVec2(text_x, at.y + style.FramePadding.y + ImGui::GetTextLineHeight()),
+        ImGui::GetColorU32(ImGuiCol_TextDisabled),
+        t.description.c_str());
+    dl->PopClipRect();
+    if (ImGui::IsItemHovered() && !t.description.empty()) {
+      ImGui::SetItemTooltip("%s", t.description.c_str());
+    }
+    if (chosen && t.id != current) {
+      model.set_label("Theme: " + t.name);
+      // The default theme is the absence of one.
+      const std::optional<std::string> value = t.id == "light" ? std::nullopt : std::optional<std::string>(t.id);
+      note(model.set_fields(kImagePath, {{"theme", value}}), events);
+      model.set_label("");
+    }
+    ImGui::PopID();
+  }
+  ImGui::EndPopup();
+}
+
+void inspector::draw_info(editor_model& model, inspector_events& events) {
+  constexpr const char* kInfoDialog = "Description and source";
+  if (info_open_) {
+    ImGui::OpenPopup(kInfoDialog);
+    info_open_ = false;
+  }
+  // A modal dialog: it takes the pointer and keyboard from the figure.
+  const ImGuiViewport* vp = ImGui::GetMainViewport();
+  ImGui::SetNextWindowPos(
+      ImVec2(vp->Pos.x + vp->Size.x * 0.5f, vp->Pos.y + vp->Size.y * 0.5f), ImGuiCond_Appearing, ImVec2(0.5f, 0.5f));
+  ImGui::SetNextWindowSize(ImVec2(std::min(460.0f, vp->Size.x * 0.9f), std::min(400.0f, vp->Size.y * 0.9f)), ImGuiCond_Appearing);
+  if (ImGui::BeginPopupModal(kInfoDialog, nullptr, ImGuiWindowFlags_NoSavedSettings)) {
+    const ImGuiStyle& style = ImGui::GetStyle();
+    const struct {
+      const char* key;
+      const char* title;
+      const char* help;
+    } entries[] = {
+        {"description", "Description", "The alt text of the image: what the figure shows."},
+        {"source", "Source", "How the data was made (the prompt, query or code); kept in the file, not drawn."},
+    };
+    constexpr float kDividerHeight = 6.0f;
+    // The close button takes the bottom row; the two boxes share the rest,
+    // after the headings and the divider.
+    const float button_row = ImGui::GetFrameHeight() + style.ItemSpacing.y;
+    const float heading = (ImGui::GetTextLineHeight() + style.ItemSpacing.y) * 2.0f + style.ItemSpacing.y;
+    const float total = std::max(
+        ImGui::GetContentRegionAvail().y - button_row - heading * 2.0f - kDividerHeight - style.ItemSpacing.y * 3.0f, 40.0f);
+    const float first = std::clamp(total * info_split_, 20.0f, std::max(total - 20.0f, 20.0f));
+    for (size_t i = 0; i < 2; ++i) {
+      const auto& entry = entries[i];
+      const std::string key = entry.key;
+      ImGui::PushID(entry.key);
+      ImGui::SeparatorText(entry.title);
+      ImGui::TextDisabled("%s", entry.help);
+      const bool typing = info_key_ == key;
+      const std::string current = model.top_level_text(key);
+      char scratch[sizeof(info_buffer_)];
+      char* buffer = typing ? info_buffer_ : scratch;
+      if (!typing) {
+        std::snprintf(scratch, sizeof(scratch), "%s", current.c_str());
+      }
+      const float height = i == 0 ? first : total - first;
+      ImGui::InputTextMultiline(
+          "##text", buffer, sizeof(info_buffer_), ImVec2(-FLT_MIN, height), ImGuiInputTextFlags_WordWrap);
+      if (ImGui::IsItemActivated()) {
+        info_key_ = key;
+        std::snprintf(info_buffer_, sizeof(info_buffer_), "%s", current.c_str());
+      }
+      if (ImGui::IsItemDeactivated() && info_key_ == key) {
+        const std::string typed = info_buffer_;
+        info_key_.clear();
+        if (typed != current) {
+          note(model.set_top_level_text(key, typed), events);
+        }
+      }
+      if (i == 0) {
+        // The divider between the boxes: drag it to share the space.
+        ImGui::InvisibleButton("##split", ImVec2(-FLT_MIN, kDividerHeight));
+        const bool grabbed = ImGui::IsItemHovered() || ImGui::IsItemActive();
+        if (grabbed) {
+          ImGui::SetMouseCursor(ImGuiMouseCursor_ResizeNS);
+        }
+        if (ImGui::IsItemActive()) {
+          info_split_ = std::clamp((first + ImGui::GetIO().MouseDelta.y) / total, 0.1f, 0.9f);
+        }
+        const ImVec2 lo = ImGui::GetItemRectMin();
+        const ImVec2 hi = ImGui::GetItemRectMax();
+        ImGui::GetWindowDrawList()->AddLine(
+            ImVec2(lo.x, (lo.y + hi.y) * 0.5f),
+            ImVec2(hi.x, (lo.y + hi.y) * 0.5f),
+            ImGui::GetColorU32(grabbed ? ImGuiCol_SeparatorActive : ImGuiCol_Separator),
+            2.0f);
+      }
+      ImGui::PopID();
+    }
+    if (ImGui::Button("Close") || (info_key_.empty() && ImGui::IsKeyPressed(ImGuiKey_Escape, false))) {
+      ImGui::CloseCurrentPopup();
+    }
+    ImGui::EndPopup();
+  }
+}
+
 inspector_events inspector::draw(editor_model& model, const std::vector<edit_element>& tree, const std::string& status) {
   inspector_events events;
 
@@ -442,6 +762,7 @@ inspector_events inspector::draw(editor_model& model, const std::vector<edit_ele
 
   // Toolbar.
   ImGui::BeginDisabled(!model.can_undo());
+  const std::string undo_tip = model.undo_label();
   if (ImGui::Button("Undo")) {
     if (const std::optional<std::string> s = model.undo()) {
       events.source = *s;
@@ -449,9 +770,13 @@ inspector_events inspector::draw(editor_model& model, const std::vector<edit_ele
       error_.clear();
     }
   }
+  if (!undo_tip.empty()) {
+    ImGui::SetItemTooltip("Undo: %s", undo_tip.c_str());
+  }
   ImGui::EndDisabled();
   ImGui::SameLine();
   ImGui::BeginDisabled(!model.can_redo());
+  const std::string redo_tip = model.redo_label();
   if (ImGui::Button("Redo")) {
     if (const std::optional<std::string> s = model.redo()) {
       events.source = *s;
@@ -459,42 +784,89 @@ inspector_events inspector::draw(editor_model& model, const std::vector<edit_ele
       error_.clear();
     }
   }
+  if (!redo_tip.empty()) {
+    ImGui::SetItemTooltip("Redo: %s", redo_tip.c_str());
+  }
   ImGui::EndDisabled();
   ImGui::SameLine();
   events.reset_view = ImGui::Button("Reset view");
+  if (ImGui::Button("Theme")) {
+    ImGui::OpenPopup("##themes");
+  }
+  ImGui::SetItemTooltip("Choose the chart's theme: colours, fonts and series palette.");
+  draw_themes(model, events);
+  ImGui::SameLine();
+  if (ImGui::Button("Info")) {
+    info_open_ = !info_open_;
+  }
+  ImGui::SetItemTooltip("Edit the description (alt text) and the source note of the figure.");
   ImGui::BeginDisabled(!model.modified());
-  events.save = ImGui::Button("Save");
+  // Save at the row's right end when it fits, else on its own line.
+  {
+    const float save_w = ImGui::CalcTextSize("Save").x + ImGui::GetStyle().FramePadding.x * 2.0f;
+    const float row_end = ImGui::GetItemRectMax().x + ImGui::GetStyle().ItemSpacing.x;
+    const float right = ImGui::GetCursorScreenPos().x + ImGui::GetContentRegionAvail().x; // the next line's start + width
+    if (row_end + save_w <= right) {
+      ImGui::SameLine(0.0f, 0.0f);
+      ImGui::SetCursorScreenPos(ImVec2(right - save_w, ImGui::GetCursorScreenPos().y));
+    }
+  }
+  events.save = primary_button("Save");
   ImGui::EndDisabled();
   if (!status.empty()) {
     ImGui::TextDisabled("%s", status.c_str());
   }
   ImGui::Separator();
 
-  // The error panel at the bottom takes the height of its text, at most
-  // 40% of the panel; the rest scrolls above it.
+  // Three regions, each with its own scrollbar and a divider between
+  // neighbours: the elements (fixed height, dragged), the fields (the rest)
+  // and the log, which holds the last error (the height of its text, at
+  // most 40% of the panel, until it is dragged).
   const ImGuiStyle& style = ImGui::GetStyle();
-  const auto error_height = [&] {
-    if (error_.empty()) {
-      return 0.0f;
+  constexpr float kMinRegion = 40.0f;
+  const auto divider = [](const char* id) {
+    // Returns how far the divider was dragged down this frame.
+    ImGui::InvisibleButton(id, ImVec2(-FLT_MIN, 6.0f));
+    if (ImGui::IsItemHovered() || ImGui::IsItemActive()) {
+      ImGui::SetMouseCursor(ImGuiMouseCursor_ResizeNS);
     }
+    const ImVec2 lo = ImGui::GetItemRectMin();
+    const ImVec2 hi = ImGui::GetItemRectMax();
+    const float mid = (lo.y + hi.y) * 0.5f;
+    ImGui::GetWindowDrawList()->AddLine(
+        ImVec2(lo.x, mid),
+        ImVec2(hi.x, mid),
+        ImGui::GetColorU32(ImGui::IsItemHovered() || ImGui::IsItemActive() ? ImGuiCol_SeparatorActive : ImGuiCol_Separator),
+        2.0f);
+    return ImGui::IsItemActive() ? ImGui::GetIO().MouseDelta.y : 0.0f;
+  };
+  const float total = ImGui::GetContentRegionAvail().y;
+  float log_height = 0.0f; // with its divider
+  if (!error_.empty()) {
     // The child's border and padding, and room for a scrollbar, narrow the text.
     const float wrap = ImGui::GetContentRegionAvail().x - style.WindowPadding.x * 2.0f - style.ScrollbarSize;
     const float text = ImGui::CalcTextSize(error_.c_str(), nullptr, false, wrap).y;
     const float frame = style.WindowPadding.y * 2.0f + style.ChildBorderSize * 2.0f + style.ItemSpacing.y;
-    return std::min(text + frame, ImGui::GetContentRegionAvail().y * 0.4f);
-  };
-  const float reserved = error_height();
-  ImGui::BeginChild("##body", ImVec2(0, reserved > 0.0f ? -(reserved + style.ItemSpacing.y) : 0.0f));
+    const float wanted = log_height_ > 0.0f ? log_height_ : std::min(text + frame, total * 0.4f);
+    log_height = std::clamp(wanted, kMinRegion, std::max(kMinRegion, total * 0.8f));
+  }
+  const float log_reserved = log_height > 0.0f ? log_height + 6.0f + style.ItemSpacing.y * 3.0f : 0.0f;
 
   // The elements.
-  if (ImGui::CollapsingHeader("Elements", ImGuiTreeNodeFlags_DefaultOpen)) {
-    const float rows = static_cast<float>(tree.size() + 1);
-    ImGui::BeginChild("##elements", ImVec2(0, std::min(220.0f, ImGui::GetTextLineHeightWithSpacing() * rows)), ImGuiChildFlags_Borders);
+  if (section_header("Elements", ImGuiTreeNodeFlags_DefaultOpen)) {
+    // Leaves room for the divider, the fields and the log.
+    const float room = ImGui::GetContentRegionAvail().y - log_reserved - 6.0f - style.ItemSpacing.y * 3.0f;
+    const float shown = std::clamp(elements_height_, kMinRegion, std::max(kMinRegion, room - kMinRegion * 2.0f));
+    ImGui::BeginChild("##elements", ImVec2(0, shown), ImGuiChildFlags_Borders);
     draw_tree(model, tree, events);
     ImGui::EndChild();
+    if (const float drag = divider("##divider"); drag != 0.0f) {
+      elements_height_ = std::clamp(shown + drag, kMinRegion, 4000.0f);
+    }
   }
 
-  // The selection.
+  // The fields of the selection, scrolling on their own.
+  ImGui::BeginChild("##fields", ImVec2(0, log_reserved > 0.0f ? -log_reserved : 0.0f));
   if (!model.selection()) {
     ImGui::PushStyleColor(ImGuiCol_Text, ImGui::GetStyle().Colors[ImGuiCol_TextDisabled]);
     ImGui::TextWrapped("Click a text or an element in the figure, or choose one above.");
@@ -513,7 +885,7 @@ inspector_events inspector::draw(editor_model& model, const std::vector<edit_ele
       draw_field(model, *first, true, events);
       ImGui::Separator();
     }
-    if (ImGui::CollapsingHeader("All fields", first != nullptr ? 0 : ImGuiTreeNodeFlags_DefaultOpen)) {
+    if (section_header("All fields", first != nullptr ? 0 : ImGuiTreeNodeFlags_DefaultOpen)) {
       for (const editable_field& f : fields) {
         if (&f != first) {
           draw_field(model, f, false, events);
@@ -532,9 +904,20 @@ inspector_events inspector::draw(editor_model& model, const std::vector<edit_ele
   }
   ImGui::EndChild();
 
-  // The error panel, below the fields.
-  if (!error_.empty()) {
-    ImGui::BeginChild("##error", ImVec2(0, 0), ImGuiChildFlags_Borders);
+  menu_.dialogs(model, events);
+  draw_info(model, events);
+  if (!events.error.empty()) {
+    error_ = events.error;
+  } else if (events.source && events.paths.empty() == false) {
+    error_.clear();
+  }
+
+  // The log, below the fields; its divider moves up and down.
+  if (log_height > 0.0f && !error_.empty()) {
+    if (const float drag = divider("##log_divider"); drag != 0.0f) {
+      log_height_ = std::clamp(log_height - drag, kMinRegion, total * 0.8f);
+    }
+    ImGui::BeginChild("##error", ImVec2(0, log_height), ImGuiChildFlags_Borders);
     ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.85f, 0.2f, 0.2f, 1.0f));
     ImGui::TextWrapped("%s", error_.c_str());
     ImGui::PopStyleColor();

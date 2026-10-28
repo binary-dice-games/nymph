@@ -7,15 +7,83 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Web app: **Collaborate** (`Ctrl+Shift+L`) shares the open chart live with the people who have its invite link, browser to browser over WebRTC with no server: they see every change as the owner makes it, follow the owner's view or pan their own, and everyone draws on a whiteboard over the chart (cursors, ink, text notes, stickers) that is never saved in the file. The owner can lock the session, remove people, make a new link and let only themselves draw; join codes and a TURN setting help strict networks.
+- Web app: **Download PNG with drawings**, a picture of the chart with the whiteboard over it that still opens in nymph as the chart.
+- `collab/collab-session.js` and `collab/collab-whiteboard.js`: the session (rooms, WebTorrent-tracker or manual signaling, encrypted, a host relaying for guests) and the whiteboard as standalone modules for other pages.
+- Web viewer and editor modules: `figureBox()` and the `figure` event, where the figure is drawn, for overlays; the editor's `setFit('natural')` shows the chart at its own size.
+
+- Web viewer and web app: a reset-view button in the chart's bottom-right corner, shown once the user pans or zooms (`resetButton: false` / `reset-button="false"` hides it).
+- Web app: the agent you already use works on the open chart. `nymph mcp`'s new `web_app_pair` tool gives a one-time code (or link) to type under **Agents > Connect an agent**; Claude Code, Claude Desktop, Cursor and Gemini CLI then read and change the chart through the app's tools, which join their tool list (`web_app_call` reaches them otherwise). The app never asks for an API key.
+- Web app: the **Agents** panel (`Ctrl+Shift+A`) lists connected agents and every change they made, each with Undo; an agent's request is one undo step; **Stop** halts it; actions that leave the tab still ask first, with "allow without asking" for the open chart.
+- Web app: browser assistants reach the open chart through WebMCP where the browser offers it (a switch turns it off).
+- The live chart in Claude's chat: **Open in the web app** opens it in the app, connected to the same agent.
+- `nymph mcp`: the `editor_*` tools also reach a paired web app tab (`editor: "web:<name>"`).
+
+- The web app at https://binary-dice-games.github.io/nymph/: open nymph YAML and PNG files from the computer (file picker, drag and drop, paste), a URL, Google Drive (when the site is set up for it), a shared link, Recent or a template; view them live; edit them with the editor of `nymph view --edit`; save back to the file (Chrome, Edge) or Drive, or download YAML or PNG; copy a link that reopens the chart or HTML that embeds it. Unsaved changes are kept as drafts; the app installs, opens `.yaml` files from the system and works offline. Phones and tablets get the viewer only.
+- The editor module for web pages: `editor/nymph-editor.js` (`createEditor()`), a second WebAssembly module next to the viewer's, with the editor tools as a JavaScript API (`tool()`), attributed changes and undo groups.
+- `nymph view --edit`: the undo and redo buttons name the change they undo or redo; `Ctrl+S` asks to save.
+- Chart themes: `image.theme` picks one of ten built-in themes (`light`, `dark`, `classic`, `forest`, `midnight`, `ocean`, `paper`, `pastel`, `slate`, `sunset`) that fills every field the chart leaves out, by element type (`FlowNode:fill_color`), slot (`uml:color`) or field name; values the chart writes, on an element or an enclosing one, win.
+- `image.background` and `image.palette` (the colours series take in turn).
+- `nymph themes [<name>]`; `--theme <name>` on `nymph render` and `nymph check` (render writes it into the PNG's source).
+- Editor (`nymph view --edit`, web app): a **Theme** picker with swatches that writes `image.theme`; the web app's **Theme…** dialog previews themes in View.
+- Web viewer and editor modules: `themes()`; `setTheme()` takes any chart theme and fetches its fonts.
+- Mermaid input: `nymph`, `render`, `check`, `nymph view` and the MCP tools `render_chart` / `check_chart` / `editor_set_source` read mermaid diagrams (flowchart, sequence, class, state, ER, gantt, pie, mindmap, sankey, xychart) and convert them to nymph YAML; errors and warnings point at the mermaid lines. Outputs stay PNG or YAML.
+- `nymph convert` and the MCP tool `convert_chart`: the nymph YAML of a mermaid diagram, a nymph PNG or a YAML source; `nymph diagram.mmd -o diagram.yaml` converts too.
+- `nymph view --edit` on a mermaid file saves the converted chart as `<name>.yaml` next to it.
+- Web viewer: `setSource()` and `<nymph-viewer src="x.mmd">` take mermaid; `importMermaid()` converts without drawing.
+
+- `nymph view --edit`: a floating toolbar next to the selected element changes its shape, fill, line and text colours, font, text size and line style, copies its style to the next element clicked, clears its style, duplicates and deletes it; plots get a colour scheme picker (pie charts and heatmaps change their plot's), series a marker picker and marker size.
+- `nymph view --edit`: clicking a legend entry selects its series (a pie chart's slice selects the chart) instead of hiding it.
+- `nymph view --edit`: the divider between the figure and the editor panel can be dragged.
+- `nymph view --edit`: right-click an element in the figure or the element tree to add a child, insert, duplicate, move or delete elements; only the types that fit are offered, and a chart can be added next to the root.
+- `nymph view --edit`: tabs over the figure show each `data` table as an editable grid, with CSV import, export and paste, and a `+` tab to add tables.
+- `nymph view --edit`: drag elements in the element tree to reorder them or move them into another parent that takes them.
+- `nymph view --edit`: **Info** button opens a window to edit the figure's `description` and `source` note; the divider under the element tree can be dragged to resize it.
+- `nymph view --edit`: list fields (`xs`, `ys`, `values`, ...) are editable as text, and a **columns** button points a field at any column of the data.
+- `nymph view --edit` is an MCP server for AI agents: `nymph mcp` has `editor_*` tools that read and change the chart open in the editor (elements, selection, tables, an image of the view); `--no-mcp` turns it off.
+
 ### Changed
+
+- `nymph view --edit` and the web editor: an edit made while an agent's change is in progress is no longer undone together with it.
+- `nymph view --theme`, the viewer element's `theme` attribute and `setTheme()` accept every chart theme, not only `light`, `dark` and `classic`.
+- `nymph view --edit`: number fields are boxes that take a typed value after a click, or change by dragging sideways (Shift finer, Ctrl coarser); a text size of 0 shows as "auto".
+- `nymph view --edit` and the web editor: a flat, web-app style panel (Fira Sans text, light or dark palette, green accent, primary Save button, section headers, thin scrollbars); the selection outline uses the accent. The web editor follows the page's light / dark theme and accent (`setAppearance()`, `appearance` option of `createEditor()`).
 
 - `nymph view --edit`: the element list is a tree with collapsible nodes and an icon per element type; errors show in their own panel at the bottom of the editor.
 
 - The Windows release executable is built with MSVC.
 - The Linux release executable links glibc dynamically (libstdc++ stays inside) so `nymph view` works; it needs glibc 2.39 or newer.
+- Plot series take only the style fields they are drawn with; a field that had no effect is now an error. `PlotHeatmap`, `PlotHistogram2D`, `PlotPieChart`, `PlotText` and `Plot3DText` take none, bars and digital traces have no `marker` / `marker_size`, `PlotShaded` has no `line_weight` or markers, `PlotErrorBars` and `PlotInfLines` take `color` and `line_weight`, `PlotAnnotation` and `PlotTag` take `color`, `PlotBarGroups` takes `fill_alpha`; `PlotText`, `PlotAnnotation`, `PlotTag`, `PlotPieChart`, `PlotBarGroups` and `Plot3DText` have no `label`.
+- `fill_color` also colours marker faces of lines, scatters, stairs and stems (2D and 3D).
+- `nymph view --edit`: choosing a colour for a field that was automatic opens the colour picker at once.
 
 ### Fixed
 - Cursor plugin on Windows: the MCP server starts through `bin\nymph.cmd`, which finds Git for Windows' `sh` even when it is not on `PATH`.
+- `nymph view --edit`: after accepting a number with Enter, the next number field no longer ends its edit at the first key.
+- `nymph view --edit`: the image is shown at its own size on a canvas, as in the web editor; changing the image width or height no longer resizes the window.
+- Editor: number fields use ImGui's own drag-or-type control; click one to type a value, repeatedly, without it losing the keyboard.
+
+- Web editor: choosing a font that is fetched on demand (e.g. Fira Sans Italic) no longer fails with "font is not embedded in this build".
+- Web editor: right-click opens the element menu.
+- Editor panel: Elements, All fields and the log each scroll on their own, with draggable dividers between them.
+- Editor: dragging a whole-number field (width, height, ...) changes it at most one unit per pixel.
+- Web app: in a live session the whiteboard tools sit at the side of the window instead of over the chart, and the owner's editor centres the chart as guests see it.
+- Editor: a UML diagram panned or zoomed past the image shows the part outside dimmed, with the image's limit outlined.
+- Web viewer and web app on phones: after a pinch zoom (especially one ended off the chart), a one-finger drag pans again instead of zooming.
+- Web viewer and web app on phones: a pinch zooms plots, Gantt charts and diagrams as far as the fingers spread, keeps the content under the fingers, and stops when they stop.
+- Web viewer and web app on phones: a pinch no longer clicks, highlights or shows the tooltip of what is under the first finger, and two quick pinches no longer reset a diagram's view.
+- Diagrams panned or zoomed (live, or by a saved `view`) pass under their title instead of over it.
+- Claude Desktop extension (`.mcpb`): its manifest lists every tool the server offers, including `convert_chart`, `list_themes`, the `editor_*` tools and `web_app_pair` / `web_app_call`.
+- Browser extension: the toolbar badge no longer stays empty after a site is turned back on while its charts reappear.
+- Web app on phones and tablets: the page itself no longer scrolls, so the top bar can no longer be dragged out of view and stay there.
+- Web viewer and web app on phones: a one- or two-finger gesture that starts on the chart no longer also scrolls the page or throws the chart out of view; vertical swipes scroll the page only with the new `touchScroll` option (`touch-scroll` attribute).
+- `nymph view --edit` no longer redraws the editor panel continuously while nothing changes.
+- `nymph view --edit`: adding a child from an element's right-click menu no longer crashes.
+- `nymph view` and the web viewer: a series colour removed by an edit, an undo or a new source goes back to its automatic colour instead of keeping the old one; automatic colours and markers match a fresh render.
+- The library builds with GCC again (a stray carriage return in `src/edit/tree_edit.cpp`).
+- `nymph view --edit`: an edit that makes the layout overflow the image (such as adding an Image to a full layout) is refused with the layout error instead of leaving the editor out of sync.
 - `nymph mcp`: a failed `output_path` write names the absolute path and suggests giving one.
 
 - The Windows and Linux release executables include `nymph view`.

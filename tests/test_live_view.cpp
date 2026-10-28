@@ -4,14 +4,18 @@
 ///        runs frames on demand, sizes the layout to its box, and with no
 ///        input draws exactly what render_figure() draws.
 #include <gtest/gtest.h>
+#include <sstream>
 #include <imgui.h>
 #include <algorithm>
+#include <cmath>
 #include <filesystem>
 #include <fstream>
 #include <iterator>
 #include <string>
 #include <vector>
 #include "core/error.hpp"
+#include "edit/source_edit.hpp"
+#include "edit/tree_edit.hpp"
 #include "document/bind.hpp"
 #include "elements/register_builtin.hpp"
 #include "fonts/embedded_fonts.hpp"
@@ -183,6 +187,26 @@ TEST(live_view, FitFillUsesTheWholeBox) {
   v.resize({500, 250, 1});
   EXPECT_EQ(v.geometry().layout_width, 500.0f);
   EXPECT_EQ(v.geometry().layout_height, 250.0f);
+}
+
+TEST(live_view, FitNaturalLaysOutAtTheSourceSizeAndNeverScales) {
+  live_view v({view_fit::fill});
+  v.set_source(kLine);
+  v.resize({200, 150, 2});
+  EXPECT_EQ(v.geometry().layout_width, 200.0f); // fill: the box
+  v.set_fit(view_fit::natural);
+  EXPECT_TRUE(v.wants_frame());
+  view_geometry g = v.geometry();
+  EXPECT_EQ(g.layout_width, 400.0f); // the source size, clipped by the box
+  EXPECT_EQ(g.layout_height, 300.0f);
+  EXPECT_FLOAT_EQ(g.css_scale, 1.0f);
+  EXPECT_FLOAT_EQ(g.framebuffer_scale, 2.0f);
+  v.resize({900, 700, 1});
+  g = v.geometry();
+  EXPECT_EQ(g.layout_width, 400.0f); // not grown either
+  EXPECT_FLOAT_EQ(g.css_scale, 1.0f);
+  v.set_fit(view_fit::fill);
+  EXPECT_EQ(v.geometry().layout_width, 900.0f);
 }
 
 TEST(live_view, ABoxTooSmallForTheImageOptionsFallsBackToTheSourceSize) {
@@ -386,6 +410,85 @@ TEST(live_view_input, TheWheelZoomsAroundThePointer) {
   EXPECT_NEAR(x_at, 2.5, 0.05);
 }
 
+TEST(live_view_input, APinchKeepsTheDataUnderTheFingersAndZoomsByTheirSpread) {
+  driven_view d(kPan);
+  const plot_view p = d.plot();
+  // The midpoint starts over data (2.5, 5) and moves 20 px right, 10 up;
+  // two steps before the next frame, each spreading the fingers by sqrt 2.
+  const float fx = p.x + p.width / 4, fy = p.y + p.height / 2;
+  const float mx = fx + 12, my = fy - 4, tx = fx + 20, ty = fy - 10;
+  d.v.pinch(fx, fy, mx, my, std::sqrt(2.0f));
+  d.v.pinch(mx, my, tx, ty, std::sqrt(2.0f));
+  d.run();
+  const plot_view q = d.plot();
+  EXPECT_NEAR(q.x_max - q.x_min, 5.0, 1e-3);
+  EXPECT_NEAR(q.y_max - q.y_min, 5.0, 1e-3);
+  // (In the plot area of the pinch's frame: new tick labels may then move
+  // the area a little.)
+  EXPECT_NEAR(q.x_min + (q.x_max - q.x_min) * (tx - p.x) / p.width, 2.5, 0.05);
+  EXPECT_NEAR(q.y_max - (q.y_max - q.y_min) * (ty - p.y) / p.height, 5.0, 0.05);
+  // Nothing is left to apply once the gesture's frame is drawn.
+  d.run();
+  EXPECT_DOUBLE_EQ(d.plot().x_min, q.x_min);
+  EXPECT_DOUBLE_EQ(d.plot().x_max, q.x_max);
+}
+
+TEST(live_view_input, APinchOnAGanttChartZoomsTimeButNotRows) {
+  driven_view d(
+      "image: {width: 600, height: 240}\n"
+      "root:\n"
+      "  type: GanttChart\n"
+      "  children:\n"
+      "    - {type: GanttTask, id: a, name: A, start: 2026-03-02, duration: 4}\n"
+      "    - {type: GanttTask, id: b, name: B, after: [a], duration: 6}\n",
+      600,
+      240);
+  const plot_view p = d.plot();
+  const float cx = p.x + p.width / 2, cy = p.y + p.height / 2;
+  d.v.pinch(cx, cy, cx, cy, 2.0f);
+  d.run();
+  const plot_view q = d.plot();
+  EXPECT_NEAR(q.x_max - q.x_min, (p.x_max - p.x_min) / 2, 1e-6 * (p.x_max - p.x_min));
+  EXPECT_DOUBLE_EQ(q.y_min, p.y_min);
+  EXPECT_DOUBLE_EQ(q.y_max, p.y_max);
+}
+
+TEST(live_view_input, APinchZoomsADiagramByTheFingersSpread) {
+  driven_view d(
+      "image: {width: 400, height: 300}\n"
+      "root:\n"
+      "  type: ClassDiagram\n"
+      "  children:\n"
+      "    - {type: Class, id: Animal}\n"
+      "    - {type: Class, id: Duck}\n"
+      "    - {type: ClassRelation, from: Duck, to: Animal, kind: Inheritance}\n");
+  const plot_view before = d.plot();
+  ASSERT_EQ(before.kind, "diagram");
+  d.v.pinch(200, 150, 220, 150, 1.5f);
+  d.run();
+  const plot_view after = d.plot();
+  EXPECT_NEAR(after.zoom, 1.5, 1e-4);
+  // The content moved right with the fingers: its centre is now further left.
+  EXPECT_LT(after.center[0], before.center[0]);
+}
+
+TEST(live_view_input, APinchOnA3DPlotZoomsItWithWheelNotches) {
+  driven_view d(
+      "image: {width: 400, height: 300}\n"
+      "root:\n"
+      "  type: Plot3D\n"
+      "  title: S\n"
+      "  children:\n"
+      "    - {type: Plot3DScatter, label: p, xs: [0, 1, 0, 1], ys: [0, 0, 1, 1], zs: [0, 1, 1, 0]}\n");
+  const plot_view before = d.plot();
+  ASSERT_EQ(before.kind, "plot3d");
+  d.v.pinch(200, 160, 200, 160, 1.5f); // about two notches
+  d.run();
+  d.run(); // the notches reach ImPlot3D the frame after the pinch
+  const plot_view after = d.plot();
+  EXPECT_LT(after.x_max - after.x_min, before.x_max - before.x_min);
+}
+
 TEST(live_view_input, TheWheelOverTheXAxisZoomsOnlyX) {
   driven_view d(kPan);
   const plot_view p = d.plot();
@@ -411,6 +514,26 @@ TEST(live_view_input, APanSurvivesLaterFramesAndResetViewRestoresTheSource) {
   EXPECT_DOUBLE_EQ(d.plot().x_max, 10.0);
 }
 
+TEST(live_view_input, ViewChangedFollowsTheUsersPansAndResets) {
+  driven_view d(kPan);
+  EXPECT_FALSE(d.v.view_changed());
+  const plot_view p = d.plot();
+  d.move(p.x + 50, p.y + 50); // hovering changes nothing
+  EXPECT_FALSE(d.v.view_changed());
+  d.drag(p.x + 100, p.y + 100, p.x + 60, p.y + 120);
+  EXPECT_TRUE(d.v.view_changed());
+  d.v.set_source(kPan); // an update keeps the view
+  d.run();
+  EXPECT_TRUE(d.v.view_changed());
+  d.v.reset_view();
+  d.run();
+  EXPECT_FALSE(d.v.view_changed());
+  d.drag(p.x + 100, p.y + 100, p.x + 60, p.y + 120);
+  d.v.set_source(kPan, true);
+  d.run();
+  EXPECT_FALSE(d.v.view_changed());
+}
+
 TEST(live_view_input, AnUpdateKeepsTheViewUnlessAskedToReset) {
   driven_view d(kPan);
   const plot_view p = d.plot();
@@ -424,6 +547,26 @@ TEST(live_view_input, AnUpdateKeepsTheViewUnlessAskedToReset) {
   d.v.set_source(updated, true);
   d.run();
   EXPECT_DOUBLE_EQ(d.plot().x_min, 0.0);
+}
+
+TEST(live_view_input, AMovedElementKeepsItsViewUnderItsNewPath) {
+  // spec/14_editor_workspace plan step 3: the root wrapped in a layout.
+  driven_view d(kPan);
+  const plot_view p = d.plot();
+  d.drag(p.x + 100, p.y + 50, p.x + 50, p.y + 50);
+  const double moved = d.plot().x_min;
+  ASSERT_GT(moved, 0.5);
+  const std::string fixed = set_field(wrap_root(kPan, "VerticalLayout").source, "root/children/0", "height", "-1");
+  d.v.set_source_moved(fixed, [](std::string_view path) -> std::optional<std::string> {
+    return path == "root" ? std::optional<std::string>("root/children/0") : std::optional<std::string>(std::string(path));
+  });
+  d.run();
+  const std::vector<plot_view> views = d.v.view_state();
+  ASSERT_EQ(views.size(), 1u);
+  EXPECT_EQ(views[0].element, "root/children/0");
+  EXPECT_NEAR(views[0].x_min, moved, 1e-4);
+  // The pan is still the user's: a save keeps it, under the new path.
+  EXPECT_NE(d.v.source_with_view().find("root/children/0: {x: ["), std::string::npos) << d.v.source_with_view();
 }
 
 TEST(live_view_input, APlotWithNoInputsDoesNotMove) {

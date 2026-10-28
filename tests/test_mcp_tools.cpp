@@ -15,6 +15,7 @@
 #include "cli/cli.hpp"
 #include "fonts/embedded_fonts.hpp"
 #include "mcp/base64.hpp"
+#include "mcp/editor_tools.hpp"
 #include "mcp/mcp_session.hpp"
 #include "nymph.hpp"
 
@@ -167,10 +168,17 @@ TEST_F(mcp_tools, list_names_every_tool_with_its_schemas) {
     EXPECT_EQ(t["inputSchema"]["additionalProperties"], false);
     EXPECT_TRUE(t["annotations"].contains("readOnlyHint"));
   }
-  EXPECT_EQ(
-      names,
-      (std::vector<std::string>{
-          "render_chart", "check_chart", "extract_chart", "chart_schema", "example_chart", "list_fonts", "list_shapes"}));
+  // The chart tools, the tools of a running editor (spec/14_editor_workspace),
+  // then pairing with the web app (spec/17_agent_connectors).
+  std::vector<std::string> expected{
+      "render_chart", "check_chart", "convert_chart", "extract_chart", "chart_schema", "example_chart", "list_fonts",
+      "list_shapes", "list_themes"};
+  for (const json& t : editor_tool_definitions()) {
+    expected.push_back(t["name"]);
+  }
+  expected.push_back("web_app_pair");
+  expected.push_back("web_app_call");
+  EXPECT_EQ(names, expected);
   const json& render = tools[0];
   for (const char* p : {"source", "input_path", "output_path", "rasterizer"}) {
     EXPECT_TRUE(render["inputSchema"]["properties"].contains(p)) << p;
@@ -380,6 +388,12 @@ TEST_F(mcp_tools, shapes_match_the_cli) {
   EXPECT_NE(error_text(call("list_shapes", {{"all", true}})).find("unknown"), std::string::npos);
 }
 
+TEST_F(mcp_tools, themes_match_the_cli) {
+  EXPECT_EQ(text_of(call("list_themes")), cli_output({"themes"}));
+  EXPECT_EQ(text_of(call("list_themes", {{"name", "ocean"}})), cli_output({"themes", "ocean"}));
+  EXPECT_NE(error_text(call("list_themes", {{"name", "oceans"}})).find("did you mean 'ocean'"), std::string::npos);
+}
+
 // ── The MCP App (step 5) ────────────────────────────────────────────────────
 
 /// A stand-in App page, with a NUL like the real one (its wasm as text).
@@ -414,8 +428,11 @@ TEST_F(mcp_tools, the_app_is_a_resource_linked_from_render_chart) {
   ASSERT_EQ(tools[0]["name"], "render_chart");
   EXPECT_EQ(tools[0]["_meta"]["ui"]["resourceUri"], "ui://nymph/viewer");
   EXPECT_EQ(tools[0]["_meta"]["ui"]["visibility"], json({"model", "app"}));
-  ASSERT_EQ(tools.back()["name"], "viewer_font");
-  EXPECT_EQ(tools.back()["_meta"]["ui"]["visibility"], json({"app"}));
+  // The chart tools end with the app-only viewer_font; the editor's and the
+  // two web app tools follow.
+  const json& font = tools[tools.size() - 3 - editor_tool_definitions().size()];
+  ASSERT_EQ(font["name"], "viewer_font");
+  EXPECT_EQ(font["_meta"]["ui"]["visibility"], json({"app"}));
 
   const json resources = rpc(*session_, "resources/list", json::object())["result"]["resources"];
   ASSERT_EQ(resources.size(), 3u);
@@ -473,6 +490,60 @@ TEST(mcp_base64, rejects_malformed_text) {
   EXPECT_FALSE(base64_decode("TW=E").has_value());
   EXPECT_FALSE(base64_decode("TWE==").has_value());
   EXPECT_FALSE(base64_decode("TQ===").has_value());
+}
+
+
+// ── Mermaid (spec/16_mermaid_import/PLAN.md step 4) ─────────────────────────
+
+const char* const kMermaid =
+    "flowchart LR\n"
+    "  A[Start] --> B{Ok?}\n"
+    "  B -->|yes| C\n"
+    "  click A callback\n";
+
+TEST_F(mcp_tools, render_takes_mermaid_and_returns_the_converted_yaml) {
+  start(software());
+  const json result = call("render_chart", {{"source", kMermaid}});
+  const std::string text = text_of(result);
+  EXPECT_EQ(result["content"][0]["type"], "image");
+  EXPECT_NE(text.find("Converted from mermaid (flowchart); convert_chart gives the nymph YAML."), std::string::npos)
+      << text;
+  EXPECT_NE(text.find("source:4:3: warning: click is ignored"), std::string::npos) << text;
+  // The App draws structuredContent.source: the YAML, never the mermaid.
+  const std::string source = result["structuredContent"]["source"];
+  EXPECT_EQ(source, import_mermaid(kMermaid).source);
+  EXPECT_EQ(text_of(call("convert_chart", {{"source", kMermaid}})).rfind(source, 0), 0u);
+}
+
+TEST_F(mcp_tools, mermaid_errors_point_at_the_mermaid) {
+  write("bad.mmd", "flowchart LR\n  A --> B@{ shape: blob }\n");
+  EXPECT_EQ(error_text(call("check_chart", {{"input_path", path("bad.mmd")}})), cli_error({"check", path("bad.mmd")}));
+  EXPECT_EQ(
+      error_text(call("render_chart", {{"source", "flowchart LR\n  A --> B@{ shape: blob }\n"}})).rfind("source:2:10: ", 0),
+      0u);
+}
+
+TEST_F(mcp_tools, check_reports_the_mermaid_kind) {
+  const std::string text = text_of(call("check_chart", {{"source", "sequenceDiagram\n  A->>B: hi\n"}}));
+  EXPECT_EQ(text, "valid\nConverted from mermaid (sequenceDiagram).");
+}
+
+TEST_F(mcp_tools, convert_writes_only_yaml_and_reads_every_input) {
+  write("flow.mmd", kMermaid);
+  const json written = call("convert_chart", {{"input_path", path("flow.mmd")}, {"output_path", path("flow.yaml")}});
+  EXPECT_EQ(read_file(dir_ / "flow.yaml"), cli_output({"convert", path("flow.mmd")}));
+  EXPECT_NE(text_of(written).find("written to "), std::string::npos);
+  for (const char* bad : {"flow.png", "flow.mmd"}) {
+    EXPECT_EQ(
+        error_text(call("convert_chart", {{"source", kMermaid}, {"output_path", path(bad)}})).rfind("output_path must end in", 0),
+        0u)
+        << bad;
+  }
+  // A YAML source is checked and returned; a nymph PNG gives its source.
+  EXPECT_EQ(text_of(call("convert_chart", {{"source", kSource}})), kSource);
+  write("chart.png", as_string(render_png(kSource)));
+  EXPECT_EQ(text_of(call("convert_chart", {{"input_path", path("chart.png")}})), kSource);
+  EXPECT_FALSE(error_text(call("convert_chart", {{"source", kBadSource}})).empty());
 }
 
 } // namespace

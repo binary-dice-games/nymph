@@ -65,4 +65,11 @@ image render_figure(const figure& f);
 /// @throws nymph::error for a layout that does not fit; as render_frames().
 std::unordered_map<const node*, rect> layout_figure(const figure& f);
 
+/// @brief The natural size of `f.root` in logical pixels: what it would
+///        take inside a layout (its class's measure()), with the image's
+///        fonts and theme. Used to size images made by the mermaid import
+///        (spec/16_mermaid_import/DESIGN.md section 3, sizing).
+/// @throws as layout_figure().
+ImVec2 measure_figure(const figure& f);
+
 } // namespace bdg::nymph
