@@ -290,6 +290,7 @@ class editor_workspace {
   void set_cursor(cursor_shape shape);
   void relayout();
   void fit_to_image();
+  void apply_pending_size();
   void ask_size_if_too_small();
   std::optional<layout_box> selection_box() const;
   void draw_figure(int pixel_width, int pixel_height);
@@ -322,6 +323,7 @@ class editor_workspace {
   cursor_shape cursor_ = cursor_shape::arrow;
   int image_w_ = 0; ///< The image size last shown, to see when the source changes it.
   int image_h_ = 0;
+  bool size_pending_ = false; ///< The image size changed and the window has not been asked to follow yet.
   float asked_w_ = 0.0f; ///< The size last asked for a layout that did not fit.
   float asked_h_ = 0.0f;
   static constexpr double kDoubleClick = 0.4; ///< Seconds between the presses of a double-click.

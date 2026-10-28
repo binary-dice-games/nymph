@@ -227,7 +227,7 @@ bool editor_panel::ask_close() {
 }
 
 bool editor_panel::wants_frame() const {
-  return frames_left_ > 0 || inspector_.pending() || inspector_.number_typing() || toolbar_.number_typing();
+  return frames_left_ > 0 || inspector_.pending() || number_typing();
 }
 
 inspector_events editor_panel::frame(double now_seconds, const std::vector<edit_element>& tree, const std::string& status) {

@@ -5,6 +5,7 @@
 ///        shortcuts, and the save and CSV requests it makes of its host.
 #include <gtest/gtest.h>
 #include <cmath>
+#include <imgui_internal.h>
 #include <string>
 #include <vector>
 #include "workspace/editor_workspace.hpp"
@@ -36,7 +37,12 @@ struct fake_host : workspace_host {
   }
   void request_size(float w, float h) override {
     sizes.emplace_back(w, h);
+    if (resizing != nullptr) { // a native window resizes at once and draws a frame inside the call
+      resizing->resize(w, h, 1.0f);
+      resizing->frame(500.0 + static_cast<double>(sizes.size()));
+    }
   }
+  editor_workspace* resizing = nullptr;
   void changed(const commit_result& r) override {
     changes.push_back(r);
   }
@@ -90,6 +96,58 @@ TEST_F(workspace_fixture, ASourceThatDoesNotBindIsRefusedForEditing) {
   ws2.resize(900.0f, 400.0f, 1.0f);
   EXPECT_THROW(ws2.open("root: {type: Plot, bogus: 1}", true, true), std::exception);
   EXPECT_EQ(ws2.panel(), nullptr);
+}
+
+TEST_F(workspace_fixture, TheWindowFollowsTheImageOnlyOnceTheNumberFieldIsLeft) {
+  ws->resize(900.0f, 1100.0f, 1.5f);
+  ws->panel()->model().select(edit_target_id{"image", ""});
+  ws->panel()->refresh();
+  run_frames(6);
+  const workspace_layout l = ws->panel()->layout();
+  const float x = l.strip.x + 200.0f;
+  ImGuiContext& g = *ws->panel()->imgui_context();
+  // The widgets of the strip under the pointer, top to bottom (moves only).
+  std::vector<float> tops;
+  ImGuiID last = 0;
+  for (float y = 400.0f; y < l.strip.height; y += 2.0f) {
+    ws->pointer({pointer_event::kind::move, x, y, 0});
+    run_frames(2);
+    if (g.HoveredId != 0 && g.HoveredId != last) {
+      tops.push_back(y);
+    }
+    last = g.HoveredId;
+  }
+  const auto type_digits = [&](const char* digits) {
+    for (const char* c = digits; *c != 0; ++c) {
+      ws->key(window_key::other, key_mods{}, true, false); // a digit: its key, then its character
+      ws->text(static_cast<char32_t>(*c));
+      ws->key(window_key::other, key_mods{}, false, false);
+      run_frames(2);
+    }
+  };
+  const char* const values[] = {"650", "500"};
+  size_t typed = 0;
+  for (size_t i = 1; i < tops.size() && typed < 2; ++i) { // the first is the "All fields" header
+    click(x, tops[i] + 10.0f);
+    if (!ws->panel()->number_typing()) {
+      continue;
+    }
+    // Leaving the width by clicking the height must not move the strip
+    // under the pointer: the window waits.
+    EXPECT_TRUE(host.sizes.empty()) << "the window was resized while a field is typed into";
+    type_digits(values[typed]);
+    EXPECT_TRUE(ws->panel()->number_typing()) << "a digit closed the field";
+    EXPECT_TRUE(ws->panel()->wants_keyboard());
+    ++typed;
+  }
+  ASSERT_EQ(typed, 2u) << "width and height take the keyboard one after the other";
+  ws->key(window_key::enter, key_mods{}, true, false);
+  run_frames(2);
+  ws->key(window_key::enter, key_mods{}, false, false);
+  run_frames(3);
+  ASSERT_EQ(host.sizes.size(), 1u) << "the window follows the image once the field is left";
+  EXPECT_FLOAT_EQ(host.sizes.back().first, 650.0f + ws->strip_width());
+  EXPECT_FLOAT_EQ(host.sizes.back().second, 500.0f + ws->tab_height());
 }
 
 TEST_F(workspace_fixture, GoesIdleWhenNothingHappens) {

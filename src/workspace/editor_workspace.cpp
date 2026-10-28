@@ -135,6 +135,7 @@ std::string editor_workspace::show_panel(bool on) {
     view_.set_show_limits(true);
   } else {
     panel_.reset();
+    size_pending_ = false;
     view_.set_edit_mode(false);
     view_.set_show_limits(false);
     view_.set_selection(std::nullopt);
@@ -364,7 +365,7 @@ bool editor_workspace::wants_keyboard() const {
 // ── Frames ───────────────────────────────────────────────────────────────────
 
 bool editor_workspace::wants_frame() const {
-  return view_.wants_frame() || (panel_ != nullptr && panel_->wants_frame());
+  return view_.wants_frame() || size_pending_ || (panel_ != nullptr && panel_->wants_frame());
 }
 
 void editor_workspace::frame(double now_seconds) {
@@ -404,6 +405,7 @@ void editor_workspace::frame(double now_seconds) {
       host_.decided(decision);
     }
   }
+  apply_pending_size();
 }
 
 void editor_workspace::take_file_requests() {
@@ -638,7 +640,18 @@ void editor_workspace::fit_to_image() {
   }
   image_w_ = image.width;
   image_h_ = image.height;
-  host_.request_size(static_cast<float>(image.width) + strip_width(), static_cast<float>(image.height) + tab_height());
+  size_pending_ = true;
+}
+
+void editor_workspace::apply_pending_size() {
+  // The window follows the image once the user lets go of the field they
+  // are editing: a resize in the middle of a click or while typing moves
+  // the strip from under the pointer and ends the edit.
+  if (!size_pending_ || panel_ == nullptr || panel_drag_ || !panel_->settled()) {
+    return;
+  }
+  size_pending_ = false;
+  host_.request_size(static_cast<float>(image_w_) + strip_width(), static_cast<float>(image_h_) + tab_height());
 }
 
 void editor_workspace::ask_size_if_too_small() {
