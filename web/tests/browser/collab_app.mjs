@@ -140,7 +140,7 @@ test('figureBox(): the viewer\'s canvas, the editor\'s figure under its tab bar,
     const editor = window.nymphApp.app.editor;
     return { box: editor.figureBox(), tab: editor.state().tabHeight };
   });
-  assert(e.box && Math.abs(e.box.top - e.tab) < 1 && e.box.left === 0 && e.box.width > 0, `editor box ${JSON.stringify(e)}`);
+  assert(e.box && e.box.top >= e.tab && e.box.left >= 0 && e.box.width > 0 && e.box.area && e.box.area.top === e.tab, `editor box ${JSON.stringify(e)}`);
   await done(page);
 });
 
@@ -406,12 +406,9 @@ test('in a session the owner\'s editor has the guests\' layout: drawings land on
     return n;
   }, [...shot]);
   assert(dark > 30, `${dark} dark pixels at the top of the figure`);
-  // Leaving the session gives the editor its whole area again.
+  // The editor keeps the chart's own size when the session ends.
   await run(owner, 'collab_stop');
-  await owner.waitForFunction((was) => {
-    const b = window.nymphApp.app.editor.figureBox();
-    return `${Math.round(b.width / b.scale)}x${Math.round(b.height / b.scale)}` !== was;
-  }, o, { timeout: 10000 });
+  assert((await size(owner)) === o, 'the editor keeps the chart size after the session');
   await done(owner, guest);
 });
 
