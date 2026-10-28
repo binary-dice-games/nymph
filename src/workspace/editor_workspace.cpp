@@ -308,6 +308,12 @@ key_outcome editor_workspace::key(window_key key, key_mods mods, bool down, bool
   // A popup of the panel (a menu, a colour picker) takes the keys too:
   // Escape closes it, not the window.
   const bool panel_keys = panel_ != nullptr && (panel_->wants_keyboard() || panel_->modal_open() || panel_->popup_open());
+  if (!down && !panel_keys && panel_ != nullptr) {
+    // A key released after the field that took it was left (Enter accepting
+    // a number) must still reach the panel: ImGui would hold it down and
+    // repeat it into the next field, ending its edit at the first key.
+    panel_->key(key, mods, false, false);
+  }
   switch (route_key(panel_keys, view_.wants_keyboard())) {
     case key_route::panel:
       panel_->key(key, mods, down, repeat);

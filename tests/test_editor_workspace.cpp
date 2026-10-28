@@ -145,6 +145,8 @@ TEST_F(workspace_fixture, TheWindowFollowsTheImageOnlyOnceTheNumberFieldIsLeft) 
   run_frames(2);
   ws->key(window_key::enter, key_mods{}, false, false);
   run_frames(3);
+  // Enter's release came after the field was left: the panel must still see it.
+  EXPECT_FALSE(g.IO.KeysData[ImGuiKey_Enter - ImGuiKey_NamedKey_BEGIN].Down);
   ASSERT_EQ(host.sizes.size(), 1u) << "the window follows the image once the field is left";
   EXPECT_FLOAT_EQ(host.sizes.back().first, 650.0f + ws->strip_width());
   EXPECT_FLOAT_EQ(host.sizes.back().second, 500.0f + ws->tab_height());

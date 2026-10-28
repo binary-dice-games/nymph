@@ -61,6 +61,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- `nymph view --edit`: after accepting a number with Enter, the next number field no longer ends its edit at the first key.
 - `nymph view --edit`: changing the image width or height no longer resizes the window under the pointer mid-click, which ended typing in the next number field; the window follows once the field is left.
 - Editor: number fields use ImGui's own drag-or-type control; click one to type a value, repeatedly, without it losing the keyboard.
 
