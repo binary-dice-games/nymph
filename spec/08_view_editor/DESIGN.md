@@ -134,16 +134,20 @@ text style), `src/window/view_command.*` (`--edit`), `docs/format.md`.
   combo from `names`; `flags` one checkbox per name; `font` (a `text` field
   with the font check) a combo of `nymph fonts`; arrays and `$column`
   references are shown read-only as source text.
-- **`number_box`** (`src/edit/number_box.hpp`): a number field that a click
-  (press and release without moving) turns into a text field (Enter, Tab or
-  a click elsewhere accepts, Escape cancels) and a sideways drag changes:
-  the step per pixel is a power of ten near 1/200 of the limits' span, or of
-  the value's size when the span is unknown or huge (at least 0.1 for whole
-  numbers), Shift ten times finer, Ctrl ten times coarser; values are
-  rounded to the step so a drag writes `0.3`, not `0.30000000000000004`. It
+- **`number_box`** (`src/edit/number_box.hpp`): a thin adapter over ImGui's
+  own `DragScalar` (`io.ConfigDragClickToInputText`: a click without
+  dragging types the value; Enter, Tab or a click elsewhere accepts,
+  Escape cancels; values are clamped to the limits). A sideways drag
+  changes it: the step per pixel is a power of ten near 1/200 of the
+  limits' span, or of the value's size when the span is unknown or huge,
+  at most one unit for a bounded range and at least 0.1 for whole numbers
+  (ImGui's own Shift / Alt make it finer / coarser); a drag lands on a
+  multiple of its step so it writes `0.3`, not `0.30000000000000004`. It
   reports `dragged` (one undo step per gesture) or `typed`. `font_size` 0
-  shows as "auto" and a drag from it starts at the inherited size
-  (`editor_model::inherited_font_size()`). Public ImGui API only.
+  shows as "auto" (the format text) and a drag from it starts at the
+  inherited size (`editor_model::inherited_font_size()`). An earlier
+  hand-built box (a button drawn by hand, swapped for an `InputText` on a
+  click) lost the keyboard in the browser and was replaced.
 - **`edit_toolbar`** (`src/edit/edit_toolbar.hpp`): a floating toolbar for
   the fields changed most often, drawn as its own window in the panel's
   ImGui context (which covers the whole window) over the figure, centred
@@ -298,7 +302,7 @@ yaml_value, merge, replace_binding)`, `clear(field)`, `undo()`, `redo()`,
 enum / flags` and `find_source_problem()`. `inspector` (`src/edit/inspector.hpp`):
 `widget_for(field_desc)`, `draw()`, `edit_text()`, `flush()`. `number_box`:
 `draw(id, value, options, width) -> number_box_change`, `drag_step()`,
-`tidy()`, `format()`, `parse()`. `edit_toolbar`: `tools_for(model)`,
+`tidy()`. `edit_toolbar`: `tools_for(model)`,
 `place(anchor, area, w, h)`, `draw(model, menu, area, anchor)`,
 `contains(x, y)`, `copy_style()`, `paste_style()`, `clear_style()`. The panel
 itself is `src/window/editor_panel.*` (its ImGui context and the OpenGL3
