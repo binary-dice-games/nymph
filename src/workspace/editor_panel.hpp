@@ -21,7 +21,6 @@
 #include "edit/workspace_layout.hpp"
 #include "view/live_view.hpp"
 #include "workspace/panel_style.hpp"
-#include "workspace/source_pane.hpp"
 #include "workspace/workspace_input.hpp"
 
 namespace bdg::nymph {
@@ -44,11 +43,8 @@ class editor_panel {
   ///        a panel that runs its frames without drawing them (tests, the
   ///        web editor's headless mode).
   /// @param file_name The input's name, shown in the dialogs.
-  /// @param repair Open a source that does not bind in repair state (the
-  ///        source pane shown, everything else waiting for a text that
-  ///        binds) instead of throwing.
-  /// @throws nymph::error if `source` is not a valid source (without `repair`).
-  editor_panel(std::string source, std::string file_name, const char* glsl_version, bool repair = false);
+  /// @throws nymph::error if `source` is not a valid source.
+  editor_panel(std::string source, std::string file_name, const char* glsl_version);
   /// OpenGL context current.
   ~editor_panel();
   editor_panel(const editor_panel&) = delete;
@@ -64,8 +60,8 @@ class editor_panel {
   void set_theme(const std::string& theme);
 
   /// @brief Asks for a frame when a font the panel waits for (its sans
-  ///        text font, the source pane's monospace one) has become
-  ///        available since the last frame (the web page fetches them).
+  ///        text font) has become available since the last frame (the web
+  ///        page fetches them).
   void check_fonts();
 
   /// @brief Pins the panel's look (light or dark, the accent) whatever the
@@ -106,48 +102,7 @@ class editor_panel {
 
   /// @brief The regions of the window (workspace_layout.hpp).
   workspace_layout layout() const {
-    return layout_workspace(width_, height_, wanted_strip_, kTabBarHeight, source_shown_ ? source_width() : 0.0f);
-  }
-
-  // ── Source pane (spec/15_web_app/DESIGN.md section 5.4) ──────────────
-
-  /// @brief Shows or hides the source pane; with `line` (1-based) its cursor
-  ///        goes there.
-  void show_source(bool on, std::optional<int> line = std::nullopt);
-  bool source_shown() const {
-    return source_shown_;
-  }
-  /// @brief The pane had the keyboard in the last frame.
-  bool source_focused() const {
-    return source_shown_ && pane_.focused();
-  }
-  /// @brief The pane's text does not bind: the rest of the panel is
-  ///        read-only and agents' writes are refused until it does.
-  bool source_ahead() const {
-    return pane_.ahead();
-  }
-  /// @brief Why the panel is locked ("" when it is not): the pane is ahead
-  ///        of the model, or the source has never bound (repair state).
-  std::string locked_reason() const;
-  /// @brief The source pane's width asked for (CSS pixels), kept while hidden.
-  float source_width() const {
-    return wanted_source_ > 0.0f ? wanted_source_ : std::max(kMinSourceWidth, (width_ - strip_width()) * 0.4f);
-  }
-  void set_source_width(float width) {
-    wanted_source_ = width;
-    refresh();
-  }
-  /// @brief Where the source pane starts, CSS pixels from the left (its
-  ///        divider with the figure); meaningful while it is shown.
-  float source_x() const {
-    return layout().source.x;
-  }
-  source_pane& pane() {
-    return pane_;
-  }
-  /// @brief Text typed in the pane waits for its pause.
-  bool source_pending() const {
-    return source_shown_ && pane_.pending();
+    return layout_workspace(width_, height_, wanted_strip_, kTabBarHeight);
   }
 
   /// @brief Where the figure is shown: the left side under the tab bar
@@ -267,6 +222,10 @@ class editor_panel {
   inspector& panel() {
     return inspector_;
   }
+  /// @brief A number field (the strip's or the toolbar's) is being typed into.
+  bool number_typing() const {
+    return inspector_.number_typing() || toolbar_.number_typing();
+  }
 
   /// @brief Asks for frames (a change from outside the strip).
   void refresh() {
@@ -282,17 +241,8 @@ class editor_panel {
   inspector inspector_;
   edit_toolbar toolbar_;
   std::optional<layout_box> anchor_; ///< The selection in the figure, for the toolbar.
-  void draw_source(double now_seconds, inspector_events& events);
-  void sync_source(inspector_events& events);
 
   ImGuiContext* context_ = nullptr;
-  source_pane pane_;
-  bool source_shown_ = false;
-  float wanted_source_ = 0.0f; ///< 0: 40 % of the space left of the strip.
-  std::optional<int> pending_line_; ///< A line for the pane's cursor at its next frame.
-  std::optional<edit_target_id> synced_selection_; ///< The selection the pane's cursor last followed.
-  std::string synced_source_; ///< The model source the pane last followed.
-  ImFont* mono_ = nullptr; ///< FiraMono, once its bytes are there.
   ImFont* ui_font_ = nullptr; ///< FiraSans, once its bytes are there.
   panel_appearance appearance_;
   bool appearance_pinned_ = false; ///< set_appearance() was called.

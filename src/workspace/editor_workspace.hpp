@@ -1,7 +1,7 @@
 // MIT License © 2026 Binary Dice Games
 /// @file editor_workspace.hpp
 /// @brief The editor as both hosts drive it: the figure (a live_view), the
-///        editor panel and, later, the source pane, with the pointer and key
+///        editor panel, with the pointer and key
 ///        routing between them, drawn with Dear ImGui's OpenGL3 backend into
 ///        the current GL context (spec/15_web_app/DESIGN.md section 5.1).
 ///        `nymph view` (viewer_window.cpp) and the web editor
@@ -50,13 +50,6 @@ class workspace_host {
     (void)table;
     (void)file_name;
     (void)csv;
-  }
-  /// @brief The workspace would like to be `css_width` x `css_height` CSS
-  ///        pixels: the layout does not fit, or the image size changed. A
-  ///        window grows; a page ignores it.
-  virtual void request_size(float css_width, float css_height) {
-    (void)css_width;
-    (void)css_height;
   }
   /// @brief What a confirmation dialog of the panel decided.
   virtual void decided(editor_panel::decision decision) {
@@ -174,29 +167,20 @@ class editor_workspace {
   void set_host_files(bool on);
 
   /// @brief Shows or hides the editor panel (GL context current).
-  /// @param repair With a source that does not bind, open the panel in
-  ///        repair state (source pane only) instead of refusing.
   /// @return "" when done, else why the source cannot be edited (the panel
   ///         stays hidden).
-  std::string show_panel(bool on, bool repair = false);
+  std::string show_panel(bool on);
 
-  /// @brief Opens `source` as the document, with the panel when `edit`:
-  ///        a source that does not bind opens in repair state (the source
-  ///        pane at the error, the figure empty) when `edit`, and throws
-  ///        nymph::error otherwise. Throws fonts_needed as live_view does.
+  /// @brief Opens `source` as the document, with the panel when `edit`.
+  ///        Throws nymph::error if it does not bind, and fonts_needed as
+  ///        live_view does.
   void open(const std::string& source, bool reset_view, bool edit);
-  /// @brief The panel is in repair state: its source does not bind yet.
-  bool repairing() const {
-    return panel_ != nullptr && panel_->model().repairing();
-  }
-  /// @brief Shows or hides the source pane (with the panel; Ctrl+U).
-  void show_source(bool on, std::optional<int> line = std::nullopt);
   /// @brief Shows the model's source in the figure again after the fonts it
   ///        needed were registered (workspace_host::need_fonts()).
   void retry_view();
-  /// @brief Text typed in the panel or the source pane waits for its pause.
+  /// @brief Text typed in the panel waits for its pause.
   bool pending() const {
-    return panel_ != nullptr && (panel_->panel().pending() || panel_->source_pending());
+    return panel_ != nullptr && panel_->panel().pending();
   }
   bool panel_shown() const {
     return panel_ != nullptr;
@@ -298,8 +282,6 @@ class editor_workspace {
   void figure_right_click(pointer_event::kind type, float x, float y, int button, const layout_box& figure);
   void set_cursor(cursor_shape shape);
   void relayout();
-  void fit_to_image();
-  void ask_size_if_too_small();
   std::optional<layout_box> selection_box() const;
   void draw_figure(int pixel_width, int pixel_height);
   void take_file_requests();
@@ -315,7 +297,6 @@ class editor_workspace {
   std::string file_name_;
   std::string saved_source_;
   std::string status_;
-  std::optional<std::string> repair_source_; ///< The text show_panel() opens in repair state.
   bool host_files_ = false;
   float css_w_ = 0.0f;
   float css_h_ = 0.0f;
@@ -325,15 +306,11 @@ class editor_workspace {
   float strip_wanted_ = kDefaultStripWidth;
   bool panel_drag_ = false; ///< A button went down over the panel and is still held.
   bool figure_drag_ = false; ///< A button went down over the figure and is still held.
-  enum class drag { none, strip, source } divider_drag_ = drag::none; ///< The divider being dragged.
+  enum class drag { none, strip } divider_drag_ = drag::none; ///< The divider being dragged.
   bool pointer_in_panel_ = false;
   std::optional<std::pair<float, float>> right_down_; ///< Where the right button went down in the figure.
   double divider_clicked_at_ = -1.0;
   cursor_shape cursor_ = cursor_shape::arrow;
-  int image_w_ = 0; ///< The image size last shown, to see when the source changes it.
-  int image_h_ = 0;
-  float asked_w_ = 0.0f; ///< The size last asked for a layout that did not fit.
-  float asked_h_ = 0.0f;
   static constexpr double kDoubleClick = 0.4; ///< Seconds between the presses of a double-click.
 };
 

@@ -191,7 +191,7 @@ export class NymphEditor {
     }
     // The panel's text and source fonts; ImGui's built-in font shows until
     // they are here.
-    this.core.ensureFonts(['FiraSans-Regular.ttf', 'FiraMono-Regular.ttf']).then(() => this.schedule(), () => {});
+    this.core.ensureFonts(['FiraSans-Regular.ttf']).then(() => this.schedule(), () => {});
     if (!this.headless) {
       this.attachInput();
       this.observer = new ResizeObserver(() => this.resize());
@@ -219,7 +219,7 @@ export class NymphEditor {
       const text = typeof input === 'string' ? input : new TextDecoder().decode(input);
       status = await this.core.withFonts(() =>
         this.core.withString(text, (p, n) =>
-          this.m._nymph_editor_open(p, n, opts.resetView === false ? 0 : 1, (opts.repair ?? this.options.repair) ? 1 : 0),
+          this.m._nymph_editor_open(p, n, opts.resetView === false ? 0 : 1),
         ),
       );
     }
@@ -247,11 +247,6 @@ export class NymphEditor {
   /** The current YAML, without the view. */
   source() {
     return this.core.string(this.m._nymph_editor_source());
-  }
-
-  /** The source pane's text: ahead of source() while it waits or does not load. */
-  paneText() {
-    return this.core.string(this.m._nymph_editor_pane_text());
   }
 
   /** The YAML with the view on screen in its `view` key: what a save writes. */
@@ -338,23 +333,6 @@ export class NymphEditor {
     this.schedule();
   }
 
-  /**
-   * Shows or hides the YAML source pane beside the figure (Ctrl+U in the
-   * editor); `line` (1-based) puts its cursor there.
-   */
-  showSource(on, line = 0) {
-    if (on) {
-      this.core.ensureFonts(['FiraMono-Regular.ttf']).then(() => this.schedule(), () => {});
-    }
-    this.core.check(this.m._nymph_editor_show_source(on ? 1 : 0, line));
-    this.schedule();
-  }
-
-  /** The source does not bind: only the source pane edits until it does. */
-  repairing() {
-    return !!this.state().repairing;
-  }
-
   // ── Tools (spec/14_editor_workspace/DESIGN.md section 6) ──────────────
 
   /**
@@ -423,7 +401,7 @@ export class NymphEditor {
    * area}`, CSS pixels from the container's top-left corner, `scale` CSS
    * pixels per layout pixel, `area` the part of the editor it is shown in
    * ({left, top, width, height}, which may clip it); null while a data tab
-   * or the repair state hides it (spec/18_collaboration/DESIGN.md section
+   * hides it (spec/18_collaboration/DESIGN.md section
    * 5.3). The `figure` event fires when it changes.
    */
   figureBox() {
@@ -732,9 +710,6 @@ export class NymphEditor {
  * @param {{dark: boolean, accent?: string, accentDark?: string}} [options.appearance]
  *        the panel's look, the page's (setAppearance())
  * @param {boolean} [options.panel] the editor panel (default true)
- * @param {boolean} [options.sourcePane] show the YAML source pane (default false)
- * @param {boolean} [options.repair] open a source that does not bind in repair
- *        state (the source pane at the error) instead of rejecting
  * @param {boolean} [options.headless] no canvas or GL: frames run, nothing is drawn (tests)
  * @param {string|URL} [options.wasmUrl] default: nymph-editor-core.wasm next to this file
  * @param {string|URL} [options.fontBaseUrl] default: ../fonts/
@@ -747,9 +722,6 @@ export async function createEditor(container, options = {}) {
     editor.init();
     if (options.source !== undefined || options.png !== undefined) {
       await editor.open(options.png ?? options.source);
-    }
-    if (options.sourcePane || editor.repairing()) {
-      editor.showSource(true);
     }
   } catch (e) {
     editor.destroy();

@@ -219,47 +219,6 @@ test('Ctrl+S asks the page to save; CSV export goes to the page', async () => {
   await page.context().close();
 });
 
-test('the source pane: typing in it changes the figure', async () => {
-  const page = await open('line', { sourcePane: true });
-  const s = await page.evaluate(() => window.ed.state());
-  assert(s.sourceShown, 'pane shown');
-  // Put the cursor at the end of line 1 of the pane and type a comment line.
-  const paneX = await page.evaluate(() => {
-    const st = window.ed.state();
-    return 1200 - st.stripWidth - 200;
-  });
-  await page.mouse.click(paneX, 46);
-  await idle(page);
-  await page.keyboard.press('End');
-  await page.keyboard.type(' # typed in the pane');
-  await page.waitForTimeout(500);
-  await idle(page);
-  const source = await page.evaluate(() => window.ed.source());
-  assert(source.includes('# typed in the pane'), `the source has the comment:\n${source.slice(0, 200)}`);
-  await page.context().close();
-});
-
-test('copy and paste through the page clipboard', async () => {
-  const page = await open('line', { sourcePane: true });
-  await page.evaluate(() => window.ed.showSource(true, 1));
-  await idle(page);
-  const paneX = await page.evaluate(() => 1200 - window.ed.state().stripWidth - 200);
-  await page.mouse.click(paneX, 46);
-  await idle(page);
-  // The page's paste event hands the clipboard's text over before the key
-  // reaches the pane (ImGui reads its clipboard synchronously).
-  await page.evaluate(() => navigator.clipboard.writeText('# pasted\n'));
-  await page.keyboard.press('Home');
-  await idle(page);
-  await page.keyboard.press('Control+V');
-  await page.waitForTimeout(500);
-  await idle(page);
-  const source = await page.evaluate(() => window.ed.source());
-  const pane = await page.evaluate(() => window.ed.paneText());
-  assert(source.includes("# pasted"), `pasted:\n${pane.slice(0, 200)}`);
-  await page.context().close();
-});
-
 test('tool definitions, agent changes and the view image', async () => {
   const page = await open('flowchart');
   const r = await page.evaluate(() => {

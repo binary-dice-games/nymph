@@ -52,46 +52,25 @@ inline bool divider_hit(float x, float strip_x) {
   return d >= -kDividerGrab && d <= kDividerGrab;
 }
 
-/// @brief The narrowest the source pane can be dragged.
-inline constexpr float kMinSourceWidth = 200.0f;
-
 /// @brief The regions of the window.
 struct workspace_layout {
-  layout_box tabs; ///< The tab bar over the left side and the source pane; empty without tabs.
+  layout_box tabs; ///< The tab bar over the left side; empty without tabs.
   layout_box left; ///< The left side under the tab bar: the figure or a table.
-  layout_box source; ///< The source pane between the left side and the strip; empty when hidden.
   layout_box strip; ///< The editor strip on the right.
 };
 
-/// @brief The source pane's width in a space `space` wide (window less
-///        strip) when `wanted` was asked for: at least kMinSourceWidth,
-///        leaving the figure at least kMinFigureWidth (never negative).
-inline float clamp_source_width(float space, float wanted) {
-  const float upper = space - kMinFigureWidth;
-  float width = wanted < kMinSourceWidth ? kMinSourceWidth : wanted;
-  if (width > upper) {
-    width = upper;
-  }
-  return width < 0.0f ? 0.0f : width;
-}
-
 /// @brief Splits a `width` x `height` window with a strip of
 ///        clamp_strip_width(width, wanted_strip), a tab bar `tab_height`
-///        high (0 for none) over the left side, and, when `wanted_source` >
-///        0, the source pane (spec/15_web_app/DESIGN.md section 5.4) between
-///        the left side and the strip. The left side stays at x = 0: the
-///        figure's draw data fills the bottom-left of the drawable.
-inline workspace_layout layout_workspace(float width, float height, float wanted_strip, float tab_height, float wanted_source = 0.0f) {
+///        high (0 for none) over the left side. The left side stays at x = 0:
+///        the figure's draw data fills the bottom-left of the drawable.
+inline workspace_layout layout_workspace(float width, float height, float wanted_strip, float tab_height) {
   workspace_layout l;
   const float strip = clamp_strip_width(width, wanted_strip);
   const float rest = width - strip > 1.0f ? width - strip : 1.0f;
-  const float source = wanted_source > 0.0f ? clamp_source_width(rest, wanted_source) : 0.0f;
-  const float left_w = rest - source > 1.0f ? rest - source : 1.0f;
   l.strip = {width - strip, 0.0f, strip, height};
   l.tabs = {0.0f, 0.0f, tab_height > 0.0f ? rest : 0.0f, tab_height};
   const float top = tab_height > height ? height : tab_height;
-  l.left = {0.0f, top, left_w, height - top};
-  l.source = source > 0.0f ? layout_box{left_w, top, source, height - top} : layout_box{};
+  l.left = {0.0f, top, rest, height - top};
   return l;
 }
 

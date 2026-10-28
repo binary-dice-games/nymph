@@ -31,7 +31,6 @@ class workspace_tools : public mcp::editor_host {
   /// and, for an agent, who called it.
   void changed(const commit_result& r, const std::string& tool) override;
   void select(const edit_target_id& target) override;
-  std::string locked_reason() const override;
   std::vector<uint8_t> view_image(int max_width, int& width, int& height) override;
 
  private:

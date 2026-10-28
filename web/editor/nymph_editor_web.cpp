@@ -250,19 +250,9 @@ std::u32string utf32(std::string_view text) {
   return out;
 }
 
-/// Shows `source` as a new document (no undo history), the panel as asked;
-/// with `repair`, a source that does not bind opens in repair state.
-void open_source(editor& e, std::string_view source, bool reset_view, bool repair) {
-  const bool shown = e.ws->panel() != nullptr && e.ws->panel()->source_shown();
-  if (repair && e.panel_wanted) {
-    e.ws->open(std::string(source), reset_view, true);
-  } else {
-    e.ws->view().set_source(source, reset_view); // throws before anything changes
-    e.ws->open(std::string(source), reset_view, e.panel_wanted);
-  }
-  if (shown && e.ws->panel() != nullptr) {
-    e.ws->show_source(true);
-  }
+/// Shows `source` as a new document (no undo history), the panel as asked.
+void open_source(editor& e, std::string_view source, bool reset_view) {
+  e.ws->open(std::string(source), reset_view, e.panel_wanted);
   e.last_selection.reset();
 }
 
@@ -368,19 +358,11 @@ EMSCRIPTEN_KEEPALIVE int nymph_editor_set_file_name(const char* name) {
 }
 
 /// @brief Opens `text` as a new document: 0, 1 (does not bind) or 2 (fonts needed).
-EMSCRIPTEN_KEEPALIVE int nymph_editor_open(const char* text, int size, int reset_view, int repair) {
+EMSCRIPTEN_KEEPALIVE int nymph_editor_open(const char* text, int size, int reset_view) {
   return guarded([&] {
     editor& e = get();
     e.host.make_current();
-    open_source(e, std::string_view(text, static_cast<size_t>(size)), reset_view != 0, repair != 0);
-    return kOk;
-  });
-}
-
-/// @brief Shows or hides the source pane; `line` > 0 puts its cursor there.
-EMSCRIPTEN_KEEPALIVE int nymph_editor_show_source(int on, int line) {
-  return guarded([&] {
-    get().ws->show_source(on != 0, line > 0 ? std::optional<int>(line) : std::nullopt);
+    open_source(e, std::string_view(text, static_cast<size_t>(size)), reset_view != 0);
     return kOk;
   });
 }
@@ -559,18 +541,6 @@ EMSCRIPTEN_KEEPALIVE const char* nymph_editor_source() {
   return scratch().c_str();
 }
 
-/// @brief The source pane's text (it differs from nymph_editor_source()
-///        while typing waits for its pause, or does not bind).
-EMSCRIPTEN_KEEPALIVE const char* nymph_editor_pane_text() {
-  scratch().clear();
-  guarded([&] {
-    editor& e = get();
-    scratch() = e.ws->panel() != nullptr ? e.ws->panel()->pane().text() : std::string();
-    return kOk;
-  });
-  return scratch().c_str();
-}
-
 /// @brief The source with the view on screen in its `view` key.
 EMSCRIPTEN_KEEPALIVE const char* nymph_editor_yaml() {
   scratch().clear();
@@ -607,21 +577,17 @@ EMSCRIPTEN_KEEPALIVE const char* nymph_editor_state() {
            {"panel", e.ws->panel_shown()},
            {"stripWidth", e.ws->strip_width()},
            {"tabHeight", e.ws->tab_height()},
-           {"repairing", e.ws->repairing()},
            {"viewWantsFrame", e.ws->view().wants_frame()},
            {"panelWantsFrame", e.ws->panel() != nullptr && e.ws->panel()->wants_frame()},
-           {"sourceShown", e.ws->panel() != nullptr && e.ws->panel()->source_shown()},
-           {"locked", e.ws->panel() != nullptr ? e.ws->panel()->locked_reason() : std::string()},
            {"wantsKeyboard", e.ws->wants_keyboard()}};
     // Where the figure's layout is drawn, for overlays
-    // (spec/18_collaboration/DESIGN.md section 5.3): null while a data tab
-    // or the repair state hides it.
+    // (spec/18_collaboration/DESIGN.md section 5.3): null while a data tab hides it.
     j["figure"] = json();
     {
       const view_geometry g = e.ws->view().geometry();
       const editor_panel* p = e.ws->panel();
       const layout_box box = p != nullptr ? p->figure_box() : layout_box{0.0f, 0.0f, 1.0f, 1.0f};
-      if (g.layout_width > 0.0f && !box.empty() && !e.ws->repairing()) {
+      if (g.layout_width > 0.0f && !box.empty()) {
         const ImVec2 off = e.ws->figure_offset();
         j["figure"] = json{
             {"x", box.x + off.x},

@@ -5,8 +5,10 @@
 ///        shortcuts, and the save and CSV requests it makes of its host.
 #include <gtest/gtest.h>
 #include <cmath>
+#include <imgui_internal.h>
 #include <string>
 #include <vector>
+#include "edit/field_value.hpp"
 #include "workspace/editor_workspace.hpp"
 
 namespace bdg::nymph {
@@ -34,9 +36,6 @@ struct fake_host : workspace_host {
   void request_csv_export(const std::string& table, const std::string& file_name, const std::string& csv) override {
     exports.push_back(table + "|" + file_name + "|" + csv);
   }
-  void request_size(float w, float h) override {
-    sizes.emplace_back(w, h);
-  }
   void changed(const commit_result& r) override {
     changes.push_back(r);
   }
@@ -44,7 +43,6 @@ struct fake_host : workspace_host {
   int saves = 0;
   std::vector<std::string> imports;
   std::vector<std::string> exports;
-  std::vector<std::pair<float, float>> sizes;
   std::vector<commit_result> changes;
 };
 
@@ -84,14 +82,85 @@ TEST_F(workspace_fixture, LaysOutTheFigureLeftOfTheStripUnderTheTabs) {
   EXPECT_FLOAT_EQ(figure.y, editor_panel::kTabBarHeight);
 }
 
+TEST_F(workspace_fixture, ASourceThatDoesNotBindIsRefusedForEditing) {
+  fake_host other;
+  editor_workspace ws2(other, view_options{view_fit::fill, /*cpu_textures=*/true, true}, "", workspace_gl{});
+  ws2.resize(900.0f, 400.0f, 1.0f);
+  EXPECT_THROW(ws2.open("root: {type: Plot, bogus: 1}", true, true), std::exception);
+  EXPECT_EQ(ws2.panel(), nullptr);
+}
+
+TEST_F(workspace_fixture, NumberFieldsTakeTheKeyboardOneAfterAnotherAndEnterIsReleased) {
+  ws->resize(900.0f, 1100.0f, 1.5f);
+  ws->panel()->model().select(edit_target_id{"image", ""});
+  ws->panel()->refresh();
+  run_frames(6);
+  const workspace_layout l = ws->panel()->layout();
+  const float x = l.strip.x + 200.0f;
+  ImGuiContext& g = *ws->panel()->imgui_context();
+  // The widgets of the strip under the pointer, top to bottom (moves only).
+  std::vector<float> tops;
+  ImGuiID last = 0;
+  for (float y = 400.0f; y < l.strip.height; y += 2.0f) {
+    ws->pointer({pointer_event::kind::move, x, y, 0});
+    run_frames(2);
+    if (g.HoveredId != 0 && g.HoveredId != last) {
+      tops.push_back(y);
+    }
+    last = g.HoveredId;
+  }
+  const auto type_digits = [&](const char* digits) {
+    for (const char* c = digits; *c != 0; ++c) {
+      ws->key(window_key::other, key_mods{}, true, false); // a digit: its key, then its character
+      ws->text(static_cast<char32_t>(*c));
+      ws->key(window_key::other, key_mods{}, false, false);
+      run_frames(2);
+    }
+  };
+  const char* const values[] = {"650", "500"};
+  size_t typed = 0;
+  for (size_t i = 1; i < tops.size() && typed < 2; ++i) { // the first is the "All fields" header
+    click(x, tops[i] + 10.0f);
+    if (!ws->panel()->number_typing()) {
+      continue;
+    }
+    type_digits(values[typed]);
+    EXPECT_TRUE(ws->panel()->number_typing()) << "a digit closed the field";
+    EXPECT_TRUE(ws->panel()->wants_keyboard());
+    ++typed;
+  }
+  ASSERT_EQ(typed, 2u) << "width and height take the keyboard one after the other";
+  ws->key(window_key::enter, key_mods{}, true, false);
+  run_frames(2);
+  ws->key(window_key::enter, key_mods{}, false, false);
+  run_frames(3);
+  // Enter's release came after the field was left: the panel must still see it.
+  EXPECT_FALSE(g.IO.KeysData[ImGuiKey_Enter - ImGuiKey_NamedKey_BEGIN].Down);
+}
+
+TEST_F(workspace_fixture, ChangingTheImageSizeKeepsTheCanvas) {
+  ws->view().set_fit(view_fit::natural);
+  run_frames(3);
+  const layout_box before = ws->panel()->figure_box();
+  ws->panel()->model().select(edit_target_id{"image", ""});
+  ASSERT_TRUE(ws->panel()->model().commit("width", encode_int(700)).ok);
+  inspector_events events;
+  events.source = ws->panel()->model().source();
+  ws->apply_change(commit_result{.ok = true, .source = *events.source}, "");
+  run_frames(3);
+  const layout_box after = ws->panel()->figure_box();
+  EXPECT_FLOAT_EQ(after.width, before.width);
+  EXPECT_FLOAT_EQ(after.height, before.height);
+  EXPECT_FLOAT_EQ(ws->view().geometry().layout_width, 700.0f); // the image changed, not the canvas
+}
+
 TEST_F(workspace_fixture, GoesIdleWhenNothingHappens) {
   run_frames(12);
   EXPECT_FALSE(ws->view().wants_frame());
   EXPECT_FALSE(ws->panel()->wants_frame());
-  // Also with a selection (the toolbar is shown) and the source pane.
+  // Also with a selection (the toolbar is shown).
   ws->panel()->model().select(edit_target_id{"root", ""});
   ws->panel()->refresh();
-  ws->show_source(true);
   run_frames(30);
   EXPECT_FALSE(ws->wants_frame());
 }

@@ -23,7 +23,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - The web app at https://binary-dice-games.github.io/nymph/: open nymph YAML and PNG files from the computer (file picker, drag and drop, paste), a URL, Google Drive (when the site is set up for it), a shared link, Recent or a template; view them live; edit them with the editor of `nymph view --edit`; save back to the file (Chrome, Edge) or Drive, or download YAML or PNG; copy a link that reopens the chart or HTML that embeds it. Unsaved changes are kept as drafts; the app installs, opens `.yaml` files from the system and works offline. Phones and tablets get the viewer only.
 - The editor module for web pages: `editor/nymph-editor.js` (`createEditor()`), a second WebAssembly module next to the viewer's, with the editor tools as a JavaScript API (`tool()`), attributed changes and undo groups.
-- `nymph view --edit` and the web editor: a source pane (`Ctrl+U`, or the **Source** tab button) shows the YAML beside the figure, highlighted, with line numbers, folding and find / replace, in step with the panel both ways; a file that does not load opens at its error there instead of failing.
 - `nymph view --edit`: the undo and redo buttons name the change they undo or redo; `Ctrl+S` asks to save.
 - Chart themes: `image.theme` picks one of ten built-in themes (`light`, `dark`, `classic`, `forest`, `midnight`, `ocean`, `paper`, `pastel`, `slate`, `sunset`) that fills every field the chart leaves out, by element type (`FlowNode:fill_color`), slot (`uml:color`) or field name; values the chart writes, on an element or an enclosing one, win.
 - `image.background` and `image.palette` (the colours series take in turn).
@@ -62,6 +61,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- `nymph view --edit`: after accepting a number with Enter, the next number field no longer ends its edit at the first key.
+- `nymph view --edit`: the image is shown at its own size on a canvas, as in the web editor; changing the image width or height no longer resizes the window.
 - Editor: number fields use ImGui's own drag-or-type control; click one to type a value, repeatedly, without it losing the keyboard.
 
 - Web editor: choosing a font that is fetched on demand (e.g. Fira Sans Italic) no longer fails with "font is not embedded in this build".

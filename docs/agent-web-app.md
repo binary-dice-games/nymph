@@ -49,8 +49,7 @@ chart format itself.
 - Ask before replacing a chart wholesale, or before `app_new_document`
   while a chart with unsaved changes is open.
 - The user's own edits win. If a write is refused because the user is
-  typing in the source pane, wait and try again later; do not work around
-  it.
+  mid-edit, wait and try again later; do not work around it.
 - `app_save`, `app_download`, `app_copy_link`, `app_open_url` and the other
   actions that leave the browser tab show the user a confirmation first.
   Use them only when the user asked for them.

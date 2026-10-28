@@ -238,6 +238,64 @@ TEST(number_box, ASingleClickStaysTypingUntilItIsAccepted) {
   EXPECT_DOUBLE_EQ(rig.value, 88.0);
 }
 
+/// Two boxes in one window, as the image's width and height are.
+struct two_box_rig {
+  headless_imgui gui;
+  number_box box;
+  number_box_options options;
+  double values[2] = {10.0, 20.0};
+  ImVec2 center[2];
+
+  void frame() {
+    gui.frame([&] {
+      for (int i = 0; i < 2; ++i) {
+        ImGui::PushID(i);
+        ImGui::SetNextItemWidth(120.0f);
+        box.draw("##v", values[i], options);
+        center[i] = ImVec2(
+            (ImGui::GetItemRectMin().x + ImGui::GetItemRectMax().x) * 0.5f,
+            (ImGui::GetItemRectMin().y + ImGui::GetItemRectMax().y) * 0.5f);
+        ImGui::PopID();
+      }
+    });
+  }
+  void click(int i) {
+    gui.input([&](ImGuiIO& io) { io.AddMousePosEvent(center[i].x, center[i].y); });
+    frame();
+    gui.input([&](ImGuiIO& io) { io.AddMouseButtonEvent(0, true); });
+    frame();
+    gui.input([&](ImGuiIO& io) { io.AddMouseButtonEvent(0, false); });
+    frame();
+    frame();
+    frame();
+  }
+  void type(const char* text) {
+    gui.input([&](ImGuiIO& io) { io.AddInputCharactersUTF8(text); });
+    frame();
+  }
+};
+
+TEST(number_box, ClickingAnotherBoxWhileTypingStartsTypingThere) {
+  two_box_rig rig;
+  rig.options.integer = true;
+  rig.frame();
+  rig.click(0);
+  ASSERT_TRUE(rig.box.typing());
+  rig.type("5");
+  rig.click(1); // no Enter: the click elsewhere accepts the first
+  EXPECT_DOUBLE_EQ(rig.values[0], 5.0); // the first was accepted by the click
+  EXPECT_TRUE(rig.box.typing()) << "the second box has the keyboard";
+  rig.type("7");
+  rig.frame();
+  EXPECT_TRUE(rig.box.typing()) << "typing a character keeps the box open";
+  rig.gui.input([&](ImGuiIO& io) { io.AddKeyEvent(ImGuiKey_Enter, true); });
+  rig.frame();
+  rig.gui.input([&](ImGuiIO& io) { io.AddKeyEvent(ImGuiKey_Enter, false); });
+  rig.frame();
+  EXPECT_FALSE(rig.box.typing());
+  EXPECT_DOUBLE_EQ(rig.values[1], 7.0); // typed over the selected text
+}
+
 TEST(number_box, EscapeCancelsTheTypedValueAndLimitsClampIt) {
   box_rig rig;
   rig.options.min = 1.0;

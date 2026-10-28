@@ -37,9 +37,7 @@ zoom, hover for values, double-click to fit.
 [`nymph view --edit`](viewer.md#editing-in-the-window): click a text or an
 element to select it, change it in the panel or the floating toolbar,
 right-click to add, move or delete elements, and edit the data tables in
-their tabs. **Source** (or `Ctrl+U`) shows the YAML beside the chart, kept
-in step both ways; `Ctrl+F` / `Ctrl+H` find and replace in it. `Ctrl+Z` /
-`Ctrl+Y` undo and redo; going back to View keeps the chart and its zoom but
+their tabs. `Ctrl+Z` / `Ctrl+Y` undo and redo; going back to View keeps the chart and its zoom but
 not the undo history.
 
 **Theme** (the panel's button, or **⋯ > Theme…**) gives the chart a
@@ -100,7 +98,6 @@ offers **Reload** (it never reloads by itself).
 |------|------|
 | `Ctrl+O`, `Ctrl+S` | Open, save |
 | `E` | Edit (in View) |
-| `Ctrl+U` | The YAML source |
 | `Ctrl+Z`, `Ctrl+Y` | Undo, redo |
 | `Delete`, `Ctrl+D`, `Alt+↑/↓` | Delete, duplicate, move the selected element |
 | `Ctrl+Shift+A` | The Agents panel |
