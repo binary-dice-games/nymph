@@ -152,7 +152,7 @@ export async function writeHandle(handle, bytes) {
 /**
  * The nymph source a PNG carries (its `nymph` iTXt chunk), or null. Read
  * here, not by the module, so a source that does not load can still be
- * shown for repair.
+ * reported.
  */
 export async function pngSource(bytes) {
   if (!isPng(bytes)) {

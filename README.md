@@ -203,7 +203,7 @@ carries its source: `bdg::nymph::extract_source(png)` returns it.
 | [spec/11_cross_browser_extension/PLAN.md](spec/11_cross_browser_extension/PLAN.md) | Its implementation steps and tests |
 | [spec/14_editor_workspace/DESIGN.md](spec/14_editor_workspace/DESIGN.md) | Editor workspace: resizable panel, adding and removing elements, data table tabs, the editor as an MCP server |
 | [spec/14_editor_workspace/PLAN.md](spec/14_editor_workspace/PLAN.md) | Its implementation steps and tests |
-| [spec/15_web_app/DESIGN.md](spec/15_web_app/DESIGN.md), [PLAN.md](spec/15_web_app/PLAN.md) | The web app: editor in a second WebAssembly module, source pane, commands for agents; its steps |
+| [spec/15_web_app/DESIGN.md](spec/15_web_app/DESIGN.md), [PLAN.md](spec/15_web_app/PLAN.md) | The web app: editor in a second WebAssembly module, commands for agents; its steps |
 | [spec/16_mermaid_import/DESIGN.md](spec/16_mermaid_import/DESIGN.md), [PLAN.md](spec/16_mermaid_import/PLAN.md) | Mermaid import: mermaid read on every entry point, converted to nymph YAML; outputs stay PNG or YAML; its steps |
 | [spec/17_agent_connectors/DESIGN.md](spec/17_agent_connectors/DESIGN.md), [PLAN.md](spec/17_agent_connectors/PLAN.md) | Agent connectors: the user's own agent reaches the web app through `nymph mcp` pairing or WebMCP, no API keys; its steps |
 | [spec/18_collaboration/DESIGN.md](spec/18_collaboration/DESIGN.md), [PLAN.md](spec/18_collaboration/PLAN.md) | Live collaboration over WebRTC with no server: owner-only editing, a shared whiteboard, standalone session and whiteboard packages; its steps |

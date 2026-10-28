@@ -99,45 +99,7 @@ editor_model::editor_model(std::string source) : source_(std::move(source)), ori
   refresh();
 }
 
-editor_model::editor_model(std::string source, repair_t) : source_(std::move(source)), original_(source_) {
-  try {
-    refresh();
-  } catch (const error& e) {
-    repairing_ = true;
-    repair_error_ = e.what();
-    repair_line_ = e.line();
-    repair_column_ = e.column();
-    // Something to stand on until the text binds; nothing reads it.
-    figure_ = std::make_unique<figure>(bind_source("root: {type: Label, text: \"\"}\n", builtin_registry()));
-  }
-}
-
 editor_model::~editor_model() = default;
-
-int editor_model::element_line(std::string_view path) const {
-  if (repairing_) {
-    return 0;
-  }
-  const auto paths = element_paths(figure_->root);
-  const auto it = paths.find(path);
-  return it != paths.end() ? it->second->line : 0;
-}
-
-std::string editor_model::element_at_line(int line) const {
-  if (repairing_) {
-    return {};
-  }
-  std::string best;
-  int best_line = 0;
-  for (const auto& [path, n] : element_paths(figure_->root)) {
-    // The latest start at or before the line; on a tie the deeper path.
-    if (n->line > 0 && n->line <= line && (n->line > best_line || (n->line == best_line && path.size() > best.size()))) {
-      best = path;
-      best_line = n->line;
-    }
-  }
-  return best;
-}
 
 void editor_model::refresh() {
   figure_ = std::make_unique<figure>(bind_source(source_, builtin_registry()));
@@ -253,9 +215,6 @@ commit_result editor_model::fail(const std::string& message, int line, int colum
 }
 
 commit_result editor_model::apply(std::string next, const std::string& key, bool merge) {
-  if (repairing_ && key != "source") {
-    return fail("fix the source first: " + repair_error_, repair_line_, repair_column_);
-  }
   if (const std::optional<source_problem> problem = find_source_problem(next)) {
     return fail(problem->message, problem->line, problem->column);
   }
@@ -287,12 +246,7 @@ commit_result editor_model::apply(std::string next, const std::string& key, bool
   const std::string label = group_ ? group_->label : !label_.empty() ? label_ : change_label(key);
   const std::string origin = group_ ? group_->origin : origin_;
   const bool merged = merge && key == last_key_ && !undo_.empty();
-  if (repairing_) {
-    // The text that did not bind is no state to go back to: the history
-    // starts here.
-    repairing_ = false;
-    repair_error_.clear();
-  } else if (group_ && group_->pushed) {
+  if (group_ && group_->pushed) {
     // One entry for the whole group: its first change pushed it.
   } else if (!merged) {
     undo_.push_back(undo_entry{source_, label, origin});

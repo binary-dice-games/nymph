@@ -36,9 +36,6 @@ struct view_request {
   std::string mermaid_kind; ///< The mermaid keyword when the input was mermaid, else empty.
   int width = 0; ///< The layout size of the source (`image`), CSS pixels.
   int height = 0;
-  /// With --edit, a source that does not bind opens in repair state
-  /// (spec/15_web_app/DESIGN.md section 5.4): why it does not, else "".
-  std::string repair;
 };
 
 /// @brief A window size in screen coordinates.

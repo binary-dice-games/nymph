@@ -149,33 +149,17 @@ test('CSV export and import go through the page', async () => {
   assert(error instanceof NymphError, 'a CSV that breaks the chart is refused');
 });
 
-test('a broken source opens in repair state with repair: true', async () => {
+test('a broken source is refused and the document stays', async () => {
+  const before = editor.source();
   const broken = 'root:\n  type: Plot\n  children:\n    - {type: PlotLine, ys: [1, 2], bogus: 3}\n';
-  await editor.open(broken, { repair: true });
-  editor.frame(2);
-  const s = editor.state();
-  assertEq(s.repairing, true, 'repairing');
-  assertEq(s.sourceShown, true, 'source pane shown');
-  assert(s.locked.length > 0, 'locked');
   let error = null;
   try {
-    editor.tool('editor_set_fields', { path: 'root', fields: { title: 'x' } });
+    await editor.open(broken);
   } catch (e) {
     error = e;
   }
-  assert(error instanceof NymphError, 'agent writes refused while repairing');
-  await editor.open(await example('line'));
-  assertEq(editor.state().repairing, false, 'a good source is not in repair');
-});
-
-test('the source pane opens and closes', async () => {
-  await editor.open(await example('line'));
-  editor.showSource(true, 3);
-  editor.frame(2);
-  assertEq(editor.state().sourceShown, true, 'shown');
-  editor.showSource(false);
-  editor.frame(1);
-  assertEq(editor.state().sourceShown, false, 'hidden');
+  assert(error instanceof NymphError, 'a source that does not load is refused');
+  assertEq(editor.source(), before, 'the document is unchanged');
 });
 
 let failed = 0;

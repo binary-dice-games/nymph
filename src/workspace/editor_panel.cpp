@@ -69,18 +69,8 @@ ImGuiKey imgui_key(window_key key) {
   }
 }
 
-editor_panel::editor_panel(std::string source, std::string file_name, const char* glsl_version, bool repair)
-    : model_(std::move(source), editor_model::repair_t{}), file_name_(std::move(file_name)) {
-  if (model_.repairing() && !repair) {
-    throw error(model_.repair_line(), model_.repair_column(), model_.repair_error());
-  }
-  pane_.reset(model_.source());
-  synced_source_ = model_.source();
-  if (model_.repairing()) {
-    source_shown_ = true;
-    pending_line_ = std::max(1, model_.repair_line());
-    pane_.refused(model_.repair_line(), model_.repair_column(), model_.repair_error());
-  }
+editor_panel::editor_panel(std::string source, std::string file_name, const char* glsl_version)
+    : model_(std::move(source)), file_name_(std::move(file_name)) {
   const panel_context_scope scope(nullptr);
   context_ = ImGui::CreateContext();
   ImGui::SetCurrentContext(context_);
@@ -137,8 +127,7 @@ void editor_panel::set_theme(const std::string& name) {
 }
 
 void editor_panel::check_fonts() {
-  if ((ui_font_ == nullptr && !font_data("FiraSans-Regular.ttf").empty()) ||
-      (mono_ == nullptr && !font_data("FiraMono-Regular.ttf").empty())) {
+  if (ui_font_ == nullptr && !font_data("FiraSans-Regular.ttf").empty()) {
     refresh();
   }
 }
@@ -153,7 +142,6 @@ void editor_panel::set_appearance(const panel_appearance& appearance) {
 
 void editor_panel::apply_appearance(const panel_appearance& appearance) {
   appearance_ = appearance;
-  pane_.set_palette(source_palette(appearance));
   const panel_context_scope scope(context_);
   apply_panel_style(ImGui::GetStyle(), appearance);
   refresh();
@@ -239,90 +227,7 @@ bool editor_panel::ask_close() {
 }
 
 bool editor_panel::wants_frame() const {
-  return frames_left_ > 0 || inspector_.pending() || inspector_.number_typing() || toolbar_.number_typing() || (source_shown_ && pane_.waiting());
-}
-
-std::string editor_panel::locked_reason() const {
-  if (model_.repairing()) {
-    return "fix the source first: " + model_.repair_error();
-  }
-  if (pane_.ahead()) {
-    return "the source text does not load yet: " + pane_.error();
-  }
-  return {};
-}
-
-void editor_panel::show_source(bool on, std::optional<int> line) {
-  if (model_.repairing()) {
-    on = true; // the only way to fix it
-  }
-  source_shown_ = on;
-  if (on && line) {
-    pending_line_ = line;
-  }
-  refresh();
-}
-
-void editor_panel::draw_source(double now_seconds, inspector_events& events) {
-  if (!source_shown_) {
-    return;
-  }
-  const workspace_layout regions = layout();
-  ImGui::SetNextWindowPos(ImVec2(regions.source.x, regions.source.y), ImGuiCond_Always);
-  ImGui::SetNextWindowSize(ImVec2(regions.source.width, regions.source.height), ImGuiCond_Always);
-  ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.0f, 0.0f));
-  ImGui::Begin(
-      "##nymph_source", nullptr,
-      ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoMove |
-          ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoBringToFrontOnFocus | ImGuiWindowFlags_NoScrollbar |
-          ImGuiWindowFlags_NoScrollWithMouse);
-  ImGui::PopStyleVar();
-  if (pending_line_) {
-    pane_.go_to_line(*pending_line_);
-    pane_.editor().SetFocus();
-    pending_line_.reset();
-  }
-  const std::optional<std::string> typed = pane_.draw(now_seconds, mono_, 14.0f);
-  ImGui::End();
-  if (typed) {
-    model_.set_label("Edit source");
-    const commit_result r = model_.set_source(*typed);
-    model_.set_label("");
-    if (r.ok) {
-      events.source = r.source;
-      pane_.accepted(r.source);
-      synced_source_ = r.source;
-      inspector_.set_error("");
-    } else {
-      pane_.refused(r.line, r.column, r.error);
-    }
-    refresh();
-  }
-  if (const std::optional<int> line = pane_.take_cursor_line(now_seconds)) {
-    const std::string path = model_.element_at_line(*line);
-    const std::optional<edit_target_id>& selected = model_.selection();
-    if (!path.empty() && (!selected || selected->element != path)) {
-      events.select = edit_target_id{path, ""};
-      synced_selection_ = events.select;
-    }
-  }
-}
-
-void editor_panel::sync_source(inspector_events& events) {
-  (void)events;
-  if (model_.source() != synced_source_ && !pane_.ahead() && !pane_.pending()) {
-    pane_.follow(model_.source());
-    synced_source_ = model_.source();
-  }
-  const std::optional<edit_target_id>& selected = model_.selection();
-  const bool same = selected.has_value() == synced_selection_.has_value() &&
-      (!selected || (selected->element == synced_selection_->element));
-  if (!same) {
-    synced_selection_ = selected;
-    if (selected && source_shown_) {
-      pane_.go_to_line(model_.element_line(selected->element));
-    }
-  }
+  return frames_left_ > 0 || inspector_.pending() || inspector_.number_typing() || toolbar_.number_typing();
 }
 
 inspector_events editor_panel::frame(double now_seconds, const std::vector<edit_element>& tree, const std::string& status) {
@@ -347,22 +252,10 @@ inspector_events editor_panel::frame(double now_seconds, const std::vector<edit_
       refresh(); // a few frames more, drawn with it
     }
   }
-  if (mono_ == nullptr) {
-    // The pane's monospace font, once its bytes are there (embedded
-    // natively; fetched on demand by the web page).
-    const std::span<const uint8_t> mono = font_data("FiraMono-Regular.ttf");
-    if (!mono.empty()) {
-      ImFontConfig config;
-      config.FontDataOwnedByAtlas = false;
-      mono_ = io.Fonts->AddFontFromMemoryTTF(const_cast<uint8_t*>(mono.data()), static_cast<int>(mono.size()), 14.0f, &config);
-      refresh();
-    }
-  }
   if (!headless_) {
     ImGui_ImplOpenGL3_NewFrame();
   }
   ImGui::NewFrame();
-  const bool locked = !locked_reason().empty();
   const workspace_layout regions = layout();
   constexpr ImGuiWindowFlags kFixed = ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize |
       ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoSavedSettings |
@@ -374,17 +267,13 @@ inspector_events editor_panel::frame(double now_seconds, const std::vector<edit_
     ImGui::SetNextWindowPos(ImVec2(regions.left.x, regions.left.y), ImGuiCond_Always);
     ImGui::SetNextWindowSize(ImVec2(regions.left.width, regions.left.height), ImGuiCond_Always);
     ImGui::Begin("##nymph_table", nullptr, kFixed);
-    ImGui::BeginDisabled(locked);
     grid_.draw(model_, *tab_, table_events);
-    ImGui::EndDisabled();
     ImGui::End();
   }
   // The floating toolbar over the figure, first: the fields below show
   // what it changed.
   const layout_box toolbar_before = toolbar_.rect();
-  ImGui::BeginDisabled(locked);
-  const inspector_events tool_events = toolbar_.draw(model_, inspector_.menu(), figure_box(), locked ? std::nullopt : anchor_);
-  ImGui::EndDisabled();
+  const inspector_events tool_events = toolbar_.draw(model_, inspector_.menu(), figure_box(), anchor_);
   const layout_box toolbar_after = toolbar_.rect();
   if (toolbar_after.x != toolbar_before.x || toolbar_after.y != toolbar_before.y ||
       toolbar_after.width != toolbar_before.width || toolbar_after.height != toolbar_before.height) {
@@ -393,24 +282,7 @@ inspector_events editor_panel::frame(double now_seconds, const std::vector<edit_
   ImGui::SetNextWindowPos(ImVec2(regions.strip.x, 0.0f), ImGuiCond_Always);
   ImGui::SetNextWindowSize(ImVec2(regions.strip.width, height_), ImGuiCond_Always);
   ImGui::Begin("##nymph_editor", nullptr, kFixed);
-  inspector_events events;
-  if (model_.repairing()) {
-    ImGui::TextWrapped("This source does not load. Fix it in the source pane; the editor opens once it does.");
-    ImGui::Spacing();
-    ImGui::PushStyleColor(ImGuiCol_Text, IM_COL32(200, 40, 40, 255));
-    ImGui::TextWrapped("%s", pane_.error().empty() ? model_.repair_error().c_str() : pane_.error().c_str());
-    ImGui::PopStyleColor();
-  } else {
-    if (locked) {
-      ImGui::PushStyleColor(ImGuiCol_Text, IM_COL32(200, 40, 40, 255));
-      ImGui::TextWrapped("%s", locked_reason().c_str());
-      ImGui::PopStyleColor();
-      ImGui::Separator();
-    }
-    ImGui::BeginDisabled(locked);
-    events = inspector_.draw(model_, tree, status);
-    ImGui::EndDisabled();
-  }
+  inspector_events events = inspector_.draw(model_, tree, status);
   if (tool_events.source && !events.source) {
     events.source = tool_events.source;
     events.paths = tool_events.paths;
@@ -428,8 +300,6 @@ inspector_events editor_panel::frame(double now_seconds, const std::vector<edit_
   grid_.dialogs(model_, table_events);
   draw_table_dialogs(table_events);
   ImGui::End();
-  draw_source(now_seconds, events);
-  sync_source(events);
   // A table change: shown like any other (the inspector's own come first).
   if (table_events.source && !events.source) {
     events.source = table_events.source;
@@ -452,7 +322,7 @@ inspector_events editor_panel::frame(double now_seconds, const std::vector<edit_
       select_tab_ = true;
     }
   }
-  wants_keyboard_ = io.WantTextInput || source_focused();
+  wants_keyboard_ = io.WantTextInput;
   modal_open_ = ImGui::IsPopupOpen(kSaveDialog) || ImGui::IsPopupOpen(kCloseDialog);
   popup_open_ = ImGui::IsPopupOpen(nullptr, ImGuiPopupFlags_AnyPopupId | ImGuiPopupFlags_AnyPopupLevel);
   ImGui::Render();
@@ -525,17 +395,6 @@ void editor_panel::draw_tabs(inspector_events& events) {
         }
         ImGui::EndPopup();
       }
-    }
-    if (source_shown_) {
-      ImGui::PushStyleColor(ImGuiCol_Tab, ImGui::GetStyleColorVec4(ImGuiCol_TabSelected));
-    }
-    const bool toggle_source = ImGui::TabItemButton("Source", ImGuiTabItemFlags_Trailing | ImGuiTabItemFlags_NoTooltip);
-    if (source_shown_) {
-      ImGui::PopStyleColor();
-    }
-    ImGui::SetItemTooltip(source_shown_ ? "Hide the YAML source (Ctrl+U)" : "Show the YAML source beside the chart (Ctrl+U)");
-    if (toggle_source) {
-      show_source(!source_shown_);
     }
     if (ImGui::TabItemButton("+", ImGuiTabItemFlags_Trailing | ImGuiTabItemFlags_NoTooltip)) {
       const std::vector<data_table> tables = model_.tables();

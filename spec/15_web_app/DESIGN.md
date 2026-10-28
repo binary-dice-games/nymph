@@ -572,6 +572,14 @@ class NymphEditor {
 
 ### 5.4 Source pane (`src/workspace/source_pane.*`)
 
+**Removed.** The pane (with its YAML highlighting, the repair state it served,
+the `Ctrl+U` toggle, `showSource()` / `paneText()` and the `sourcePane` /
+`repair` options) was taken out of the editor: typing in it raced with
+parsing, corrupting the text and moving the cursor. A source that does not
+bind is refused when opened for editing; an agent or the user changes the
+source through the panel, the tables or the tools. The rest of this section
+is kept as history and is no longer true.
+
 The YAML text beside the figure, in both hosts. A `TextEditor` from
 ImGuiColorTextEdit drawn in the panel's ImGui context (which already covers
 the whole window), so its keys, clipboard, popups and theme are the

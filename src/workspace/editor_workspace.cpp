@@ -85,25 +85,7 @@ void editor_workspace::set_host_files(bool on) {
 }
 
 void editor_workspace::open(const std::string& source, bool reset_view, bool edit) {
-  try {
-    view_.set_source(source, reset_view);
-  } catch (const fonts_needed&) {
-    throw;
-  } catch (const error&) {
-    if (!edit) {
-      throw;
-    }
-    // Repair state: the panel holds the text, the figure shows nothing.
-    show_panel(false);
-    saved_source_ = source;
-    repair_source_ = source;
-    const std::string refused = show_panel(true, true);
-    repair_source_.reset();
-    if (!refused.empty()) {
-      throw;
-    }
-    return;
-  }
+  view_.set_source(source, reset_view);
   show_panel(false);
   saved_source_ = source;
   if (edit) {
@@ -115,7 +97,7 @@ void editor_workspace::open(const std::string& source, bool reset_view, bool edi
 }
 
 void editor_workspace::retry_view() {
-  if (panel_ == nullptr || panel_->model().repairing()) {
+  if (panel_ == nullptr) {
     return;
   }
   inspector_events events;
@@ -131,21 +113,13 @@ void editor_workspace::retry_view() {
   panel_->refresh();
 }
 
-void editor_workspace::show_source(bool on, std::optional<int> line) {
-  if (panel_ != nullptr) {
-    panel_->show_source(on, line);
-    relayout();
-  }
-}
-
-std::string editor_workspace::show_panel(bool on, bool repair) {
+std::string editor_workspace::show_panel(bool on) {
   if ((panel_ != nullptr) == on) {
     return {};
   }
   if (on) {
     try {
-      const std::string source = repair_source_ ? *repair_source_ : std::string(view_.source());
-      panel_ = std::make_unique<editor_panel>(source, file_name_, glsl_version_.c_str(), repair);
+      panel_ = std::make_unique<editor_panel>(std::string(view_.source()), file_name_, glsl_version_.c_str());
     } catch (const std::exception& e) {
       return e.what();
     }
@@ -252,12 +226,8 @@ void editor_workspace::pointer(const pointer_event& in) {
 bool editor_workspace::divider(pointer_event::kind type, float x, int button) {
   if (divider_drag_ != drag::none) {
     if (type == pointer_event::kind::move) {
-      if (divider_drag_ == drag::strip) {
-        panel_->set_strip_width(css_w_ - x);
-        strip_wanted_ = panel_->wanted_strip_width();
-      } else {
-        panel_->set_source_width(panel_->strip_x() - x);
-      }
+      panel_->set_strip_width(css_w_ - x);
+      strip_wanted_ = panel_->wanted_strip_width();
       relayout();
     } else if (type == pointer_event::kind::up) {
       divider_drag_ = drag::none;
@@ -266,25 +236,20 @@ bool editor_workspace::divider(pointer_event::kind type, float x, int button) {
   }
   const bool free = !panel_drag_ && !panel_->popup_open() && !panel_->modal_open();
   const bool over_strip = free && divider_hit(x, panel_->strip_x());
-  const bool over_source = free && !over_strip && panel_->source_shown() && divider_hit(x, panel_->source_x());
-  set_cursor(over_strip || over_source ? cursor_shape::resize_horizontal : cursor_shape::arrow);
-  if (!(over_strip || over_source) || type != pointer_event::kind::down || button != 0) {
+  set_cursor(over_strip ? cursor_shape::resize_horizontal : cursor_shape::arrow);
+  if (!over_strip || type != pointer_event::kind::down || button != 0) {
     return false;
   }
   const double now = workspace_now();
   if (now - divider_clicked_at_ < kDoubleClick) {
     // A double-click puts the divider back where it starts.
-    if (over_strip) {
-      panel_->set_strip_width(kDefaultStripWidth);
-      strip_wanted_ = kDefaultStripWidth;
-    } else {
-      panel_->set_source_width(0.0f);
-    }
+    panel_->set_strip_width(kDefaultStripWidth);
+    strip_wanted_ = kDefaultStripWidth;
     divider_clicked_at_ = -1.0;
     relayout();
   } else {
     divider_clicked_at_ = now;
-    divider_drag_ = over_strip ? drag::strip : drag::source;
+    divider_drag_ = drag::strip;
   }
   // The figure and the strip see the pointer leave.
   view_.input({pointer_event::kind::leave, 0.0f, 0.0f, 0});
@@ -329,31 +294,12 @@ void editor_workspace::set_cursor(cursor_shape shape) {
 
 key_outcome editor_workspace::key(window_key key, key_mods mods, bool down, bool repeat) {
   const key_event figure_key{imgui_key(key), down, mods.ctrl, mods.shift, mods.alt, false};
-  // Shortcuts that hold wherever the keyboard is (spec/15_web_app/DESIGN.md
-  // section 5.4): the source pane, saving, and the document's undo while
-  // the pane is in step with the model.
+  // Shortcuts that hold wherever the keyboard is: saving.
   if (panel_ != nullptr && mods.ctrl && !mods.alt) {
-    if (key == window_key::u) {
-      if (down && !repeat) {
-        show_source(!panel_->source_shown());
-      }
-      return key_outcome::consumed;
-    }
     if (key == window_key::s && !panel_->modal_open()) {
       if (down && !repeat) {
         flush_pending();
         host_.request_save();
-      }
-      return key_outcome::consumed;
-    }
-    const bool undo_key = key == window_key::z || key == window_key::y;
-    if (undo_key && panel_->source_focused() && !panel_->source_ahead() && !panel_->modal_open()) {
-      if (down) {
-        if (key == window_key::y || mods.shift) {
-          redo();
-        } else {
-          undo();
-        }
       }
       return key_outcome::consumed;
     }
@@ -488,7 +434,7 @@ void editor_workspace::draw_figure(int pixel_width, int pixel_height) {
   // The figure's draw data fills the bottom-left of the drawable (OpenGL
   // counts from the bottom), which is the left side under the tab bar. A
   // data tab hides it.
-  if (last_ != nullptr && (panel_ == nullptr || (!panel_->figure_box().empty() && !panel_->model().repairing()))) {
+  if (last_ != nullptr && (panel_ == nullptr || !panel_->figure_box().empty())) {
     // A layout of another size than the box (view_fit::natural in a live
     // session, spec/18_collaboration/DESIGN.md section 6.4, or a fit that
     // fell back to the source size) is drawn from the box's top-left corner,

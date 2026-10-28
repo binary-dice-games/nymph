@@ -446,7 +446,6 @@ function showDocument() {
   // A live chart is the owner's: a guest views it (spec/18_collaboration).
   const guest = app.doc?.origin.kind === 'collab';
   $('mode-edit').parentElement.hidden = !device.directEditing || guest;
-  $('btn-source').hidden = !device.directEditing || guest;
   $('mode-edit').disabled = !edit.ok;
   $('mode-edit').title = edit.ok ? 'Edit the chart (E). Undo history is not kept when you go back to View.' : edit.why;
   // The mobile page saves nothing (nothing is ever modified there): its
@@ -474,7 +473,6 @@ function updateTitle() {
   document.title = `${doc.modified ? '• ' : ''}${doc.name} — nymph`;
   $('mode-view').setAttribute('aria-pressed', String(app.mode === 'view'));
   $('mode-edit').setAttribute('aria-pressed', String(app.mode === 'edit'));
-  $('btn-source').setAttribute('aria-pressed', String(app.mode === 'edit' && !!app.editor?.state().sourceShown));
   $('btn-save').title = doc.savesInPlace ? 'Save (Ctrl+S)' : 'Save: download the file (Ctrl+S)';
 }
 
@@ -494,7 +492,7 @@ function originText(doc) {
 }
 
 /** Shows the document in `mode`, switching modules as needed (section 4). */
-async function showMode(mode, { force = false, sourceLine } = {}) {
+async function showMode(mode, { force = false } = {}) {
   const doc = app.doc;
   if (!doc) {
     return;
@@ -521,7 +519,7 @@ async function showMode(mode, { force = false, sourceLine } = {}) {
     await showViewer(source);
   } else {
     const source = app.viewer?.toYaml?.() ?? doc.source;
-    await showEditor(source, { sourceLine });
+    await showEditor(source);
   }
   app.collab.stageChanged();
   app.collab.documentChanged();
@@ -571,17 +569,8 @@ async function showViewer(source) {
 /** The banner of a source that does not load. */
 function showSourceError(e) {
   const where = e.line ? `line ${e.line}, column ${e.column}` : '';
-  const canEdit = editAvailability().ok;
-  $('stage').replaceChildren(
-    el('div', { class: 'message' }, el('p', {}, 'This chart does not load.'), el('p', {}, canEdit ? 'Fix it in the source.' : 'Open it on a computer to fix it.')),
-  );
-  banner({
-    kind: 'error',
-    where,
-    text: e.message,
-    dismiss: false,
-    actions: canEdit ? [{ label: 'Fix in source', primary: true, run: () => showMode('edit', { force: true, sourceLine: e.line || 1 }) }] : [],
-  });
+  $('stage').replaceChildren(el('div', { class: 'message' }, el('p', {}, 'This chart does not load.'), el('p', {}, 'Fix its source and open it again.')));
+  banner({ kind: 'error', where, text: e.message, dismiss: false });
 }
 
 async function loadEditorModule() {
@@ -592,7 +581,7 @@ async function loadEditorModule() {
   return app.editorModule;
 }
 
-async function showEditor(source, { sourceLine } = {}) {
+async function showEditor(source) {
   const stage = $('stage');
   const { createEditor } = await busy(loadEditorModule());
   const box = el('div', { class: 'editor-box' });
@@ -601,7 +590,6 @@ async function showEditor(source, { sourceLine } = {}) {
     editor = await busy(
       createEditor(box, {
         source,
-        repair: true,
         fileName: app.doc.name,
         theme: app.chartTheme,
         appearance: pageAppearance(),
@@ -627,17 +615,12 @@ async function showEditor(source, { sourceLine } = {}) {
   app.mode = 'edit';
   const doc = app.doc;
   doc.source = editor.source();
-  if (editor.repairing()) {
-    banner({ kind: 'error', text: 'This chart does not load. Fix it in the source pane; the editor opens once it does.', dismiss: false });
-  } else if ($('banner').classList.contains('error')) {
+  if ($('banner').classList.contains('error')) {
     banner(null);
-  }
-  if (sourceLine || editor.repairing()) {
-    editor.showSource(true, sourceLine ?? 0);
   }
   editor.on('change', () => {
     doc.source = editor.source();
-    if (!editor.repairing() && $('banner').classList.contains('error')) {
+    if ($('banner').classList.contains('error')) {
       banner(null);
     }
     updateTitle();
@@ -724,17 +707,6 @@ function savedAs(yaml) {
 /** Save: back to where it came from where possible, else a download. */
 async function save() {
   const doc = app.doc;
-  if (app.editor?.repairing()) {
-    // The text as it is (it does not load yet), as YAML.
-    const text = app.editor.paneText() || doc.source;
-    if (doc.origin.kind === 'local' && doc.origin.handle && !doc.png) {
-      await writeHandle(doc.origin.handle, text);
-    } else {
-      download(text, doc.fileName('yaml'), 'application/yaml');
-    }
-    toast('Saved the text as it is: it does not load yet');
-    return;
-  }
   const kind = doc.png ? 'png' : 'yaml';
   const { bytes, mime, yaml } = bytesOf(kind);
   if (doc.origin.kind === 'local' && doc.origin.handle) {
@@ -834,7 +806,6 @@ function defineCommands() {
       mode: app.mode,
       modified: app.doc.modified,
       png: app.doc.png,
-      repairing: !!app.editor?.repairing(),
       version: app.editor?.version() ?? null,
       error: $('banner').classList.contains('error') ? $('banner').textContent : '',
     }),
@@ -1111,24 +1082,6 @@ function defineCommands() {
     },
   });
   commands.define({
-    name: 'app_show_source',
-    title: 'Source',
-    description: 'Shows or hides the YAML source beside the chart (switching to Edit).',
-    scope: 'document',
-    available: editOk,
-    inputSchema: schema({ show: { type: 'boolean' }, line: { type: 'integer' } }),
-    run: async ({ show, line }) => {
-      if (app.mode !== 'edit') {
-        await showMode('edit', { sourceLine: line ?? 1 });
-        return { shown: true };
-      }
-      const on = show ?? !app.editor.state().sourceShown;
-      app.editor.showSource(on, line ?? 0);
-      updateTitle();
-      return { shown: on };
-    },
-  });
-  commands.define({
     name: 'app_save',
     title: 'Save',
     description: 'Saves the chart back to where it came from (the file, Google Drive), or downloads it.',
@@ -1400,7 +1353,6 @@ function wireControls() {
   $('btn-drive').hidden = !app.drive.available();
   $('mode-view').addEventListener('click', () => act('app_set_mode', { mode: 'view' }));
   $('mode-edit').addEventListener('click', () => act('app_set_mode', { mode: 'edit' }));
-  $('btn-source').addEventListener('click', () => act('app_show_source'));
   $('btn-save').addEventListener('click', () => act('app_save'));
   $('btn-more').innerHTML = icons.more;
   $('btn-save-menu').innerHTML = icons.caret;
@@ -1437,7 +1389,6 @@ function wireControls() {
     showMenu(e.currentTarget, [
       ...(app.doc && narrow
         ? [
-            device.directEditing && { label: 'Source', icon: 'code', note: 'Ctrl+U', run: () => act('app_show_source') },
             { label: 'Copy link', icon: 'link', run: () => act('app_copy_link') },
             { label: 'Copy embed code', icon: 'code', run: () => act('app_copy_embed') },
             { label: 'Download PNG', icon: 'image', run: () => act('app_download', { kind: 'png' }) },
@@ -1556,9 +1507,6 @@ function wireKeys() {
       } else if (ctrl && (e.key === 's' || e.key === 'S') && app.doc && app.mode === 'view') {
         e.preventDefault();
         act('app_save');
-      } else if (ctrl && (e.key === 'u' || e.key === 'U') && app.doc && app.mode === 'view' && device.directEditing) {
-        e.preventDefault();
-        act('app_show_source');
       } else if (!typing && !ctrl && !e.altKey && app.mode === 'view') {
         if (e.key === 'e' && app.doc && editAvailability().ok) {
           act('app_set_mode', { mode: 'edit' });
@@ -1704,7 +1652,6 @@ function shortcuts() {
     ['Ctrl+O', 'Open a file'],
     ['Ctrl+S', 'Save'],
     ['E', 'Edit (in View)'],
-    ['Ctrl+U', 'Show or hide the YAML source'],
     ['Ctrl+Z / Ctrl+Y', 'Undo / redo (in Edit)'],
     ['Delete, Ctrl+D', 'Delete / duplicate the selected element'],
     ['Alt+↑ / Alt+↓', 'Move the selected element'],

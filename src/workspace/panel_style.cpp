@@ -26,10 +26,6 @@ ImVec4 alpha(ImVec4 c, float a) {
   return c;
 }
 
-ImU32 u32(const ImVec4& c) {
-  return ImGui::ColorConvertFloat4ToU32(c);
-}
-
 } // namespace
 
 panel_palette palette_of(const panel_appearance& a) {
@@ -162,31 +158,6 @@ void apply_panel_style(ImGuiStyle& style, const panel_appearance& a) {
   c[ImGuiCol_NavWindowingHighlight] = p.accent;
   c[ImGuiCol_NavWindowingDimBg] = ImVec4(0.04f, 0.05f, 0.08f, 0.45f);
   c[ImGuiCol_ModalWindowDimBg] = ImVec4(0.04f, 0.05f, 0.08f, 0.45f);
-}
-
-TextEditor::Palette source_palette(const panel_appearance& a) {
-  TextEditor::Palette t = a.dark ? TextEditor::GetDarkPalette() : TextEditor::GetLightPalette();
-  const panel_palette p = palette_of(a);
-  const auto set = [&](TextEditor::Color which, const ImVec4& c) { t[static_cast<size_t>(which)] = u32(c); };
-  set(TextEditor::Color::background, a.dark ? p.bg : rgb(0xfbfcfd));
-  set(TextEditor::Color::text, p.text);
-  set(TextEditor::Color::identifier, p.text);
-  set(TextEditor::Color::punctuation, p.muted);
-  set(TextEditor::Color::comment, alpha(p.muted, 0.9f));
-  set(TextEditor::Color::keyword, a.dark ? rgb(0x7cc7ff) : rgb(0x1f5fbf)); // mapping keys
-  set(TextEditor::Color::knownIdentifier, p.accent); // element types
-  set(TextEditor::Color::preprocessor, a.dark ? rgb(0xd6a2ff) : rgb(0x8a3fc7)); // $column
-  set(TextEditor::Color::string, a.dark ? rgb(0xf2b37a) : rgb(0xa1561b));
-  set(TextEditor::Color::number, a.dark ? rgb(0xa5d6a7) : rgb(0x2e7d32));
-  set(TextEditor::Color::declaration, a.dark ? rgb(0xf48fb1) : rgb(0xb5306a)); // true / false / null
-  set(TextEditor::Color::lineNumber, alpha(p.muted, 0.7f));
-  set(TextEditor::Color::currentLineNumber, p.text);
-  set(TextEditor::Color::currentLineHighlight, alpha(p.surface_2, a.dark ? 0.6f : 0.9f));
-  set(TextEditor::Color::currentLineHighlightBorder, ImVec4(0, 0, 0, 0));
-  set(TextEditor::Color::selection, alpha(p.accent, 0.25f));
-  set(TextEditor::Color::cursor, p.accent);
-  set(TextEditor::Color::whitespace, alpha(p.muted, 0.35f));
-  return t;
 }
 
 } // namespace bdg::nymph

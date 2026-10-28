@@ -22,7 +22,7 @@ enum class window_key {
 /// @brief The pointer's look over the workspace.
 enum class cursor_shape {
   arrow,
-  resize_horizontal, ///< Over a divider (figure and strip, source pane and figure).
+  resize_horizontal, ///< Over a divider between the figure and the strip.
   text, ///< Over a text field.
 };
 

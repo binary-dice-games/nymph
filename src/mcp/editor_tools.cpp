@@ -566,17 +566,6 @@ json editor_undo_redo(editor_host& host, bool undo) {
   return change_result(host, r, undo ? "editor_undo" : "editor_redo");
 }
 
-/// Refuses a write while the editor is locked (the user is fixing source
-/// text that does not load).
-void check_unlocked(const editor_host& host, bool read_only) {
-  if (!read_only) {
-    const std::string reason = host.locked_reason();
-    if (!reason.empty()) {
-      throw tool_error("the user is editing the source; nothing changed (" + reason + ")");
-    }
-  }
-}
-
 /// Attributes the model's changes during one tool call to `origin`, labelled
 /// with the tool's title, and puts the previous attribution back after.
 class attribution {
@@ -766,16 +755,14 @@ std::vector<tool> make_editor_tools(editor_runner run) {
   for (const definition& d : definitions()) {
     auto handler = d.handler;
     const std::string title = d.title;
-    const bool read_only = d.read_only;
     out.push_back(
         {{{"name", d.name},
           {"title", d.title},
           {"description", d.description},
           {"inputSchema", d.input},
           {"annotations", annotations(d.title, d.read_only)}},
-         [run, handler, title, read_only](const json& args) {
-           return run([handler, args, title, read_only](editor_host& host) {
-             check_unlocked(host, read_only);
+         [run, handler, title](const json& args) {
+           return run([handler, args, title](editor_host& host) {
              const attribution scope(host, title, "agent:mcp");
              return handler(host, args);
            });
@@ -795,7 +782,6 @@ json call_editor_tool(editor_host& host, const std::string& name, const json& ar
     if (!args.is_object()) {
       throw tool_error("the arguments must be an object");
     }
-    check_unlocked(host, it->read_only);
     const attribution scope(host, it->title, origin);
     return it->handler(host, args);
   } catch (const tool_error& e) {

@@ -84,14 +84,21 @@ TEST_F(workspace_fixture, LaysOutTheFigureLeftOfTheStripUnderTheTabs) {
   EXPECT_FLOAT_EQ(figure.y, editor_panel::kTabBarHeight);
 }
 
+TEST_F(workspace_fixture, ASourceThatDoesNotBindIsRefusedForEditing) {
+  fake_host other;
+  editor_workspace ws2(other, view_options{view_fit::fill, /*cpu_textures=*/true, true}, "", workspace_gl{});
+  ws2.resize(900.0f, 400.0f, 1.0f);
+  EXPECT_THROW(ws2.open("root: {type: Plot, bogus: 1}", true, true), std::exception);
+  EXPECT_EQ(ws2.panel(), nullptr);
+}
+
 TEST_F(workspace_fixture, GoesIdleWhenNothingHappens) {
   run_frames(12);
   EXPECT_FALSE(ws->view().wants_frame());
   EXPECT_FALSE(ws->panel()->wants_frame());
-  // Also with a selection (the toolbar is shown) and the source pane.
+  // Also with a selection (the toolbar is shown).
   ws->panel()->model().select(edit_target_id{"root", ""});
   ws->panel()->refresh();
-  ws->show_source(true);
   run_frames(30);
   EXPECT_FALSE(ws->wants_frame());
 }

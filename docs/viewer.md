@@ -146,7 +146,7 @@ to the field instead (`Esc` leaves it). See [cli.md](cli.md).
 ## The editor module
 
 `editor/nymph-editor.js` puts the editor of `nymph view --edit` in a page:
-the same panel, toolbar, tree and data editing, and the source pane,
+the same panel, toolbar, tree and data editing,
 drawn with WebGL2 into one canvas that fills its container. It is a second
 WebAssembly module (about 1.2 MB gzip) so pages that only view stay small;
 it imports `../nymph-viewer.js` for its font loader, so serve it in an
@@ -155,18 +155,18 @@ it imports `../nymph-viewer.js` for its font loader, so serve it in an
 
 ```js
 import { createEditor } from './editor/nymph-editor.js';
-const editor = await createEditor(document.getElementById('box'), { source: yamlText, sourcePane: true });
+const editor = await createEditor(document.getElementById('box'), { source: yamlText });
 editor.on('change', (c) => console.log(c.label, c.origin, editor.source()));
 editor.on('save', () => save(editor.toYaml()));
 ```
 
 | Method / event | What |
 |----------------|------|
-| `createEditor(container, {source \| png, fileName, theme, appearance, panel, sourcePane, repair})` | The editor, or a `NymphError` (no WebGL2, a source that does not load; with `repair: true` such a source opens with only the source pane editing). |
+| `createEditor(container, {source \| png, fileName, theme, appearance, panel})` | The editor, or a `NymphError` (no WebGL2, a source that does not load). |
 | `open(yamlOrPng)`, `setSource(yaml, {asChange, label, origin})` | A new document; with `asChange`, one undo step. |
-| `source()`, `toYaml()`, `toPng()`, `paneText()` | The YAML, with the view on screen, as a PNG; the pane's text. |
+| `source()`, `toYaml()`, `toPng()` | The YAML, with the view on screen, as a PNG. |
 | `modified()`, `markSaved()`, `version()`, `state()` | Unsaved changes, the change counter, labels of undo / redo, the selection. |
-| `undo()`, `redo()`, `resetView()`, `setTheme(t)`, `themes()`, `showPanel(on)`, `showSource(on, line)` | `setTheme` shows a chart theme without changing the source (a promise); the panel's **Theme** button writes `image.theme`. |
+| `undo()`, `redo()`, `resetView()`, `setTheme(t)`, `themes()`, `showPanel(on)` | `setTheme` shows a chart theme without changing the source (a promise); the panel's **Theme** button writes `image.theme`. |
 | `setAppearance({dark, accent, accentDark})` | The panel's look, to match the page: light or dark, accent colours as `#rrggbb` (nymph's green when left out). Without it the panel is dark only for a chart in the `dark` theme. |
 | `tool(name, args, {origin})`, `toolDefinitions()` | The editor tools of `nymph mcp` (`editor_state`, `editor_set_fields`, `editor_add_element`, ...), run in the page; changes are attributed to `origin`. |
 | `beginGroup(label, origin)`, `endGroup()` | Several changes as one undo step. |
@@ -181,15 +181,6 @@ editor.on('save', () => save(editor.toYaml()));
 an editor panel to the right of the figure; `E` hides it again. Drag the
 divider between them to make the panel wider or narrower (double-click it
 for the default width).
-
-- **Source.** The **Source** tab button (or `Ctrl+U`) shows the YAML between
-  the figure and the panel, highlighted, with line numbers, folding and
-  find / replace (`Ctrl+F`, `Ctrl+H`). Typing applies after a short pause
-  as one undo step; text that does not load is underlined at the error and
-  the rest of the panel waits (agents too) until it loads again. Selecting
-  an element moves the cursor to its line, and moving the cursor selects
-  the element there. With `--edit`, a file that does not load opens with
-  the source at the error instead of failing.
 
 - **Click to select.** Click a title, an axis label or the legend of a plot, a
   `Label`, a node, group or link text of a diagram: the thing is outlined and

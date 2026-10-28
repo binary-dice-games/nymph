@@ -183,13 +183,13 @@ test('pasted YAML draws', async () => {
   await done(page);
 });
 
-test('a source that does not load shows its line and column, and Fix in source', async () => {
+test('a source that does not load shows its line and column', async () => {
   const page = await openApp();
   await call(page, 'app_new_document', { source: 'root:\n  type: Plot\n  children:\n    - {type: PlotLine, ys: [1, 2], bogus: 3}\n', mode: 'view' });
   await page.waitForSelector('#banner:not([hidden])');
   const s = await state(page);
   assert(/line 4/.test(s.banner), `banner: ${s.banner}`);
-  assert(await page.isVisible('#banner >> text=Fix in source'), 'Fix in source');
+  assert(await page.isHidden('#banner >> text=Fix in source'), 'no Fix in source');
   await done(page);
 });
 
@@ -348,31 +348,6 @@ test('opening another file while modified asks; Cancel keeps the document', asyn
   await opening;
   const s = await state(page);
   assert(s.name === 'line.yaml' && s.modified, JSON.stringify(s));
-  await done(page);
-});
-
-test('Source in View opens Edit with the pane; a broken file is repaired there', async () => {
-  const page = await openApp();
-  await call(page, 'app_open_example', { name: 'line' });
-  await shown(page);
-  await call(page, 'app_show_source');
-  await shown(page);
-  let st = await page.evaluate(() => window.nymphApp.app.editor.state());
-  assert(st.sourceShown, 'pane shown');
-  // A broken file: Fix in source opens the repair state.
-  await call(page, 'app_new_document', { source: 'root:\n  type: Plot\n  children:\n    - {type: PlotLine, ys: [1, 2], bogus: 3}\n', mode: 'view' });
-  await page.click('dialog.dlg >> text=Discard').catch(() => {});
-  await page.waitForSelector('#banner >> text=Fix in source');
-  await page.click('#banner >> text=Fix in source');
-  await page.waitForFunction(() => window.nymphApp.app.editor?.repairing());
-  // Fix it through the document command (as the pane would, after typing).
-  const r = await call(page, 'document_set_source', { source: 'root:\n  type: Plot\n  children:\n    - {type: PlotLine, ys: [1, 2]}\n' });
-  assert(!r.isError, JSON.stringify(r));
-  st = await page.evaluate(() => window.nymphApp.app.editor.state());
-  assert(!st.repairing, 'repaired');
-  await call(page, 'app_set_mode', { mode: 'view' });
-  await shown(page);
-  assert((await state(page)).banner === '', 'no error left');
   await done(page);
 });
 
@@ -619,17 +594,15 @@ test('on a phone: no Edit or Source, ?mode=edit opens View, and the editor is ne
   const s = await state(page);
   assert(s.mode === 'view', 'view');
   assert(await page.isHidden('#mode-edit'), 'no Edit');
-  assert(await page.isHidden('#btn-source'), 'no Source');
   assert(await page.isHidden('#btn-save'), 'no Save');
   await page.waitForTimeout(2500); // past any idle prefetch
   assert(!page.requests.some((u) => u.includes('nymph-editor')), 'no editor request');
   const names = await page.evaluate(() => window.nymphApp.commands.list().map((c) => c.name));
-  assert(!names.includes('app_show_source') && !names.includes('app_save'), 'no edit commands');
-  // A broken file: no Fix in source.
+  assert(!names.includes('app_save'), 'no edit commands');
+  // A broken file: the error, no way into the editor.
   await call(page, 'app_new_document', { source: 'root: {type: Plot, bogus: 1}\n', mode: 'view' });
   await page.waitForSelector('#banner:not([hidden])');
   assert(await page.isHidden('#banner >> text=Fix in source'), 'no Fix in source');
-  assert(/computer/.test(await page.textContent('#stage')), 'open it on a computer');
   await done(page);
 });
 
