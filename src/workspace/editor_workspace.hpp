@@ -51,13 +51,6 @@ class workspace_host {
     (void)file_name;
     (void)csv;
   }
-  /// @brief The workspace would like to be `css_width` x `css_height` CSS
-  ///        pixels: the layout does not fit, or the image size changed. A
-  ///        window grows; a page ignores it.
-  virtual void request_size(float css_width, float css_height) {
-    (void)css_width;
-    (void)css_height;
-  }
   /// @brief What a confirmation dialog of the panel decided.
   virtual void decided(editor_panel::decision decision) {
     (void)decision;
@@ -289,9 +282,6 @@ class editor_workspace {
   void figure_right_click(pointer_event::kind type, float x, float y, int button, const layout_box& figure);
   void set_cursor(cursor_shape shape);
   void relayout();
-  void fit_to_image();
-  void apply_pending_size();
-  void ask_size_if_too_small();
   std::optional<layout_box> selection_box() const;
   void draw_figure(int pixel_width, int pixel_height);
   void take_file_requests();
@@ -321,11 +311,6 @@ class editor_workspace {
   std::optional<std::pair<float, float>> right_down_; ///< Where the right button went down in the figure.
   double divider_clicked_at_ = -1.0;
   cursor_shape cursor_ = cursor_shape::arrow;
-  int image_w_ = 0; ///< The image size last shown, to see when the source changes it.
-  int image_h_ = 0;
-  bool size_pending_ = false; ///< The image size changed and the window has not been asked to follow yet.
-  float asked_w_ = 0.0f; ///< The size last asked for a layout that did not fit.
-  float asked_h_ = 0.0f;
   static constexpr double kDoubleClick = 0.4; ///< Seconds between the presses of a double-click.
 };
 

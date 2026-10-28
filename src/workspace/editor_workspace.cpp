@@ -129,13 +129,10 @@ std::string editor_workspace::show_panel(bool on) {
     if (host_.has_clipboard()) {
       panel_->set_clipboard([this](std::string_view text) { host_.set_clipboard(text); }, [this] { return host_.clipboard(); });
     }
-    image_w_ = panel_->model().image().width;
-    image_h_ = panel_->model().image().height;
     view_.set_edit_mode(true);
     view_.set_show_limits(true);
   } else {
     panel_.reset();
-    size_pending_ = false;
     view_.set_edit_mode(false);
     view_.set_show_limits(false);
     view_.set_selection(std::nullopt);
@@ -371,7 +368,7 @@ bool editor_workspace::wants_keyboard() const {
 // ── Frames ───────────────────────────────────────────────────────────────────
 
 bool editor_workspace::wants_frame() const {
-  return view_.wants_frame() || size_pending_ || (panel_ != nullptr && panel_->wants_frame());
+  return view_.wants_frame() || (panel_ != nullptr && panel_->wants_frame());
 }
 
 void editor_workspace::frame(double now_seconds) {
@@ -382,7 +379,6 @@ void editor_workspace::frame(double now_seconds) {
     if (const ImDrawData* data = view_.frame(now_seconds)) {
       last_ = data;
     }
-    ask_size_if_too_small();
   }
   if (panel_ == nullptr) {
     return;
@@ -411,7 +407,6 @@ void editor_workspace::frame(double now_seconds) {
       host_.decided(decision);
     }
   }
-  apply_pending_size();
 }
 
 void editor_workspace::take_file_requests() {
@@ -506,7 +501,6 @@ void editor_workspace::apply(const inspector_events& events) {
     } catch (const std::exception& e) {
       status_ = std::string("cannot show: ") + e.what();
     }
-    fit_to_image();
   }
   if (events.select) {
     panel_->model().select(*events.select);
@@ -637,43 +631,6 @@ ImVec2 editor_workspace::figure_offset() const {
   const float spare_y = box.height - g.layout_height * s;
   return ImVec2(
       spare_x >= 1.0f ? std::floor(spare_x * 0.5f) : 0.0f, spare_y >= 1.0f ? std::min(kFigureTopGap, std::floor(spare_y * 0.5f)) : 0.0f);
-}
-
-void editor_workspace::fit_to_image() {
-  const image_options& image = panel_->model().image();
-  if (image.width == image_w_ && image.height == image_h_) {
-    return;
-  }
-  image_w_ = image.width;
-  image_h_ = image.height;
-  size_pending_ = true;
-}
-
-void editor_workspace::apply_pending_size() {
-  // The window follows the image once the user lets go of the field they
-  // are editing: a resize in the middle of a click or while typing moves
-  // the strip from under the pointer and ends the edit.
-  if (!size_pending_ || panel_ == nullptr || panel_drag_ || !panel_->settled()) {
-    return;
-  }
-  size_pending_ = false;
-  host_.request_size(static_cast<float>(image_w_) + strip_width(), static_cast<float>(image_h_) + tab_height());
-}
-
-void editor_workspace::ask_size_if_too_small() {
-  const view_geometry g = view_.geometry();
-  if (!g.fit_fallback) {
-    asked_w_ = asked_h_ = 0.0f;
-    return;
-  }
-  const float want_w = g.layout_width + strip_width();
-  const float want_h = g.layout_height + tab_height();
-  if (want_w == asked_w_ && want_h == asked_h_) {
-    return;
-  }
-  asked_w_ = want_w;
-  asked_h_ = want_h;
-  host_.request_size(want_w, want_h);
 }
 
 std::vector<uint8_t> editor_workspace::capture_figure(int max_width, int& width, int& height, double now_seconds) {

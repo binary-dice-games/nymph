@@ -8,6 +8,7 @@
 #include <imgui_internal.h>
 #include <string>
 #include <vector>
+#include "edit/field_value.hpp"
 #include "workspace/editor_workspace.hpp"
 
 namespace bdg::nymph {
@@ -35,14 +36,6 @@ struct fake_host : workspace_host {
   void request_csv_export(const std::string& table, const std::string& file_name, const std::string& csv) override {
     exports.push_back(table + "|" + file_name + "|" + csv);
   }
-  void request_size(float w, float h) override {
-    sizes.emplace_back(w, h);
-    if (resizing != nullptr) { // a native window resizes at once and draws a frame inside the call
-      resizing->resize(w, h, 1.0f);
-      resizing->frame(500.0 + static_cast<double>(sizes.size()));
-    }
-  }
-  editor_workspace* resizing = nullptr;
   void changed(const commit_result& r) override {
     changes.push_back(r);
   }
@@ -50,7 +43,6 @@ struct fake_host : workspace_host {
   int saves = 0;
   std::vector<std::string> imports;
   std::vector<std::string> exports;
-  std::vector<std::pair<float, float>> sizes;
   std::vector<commit_result> changes;
 };
 
@@ -98,7 +90,7 @@ TEST_F(workspace_fixture, ASourceThatDoesNotBindIsRefusedForEditing) {
   EXPECT_EQ(ws2.panel(), nullptr);
 }
 
-TEST_F(workspace_fixture, TheWindowFollowsTheImageOnlyOnceTheNumberFieldIsLeft) {
+TEST_F(workspace_fixture, NumberFieldsTakeTheKeyboardOneAfterAnotherAndEnterIsReleased) {
   ws->resize(900.0f, 1100.0f, 1.5f);
   ws->panel()->model().select(edit_target_id{"image", ""});
   ws->panel()->refresh();
@@ -132,9 +124,6 @@ TEST_F(workspace_fixture, TheWindowFollowsTheImageOnlyOnceTheNumberFieldIsLeft) 
     if (!ws->panel()->number_typing()) {
       continue;
     }
-    // Leaving the width by clicking the height must not move the strip
-    // under the pointer: the window waits.
-    EXPECT_TRUE(host.sizes.empty()) << "the window was resized while a field is typed into";
     type_digits(values[typed]);
     EXPECT_TRUE(ws->panel()->number_typing()) << "a digit closed the field";
     EXPECT_TRUE(ws->panel()->wants_keyboard());
@@ -147,9 +136,22 @@ TEST_F(workspace_fixture, TheWindowFollowsTheImageOnlyOnceTheNumberFieldIsLeft) 
   run_frames(3);
   // Enter's release came after the field was left: the panel must still see it.
   EXPECT_FALSE(g.IO.KeysData[ImGuiKey_Enter - ImGuiKey_NamedKey_BEGIN].Down);
-  ASSERT_EQ(host.sizes.size(), 1u) << "the window follows the image once the field is left";
-  EXPECT_FLOAT_EQ(host.sizes.back().first, 650.0f + ws->strip_width());
-  EXPECT_FLOAT_EQ(host.sizes.back().second, 500.0f + ws->tab_height());
+}
+
+TEST_F(workspace_fixture, ChangingTheImageSizeKeepsTheCanvas) {
+  ws->view().set_fit(view_fit::natural);
+  run_frames(3);
+  const layout_box before = ws->panel()->figure_box();
+  ws->panel()->model().select(edit_target_id{"image", ""});
+  ASSERT_TRUE(ws->panel()->model().commit("width", encode_int(700)).ok);
+  inspector_events events;
+  events.source = ws->panel()->model().source();
+  ws->apply_change(commit_result{.ok = true, .source = *events.source}, "");
+  run_frames(3);
+  const layout_box after = ws->panel()->figure_box();
+  EXPECT_FLOAT_EQ(after.width, before.width);
+  EXPECT_FLOAT_EQ(after.height, before.height);
+  EXPECT_FLOAT_EQ(ws->view().geometry().layout_width, 700.0f); // the image changed, not the canvas
 }
 
 TEST_F(workspace_fixture, GoesIdleWhenNothingHappens) {

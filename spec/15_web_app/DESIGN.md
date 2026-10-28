@@ -417,7 +417,6 @@ class workspace_host {
   virtual void request_save();                         ///< Save button, Ctrl+S
   virtual void request_csv_import(const std::string& table);   ///< host files only; answer with import_csv()
   virtual void request_csv_export(const std::string& table, const std::string& file_name, const std::string& csv);
-  virtual void request_size(float css_width, float css_height);  ///< native: grow the window
   virtual void decided(editor_panel::decision decision);        ///< a native dialog's answer
   virtual void changed(const commit_result& r);       ///< after any accepted change: label, origin
   virtual std::string status_line(const std::string& status) const;  ///< native: "agent connected"
@@ -549,7 +548,7 @@ class NymphEditor {
   Frames run on `requestAnimationFrame` only while `wants_frame()`.
 - **Size.** The canvas fills its container (`ResizeObserver`); the
   workspace gets the CSS size and `devicePixelRatio`. The figure follows
-  the box (`fit: fill`), as in `nymph view`; `request_size` is ignored.
+  the box (`fit: fill`), as in `nymph view`.
 - **Pointer** as the viewer (pointer capture, wheel only over what takes
   it, pinch to zoom), routed by the workspace.
 - **Keyboard and text.** The canvas is focusable. Keys use the viewer's

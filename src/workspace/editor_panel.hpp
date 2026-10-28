@@ -226,12 +226,6 @@ class editor_panel {
   bool number_typing() const {
     return inspector_.number_typing() || toolbar_.number_typing();
   }
-  /// @brief No frames are owed and no number field is typed into: what the
-  ///        last input started has played out (a click's text field takes a
-  ///        few frames to appear).
-  bool settled() const {
-    return frames_left_ <= 0 && !number_typing();
-  }
 
   /// @brief Asks for frames (a change from outside the strip).
   void refresh() {

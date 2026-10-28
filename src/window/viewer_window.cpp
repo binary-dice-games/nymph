@@ -198,15 +198,6 @@ class viewer : public window_events, public workspace_host {
     }
   }
 
-  void request_size(float css_width, float css_height) override {
-    int avail_w = 0, avail_h = 0;
-    window_->available_client_size(avail_w, avail_h);
-    const window_size client = initial_window_size(
-        static_cast<int>(std::lround(css_width * scale_)), static_cast<int>(std::lround(css_height * scale_)), avail_w,
-        avail_h);
-    resize_client(client.width, client.height);
-  }
-
   void decided(editor_panel::decision decision) override {
     using decision_t = editor_panel::decision;
     if (decision == decision_t::save || decision == decision_t::save_and_close) {
@@ -329,6 +320,9 @@ class viewer : public window_events, public workspace_host {
       return;
     }
     window_->make_current();
+    // Editing shows the image at its own size on a canvas, as the web editor
+    // does: changing the image size never resizes the window.
+    ws_->view().set_fit(on ? view_fit::natural : request_.args.fit);
     if (on) {
       const std::string refused = ws_->show_panel(true);
       if (!refused.empty()) {
