@@ -120,11 +120,12 @@ export function showMenu(anchor, items) {
 
 /**
  * A modal dialog. `build(body, close)` fills it; resolves with what
- * close(value) is given (undefined for Escape).
+ * close(value) is given (undefined for Escape). `options.class` adds a
+ * class to the dialog element, `options.cancelValue` is Escape's value.
  */
 export function dialog(title, build, options = {}) {
   return new Promise((resolve) => {
-    const d = el('dialog', { class: 'dlg', 'aria-label': title });
+    const d = el('dialog', { class: `dlg ${options.class ?? ''}`.trim(), 'aria-label': title });
     const body = el('div', { class: 'body' }, el('h2', {}, title));
     d.append(body);
     let done = false;

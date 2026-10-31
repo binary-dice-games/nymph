@@ -17,6 +17,7 @@ From the start page:
 | **From URL…** | Any `https` file the server lets other sites read. GitHub file pages (`…/blob/…`) and gists open their raw file. |
 | **Google Drive** | When the site is set up for it (below). |
 | **New chart** | A template of each family: plots, a dashboard, a flowchart, class and sequence diagrams, a Gantt chart, a Sankey diagram, a UI mockup. |
+| **Import CSV or mermaid…** | A new chart from a CSV table or a mermaid diagram, through a wizard (below). Dropping a `.csv` or `.mmd` file opens it too. |
 | **Recent** | The last 20 charts, kept in this browser (**Clear** forgets them). |
 | **Examples** | Every example of the repository. |
 
@@ -27,6 +28,22 @@ below); add `&mode=edit` to open it in the editor.
 A file that does not load shows the loader's message with its line and
 column; **Fix in source** opens it in the editor with the YAML at the error
 (only that pane edits until the text loads).
+
+## Importing a CSV table or a mermaid diagram
+
+**Import CSV or mermaid…** asks for a file and opens a wizard, with a live
+preview of the chart beside each step:
+
+| Step | CSV table | Mermaid diagram |
+|------|-----------|-----------------|
+| 1 | **Chart type**: line, area, bar, stacked bars, horizontal bars, scatter, pie or histogram (the best fit is picked). | **Diagram**: the text, to fix what does not convert. |
+| 2 | **Data**: the column for the X axis or categories, the series (each with its legend name), the axis labels. | |
+| 3 / 2 | **Look**: title, subtitle and footnote; fonts (Editorial: PT Serif heading; Modern: Fira Sans; Technical: Fira Mono); colour theme; heading as a text box, a title over a rule, or plain; size; legend place; summary cards with each series' headline number (CSV only). | |
+
+**Create chart** opens the result as a new chart (in Edit on a computer).
+It is ordinary nymph YAML: a `VerticalLayout` with the heading, the plot or
+diagram, a `Separator` and the footnote, and the CSV as its `data` (numbers
+like `$1,200` or `45 %` cleaned; semicolon files with decimal commas read).
 
 ## Viewing and editing
 

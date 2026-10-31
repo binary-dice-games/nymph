@@ -122,12 +122,34 @@ async function done(page) {
 
 // ── Step 7: open and view ────────────────────────────────────────────────────
 
-test('the start screen lists templates and examples', async () => {
+test('the start screen lists examples and offers Import', async () => {
   const page = await openApp();
   assert(await page.isVisible('#start'), 'start screen');
-  const templates = await page.locator('#template-list .card').count();
+  assert(await page.isVisible('#btn-import'), 'import button');
+  assert((await page.locator('#template-list').count()) === 0, 'no template section');
   const examples = await page.locator('#example-list .card').count();
-  assert(templates >= 8 && examples >= 20, `templates ${templates}, examples ${examples}`);
+  assert(examples >= 20, `examples ${examples}`);
+  await done(page);
+});
+
+test('importing a CSV walks the wizard and opens the chart', async () => {
+  const page = await openApp({ init: () => delete window.showOpenFilePicker });
+  const chooser = page.waitForEvent('filechooser');
+  await page.click('#btn-import');
+  await (await chooser).setFiles({ name: 'sales.csv', mimeType: 'text/csv', buffer: Buffer.from('Quarter,Revenue,Costs\nQ1,121,96\nQ2,138,101\n') });
+  await page.waitForSelector('dialog.wizard-dlg .kind-card');
+  await page.click('dialog.wizard-dlg .kind-card:has-text("Line chart")');
+  await page.click('dialog.wizard-dlg button:has-text("Next")');
+  await page.waitForSelector('dialog.wizard-dlg .series-row');
+  await page.click('dialog.wizard-dlg button:has-text("Next")');
+  await page.fill('dialog.wizard-dlg .field:has-text("Title") input', 'Quarterly sales');
+  await page.click('dialog.wizard-dlg button:has-text("Create chart")');
+  await page.waitForSelector('dialog.wizard-dlg', { state: 'detached' });
+  await shown(page);
+  const s = await state(page);
+  assert(s.name === 'sales.yaml' && s.origin === 'import' && s.banner === '', JSON.stringify(s));
+  const src = await page.evaluate(() => window.nymphApp.app.doc.source);
+  assert(src.includes('Quarterly sales') && src.includes('type: PlotLine'), 'the chart written');
   await done(page);
 });
 

@@ -6,7 +6,7 @@
  * control goes through.
  */
 
-import { NymphError, createViewer } from '../nymph-viewer.js';
+import { NymphError, createViewer, importMermaid } from '../nymph-viewer.js';
 import { Activity } from './agents/activity.js';
 import { Bridge } from './agents/bridge.js';
 import { AgentsPanel } from './agents/panel.js';
@@ -16,6 +16,7 @@ import { Commands } from './commands.js';
 import { device, editAvailability } from './device.js';
 import { Doc, baseName, withoutView } from './document.js';
 import { icons } from './icons.js';
+import { importWizard } from './import.js';
 import { OpenError, fetchUrl, pickFile, pngSource, readFile, sniff, writeHandle } from './open.js';
 import { DriveProvider } from './providers/drive.js';
 import { appBase, decodeSource, embedCode, linkFor } from './share.js';
@@ -473,7 +474,7 @@ function updateTitle() {
     input.value = doc.name;
   }
   $('doc-dot').hidden = !doc.modified;
-  $('doc-origin').innerHTML = icons[{ local: 'file', url: 'link', drive: 'drive', example: 'example', template: 'template', paste: 'paste', link: 'share', collab: 'live' }[doc.origin.kind] ?? 'file'];
+  $('doc-origin').innerHTML = icons[{ local: 'file', url: 'link', drive: 'drive', example: 'example', template: 'template', import: 'template', paste: 'paste', link: 'share', collab: 'live' }[doc.origin.kind] ?? 'file'];
   $('doc-origin').title = originText(doc);
   document.title = `${doc.modified ? '• ' : ''}${doc.name} — nymph`;
   $('mode-view').setAttribute('aria-pressed', String(app.mode === 'view'));
@@ -489,6 +490,7 @@ function originText(doc) {
     drive: 'In Google Drive',
     example: 'An example',
     template: 'A new chart from a template',
+    import: 'A new chart imported from a CSV table or a mermaid diagram',
     paste: 'Pasted',
     link: 'From a shared link',
     new: 'A new chart',
@@ -685,6 +687,47 @@ function writeDraft() {
     store.saveDraft(doc);
   } else if (doc) {
     store.dropDraft(doc.id);
+  }
+}
+
+// ── Importing ─────────────────────────────────────────────────────────────────
+
+/** Whether a file name is one the import wizard takes (CSV, mermaid). */
+function isImportName(name) {
+  return /\.(csv|tsv|mmd|mermaid)$/i.test(name ?? '');
+}
+
+/** Asks for a CSV or mermaid file; null when cancelled. */
+function pickImportFile() {
+  const input = $('import-input');
+  return new Promise((resolve) => {
+    input.onchange = () => {
+      const file = input.files?.[0] ?? null;
+      input.value = '';
+      resolve(file);
+    };
+    input.oncancel = () => resolve(null);
+    input.click();
+  });
+}
+
+/**
+ * Runs the import wizard on a CSV or mermaid file and opens the chart it
+ * makes as a new document (in Edit where the device edits).
+ */
+async function importFile(file) {
+  const text = await file.text();
+  const result = await importWizard({
+    name: file.name,
+    text,
+    dialog,
+    el,
+    createViewer,
+    importMermaid,
+    wasmUrl: wasmUrl('nymph-viewer-core.wasm'),
+  });
+  if (result) {
+    await openSource(result.source, result.name, { kind: 'import' }, { mode: device.directEditing ? 'edit' : 'view' });
   }
 }
 
@@ -1065,6 +1108,19 @@ function defineCommands() {
       });
       if (name) {
         await commands.run('app_new_document', { template: name });
+      }
+    },
+  });
+  commands.define({
+    name: 'app_import_dialog',
+    agent: false, // opens a picker and a wizard for the user
+    title: 'Import CSV or mermaid…',
+    description: 'Asks for a CSV table or a mermaid diagram and makes a new chart of it, step by step.',
+    effect: 'external',
+    run: async () => {
+      const picked = await pickImportFile();
+      if (picked) {
+        await importFile(picked);
       }
     },
   });
@@ -1464,7 +1520,9 @@ function wireDropAndPaste() {
     const item = [...(e.dataTransfer?.items ?? [])].find((i) => i.kind === 'file');
     const handle = item?.getAsFileSystemHandle ? await item.getAsFileSystemHandle().catch(() => null) : null;
     const file = e.dataTransfer?.files?.[0];
-    if (file) {
+    if (file && isImportName(file.name)) {
+      importFile(file).catch((err) => toast(err.message, 6000));
+    } else if (file) {
       openBytes(await readFile(file), file.name, { kind: 'local', handle: handle?.kind === 'file' ? handle : null }).catch((err) => toast(err.message, 6000));
     }
   });
@@ -1531,7 +1589,6 @@ function wireKeys() {
 
 async function renderStart() {
   $('btn-new').hidden = false;
-  renderTemplates();
   renderExamples();
   const list = await store.recent();
   $('recent-section').hidden = list.length === 0;
@@ -1553,7 +1610,7 @@ async function renderStart() {
 }
 
 function recentWhere(r) {
-  return { local: 'This computer', url: new URL(r.url ?? 'https://x').hostname, drive: 'Google Drive', example: 'Example', template: 'Template', paste: 'Pasted', link: 'Shared link', new: 'New' }[r.kind] ?? r.kind;
+  return { local: 'This computer', url: new URL(r.url ?? 'https://x').hostname, drive: 'Google Drive', example: 'Example', template: 'Template', import: 'Imported', paste: 'Pasted', link: 'Shared link', new: 'New' }[r.kind] ?? r.kind;
 }
 
 function reopenable(r) {
@@ -1586,31 +1643,6 @@ async function openRecent(r) {
   } catch (e) {
     toast(e.message ?? String(e), 6000);
   }
-}
-
-let templatesShown = false;
-
-async function renderTemplates() {
-  if (templatesShown) {
-    return;
-  }
-  templatesShown = true;
-  const list = await fetchJson('templates/index.json', []);
-  $('templates-section').hidden = list.length === 0;
-  $('template-list').replaceChildren(
-    ...list.map((t) =>
-      el(
-        'li',
-        {},
-        el(
-          'button',
-          { type: 'button', class: 'card', onclick: () => act('app_new_document', { template: t.name }) },
-          el('div', { class: 'thumb' }, el('img', { src: `templates/${t.name}.png`, alt: '', loading: 'lazy', onerror: (e) => e.target.remove() })),
-          el('div', { class: 'label' }, el('strong', {}, t.title), el('span', {}, t.family)),
-        ),
-      ),
-    ),
-  );
 }
 
 let examplesShown = false;
