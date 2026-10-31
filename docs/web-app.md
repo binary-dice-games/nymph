@@ -16,7 +16,7 @@ From the start page:
 | Paste | YAML text, or an image (clipboard images are usually re-encoded, which drops the YAML a nymph PNG carries). |
 | **From URL…** | Any `https` file the server lets other sites read. GitHub file pages (`…/blob/…`) and gists open their raw file. |
 | **Google Drive** | When the site is set up for it (below). |
-| **New chart** | A template of each family: plots, a dashboard, a flowchart, class and sequence diagrams, a Gantt chart, a Sankey diagram, a UI mockup. |
+| **New chart** | A template of each family, each card with a small picture of its chart type: plots, a dashboard, a flowchart, class and sequence diagrams, a Gantt chart, a Sankey diagram, a UI mockup. |
 | **Import CSV or mermaid…** | A new chart from a CSV table or a mermaid diagram, through a wizard (below). Dropping a `.csv` or `.mmd` file opens it too. |
 | **Recent** | The last 20 charts, kept in this browser (**Clear** forgets them). |
 | **Examples** | Every example of the repository. |

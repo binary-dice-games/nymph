@@ -5,6 +5,7 @@
 //
 //   node app.mjs <build>/web <nymph source dir>
 
+import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
@@ -14,6 +15,7 @@ const { rawUrl, sniff, isPng } = await import(pathToFileURL(join(appDir, 'open.j
 const { withoutView, viewBlock, withView, Doc, baseName } = await import(pathToFileURL(join(appDir, 'document.js')).href);
 const { encodeSource, decodeSource } = await import(pathToFileURL(join(appDir, 'share.js')).href);
 const imp = await import(pathToFileURL(join(appDir, 'import.js')).href);
+const { chartIcon } = await import(pathToFileURL(join(appDir, 'icons.js')).href);
 void webDir;
 
 const tests = [];
@@ -172,6 +174,19 @@ test('mermaid: detection, and the diagram framed with a heading', () => {
   const flow = imp.mermaidChartSource('root: {type: Label, text: x}\n', { ...imp.defaultLook('x.mmd', 'mermaid'), size: 'wide' });
   eq(flow.includes('    - {type: Label, text: x}'), true, 'flow-style root');
   eq(flow.includes('width: 960, height: 600'), true, 'chosen size');
+});
+
+// ── Chart pictograms (app/icons.js) ─────────────────────────────────────────
+
+test('every template and import chart kind has a pictogram', () => {
+  const templates = JSON.parse(readFileSync(join(sourceDir, 'web', 'app', 'templates', 'index.json'), 'utf8'));
+  for (const t of templates) {
+    eq(chartIcon(t.icon).startsWith('<svg'), true, `template ${t.name}`);
+  }
+  for (const k of ['line', 'area', 'bars', 'stacked', 'hbars', 'scatter', 'pie', 'histogram']) {
+    eq(chartIcon(k).startsWith('<svg'), true, `kind ${k}`);
+  }
+  eq(chartIcon('nope'), '', 'unknown type');
 });
 
 let failed = 0;

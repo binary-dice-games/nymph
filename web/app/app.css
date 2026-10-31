@@ -512,6 +512,10 @@ main {
   background: #fff;
 }
 
+.card .kind-icon {
+  margin: 8px 8px 0;
+}
+
 .card .label {
   padding: 9px 11px 10px;
   display: flex;

@@ -1,11 +1,11 @@
 [
-  {"name": "plot", "title": "Line chart", "family": "Plot"},
-  {"name": "bars", "title": "Bar chart", "family": "Plot"},
-  {"name": "dashboard", "title": "Dashboard", "family": "Layout"},
-  {"name": "flowchart", "title": "Flowchart", "family": "Diagram"},
-  {"name": "class_diagram", "title": "Class diagram", "family": "UML"},
-  {"name": "sequence", "title": "Sequence diagram", "family": "UML"},
-  {"name": "gantt", "title": "Gantt chart", "family": "Schedule"},
-  {"name": "sankey", "title": "Sankey diagram", "family": "Flow"},
-  {"name": "mockup", "title": "UI mockup", "family": "Interface"}
+  {"name": "plot", "title": "Line chart", "family": "Plot", "icon": "line"},
+  {"name": "bars", "title": "Bar chart", "family": "Plot", "icon": "bars"},
+  {"name": "dashboard", "title": "Dashboard", "family": "Layout", "icon": "dashboard"},
+  {"name": "flowchart", "title": "Flowchart", "family": "Diagram", "icon": "flowchart"},
+  {"name": "class_diagram", "title": "Class diagram", "family": "UML", "icon": "class"},
+  {"name": "sequence", "title": "Sequence diagram", "family": "UML", "icon": "sequence"},
+  {"name": "gantt", "title": "Gantt chart", "family": "Schedule", "icon": "gantt"},
+  {"name": "sankey", "title": "Sankey diagram", "family": "Flow", "icon": "sankey"},
+  {"name": "mockup", "title": "UI mockup", "family": "Interface", "icon": "mockup"}
 ]
