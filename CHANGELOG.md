@@ -64,6 +64,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 - Web app: **PNG with drawings** includes drawings made outside the chart image, instead of cutting them off.
+- Web app: in Edit mode, editor tools called by agents (and setting the file's theme) failed with a JSON error instead of changing the chart.
+- Web app: closing the chart while hosting a live session again asks, then ends the session for the guests.
 - Cursor plugin on Windows: the MCP server starts through `bin\nymph.cmd`, which finds Git for Windows' `sh` even when it is not on `PATH`.
 - Web app: the live session shows the name you entered when joining instead of "submit".
 - `nymph view --edit`: after accepting a number with Enter, the next number field no longer ends its edit at the first key.
