@@ -26,7 +26,10 @@ The main flow:
 
 1. The user picks a file: from the computer (file picker, drag and drop,
    paste), from a URL, from Google Drive, from a shared link, from the recent
-   list, or starts from a template or an example.
+   list, or starts from a template or an example, or imports a CSV table or
+   a mermaid diagram through a wizard (`web/app/app/import.js`: chart type,
+   column mapping, look; the start page's template section was replaced by
+   this Import button).
 2. The file opens in the **viewer** (the existing `nymph-viewer-core.wasm`):
    pan, zoom, values on hover.
 3. **Edit** loads the **editor**, a second WebAssembly module

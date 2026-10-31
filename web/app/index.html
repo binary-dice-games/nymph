@@ -55,6 +55,7 @@
             <button type="button" class="btn large" data-command="app_open_url_dialog">From URL…</button>
             <button type="button" class="btn large" id="btn-drive" data-command="app_open_drive" hidden>Google Drive</button>
             <button type="button" class="btn large" id="btn-new" data-command="app_new_dialog">New chart</button>
+            <button type="button" class="btn large" id="btn-import" data-command="app_import_dialog" title="Make a chart from a CSV table or a mermaid diagram">Import CSV or mermaid…</button>
           </div>
           <p class="hint">or drop a file anywhere, or paste YAML or an image</p>
         </div>
@@ -63,10 +64,6 @@
         <section class="recent" id="recent-section" hidden>
           <div class="section-head"><h2>Recent</h2><button type="button" class="link" id="recent-clear">Clear</button></div>
           <ul class="cards" id="recent-list"></ul>
-        </section>
-        <section id="templates-section">
-          <div class="section-head"><h2>Start from a template</h2></div>
-          <ul class="cards" id="template-list"></ul>
         </section>
         <section id="examples-section">
           <div class="section-head"><h2>Examples</h2></div>
@@ -98,6 +95,7 @@
   <div class="toasts" id="toasts" aria-live="polite"></div>
   <input type="file" id="file-input" accept=".yaml,.yml,.png,application/x-yaml,text/yaml,image/png" hidden>
   <input type="file" id="csv-input" accept=".csv,text/csv" hidden>
+  <input type="file" id="import-input" accept=".csv,.tsv,.mmd,.mermaid,.txt,text/csv,text/plain" hidden>
 
   <script type="module" src="app/main.js"></script>
 </body>

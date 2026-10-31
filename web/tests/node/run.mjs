@@ -376,6 +376,20 @@ test('the module converts mermaid exactly as the native tool', async () => {
   }
 });
 
+test('the import wizard\'s charts load: every CSV kind and a framed mermaid diagram', async () => {
+  const imp = await import(pathToFileURL(join(sourceDir, 'web', 'app', 'app', 'import.js')).href);
+  const info = imp.analyzeTable(imp.parseCsv('Quarter,Revenue,"unit cost"\nQ1,121,9\nQ2,138,8\nQ3,152,7\n'));
+  const v = await viewer('root: {type: Label, text: x}\n');
+  for (const k of imp.CHART_KINDS) {
+    const look = { ...imp.defaultLook('sales.csv'), subtitle: 'In kUSD', cards: true, theme: 'paper' };
+    await v.setSource(imp.csvChartSource(info, k.id, imp.defaultMapping(k.id, info), look, v.themes()[0].palette));
+  }
+  const { source } = await importMermaid('---\ntitle: Orders\n---\nflowchart LR\n  A --> B\n');
+  await v.setSource(imp.mermaidChartSource(source, { ...imp.defaultLook('orders.mmd', 'mermaid'), title: imp.mermaidTitle(source) }));
+  assert(v.toYaml().includes('type: Flowchart'), 'the diagram is in the frame');
+  v.destroy();
+});
+
 test('setSource takes mermaid and the viewer holds the YAML', async () => {
   const mermaid = 'flowchart LR\n  A --> B\n  click A callback\n';
   const v = await viewer(mermaid);
