@@ -63,6 +63,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `nymph view --edit`: choosing a colour for a field that was automatic opens the colour picker at once.
 
 ### Fixed
+- Web app: the import wizard's preview no longer keeps the previous chart's zoom and pan after switching chart type (pie and horizontal bars were drawn squashed and stayed so).
 - Web app: **PNG with drawings** includes drawings made outside the chart image, instead of cutting them off.
 - Web app: in Edit mode, editor tools called by agents (and setting the file's theme) failed with a JSON error instead of changing the chart.
 - Web app: closing the chart while hosting a live session again asks, then ends the session for the guests.

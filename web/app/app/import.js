@@ -911,7 +911,8 @@ export async function importWizard(deps) {
           if (token !== drawn || !viewer) {
             return;
           }
-          await viewer.setSource(source);
+          // Each preview is a new chart: never keep the last one's zoom and pan.
+          await viewer.setSource(source, { resetView: true });
           previewNote.textContent = mermaid && converted?.warnings?.length ? `${converted.warnings.length} part(s) of the diagram were left out: ${converted.warnings[0].message}` : '';
           previewNote.className = 'preview-note';
           next.disabled = false;
