@@ -13,6 +13,8 @@
  * preview and resolves with the source to open.
  */
 
+import { chartIcon } from './icons.js';
+
 // ── CSV ───────────────────────────────────────────────────────────────────────
 
 /** The delimiter of a CSV text: the one of , ; and tab its first line uses most. */
@@ -780,18 +782,6 @@ export function mermaidChartSource(converted, look) {
 
 // ── The wizard ────────────────────────────────────────────────────────────────
 
-/** Small drawings of each chart kind for the first step's cards. */
-const KIND_ICONS = {
-  line: '<polyline points="6,40 18,28 30,32 42,16 56,20" fill="none" stroke="var(--accent)" stroke-width="3" stroke-linejoin="round" stroke-linecap="round"/><polyline points="6,44 18,38 30,40 42,30 56,34" fill="none" stroke="var(--muted)" stroke-width="2" stroke-linejoin="round" opacity=".6"/>',
-  area: '<path d="M6 40 L18 26 L30 32 L42 14 L56 20 L56 46 L6 46Z" fill="var(--accent)" opacity=".25"/><polyline points="6,40 18,26 30,32 42,14 56,20" fill="none" stroke="var(--accent)" stroke-width="3" stroke-linejoin="round"/>',
-  bars: '<rect x="8" y="22" width="7" height="24" rx="1.5" fill="var(--accent)"/><rect x="16" y="30" width="7" height="16" rx="1.5" fill="var(--muted)" opacity=".6"/><rect x="30" y="12" width="7" height="34" rx="1.5" fill="var(--accent)"/><rect x="38" y="24" width="7" height="22" rx="1.5" fill="var(--muted)" opacity=".6"/>',
-  stacked: '<rect x="10" y="26" width="10" height="20" rx="1.5" fill="var(--accent)"/><rect x="10" y="16" width="10" height="10" fill="var(--muted)" opacity=".6"/><rect x="26" y="20" width="10" height="26" rx="1.5" fill="var(--accent)"/><rect x="26" y="8" width="10" height="12" fill="var(--muted)" opacity=".6"/><rect x="42" y="30" width="10" height="16" rx="1.5" fill="var(--accent)"/><rect x="42" y="22" width="10" height="8" fill="var(--muted)" opacity=".6"/>',
-  hbars: '<rect x="8" y="8" width="44" height="8" rx="1.5" fill="var(--accent)"/><rect x="8" y="20" width="32" height="8" rx="1.5" fill="var(--accent)" opacity=".8"/><rect x="8" y="32" width="22" height="8" rx="1.5" fill="var(--accent)" opacity=".6"/><rect x="8" y="44" width="12" height="4" rx="1.5" fill="var(--muted)" opacity=".6"/>',
-  scatter: '<circle cx="12" cy="38" r="3" fill="var(--accent)"/><circle cx="20" cy="32" r="3" fill="var(--accent)"/><circle cx="26" cy="36" r="3" fill="var(--accent)"/><circle cx="32" cy="24" r="3" fill="var(--accent)"/><circle cx="40" cy="22" r="3" fill="var(--accent)"/><circle cx="46" cy="14" r="3" fill="var(--accent)"/><circle cx="52" cy="18" r="3" fill="var(--muted)" opacity=".6"/>',
-  pie: '<circle cx="31" cy="27" r="19" fill="var(--muted)" opacity=".35"/><path d="M31 27 L31 8 A19 19 0 0 1 48 35 Z" fill="var(--accent)"/><path d="M31 27 L48 35 A19 19 0 0 1 22 44 Z" fill="var(--accent)" opacity=".6"/>',
-  histogram: '<rect x="6" y="38" width="8" height="8" fill="var(--accent)" opacity=".6"/><rect x="14" y="26" width="8" height="20" fill="var(--accent)" opacity=".8"/><rect x="22" y="12" width="8" height="34" fill="var(--accent)"/><rect x="30" y="18" width="8" height="28" fill="var(--accent)"/><rect x="38" y="30" width="8" height="16" fill="var(--accent)" opacity=".8"/><rect x="46" y="40" width="8" height="6" fill="var(--accent)" opacity=".6"/>',
-};
-
 /** Whether a file is mermaid by its name or its first keyword. */
 export function isMermaidFile(name, text) {
   if (/\.(mmd|mermaid)$/i.test(name ?? '')) {
@@ -1000,7 +990,7 @@ export async function importWizard(deps) {
                 },
                 ondblclick: () => go(1),
               },
-              el('span', { class: 'kind-icon', html: `<svg viewBox="0 0 62 52" width="62" height="52" aria-hidden="true">${KIND_ICONS[k.id]}</svg>` }),
+              el('span', { class: 'kind-icon', html: chartIcon(k.id) }),
               el('strong', {}, k.title),
               el('span', {}, k.note),
             ),

@@ -15,7 +15,7 @@ import { Collab } from './collab/collab.js';
 import { Commands } from './commands.js';
 import { device, editAvailability } from './device.js';
 import { Doc, baseName, withoutView } from './document.js';
-import { icons } from './icons.js';
+import { chartIcon, icons } from './icons.js';
 import { importWizard } from './import.js';
 import { OpenError, fetchUrl, pickFile, pngSource, readFile, sniff, writeHandle } from './open.js';
 import { DriveProvider } from './providers/drive.js';
@@ -1104,7 +1104,7 @@ function defineCommands() {
           el(
             'ul',
             { class: 'cards small' },
-            list.map((t) => el('li', {}, el('button', { type: 'button', class: 'card', onclick: () => close(t.name) }, el('div', { class: 'label' }, el('strong', {}, t.title), el('span', {}, t.family))))),
+            list.map((t) => el('li', {}, el('button', { type: 'button', class: 'card', onclick: () => close(t.name) }, t.icon ? el('span', { class: 'kind-icon', html: chartIcon(t.icon) }) : null, el('div', { class: 'label' }, el('strong', {}, t.title), el('span', {}, t.family))))),
           ),
           dialogButtons(close, [{ label: 'Cancel', value: undefined }]),
         );

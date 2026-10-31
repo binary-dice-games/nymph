@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Web app: the **New chart** dialog shows a small picture of each template's chart type, like the import wizard's chart cards.
 - Web app: **Import CSV or mermaid…** on the start page (or drop a `.csv` / `.mmd` file) opens a wizard with a live preview: for a CSV, pick the chart (line, area, bars, stacked or horizontal bars, scatter, pie, histogram), map columns to the axis and series, then set the title, subtitle, footnote, fonts, colour theme, heading style, size, legend and summary cards; a mermaid diagram gets the same heading, fonts and theme. The new chart is laid out like a report: a title text box, a rule and a footnote.
 
 - Web app: **Collaborate** (`Ctrl+Shift+L`) shares the open chart live with the people who have its invite link, browser to browser over WebRTC with no server: they see every change as the owner makes it, follow the owner's view or pan their own, and everyone draws on a whiteboard over the chart (cursors, ink, text notes, stickers) that is never saved in the file. The owner can lock the session, remove people, make a new link and let only themselves draw; join codes and a TURN setting help strict networks.
