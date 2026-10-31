@@ -21,6 +21,7 @@
 #include <stdexcept>
 #include <string>
 #include <string_view>
+#include <utility>
 #include <vector>
 #include "core/error.hpp"
 #include "fonts/embedded_fonts.hpp"
@@ -168,7 +169,11 @@ int guarded(F&& f) {
   try {
     const int s = f();
     if (the_editor() && the_editor()->ws) {
+      // A listener may call back in (e.g. source() on "change") and reuse
+      // scratch(); keep the result f() left there for the caller.
+      std::string result = std::move(scratch());
       flush_events(*the_editor());
+      scratch() = std::move(result);
     }
     return s;
   } catch (const fonts_needed& e) {

@@ -284,10 +284,13 @@ function updateAddress() {
 
 // ── Opening ───────────────────────────────────────────────────────────────────
 
-/** Asks to save or discard unsaved changes, and to end a live session; false to stay. */
-async function confirmLeave({ collab = false } = {}) {
-  // The host switching charts keeps the live session (see Collab.documentSwitched).
-  if (!collab && app.doc && !app.collab.hosting && !(await app.collab.stop({ ask: true }))) {
+/**
+ * Asks to save or discard unsaved changes, and to end a live session; false
+ * to stay. `switching`: another chart is opening, so a host keeps the session
+ * (see Collab.documentSwitched); closing the chart still ends it.
+ */
+async function confirmLeave({ collab = false, switching = false } = {}) {
+  if (!collab && app.doc && !(switching && app.collab.hosting) && !(await app.collab.stop({ ask: true }))) {
     return false;
   }
   if (!app.doc?.modified || app.doc.origin.kind === 'collab') {
@@ -331,7 +334,7 @@ async function openBytes(bytes, name, origin, opts = {}) {
 
 /** Opens a source as the document. */
 async function openSource(source, name, origin, opts = {}) {
-  if (!(await confirmLeave({ collab: !!opts.collab }))) {
+  if (!(await confirmLeave({ collab: !!opts.collab, switching: true }))) {
     return false;
   }
   const token = ++app.opening;
