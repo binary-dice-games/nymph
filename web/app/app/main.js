@@ -1470,6 +1470,7 @@ function wireControls() {
       ...['auto', 'light', 'dark'].map((t) => ({ label: `App: ${t === 'auto' ? 'as the system' : t}`, icon: 'theme', note: mark(theme === t), run: () => act('app_set_theme', { theme: t }) })),
       '-',
       !device.mobile && { label: 'Keyboard shortcuts', icon: 'keyboard', note: '?', run: () => act('app_shortcuts') },
+      { label: 'How to use nymph', icon: 'info', run: () => window.open('tutorial.html', '_blank', 'noopener') },
       { label: 'About nymph', icon: 'info', run: () => act('app_about') },
       app.doc && { label: 'Close chart', icon: 'close', run: () => act('app_close') },
     ].filter(Boolean));
@@ -1681,7 +1682,9 @@ function about() {
       el('p', {}, 'nymph turns a YAML description of a chart into a picture: plots, UML diagrams, flowcharts, Gantt and Sankey charts, user-interface mockups. This page views and edits them in your browser; your files stay here.'),
       el('p', {}, `Version ${app.version.version || 'development'} (${(app.version.commit ?? 'dev').slice(0, 10)}).`),
       el('p', {}, 'MIT License © 2026 Binary Dice Games. Fonts under the SIL Open Font License. Built with Dear ImGui, ImPlot, ImPlot3D, ImGuiColorTextEdit (MIT) and libyaml.'),
-      el('p', {}, el('a', { href: 'https://github.com/binary-dice-games/nymph', target: '_blank', rel: 'noopener' }, 'Source code and documentation')),
+      el('p', {},
+        el('a', { href: 'tutorial.html', target: '_blank', rel: 'noopener' }, 'How to use nymph'), ' · ',
+        el('a', { href: 'https://github.com/binary-dice-games/nymph', target: '_blank', rel: 'noopener' }, 'Source code and documentation')),
       dialogButtons(close, [{ label: 'Close', value: true, kind: 'primary', focus: true }]),
     );
   });

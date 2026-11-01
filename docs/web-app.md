@@ -5,6 +5,10 @@ charts in the browser, with nothing to install. Your files stay in the
 browser: nothing is uploaded unless you save to Google Drive, and there are
 no analytics. Design: [spec/15_web_app/DESIGN.md](../spec/15_web_app/DESIGN.md).
 
+New to it? The site's [tutorial](https://binary-dice-games.github.io/nymph/tutorial.html)
+([source](../web/app/tutorial.html)) walks through the basics with
+screenshots and animations.
+
 ## Opening a chart
 
 From the start page:
