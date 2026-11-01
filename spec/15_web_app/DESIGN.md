@@ -118,6 +118,7 @@ Files owned or changed:
 ```
 https://binary-dice-games.github.io/nymph/
   index.html, app/…            the app (web/app/), entry for every route
+  tutorial.html, tutorial/     how to use the app, with screenshots and GIFs (web/app/)
   manifest.webmanifest, sw.js  PWA
   config.json                  provider settings (public values), written at build time
   version.json                 {version, commit}: cache key, About
@@ -298,7 +299,17 @@ carry `?v=<commit>`: a deploy is picked up at once. The JavaScript module
 URLs do not: `nymph-editor.js` imports `../nymph-viewer.js`, and a second
 URL for it would load a second copy (and a second `NymphError` class).
 The worker is registered as `sw.js?editor=0|1`, so the mobile page never
-precaches the editor.
+precaches the editor. Only navigations to the app's own page (the site root
+or `index.html`, any query) answer with the cached shell; other pages (the
+demo, the tutorial) are served as themselves.
+
+The **tutorial** (`web/app/tutorial.html`, linked from the start page, the
+**⋯** menu and About) is a static page with committed screenshots and GIFs in
+`tutorial/`. They are made from the real app by
+`web/tests/tutorial/media.mjs` (Chromium's screencast and ffmpeg) rather
+than drawn by hand, so they can be remade when the app changes
+([docs/building.md](../../docs/building.md#web-viewer)); the Node and
+browser tests check that every picture it shows ships and loads.
 
 ### 3.10 Mobile: view only
 

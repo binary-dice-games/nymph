@@ -269,6 +269,25 @@ test('the URLs embedders use still answer', async () => {
   }
 });
 
+test('the start page links the tutorial, and the tutorial shows all its pictures', async () => {
+  const page = await openApp();
+  await page.click('#start .hint a[href="tutorial.html"]');
+  await page.waitForURL(`${site.base}/tutorial.html`);
+  assert((await page.title()) === 'How to use nymph', `title ${await page.title()}`);
+  const images = page.locator('main img');
+  assert((await images.count()) >= 10, 'pictures');
+  // Lazy pictures load when scrolled to: load them all, then check none is broken.
+  await images.evaluateAll((all) => all.forEach((img) => (img.loading = 'eager')));
+  await page.waitForFunction(() => [...document.querySelectorAll('main img')].every((img) => img.complete), null, { timeout: 20000 });
+  const broken = await images.evaluateAll((all) => all.filter((img) => img.naturalWidth === 0).map((img) => img.getAttribute('src')));
+  assert(broken.length === 0, `broken: ${broken.join(', ')}`);
+  // Its links back to the app work.
+  await page.click('header .brand');
+  await page.waitForFunction(() => document.documentElement.dataset.ready === 'true', null, { timeout: 30000 });
+  assert(await page.isVisible('#start'), 'back on the start page');
+  await done(page);
+});
+
 // ── Step 8: Edit and save ────────────────────────────────────────────────────
 
 test('View to Edit keeps the zoom and is not modified; an edit marks the title', async () => {
@@ -605,6 +624,20 @@ test('after one visit the app works offline', async () => {
   await shown(page);
   assert((await state(page)).name === 'line.yaml', 'opened offline');
   await page.context().setOffline(false);
+  await done(page);
+});
+
+test('with the service worker, the tutorial and the demo open as themselves, not as the app', async () => {
+  const page = await openApp({ sw: true });
+  await page.evaluate(() => navigator.serviceWorker.ready);
+  await page.reload();
+  await page.waitForFunction(() => !!navigator.serviceWorker.controller, null, { timeout: 20000 });
+  await page.goto(`${site.base}/tutorial.html`);
+  assert((await page.title()) === 'How to use nymph', `tutorial: ${await page.title()}`);
+  await page.goto(`${site.base}/demo/`);
+  assert(!(await page.locator('#start').count()), 'the demo is not the app');
+  await page.goto(`${site.base}/?example=line`);
+  await page.waitForFunction(() => document.documentElement.dataset.ready === 'true', null, { timeout: 20000 });
   await done(page);
 });
 

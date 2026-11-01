@@ -1,7 +1,8 @@
 // MIT License © 2026 Binary Dice Games
 // spec/15_web_app plan steps 7 to 9: the app's pure functions in Node: URL
 // rewrites, the view key ignored by "modified", share links' encoding, and
-// the import wizard's CSV parsing and chart writing (app/import.js).
+// the import wizard's CSV parsing and chart writing (app/import.js), and
+// the tutorial page on the built site.
 //
 //   node app.mjs <build>/web <nymph source dir>
 
@@ -16,7 +17,6 @@ const { withoutView, viewBlock, withView, Doc, baseName } = await import(pathToF
 const { encodeSource, decodeSource } = await import(pathToFileURL(join(appDir, 'share.js')).href);
 const imp = await import(pathToFileURL(join(appDir, 'import.js')).href);
 const { chartIcon } = await import(pathToFileURL(join(appDir, 'icons.js')).href);
-void webDir;
 
 const tests = [];
 const test = (name, fn) => tests.push({ name, fn });
@@ -187,6 +187,19 @@ test('every template and import chart kind has a pictogram', () => {
     eq(chartIcon(k).startsWith('<svg'), true, `kind ${k}`);
   }
   eq(chartIcon('nope'), '', 'unknown type');
+});
+
+test('the site ships the tutorial with every picture it shows, linked from the start page', () => {
+  const site = join(webDir, 'site');
+  const page = readFileSync(join(site, 'tutorial.html'), 'utf8');
+  eq(/<title>How to use nymph<\/title>/.test(page), true, 'the title');
+  const images = [...page.matchAll(/src="(tutorial\/[^"]+)"/g)].map((m) => m[1]);
+  eq(images.length >= 10, true, `${images.length} pictures`);
+  for (const image of images) {
+    const head = readFileSync(join(site, image)).subarray(0, 4).toString('latin1');
+    eq(/^(\x89PNG|GIF8)/.test(head), true, `${image} is a PNG or a GIF`);
+  }
+  eq(readFileSync(join(site, 'index.html'), 'utf8').includes('href="tutorial.html"'), true, 'linked from the start page');
 });
 
 let failed = 0;

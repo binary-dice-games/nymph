@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Web app: a tutorial page (`tutorial.html`, linked from the start page, the **⋯** menu and About) on opening, viewing, editing, styling, saving and sharing charts, with screenshots and animations.
 - Web app: the **New chart** dialog shows a small picture of each template's chart type, like the import wizard's chart cards.
 - Web app: **Import CSV or mermaid…** on the start page (or drop a `.csv` / `.mmd` file) opens a wizard with a live preview: for a CSV, pick the chart (line, area, bars, stacked or horizontal bars, scatter, pie, histogram), map columns to the axis and series, then set the title, subtitle, footnote, fonts, colour theme, heading style, size, legend and summary cards; a mermaid diagram gets the same heading, fonts and theme. The new chart is laid out like a report: a title text box, a rule and a footnote.
 
@@ -64,6 +65,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `nymph view --edit`: choosing a colour for a field that was automatic opens the colour picker at once.
 
 ### Fixed
+- Web app: once the app had been visited (it works offline), the demo page opened the app instead of itself.
 - Web app: the import wizard's preview no longer keeps the previous chart's zoom and pan after switching chart type (pie and horizontal bars were drawn squashed and stayed so).
 - Web app: **PNG with drawings** includes drawings made outside the chart image, instead of cutting them off.
 - Web app: in Edit mode, editor tools called by agents (and setting the file's theme) failed with a JSON error instead of changing the chart.

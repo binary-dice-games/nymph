@@ -1,7 +1,7 @@
 // MIT License © 2026 Binary Dice Games
 // The nymph web app's service worker (spec/15_web_app/DESIGN.md section
-// 3.9): the app shell and both modules cached per build, fonts, examples
-// and templates as they are fetched. Same-origin GET requests only: URLs
+// 3.9): the app shell and both modules cached per build, fonts, examples,
+// templates and the tutorial as they are fetched. Same-origin GET requests only: URLs
 // the user opens and Google Drive never go through it. A new version waits
 // until the page asks it to take over (the user chose Reload).
 
@@ -51,8 +51,11 @@ self.addEventListener('fetch', (event) => {
   if (request.method !== 'GET' || url.origin !== self.location.origin) {
     return; // the network, untouched
   }
-  // The app's pages answer from the shell, whatever the query (?url=, ?example=).
-  const key = request.mode === 'navigate' ? 'index.html' : request;
+  // The app's page answers from the shell, whatever the query (?url=, ?example=);
+  // other pages (the tutorial, the demo) are themselves.
+  const scope = new URL('./', self.location.href).pathname;
+  const app = request.mode === 'navigate' && (url.pathname === scope || url.pathname === `${scope}index.html`);
+  const key = app ? 'index.html' : request;
   event.respondWith(
     caches.open(CACHE).then(async (cache) => {
       const hit = await cache.match(key, { ignoreSearch: request.mode === 'navigate' });
@@ -60,7 +63,7 @@ self.addEventListener('fetch', (event) => {
         return hit;
       }
       const response = await fetch(request);
-      if (response.ok && /\/(fonts|examples|templates|editor|demo)\//.test(url.pathname)) {
+      if (response.ok && /\/(fonts|examples|templates|editor|demo|tutorial)\/|\/tutorial\.html$/.test(url.pathname)) {
         cache.put(request, response.clone());
       }
       return response;

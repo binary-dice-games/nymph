@@ -12,7 +12,8 @@ linked.
 It is meant for AI agents that need to show information as a chart; they
 can also draft diagrams in [mermaid](docs/mermaid.md), which nymph reads,
 draws and converts to its YAML.
-The [web app](https://binary-dice-games.github.io/nymph/) ([docs](docs/web-app.md))
+The [web app](https://binary-dice-games.github.io/nymph/) ([docs](docs/web-app.md),
+[tutorial](https://binary-dice-games.github.io/nymph/tutorial.html))
 opens, views and edits nymph files in the browser, with nothing to install;
 the agent you already use (Claude Code, Cursor, Gemini CLI) can
 [connect to it](docs/web-app.md#agents) and edit the open chart, with no API key;
@@ -127,7 +128,7 @@ carries its source: `bdg::nymph::extract_source(png)` returns it.
 | `imuml/` | ImUml, the UML diagram library for Dear ImGui that nymph's diagrams use |
 | `app/` | The `nymph` command-line executable |
 | `tests/` | GoogleTest suite, run with `ctest` |
-| `web/` | The web viewer, the editor module (WebAssembly, JavaScript APIs), the web app (`web/app/`) and the collaboration packages (`web/collab/`), built with `NYMPH_WEB` |
+| `web/` | The web viewer, the editor module (WebAssembly, JavaScript APIs), the web app (`web/app/`, with its tutorial page; `web/tests/tutorial/` makes its pictures) and the collaboration packages (`web/collab/`), built with `NYMPH_WEB` |
 | `claude/` | Claude integration: the agent skill text (`claude/skill/`), the MCP App that shows charts live in the chat (`claude/app/`) and the Claude Code plugin (`claude/plugin/`, listed by `.claude-plugin/marketplace.json`) |
 | `cursor/` | Cursor integration: the plugin (`cursor/plugin/`, listed by `.cursor-plugin/marketplace.json`) and its rule template |
 | `extension/` | The Chrome extension that turns nymph PNGs on any page into live viewers (built with `NYMPH_WEB`) |

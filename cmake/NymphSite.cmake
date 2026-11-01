@@ -2,7 +2,8 @@
 #
 # Assembles the GitHub Pages site (spec/15_web_app/DESIGN.md section 3.1)
 # into OUT: the app at the root, the viewer's files at their published
-# paths, the editor module, fonts, examples, templates, the demo page,
+# paths, the editor module, fonts, examples, templates, the demo page, the
+# tutorial (tutorial.html and its pictures in tutorial/),
 # version.json, config.json and the service worker. Run with cmake -P:
 #   -DWEB=<build>/web -DSOURCE=<nymph source> -DOUT=<site>
 #   -DVERSION=<x.y.z> -DCOMMIT=<sha>
@@ -23,7 +24,8 @@ file(MAKE_DIRECTORY "${OUT}")
 file(GLOB _app_top LIST_DIRECTORIES false "${SOURCE}/web/app/*")
 list(FILTER _app_top EXCLUDE REGEX "sw\\.js\\.in$")
 file(COPY ${_app_top} DESTINATION "${OUT}")
-file(COPY "${SOURCE}/web/app/app" "${SOURCE}/web/app/templates" DESTINATION "${OUT}")
+# The app's modules, the templates, and the tutorial's pictures (tutorial.html is a top file).
+file(COPY "${SOURCE}/web/app/app" "${SOURCE}/web/app/templates" "${SOURCE}/web/app/tutorial" DESTINATION "${OUT}")
 file(COPY "${SOURCE}/resources/icon.png" DESTINATION "${OUT}")
 
 # The viewer at the paths embedders use, the editor, fonts, examples, demo.

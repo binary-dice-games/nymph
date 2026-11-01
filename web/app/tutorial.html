@@ -1,0 +1,377 @@
+<!doctype html>
+<!-- MIT License © 2026 Binary Dice Games -->
+<!-- The web app's tutorial. Its pictures (tutorial/) are made from the real
+     app by web/tests/tutorial/media.mjs: remake them when the app changes. -->
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src 'self'; style-src 'unsafe-inline'; base-uri 'none'; form-action 'none'">
+  <meta name="description" content="How to use nymph in the browser: open, view, edit, style, save and share charts, with screenshots and animations.">
+  <meta name="color-scheme" content="light dark">
+  <meta name="theme-color" content="#0f9f86">
+  <title>How to use nymph</title>
+  <link rel="icon" href="icon.png">
+  <style>
+    :root {
+      color-scheme: light dark;
+      --bg: #ffffff;
+      --fg: #1b2230;
+      --muted: #5f6b7d;
+      --border: #e1e5eb;
+      --accent: #0b8571;
+      --soft: #f0f2f5;
+      --kbd: #ffffff;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #0f1217;
+        --fg: #e6e9ef;
+        --muted: #9aa4b5;
+        --border: #2b313c;
+        --accent: #2bc6a8;
+        --soft: #1f242d;
+        --kbd: #171b22;
+      }
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--fg);
+      font: 16px/1.6 system-ui, -apple-system, 'Segoe UI', sans-serif;
+    }
+    header, main, footer { width: min(900px, 100%); margin: 0 auto; padding: 0 16px; }
+    header { display: flex; align-items: center; justify-content: space-between; padding-top: 14px; padding-bottom: 14px; }
+    .brand { display: flex; gap: 8px; align-items: center; color: inherit; font-size: 17px; font-weight: 700; text-decoration: none; }
+    nav { display: flex; gap: 18px; }
+    a { color: var(--accent); }
+    nav a { color: var(--muted); text-decoration: none; font-weight: 500; }
+    h1 { font-size: 2rem; line-height: 1.2; margin: 1rem 0 0.5rem; }
+    h2 { font-size: 1.45rem; margin: 2.6rem 0 0.6rem; padding-top: 1.2rem; border-top: 1px solid var(--border); }
+    h3 { font-size: 1.1rem; margin: 1.6rem 0 0.4rem; }
+    .lead { font-size: 1.1rem; color: var(--muted); }
+    figure { margin: 1rem 0 1.4rem; }
+    figure img {
+      display: block;
+      max-width: 100%;
+      height: auto;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      box-shadow: 0 8px 24px rgba(16, 24, 40, 0.08);
+    }
+    figure.side { float: right; width: min(340px, 45%); margin: 0.3rem 0 1rem 1.4rem; }
+    figcaption { margin-top: 0.4rem; color: var(--muted); font-size: 0.9rem; }
+    .clear { clear: both; }
+    kbd {
+      display: inline-block;
+      min-width: 1.6em;
+      padding: 0 0.4em;
+      border: 1px solid var(--border);
+      border-bottom-width: 2px;
+      border-radius: 5px;
+      background: var(--kbd);
+      font: 600 0.85em/1.5 ui-monospace, 'SFMono-Regular', Consolas, monospace;
+      text-align: center;
+    }
+    code { font: 0.9em ui-monospace, 'SFMono-Regular', Consolas, monospace; }
+    pre {
+      overflow-x: auto;
+      padding: 12px 16px;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      background: var(--soft);
+      font-size: 0.9rem;
+      line-height: 1.45;
+    }
+    pre code { font-size: inherit; }
+    table { width: 100%; border-collapse: collapse; margin: 0.8rem 0 1.2rem; font-size: 0.95rem; }
+    th, td { padding: 6px 8px; border-bottom: 1px solid var(--border); text-align: left; vertical-align: top; }
+    th { color: var(--muted); font-weight: 600; }
+    td:first-child { white-space: nowrap; }
+    .toc { padding: 12px 16px; border: 1px solid var(--border); border-radius: 10px; background: var(--soft); }
+    .toc ol { margin: 0.4rem 0 0; padding-left: 1.4rem; columns: 2 16rem; }
+    .tip { padding: 10px 14px; border-left: 4px solid var(--accent); border-radius: 6px; background: var(--soft); }
+    .try { font-weight: 600; }
+    footer {
+      margin-top: 3rem;
+      padding-top: 1rem;
+      padding-bottom: 2rem;
+      border-top: 1px solid var(--border);
+      color: var(--muted);
+      font-size: 0.9rem;
+    }
+    @media (max-width: 640px) {
+      figure.side { float: none; width: auto; margin: 1rem 0; }
+      td:first-child { white-space: normal; }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <a class="brand" href="./">
+      <img src="icon.png" alt="" width="28" height="28">
+      <span>nymph</span>
+    </a>
+    <nav aria-label="Site">
+      <a href="./">Open the app</a>
+      <a href="demo/">Demo</a>
+      <a href="https://github.com/binary-dice-games/nymph" rel="noopener">Source</a>
+    </nav>
+  </header>
+
+  <main>
+    <h1>How to use nymph</h1>
+    <p class="lead">
+      nymph turns a short text file describing a chart into a picture: plots, dashboards, UML
+      diagrams, flowcharts, Gantt and Sankey charts, user-interface mockups. This app opens, views
+      and edits those charts in your browser, with nothing to install. Your files stay in the
+      browser.
+    </p>
+
+    <figure>
+      <img src="tutorial/edit-text.gif" width="896" height="392" alt="In Edit mode, a click on the chart's title selects it; the title is typed again in the panel on the right and the chart changes as it is typed.">
+      <figcaption>Click a text in the chart, type, and the chart is redrawn at once.</figcaption>
+    </figure>
+
+    <nav class="toc" aria-label="Contents">
+      <strong>Contents</strong>
+      <ol>
+        <li><a href="#file">The file behind every chart</a></li>
+        <li><a href="#open">Open a chart</a></li>
+        <li><a href="#new">Start a new chart</a></li>
+        <li><a href="#view">Look at a chart</a></li>
+        <li><a href="#edit">Edit a chart</a></li>
+        <li><a href="#style">Colours, fonts and themes</a></li>
+        <li><a href="#add">Add and remove parts</a></li>
+        <li><a href="#data">Change the data</a></li>
+        <li><a href="#save">Save and download</a></li>
+        <li><a href="#share">Share</a></li>
+        <li><a href="#agents">Work with an AI agent</a></li>
+        <li><a href="#keys">Keyboard shortcuts</a></li>
+        <li><a href="#more">Going further</a></li>
+      </ol>
+    </nav>
+
+    <h2 id="file">1. The file behind every chart</h2>
+    <p>
+      A nymph chart is a small <a href="https://github.com/binary-dice-games/nymph/blob/main/docs/format.md" rel="noopener">YAML</a>
+      file: what to draw (<code>root</code>), its parts (<code>children</code>) and the numbers
+      (<code>data</code>). This one is the line chart in the pictures below:
+    </p>
+<pre><code>root:
+  type: Plot
+  title: Load test
+  x_label: minute
+  children:
+    - {type: PlotLine, label: cpu, xs: $minute, ys: $cpu}
+    - {type: PlotLine, label: memory, xs: $minute, ys: $mem}
+data: |
+  minute, cpu, mem
+  0, 12, 40
+  1, 35, 42
+  2, 71, 47</code></pre>
+    <p>
+      You never have to write it by hand here: everything you change in the app is written into
+      this file for you. A PNG saved by nymph carries its YAML inside, so the picture itself can be
+      opened again and edited. AI agents (Claude, Cursor, Gemini) write this format well, and the
+      <a href="https://github.com/binary-dice-games/nymph#install" rel="noopener">command-line tool</a>
+      turns it into a PNG: <code>nymph chart.yaml</code>.
+    </p>
+
+    <h2 id="open">2. Open a chart</h2>
+    <figure>
+      <img src="tutorial/start.png" width="1280" height="720" loading="lazy" alt="The start page: Open a nymph chart, with Open file, From URL, New chart and Import CSV or mermaid buttons, and a grid of examples below.">
+      <figcaption>The start page. Click any example to open it.</figcaption>
+    </figure>
+    <table>
+      <tr><th>How</th><th>What it opens</th></tr>
+      <tr><td><strong>Open file…</strong> (<kbd>Ctrl+O</kbd>)</td><td>A <code>.yaml</code> file, or a PNG that nymph wrote.</td></tr>
+      <tr><td>Drag and drop</td><td>A file dropped anywhere on the page.</td></tr>
+      <tr><td>Paste</td><td>YAML text from the clipboard.</td></tr>
+      <tr><td><strong>From URL…</strong></td><td>A file on the web, such as a file page on GitHub.</td></tr>
+      <tr><td><strong>Examples</strong></td><td>A chart of every kind, to look at or start from.</td></tr>
+      <tr><td><strong>Recent</strong></td><td>The last charts you opened in this browser.</td></tr>
+    </table>
+    <p class="try"><a href="./?example=line">Try it: open the line chart example</a></p>
+
+    <h2 id="new">3. Start a new chart</h2>
+    <figure class="side">
+      <img src="tutorial/new-chart.png" width="544" height="581" loading="lazy" alt="The New chart dialog with nine templates: line chart, bar chart, dashboard, flowchart, class diagram, sequence diagram, Gantt chart, Sankey diagram and UI mockup.">
+    </figure>
+    <p>
+      <strong>New chart</strong> starts from a template of each family: plots, a dashboard, a
+      flowchart, class and sequence diagrams, a Gantt chart, a Sankey diagram and a UI mockup.
+      The template opens in the editor, ready to change.
+    </p>
+    <p>
+      Got the numbers in a spreadsheet already? Save them as CSV and use
+      <strong>Import CSV or mermaid…</strong>. A short wizard asks for the chart type, which
+      columns to draw and the look (title, fonts, colours), with a live preview at each step.
+      It also reads <a href="https://github.com/binary-dice-games/nymph/blob/main/docs/mermaid.md" rel="noopener">mermaid</a>
+      diagrams and turns them into nymph charts.
+    </p>
+    <figure class="clear">
+      <img src="tutorial/import.gif" width="768" height="432" loading="lazy" alt="Import CSV: a sales table becomes a line chart; the wizard goes through chart type, data and look, a title is typed, and Create chart opens it in the editor.">
+      <figcaption>A CSV table becomes a chart in three steps.</figcaption>
+    </figure>
+
+    <h2 id="view">4. Look at a chart</h2>
+    <p>
+      A chart opens in <strong>View</strong>. It is live, not a flat picture: hover a plot to read
+      the values under the pointer, turn the mouse wheel (or pinch) to zoom, drag to move around,
+      and double-click to fit the whole chart again.
+    </p>
+    <figure>
+      <img src="tutorial/view.gif" width="660" height="360" loading="lazy" alt="Hovering a line chart shows the values under the pointer; the wheel zooms in, a drag pans, and a double-click fits the chart again.">
+      <figcaption>Hover, zoom with the wheel, drag, and double-click to fit.</figcaption>
+    </figure>
+    <p class="tip">
+      On a phone or tablet the app shows charts only (open, view, share, download). Editing needs a
+      computer with a mouse and keyboard.
+    </p>
+
+    <h2 id="edit">5. Edit a chart</h2>
+    <p>
+      Press <strong>Edit</strong> in the top bar (or the <kbd>E</kbd> key). The editor shows the
+      chart on the left and a panel on the right:
+    </p>
+    <figure>
+      <img src="tutorial/editor.png" width="1280" height="720" loading="lazy" alt="The editor: the dashboard example with the Temperature title selected, a floating toolbar over it, and the panel with Undo, Redo, Theme, the Elements list and the title field.">
+      <figcaption>The editor, with the title of a plot selected.</figcaption>
+    </figure>
+    <ul>
+      <li><strong>Click a text</strong> (a title, an axis label, a legend, a box in a diagram) to
+        select it. Its field appears at the top of the panel: type there and the chart follows.</li>
+      <li><strong>Click an empty part</strong> of a plot or diagram to select the whole of it;
+        <strong>All fields</strong> lists everything that can be set on it.</li>
+      <li>The <strong>Elements</strong> list shows every part of the chart as a tree: click one
+        to select it, even if it is hard to click in the chart.</li>
+      <li><strong>Undo</strong> and <strong>Redo</strong> (<kbd>Ctrl+Z</kbd>, <kbd>Ctrl+Y</kbd>)
+        take back any change. <strong>reset</strong> next to a field puts it back to its
+        default.</li>
+      <li>Dragging still moves the chart and the wheel still zooms; <strong>Reset view</strong>
+        fits it again.</li>
+    </ul>
+    <p class="try"><a href="./?example=line&amp;mode=edit">Try it: edit the line chart example</a></p>
+
+    <h2 id="style">6. Colours, fonts and themes</h2>
+    <p>
+      A small toolbar floats next to whatever is selected, with the changes made most often:
+      text colour, the colour scheme of a plot, font and text size, line and fill colours, and the
+      shape of diagram boxes. At its end, <strong>copy style</strong> (the next thing you click
+      takes the same colours and text style), <strong>clear style</strong>,
+      <strong>Duplicate</strong> and <strong>Delete</strong>.
+    </p>
+    <figure>
+      <img src="tutorial/style.gif" width="720" height="450" loading="lazy" alt="A bar chart is selected; the toolbar's colour scheme button opens a list of schemes and Paired gives the bars new colours.">
+      <figcaption>A new colour scheme for a bar chart, from the floating toolbar.</figcaption>
+    </figure>
+    <figure class="side">
+      <img src="tutorial/theme.png" width="744" height="638" loading="lazy" alt="The Theme dialog: Its own theme, Light, Dark, Classic, Forest, Midnight, Ocean, Paper, Pastel, Slate and Sunset, each with a sample of its colours.">
+    </figure>
+    <p>
+      A <strong>theme</strong> changes the whole chart at once: background, fonts and the colours
+      of every series and diagram. Press <strong>Theme</strong> in the panel (or
+      <strong>⋯ &gt; Theme…</strong>). In Edit it is written into the file, and Undo takes it
+      back; in View it is only a preview.
+    </p>
+    <p>
+      The <strong>⋯</strong> menu also switches the app itself between light and dark.
+    </p>
+
+    <h2 id="add" class="clear">7. Add and remove parts</h2>
+    <p>
+      Right-click a part of the chart (or an entry of the Elements list) to add something:
+      <strong>Add child</strong> puts a new part inside it (a line in a plot, a box in a
+      flowchart), <strong>Add chart below</strong> and <strong>Add chart to the right</strong> put
+      a new chart next to it. The menu offers only what fits there. To remove a part, select it
+      and press <kbd>Delete</kbd> (or the bin on the toolbar).
+    </p>
+    <figure>
+      <img src="tutorial/add-element.gif" width="672" height="465" loading="lazy" alt="A right-click on a line chart opens a menu; Add chart below lists the kinds of charts, and Plot adds an empty plot under the first one.">
+      <figcaption>Right-click, <strong>Add chart below</strong>, <strong>Plot</strong>: a second plot under the first.</figcaption>
+    </figure>
+
+    <h2 id="data">8. Change the data</h2>
+    <p>
+      The tabs over the chart hold its data tables, next to <strong>Chart</strong>. A table is a grid:
+      click a cell and type, add rows and columns, and rename a column in its header. The chart
+      follows when you go back to it. <strong>Import CSV</strong> replaces a table with a file,
+      <strong>Paste CSV</strong> with the clipboard (copied from a spreadsheet, for example), and
+      <strong>Export CSV</strong> saves it. The <strong>+</strong> tab adds a new table.
+    </p>
+    <figure>
+      <img src="tutorial/data.gif" width="720" height="420" loading="lazy" alt="The data tab of the line chart: the cpu value at minute 3 is changed from 88 to 40, and back on the Chart tab the red line dips there.">
+      <figcaption>One number changed in the data tab, and the line follows.</figcaption>
+    </figure>
+
+    <h2 id="save">9. Save and download</h2>
+    <figure class="side">
+      <img src="tutorial/save-menu.png" width="340" height="250" loading="lazy" alt="The Save menu: Save, Save as, Download YAML and Download PNG (carries the YAML).">
+    </figure>
+    <p>
+      A dot after the file name means unsaved changes. <strong>Save</strong> (<kbd>Ctrl+S</kbd>)
+      writes back to the file you opened where the browser allows it (Chrome, Edge), otherwise it
+      downloads it. The arrow next to it has <strong>Save as…</strong>,
+      <strong>Download YAML</strong> and <strong>Download PNG</strong>: the PNG is a picture
+      anybody can see, and it carries the YAML, so nymph can open it and edit it again.
+    </p>
+    <p>
+      If the tab closes before you save, the app keeps a draft: open the same chart again and it
+      offers to restore your changes.
+    </p>
+
+    <h2 id="share" class="clear">10. Share</h2>
+    <figure class="side">
+      <img src="tutorial/share-menu.png" width="340" height="250" loading="lazy" alt="The Share menu: Copy link, Copy embed code, Share live, Download PNG and Download YAML.">
+    </figure>
+    <ul>
+      <li><strong>Copy link</strong> gives a link that opens the same chart. A changed chart travels
+        inside the link itself; it is never sent to a server.</li>
+      <li><strong>Copy embed code</strong> gives HTML that shows the chart, live, in any web
+        page.</li>
+      <li><strong>Collaborate</strong> (or <strong>Share live…</strong>) lets other people watch the
+        chart while you edit it, and draw and write notes on it together, browser to browser.
+        See <a href="https://github.com/binary-dice-games/nymph/blob/main/docs/collaboration.md" rel="noopener">live collaboration</a>.</li>
+    </ul>
+
+    <h2 id="agents" class="clear">11. Work with an AI agent</h2>
+    <p>
+      An AI agent you already use (Claude Code, Claude Desktop, Cursor, Gemini CLI) can work on the
+      chart open in the app. Ask it to "connect to the nymph web app": it gives you a short code to
+      type under <strong>Agents</strong>. Every change it makes is listed there with
+      <strong>Undo</strong>. The app never asks for an API key and calls no AI service itself.
+      See <a href="https://github.com/binary-dice-games/nymph/blob/main/docs/web-app.md#agents" rel="noopener">agents in the web app</a>.
+    </p>
+
+    <h2 id="keys">12. Keyboard shortcuts</h2>
+    <table>
+      <tr><th>Keys</th><th>What</th></tr>
+      <tr><td><kbd>Ctrl+O</kbd>, <kbd>Ctrl+S</kbd></td><td>Open, save</td></tr>
+      <tr><td><kbd>E</kbd></td><td>Edit (in View)</td></tr>
+      <tr><td><kbd>Ctrl+Z</kbd>, <kbd>Ctrl+Y</kbd></td><td>Undo, redo</td></tr>
+      <tr><td><kbd>Delete</kbd>, <kbd>Ctrl+D</kbd></td><td>Delete, duplicate the selected part</td></tr>
+      <tr><td><kbd>Alt+↑</kbd>, <kbd>Alt+↓</kbd></td><td>Move the selected part up or down</td></tr>
+      <tr><td><kbd>Ctrl+Shift+A</kbd></td><td>The Agents panel</td></tr>
+      <tr><td><kbd>Ctrl+Shift+L</kbd></td><td>Share live</td></tr>
+      <tr><td>Wheel, drag, double-click</td><td>Zoom, pan, fit the chart</td></tr>
+      <tr><td><kbd>?</kbd></td><td>All shortcuts</td></tr>
+    </table>
+
+    <h2 id="more">13. Going further</h2>
+    <ul>
+      <li><a href="https://github.com/binary-dice-games/nymph/blob/main/docs/web-app.md" rel="noopener">The web app in detail</a>: every way to open, save and share, Google Drive, installing it and working offline.</li>
+      <li><a href="https://github.com/binary-dice-games/nymph/blob/main/docs/format.md" rel="noopener">The YAML format</a> and <a href="https://github.com/binary-dice-games/nymph/blob/main/docs/elements.md" rel="noopener">every element</a>.</li>
+      <li><a href="https://github.com/binary-dice-games/nymph#install" rel="noopener">Install the command-line tool</a>, or use nymph from <a href="https://github.com/binary-dice-games/nymph/blob/main/docs/claude.md" rel="noopener">Claude</a> or <a href="https://github.com/binary-dice-games/nymph/blob/main/docs/cursor.md" rel="noopener">Cursor</a>.</li>
+      <li>The <a href="demo/">demo page</a>: every example, live, next to its PNG.</li>
+    </ul>
+  </main>
+
+  <footer>
+    MIT License © 2026 Binary Dice Games ·
+    <a href="./">Open the app</a> ·
+    <a href="https://github.com/binary-dice-games/nymph" rel="noopener">Source code</a>
+  </footer>
+</body>
+</html>

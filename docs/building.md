@@ -244,6 +244,16 @@ turn on its Google Drive buttons ([web-app.md](web-app.md#hosting-and-setup)),
 `NYMPH_SITE_COMMIT` names the commit it was built from (default: git
 `HEAD`). `ctest` checks both modules against `web/size_budget.json`.
 
+The tutorial page's screenshots and animations (`web/app/tutorial/`) are
+made from the built site in Chromium, not drawn by hand. After a change to
+the look of the app, remake them and commit the files it writes (it needs
+Playwright for Node and ffmpeg; about two minutes):
+
+```sh
+node web/tests/tutorial/media.mjs build-web/web .            # all of them
+node web/tests/tutorial/media.mjs build-web/web . view data  # only these
+```
+
 It also writes `build-web/claude/viewer.html`, the MCP App that shows
 `nymph mcp`'s charts live in a Claude conversation. Embed it in the
 native build to serve it:
