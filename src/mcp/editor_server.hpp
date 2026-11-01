@@ -7,6 +7,7 @@
 #pragma once
 
 #include <atomic>
+#include <condition_variable>
 #include <deque>
 #include <filesystem>
 #include <functional>
@@ -81,6 +82,7 @@ class editor_server {
   struct connection {
     ipc::local_stream stream;
     std::thread thread;
+    bool done = false; ///< serve() returned (guarded by mtx_).
   };
   void accept_loop();
   void serve(connection& c);
@@ -89,6 +91,7 @@ class editor_server {
   ipc::local_listener listener_;
   std::mutex mtx_;
   std::vector<std::unique_ptr<connection>> connections_;
+  std::condition_variable ended_; ///< A connection's serve() returned.
   std::atomic<int> open_{0};
   std::thread accept_; ///< Last: started once everything else exists.
 };

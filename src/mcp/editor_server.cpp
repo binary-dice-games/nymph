@@ -2,6 +2,8 @@
 /// @file editor_server.cpp
 /// @brief The editor's MCP server (see editor_server.hpp).
 #include "mcp/editor_server.hpp"
+#include <algorithm>
+#include <chrono>
 #include <utility>
 #include "mcp/json_rpc.hpp"
 #include "mcp/mcp_session.hpp"
@@ -78,6 +80,19 @@ editor_server::~editor_server() {
   for (const std::unique_ptr<connection>& c : all) {
     c->stream.shutdown_reads(); // its read returns; a reply on its way still goes out
   }
+  // On Windows shutting reads down does not end a read already blocked (a
+  // client connected but quiet): those connections are closed after a moment.
+  {
+    std::unique_lock<std::mutex> lock(mtx_);
+    ended_.wait_for(lock, std::chrono::milliseconds(500), [&] {
+      return std::all_of(all.begin(), all.end(), [](const std::unique_ptr<connection>& c) { return c->done; });
+    });
+    for (const std::unique_ptr<connection>& c : all) {
+      if (!c->done) {
+        c->stream.abort();
+      }
+    }
+  }
   for (const std::unique_ptr<connection>& c : all) {
     if (c->thread.joinable()) {
       c->thread.join();
@@ -125,6 +140,9 @@ void editor_server::serve(connection& c) {
     }
   }
   --open_;
+  const std::lock_guard<std::mutex> lock(mtx_);
+  c.done = true;
+  ended_.notify_all();
 }
 
 } // namespace bdg::nymph::mcp

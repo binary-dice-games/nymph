@@ -1,8 +1,8 @@
 // MIT License © 2026 Binary Dice Games
 /// @file test_local_socket.cpp
 /// @brief spec/14_editor_workspace plan step 8: lines over a local socket
-///        both ways, a closed peer, two connections, stopping a blocked
-///        accept, a stale socket file, the editors' discovery files.
+///        both ways, a closed peer, ending a blocked read, two
+///        connections, stopping a blocked accept, a stale socket file, the editors' discovery files.
 #include <gtest/gtest.h>
 #include <chrono>
 #include <filesystem>
@@ -51,6 +51,27 @@ TEST(local_socket, LinesGoBothWays) {
   EXPECT_EQ(line.size(), big.size() + 5);
   client.shutdown(); // the server's read ends
   server.join();
+  std::filesystem::remove_all(dir);
+}
+
+TEST(local_socket, AbortEndsAReadBlockedOnAnotherThread) {
+  const std::filesystem::path dir = test_dir();
+  local_listener listener(dir / "s.sock");
+  local_stream client = local_stream::connect(dir / "s.sock");
+  std::optional<local_stream> c = listener.accept();
+  ASSERT_TRUE(c);
+  // The peer stays open and quiet: only abort() ends the read (on Windows,
+  // shutdown_reads() does not).
+  std::future<bool> read = std::async(std::launch::async, [&] {
+    std::string line;
+    return c->read_line(line);
+  });
+  EXPECT_EQ(read.wait_for(std::chrono::milliseconds(100)), std::future_status::timeout);
+  c->abort();
+  ASSERT_EQ(read.wait_for(std::chrono::seconds(10)), std::future_status::ready) << "the read is still blocked";
+  EXPECT_FALSE(read.get());
+  std::string line;
+  EXPECT_FALSE(client.read_line(line)); // the peer sees the end
   std::filesystem::remove_all(dir);
 }
 
