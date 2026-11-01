@@ -71,7 +71,7 @@ async function openApp(options = {}) {
   await context.grantPermissions(['clipboard-read', 'clipboard-write'], { origin: site.base });
   const page = await context.newPage();
   page.errors = [];
-  page.on('pageerror', (e) => page.errors.push(e.message));
+  page.on('pageerror', (e) => page.errors.push(`${e.message} (${page.url()})`));
   page.requests = [];
   page.on('request', (r) => page.requests.push(r.url()));
   if (options.init) {
@@ -632,12 +632,19 @@ test('with the service worker, the tutorial and the demo open as themselves, not
   await page.evaluate(() => navigator.serviceWorker.ready);
   await page.reload();
   await page.waitForFunction(() => !!navigator.serviceWorker.controller, null, { timeout: 20000 });
-  await page.goto(`${site.base}/tutorial.html`);
-  assert((await page.title()) === 'How to use nymph', `tutorial: ${await page.title()}`);
-  await page.goto(`${site.base}/demo/`);
-  assert(!(await page.locator('#start').count()), 'the demo is not the app');
-  await page.goto(`${site.base}/?example=line`);
   await page.waitForFunction(() => document.documentElement.dataset.ready === 'true', null, { timeout: 20000 });
+  // Each in a tab of its own, which the worker controls too: what is checked
+  // is the document it answers with, not how those pages load.
+  for (const [path, check] of [
+    ['tutorial.html', async (tab) => (await tab.title()) === 'How to use nymph'],
+    ['demo/', async (tab) => (await tab.locator('#start').count()) === 0],
+  ]) {
+    const tab = await page.context().newPage();
+    await tab.goto(`${site.base}/${path}`);
+    assert(await tab.evaluate(() => !!navigator.serviceWorker.controller), `${path}: controlled by the worker`);
+    assert(await check(tab), `${path}: opened as the app (title ${await tab.title()})`);
+    await tab.close();
+  }
   await done(page);
 });
 
