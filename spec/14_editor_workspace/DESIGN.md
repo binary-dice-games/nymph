@@ -500,7 +500,8 @@ the model; in the advanced mode only the user's text does, and nothing
 writes into the text but entering the mode. So there is no model-to-text
 direction to race with.
 
-- **Entering** (the **Advanced** button at the right end of the tab bar,
+- **Entering** (the **Source Editor** button in the panel's toolbar, an
+  `inspector_events::source_editor` the panel acts on at the frame's end,
   or `Ctrl+U`; `editor_workspace::set_advanced(true)`): a text typed in a
   field is committed first, the model's source is loaded into
   `source_editor` (ImGuiColorTextEdit's `TextEditor`, FiraMono, the
@@ -521,7 +522,7 @@ direction to race with.
   shortcuts are off. The whole visit is one model undo step, "Edit
   source" (a `begin_group` / `end_group` around it), so `Ctrl+Z` in the
   basic editor afterwards undoes it at once.
-- **Leaving** (the same button, **Basic editor** in the strip, `Ctrl+U`).
+- **Leaving** (**Basic editor**, where **Source Editor** was, or `Ctrl+U`).
   A text that loads is already the model's: the basic editor shows it. A
   text that does not load opens a dialog: **Discard text** goes back with
   the last source that loaded, **Keep editing** stays.

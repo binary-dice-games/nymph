@@ -483,6 +483,10 @@ inspector_events editor_panel::frame(double now_seconds, const std::vector<edit_
   ImGui::SetNextWindowSize(ImVec2(regions.strip.width, height_), ImGuiCond_Always);
   ImGui::Begin("##nymph_editor", nullptr, kFixed);
   inspector_events events = inspector_.draw(model_, tree, status);
+  if (events.source_editor) {
+    mode_asked_ = mode_ask::advanced; // handled at the frame's end
+    refresh();
+  }
   if (tool_events.source && !events.source) {
     events.source = tool_events.source;
     events.paths = tool_events.paths;
@@ -557,20 +561,6 @@ void editor_panel::draw_tabs(inspector_events& events) {
         tab_.reset();
       }
       ImGui::EndTabItem();
-    }
-    // The mode toggle, at the bar's right end.
-    if (advanced_) {
-      ImGui::PushStyleColor(ImGuiCol_Tab, ImGui::GetStyleColorVec4(ImGuiCol_TabSelected));
-    }
-    const bool toggle = ImGui::TabItemButton("Advanced", ImGuiTabItemFlags_Trailing | ImGuiTabItemFlags_NoTooltip);
-    if (advanced_) {
-      ImGui::PopStyleColor();
-    }
-    ImGui::SetItemTooltip(
-        advanced_ ? "Back to the basic editor (Ctrl+U)" : "Advanced edit: write the YAML source by hand (Ctrl+U)");
-    if (toggle) {
-      mode_asked_ = advanced_ ? mode_ask::basic : mode_ask::advanced;
-      refresh();
     }
     if (advanced_) {
       ImGui::EndTabBar(); // no data tabs: the source holds the data

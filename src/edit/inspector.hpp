@@ -48,6 +48,9 @@ struct inspector_events {
   bool undo = false; ///< The undo or redo button; `source` has the result.
   bool save = false; ///< The Save button: overwrite the input (after the viewer asks).
   bool reset_view = false;
+  /// The Source Editor button: switch to the advanced edit mode (the panel
+  /// does it; spec/14_editor_workspace/DESIGN.md section 13).
+  bool source_editor = false;
   /// A change from the tree's menu was refused: the message for the error
   /// panel.
   std::string error;
