@@ -21,6 +21,7 @@
 #include "edit/workspace_layout.hpp"
 #include "view/live_view.hpp"
 #include "workspace/panel_style.hpp"
+#include "workspace/source_editor.hpp"
 #include "workspace/workspace_input.hpp"
 
 namespace bdg::nymph {
@@ -198,6 +199,50 @@ class editor_panel {
     return d;
   }
 
+  // ── Advanced mode (spec/14_editor_workspace/DESIGN.md section 13) ────
+
+  /// @brief Whether the strip shows the source editor instead of the
+  ///        elements, the fields and the data tabs. The user writes the
+  ///        source; every basic edit (fields, tables, the floating toolbar,
+  ///        menus, tree shortcuts, agents' changes) is off.
+  bool advanced() const {
+    return advanced_;
+  }
+  /// @brief Enters or leaves the advanced mode. Entering loads the model's
+  ///        source into the text editor; while in it, a text that loads
+  ///        becomes the model's source (one undo step for the whole visit),
+  ///        one that does not is reported in the log and leaves the figure
+  ///        as it was. Leaving tries the text first.
+  /// @param discard Leave even though the text does not load: what was
+  ///        typed since the last text that loaded is dropped.
+  /// @return "" when done, else why not (the text does not load); the
+  ///         mode is unchanged then.
+  std::string set_advanced(bool on, bool discard = false);
+  /// @brief Asks to leave the advanced mode as the toggle does: at once
+  ///        when the text loads, else after the "discard?" dialog.
+  void ask_basic();
+  /// @brief Tries text typed in the source editor now, without waiting for
+  ///        its pause (before a save).
+  /// @return The change, as frame() reports it; nothing when no text waits.
+  inspector_events flush_source();
+  /// @brief The source editor (its text, error and focus).
+  source_editor& source() {
+    return source_;
+  }
+  const source_editor& source() const {
+    return source_;
+  }
+  /// @brief Whether the advanced text does not load (the figure shows the
+  ///        last one that did).
+  bool source_error() const {
+    return advanced_ && !source_.error().empty();
+  }
+  /// @brief Whether there are changes to lose: the model's source differs
+  ///        from the file's, or, in the advanced mode, the text does.
+  bool modified() const {
+    return model_.modified() || (advanced_ && source_.text() != model_.source());
+  }
+
   /// @brief Whether the strip needs another frame().
   bool wants_frame() const;
 
@@ -234,6 +279,9 @@ class editor_panel {
 
  private:
   void draw_dialogs();
+  void draw_advanced(double now_seconds, const std::string& status, inspector_events& events);
+  void try_source(const std::string& text, inspector_events& events);
+  void take_mode_request(inspector_events& events);
   void draw_tabs(inspector_events& events);
   void draw_table_dialogs(inspector_events& events);
 
@@ -244,6 +292,12 @@ class editor_panel {
 
   ImGuiContext* context_ = nullptr;
   ImFont* ui_font_ = nullptr; ///< FiraSans, once its bytes are there.
+  ImFont* mono_ = nullptr; ///< FiraMono for the source editor, once its bytes are there.
+  source_editor source_;
+  bool advanced_ = false;
+  float basic_strip_ = kDefaultStripWidth; ///< The strip width asked for before the advanced mode.
+  enum class mode_ask { none, advanced, basic } mode_asked_ = mode_ask::none; ///< The toggle, handled at the frame's end.
+  static constexpr float kMonoFontSize = 14.0f;
   panel_appearance appearance_;
   bool appearance_pinned_ = false; ///< set_appearance() was called.
   void apply_appearance(const panel_appearance& appearance);
@@ -263,7 +317,7 @@ class editor_panel {
   std::string file_name_;
   std::string save_question_; ///< replaces "Overwrite <file> with your changes?" when set
   std::string save_note_;     ///< replaces "The file is replaced; ..." when set
-  enum class ask { none, save, close } asked_ = ask::none; ///< A dialog to open at the next frame.
+  enum class ask { none, save, close, basic } asked_ = ask::none; ///< A dialog to open at the next frame.
   decision decision_ = decision::none;
   std::string theme_;
   std::optional<double> last_time_;

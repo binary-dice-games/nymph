@@ -36,7 +36,18 @@ std::string workspace_tools::view_source() const {
 }
 
 std::string workspace_tools::panel_error() const {
-  return ws_.panel() != nullptr ? ws_.panel()->panel().error() : std::string();
+  if (ws_.panel() == nullptr) {
+    return {};
+  }
+  return ws_.panel()->advanced() ? ws_.panel()->source().error() : ws_.panel()->panel().error();
+}
+
+std::string workspace_tools::changes_refused() const {
+  if (!ws_.advanced()) {
+    return {};
+  }
+  return "the user is editing the YAML source by hand (the editor's advanced mode): the chart cannot be changed "
+         "by tools until they go back to the basic editor; the read-only tools still work";
 }
 
 void workspace_tools::changed(const commit_result& r, const std::string& tool) {

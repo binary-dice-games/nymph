@@ -178,9 +178,23 @@ class editor_workspace {
   /// @brief Shows the model's source in the figure again after the fonts it
   ///        needed were registered (workspace_host::need_fonts()).
   void retry_view();
-  /// @brief Text typed in the panel waits for its pause.
+  /// @brief Text typed in the panel (a field, or the advanced source
+  ///        editor) waits for its pause.
   bool pending() const {
-    return panel_ != nullptr && panel_->panel().pending();
+    return panel_ != nullptr && (panel_->panel().pending() || (panel_->advanced() && panel_->source().pending()));
+  }
+
+  /// @brief Enters or leaves the advanced edit mode: the source editor in
+  ///        the strip instead of the elements, fields and data tabs; the
+  ///        figure shows the last source that loaded and takes no edit
+  ///        clicks or menus (spec/14_editor_workspace/DESIGN.md section 13).
+  ///        Does nothing without the panel.
+  /// @param discard Leave even though the text does not load.
+  /// @return "" when done, else why not (editor_panel::set_advanced()).
+  std::string set_advanced(bool on, bool discard = false);
+  /// @brief Whether the panel is in the advanced edit mode.
+  bool advanced() const {
+    return panel_ != nullptr && panel_->advanced();
   }
   bool panel_shown() const {
     return panel_ != nullptr;
@@ -285,6 +299,9 @@ class editor_workspace {
   std::optional<layout_box> selection_box() const;
   void draw_figure(int pixel_width, int pixel_height);
   void take_file_requests();
+  /// Follows a change of the panel's mode: the figure's edit mode, the
+  /// selection, the strip's width.
+  void follow_mode();
   static inspector_events events_of(const std::optional<std::string>& source);
 
   workspace_host& host_;
@@ -308,6 +325,7 @@ class editor_workspace {
   bool figure_drag_ = false; ///< A button went down over the figure and is still held.
   enum class drag { none, strip } divider_drag_ = drag::none; ///< The divider being dragged.
   bool pointer_in_panel_ = false;
+  bool advanced_seen_ = false; ///< The panel's mode at the last follow_mode().
   std::optional<std::pair<float, float>> right_down_; ///< Where the right button went down in the figure.
   double divider_clicked_at_ = -1.0;
   cursor_shape cursor_ = cursor_shape::arrow;

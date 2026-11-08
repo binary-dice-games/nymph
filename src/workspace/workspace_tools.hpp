@@ -32,6 +32,8 @@ class workspace_tools : public mcp::editor_host {
   void changed(const commit_result& r, const std::string& tool) override;
   void select(const edit_target_id& target) override;
   std::vector<uint8_t> view_image(int max_width, int& width, int& height) override;
+  /// Refused in the advanced edit mode: the user writes the source.
+  std::string changes_refused() const override;
 
  private:
   editor_workspace& ws_;

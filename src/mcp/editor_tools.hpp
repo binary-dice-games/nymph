@@ -46,6 +46,13 @@ class editor_host {
   /// @brief A PNG of the figure as the user sees it, scaled down to at most
   ///        `max_width` pixels (0: as it is); its size in `width`, `height`.
   virtual std::vector<uint8_t> view_image(int max_width, int& width, int& height) = 0;
+  /// @brief Why tools that change the chart are refused now ("" when they
+  ///        are not): the user writes the source by hand in the advanced
+  ///        edit mode (spec/14_editor_workspace/DESIGN.md section 13). The
+  ///        read-only tools still run.
+  virtual std::string changes_refused() const {
+    return {};
+  }
 };
 
 /// @brief A piece of work for the editor's UI thread.
