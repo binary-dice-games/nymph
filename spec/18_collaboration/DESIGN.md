@@ -1,5 +1,11 @@
 # nymph — Collaboration: Design
 
+> **Removed from nymph.** Live collaboration (the session and whiteboard
+> packages, the web app's Collaborate feature) moved to the standalone tool
+> [inksplat](https://github.com/binary-dice-games/inksplat). This document
+> is kept as a record; nymph keeps only the viewer and editor APIs it
+> added (`figureBox()`, the `figure` event, `setFit('natural')`).
+
 **Status: built** (plan steps 2-9; see [PLAN.md](PLAN.md) for each
 step's result). Tested on Linux: Node (the whiteboard model, the session
 over in-memory links), Chromium through Playwright (real WebRTC between

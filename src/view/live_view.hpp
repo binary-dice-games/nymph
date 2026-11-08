@@ -36,10 +36,8 @@ enum class view_fit {
   width, ///< Lay out at the box width; height scaled to keep the aspect ratio.
   fill, ///< Lay out at the box size.
   scale, ///< Lay out at the source size; scale with CSS to the box width, up or down.
-  /// Lay out at the source size and never scale (the box may clip it): what
-  /// the web editor shows in a live session, so the owner's figure has the
-  /// same layout as the guests' viewers (spec/18_collaboration/DESIGN.md
-  /// section 6.4).
+  /// Lay out at the source size and never scale (the box may clip it): the
+  /// web editor's figure then has the same layout as the viewer's.
   natural,
 };
 
