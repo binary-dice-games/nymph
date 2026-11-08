@@ -189,8 +189,9 @@ export class NymphEditor {
     if (this.options.fit) {
       this.setFit(this.options.fit);
     }
-    // The panel's text and source fonts; ImGui's built-in font shows until
-    // they are here.
+    // The panel's text font; ImGui's built-in font shows until it is here.
+    // The source editor's font is asked for (a "fonts" event) on entering
+    // the advanced mode.
     this.core.ensureFonts(['FiraSans-Regular.ttf']).then(() => this.schedule(), () => {});
     if (!this.headless) {
       this.attachInput();

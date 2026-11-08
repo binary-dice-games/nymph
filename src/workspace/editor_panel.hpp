@@ -100,6 +100,10 @@ class editor_panel {
 
   /// @brief Height of the tab bar over the left side, CSS pixels.
   static constexpr float kTabBarHeight = 28.0f;
+  /// @brief The source editor's monospace font. A build without it
+  ///        embedded asks the host for it (workspace_host::need_fonts())
+  ///        on entering the advanced mode.
+  static constexpr const char* kSourceFont = "FiraMono-Regular.ttf";
 
   /// @brief The regions of the window (workspace_layout.hpp).
   workspace_layout layout() const {

@@ -9,6 +9,7 @@
 #include <imgui_internal.h>
 #include <string>
 #include <vector>
+#include "fonts/font_testing.hpp"
 #include "mcp/editor_tools.hpp"
 #include "workspace/editor_workspace.hpp"
 #include "workspace/workspace_tools.hpp"
@@ -42,8 +43,12 @@ struct fake_host : workspace_host {
   void changed(const commit_result& r) override {
     changes.push_back(r);
   }
+  void need_fonts(const std::vector<std::string>& fonts) override {
+    fonts_asked.insert(fonts_asked.end(), fonts.begin(), fonts.end());
+  }
   int saves = 0;
   std::vector<commit_result> changes;
+  std::vector<std::string> fonts_asked;
 };
 
 struct advanced_fixture : ::testing::Test {
@@ -335,6 +340,23 @@ TEST_F(advanced_fixture, GoesIdleWhenNothingHappens) {
 }
 
 // ── Highlighting ─────────────────────────────────────────────────────────────
+
+TEST(AdvancedEditFonts, EnteringAsksForTheMonospaceFontWhenNotEmbedded) {
+  // As the web build, which fetches fonts on demand: the source editor's
+  // grid needs FiraMono, not the panel's proportional FiraSans.
+  struct hidden_fonts {
+    hidden_fonts() { hide_embedded_fonts_for_testing(true); }
+    ~hidden_fonts() { hide_embedded_fonts_for_testing(false); }
+  } hidden;
+  fake_host host;
+  editor_workspace ws(host, view_options{view_fit::fill, /*cpu_textures=*/true, true}, "", workspace_gl{});
+  ws.resize(1200.0f, 600.0f, 1.0f);
+  ws.open("root: {type: Label, text: hi}\n", true, true);
+  ws.frame(1.0);
+  EXPECT_TRUE(host.fonts_asked.empty());
+  ASSERT_EQ(ws.set_advanced(true), "");
+  EXPECT_EQ(host.fonts_asked, std::vector<std::string>{editor_panel::kSourceFont});
+}
 
 TEST(YamlLanguage, KeysTypeNamesReferencesAndValues) {
   const std::vector<yaml_token> t = yaml_tokens("  - {type: PlotLine, ys: $revenue, size: 2.5, on: true} # note");
