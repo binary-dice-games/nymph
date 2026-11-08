@@ -212,6 +212,43 @@ TEST_F(workspace_fixture, ANaturalLayoutIsCentredInTheFigureAreaAndStillClickabl
   EXPECT_EQ(ws->panel()->model().selection()->element, "root");
 }
 
+TEST_F(workspace_fixture, AScaledFigureLargerThanItsAreaScrollsWithTheWheelAndStaysClickable) {
+  ws->view().set_source("image: {width: 400, height: 300}\nroot: {type: Label, text: hi}\n");
+  ws->view().set_fit(view_fit::natural);
+  ws->view().set_display_scale(4.0f);
+  run_frames();
+  const layout_box box = ws->panel()->figure_box();
+  ASSERT_LT(box.width, 1600.0f);
+  ASSERT_LT(box.height, 1200.0f);
+  EXPECT_FLOAT_EQ(ws->figure_offset().x, 0.0f); // from the top-left corner
+  EXPECT_FLOAT_EQ(ws->figure_offset().y, 0.0f);
+  const float x = box.width / 2;
+  const float y = box.y + box.height / 2;
+  ws->pointer({pointer_event::kind::move, x, y, 0});
+  ws->pointer({pointer_event::kind::wheel, x, y, 0, 0.0f, -2.0f}); // towards the user: down
+  EXPECT_LT(ws->figure_offset().y, 0.0f);
+  EXPECT_TRUE(ws->view().wants_frame());
+  for (int i = 0; i < 100; ++i) {
+    ws->pointer({pointer_event::kind::wheel, x, y, 0, -1.0f, -1.0f});
+  }
+  // Not past the layout's bottom-right edges.
+  EXPECT_FLOAT_EQ(ws->figure_offset().x, -std::floor(1600.0f - box.width));
+  EXPECT_FLOAT_EQ(ws->figure_offset().y, -std::floor(1200.0f - box.height));
+  ws->pointer({pointer_event::kind::wheel, x, y, 0, 0.0f, 1000.0f});
+  EXPECT_FLOAT_EQ(ws->figure_offset().y, 0.0f);
+  // Scrolled to the label (60 CSS px a notch), a click lands on it.
+  const std::optional<edit_target> label = ws->view().target_for("root", "text");
+  ASSERT_TRUE(label);
+  const float to_x = label->x + label->width / 2 - box.width / 2;
+  const float to_y = label->y + label->height / 2 - box.height / 2;
+  ws->pointer({pointer_event::kind::wheel, x, y, 0, -to_x / 60.0f, -to_y / 60.0f});
+  run_frames();
+  const ImVec2 off = ws->figure_offset();
+  click(off.x + label->x + label->width / 2, box.y + off.y + label->y + label->height / 2);
+  ASSERT_TRUE(ws->panel()->model().selection());
+  EXPECT_EQ(ws->panel()->model().selection()->element, "root");
+}
+
 TEST_F(workspace_fixture, ThePointerOverTheStripGoesToThePanelNotTheFigure) {
   const float strip_x = ws->panel()->strip_x();
   ws->pointer({pointer_event::kind::move, strip_x + 50.0f, 100.0f, 0});

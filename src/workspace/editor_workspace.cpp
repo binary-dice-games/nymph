@@ -20,6 +20,7 @@ namespace bdg::nymph {
 namespace {
 
 constexpr float kFigureTopGap = 24.0f; // CSS px above a centred layout, as the app's viewer stage
+constexpr float kWheelStep = 60.0f; // CSS px a wheel notch scrolls a layout larger than its box
 constexpr unsigned kColorBufferBit = 0x00004000;
 constexpr unsigned kRgba = 0x1908; // GL_RGBA
 constexpr unsigned kUnsignedByte = 0x1401; // GL_UNSIGNED_BYTE
@@ -245,6 +246,17 @@ void editor_workspace::pointer(const pointer_event& in) {
     }
     pointer_in_panel_ = false;
     const ImVec2 off = figure_offset();
+    if (e.type == pointer_event::kind::wheel && !view_.takes_wheel(e.x - off.x, e.y - off.y)) {
+      // A layout larger than its box (a display scale) scrolls where no
+      // plot or diagram takes the wheel; figure_offset() keeps it within
+      // its edges.
+      scroll_ = ImVec2(-std::min(off.x, 0.0f) - e.wheel_x * kWheelStep, -std::min(off.y, 0.0f) - e.wheel_y * kWheelStep);
+      // The pointer is over another point of the layout now (and the
+      // figure is drawn again).
+      const ImVec2 moved = figure_offset();
+      view_.input({pointer_event::kind::move, e.x - moved.x, e.y - moved.y, 0});
+      return;
+    }
     e.x -= off.x;
     e.y -= off.y;
     view_.input(e);
@@ -698,8 +710,11 @@ ImVec2 editor_workspace::figure_offset() const {
   const float s = g.css_scale > 0.0f ? g.css_scale : 1.0f;
   const float spare_x = box.width - g.layout_width * s;
   const float spare_y = box.height - g.layout_height * s;
+  // A larger layout scrolls, within its edges.
+  const auto scrolled = [](float spare, float scroll) { return -std::floor(std::clamp(scroll, 0.0f, -spare)); };
   return ImVec2(
-      spare_x >= 1.0f ? std::floor(spare_x * 0.5f) : 0.0f, spare_y >= 1.0f ? std::min(kFigureTopGap, std::floor(spare_y * 0.5f)) : 0.0f);
+      spare_x >= 1.0f ? std::floor(spare_x * 0.5f) : (spare_x < 0.0f ? scrolled(spare_x, scroll_.x) : 0.0f),
+      spare_y >= 1.0f ? std::min(kFigureTopGap, std::floor(spare_y * 0.5f)) : (spare_y < 0.0f ? scrolled(spare_y, scroll_.y) : 0.0f));
 }
 
 std::vector<uint8_t> editor_workspace::capture_figure(int max_width, int& width, int& height, double now_seconds) {

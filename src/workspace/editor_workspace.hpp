@@ -288,7 +288,8 @@ class editor_workspace {
   std::vector<uint8_t> capture_figure(int max_width, int& width, int& height, double now_seconds);
 
   /// @brief Where the layout is drawn inside the figure box (CSS px): (0, 0)
-  ///        when it fills the box, else centred (view_fit::natural).
+  ///        when it fills the box, centred when smaller (view_fit::natural),
+  ///        moved up and left by the scroll when larger (a display scale).
   ImVec2 figure_offset() const;
 
  private:
@@ -323,6 +324,7 @@ class editor_workspace {
   float strip_wanted_ = kDefaultStripWidth;
   bool panel_drag_ = false; ///< A button went down over the panel and is still held.
   bool figure_drag_ = false; ///< A button went down over the figure and is still held.
+  ImVec2 scroll_{0.0f, 0.0f}; ///< CSS px of a layout larger than its box scrolled out at the top-left.
   enum class drag { none, strip } divider_drag_ = drag::none; ///< The divider being dragged.
   bool pointer_in_panel_ = false;
   bool advanced_seen_ = false; ///< The panel's mode at the last follow_mode().

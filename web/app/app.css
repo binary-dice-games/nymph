@@ -314,6 +314,19 @@ a {
   cursor: not-allowed;
 }
 
+/* Zoom: the chart's size on the page, not its image size. */
+.segmented.zoom button {
+  padding: 0 10px;
+  color: var(--text);
+}
+
+.segmented.zoom #zoom-reset {
+  min-width: 54px;
+  padding: 0 6px;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
 .link {
   border: 0;
   background: none;
@@ -586,7 +599,8 @@ main {
   width: 100%;
   max-width: 100%;
   display: flex;
-  justify-content: center;
+  /* A zoomed chart wider than the stage scrolls from its left edge. */
+  justify-content: safe center;
 }
 
 .stage.editing {

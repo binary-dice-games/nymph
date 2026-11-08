@@ -631,6 +631,16 @@ EMSCRIPTEN_KEEPALIVE int nymph_editor_set_fit(int natural) {
   });
 }
 
+/// @brief live_view::set_display_scale(): the figure `scale` times its
+///        fitted size on screen, the layout unchanged; a figure larger than
+///        its area scrolls with the wheel.
+EMSCRIPTEN_KEEPALIVE int nymph_editor_set_display_scale(float scale) {
+  return guarded([&] {
+    get().ws->view().set_display_scale(scale);
+    return kOk;
+  });
+}
+
 /// @brief Where element `path`'s `field` ("" the element) is drawn, CSS
 ///        pixels in the editor's canvas, as JSON {x, y, width, height}, or "null".
 EMSCRIPTEN_KEEPALIVE const char* nymph_editor_target(const char* path, const char* field) {

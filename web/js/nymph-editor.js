@@ -397,6 +397,24 @@ export class NymphEditor {
   }
 
   /**
+   * Shows the figure `scale` times its fitted size (1, the default; clamped
+   * to 0.1 to 10), drawn again at that size so it stays sharp; the layout,
+   * the image size and the source do not change. A figure larger than its
+   * area scrolls with the wheel where no plot or diagram takes it.
+   * @param {number} scale
+   */
+  setDisplayScale(scale) {
+    this.displayScaleSet = scale;
+    this.core.check(this.m._nymph_editor_set_display_scale(scale));
+    this.schedule();
+  }
+
+  /** The scale setDisplayScale() set (1 before any). */
+  displayScale() {
+    return this.displayScaleSet ?? 1;
+  }
+
+  /**
    * Where the figure's layout is drawn: `{left, top, width, height, scale,
    * area}`, CSS pixels from the container's top-left corner, `scale` CSS
    * pixels per layout pixel, `area` the part of the editor it is shown in

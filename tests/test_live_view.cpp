@@ -209,6 +209,34 @@ TEST(live_view, FitNaturalLaysOutAtTheSourceSizeAndNeverScales) {
   EXPECT_EQ(v.geometry().layout_width, 900.0f);
 }
 
+TEST(live_view, ADisplayScaleGrowsTheFigureOnScreenButNotItsLayout) {
+  live_view v({view_fit::source});
+  v.set_source(kLine);
+  v.resize({200, 150, 2});
+  EXPECT_FLOAT_EQ(v.geometry().css_scale, 0.5f); // shrunk to the box
+  v.set_display_scale(3.0f);
+  EXPECT_TRUE(v.wants_frame());
+  EXPECT_FLOAT_EQ(v.display_scale(), 3.0f);
+  view_geometry g = v.geometry();
+  EXPECT_EQ(g.layout_width, 400.0f); // the image size stays
+  EXPECT_EQ(g.layout_height, 300.0f);
+  EXPECT_FLOAT_EQ(g.css_scale, 1.5f);
+  EXPECT_FLOAT_EQ(g.framebuffer_scale, 3.0f); // drawn again, sharp
+  EXPECT_EQ(g.pixel_width, 1200);
+  const std::string before = v.source_with_view();
+  v.set_display_scale(100.0f);
+  EXPECT_FLOAT_EQ(v.display_scale(), 10.0f); // clamped
+  EXPECT_EQ(v.source_with_view(), before);
+  // A fill fit lays out at the source size while scaled.
+  v.set_fit(view_fit::fill);
+  v.set_display_scale(2.0f);
+  g = v.geometry();
+  EXPECT_EQ(g.layout_width, 400.0f);
+  EXPECT_FLOAT_EQ(g.css_scale, 1.0f);
+  v.set_display_scale(1.0f);
+  EXPECT_EQ(v.geometry().layout_width, 200.0f); // the box again
+}
+
 TEST(live_view, ABoxTooSmallForTheImageOptionsFallsBackToTheSourceSize) {
   live_view v({view_fit::fill});
   v.set_source(kLine);

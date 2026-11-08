@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Web app: zoom buttons (**−**, **100%**, **+**; `-`, `0`, `+` in View) show the chart from 25% to 400% of its size on the page, in View and Edit, redrawn sharp; the image size and the file do not change. The viewer and editor modules gain `setDisplayScale(scale)`.
 - `nymph view --edit` and the web app's editor: an advanced edit mode (**Source Editor** in the panel, `Ctrl+U`) that replaces the elements, fields and data tabs with a code editor for the YAML source; the figure shows the last text that loaded and the log shows why the current one does not. Basic edits, the figure's menus and agents' changes are off while it is on.
 - Web app: a tutorial page (`tutorial.html`, linked from the start page, the **⋯** menu and About) on opening, viewing, editing, styling, saving and sharing charts, with screenshots and animations.
 - Web app: the **New chart** dialog shows a small picture of each template's chart type, like the import wizard's chart cards.

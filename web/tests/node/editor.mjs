@@ -84,6 +84,17 @@ test('setSource asChange is one undo step; without it, a new document', async ()
   assertEq(editor.state().undo, '', 'no history');
 });
 
+test('setDisplayScale leaves the document unmodified', async () => {
+  await editor.open(await example('line'));
+  const before = editor.source();
+  editor.setDisplayScale(2.5);
+  editor.frame(4);
+  assertEq(editor.displayScale(), 2.5, 'displayScale');
+  assertEq(editor.state().modified, false, 'modified');
+  assertEq(editor.source(), before, 'source');
+  editor.setDisplayScale(1);
+});
+
 test('toPng carries toYaml', async () => {
   await editor.open(await example('bars'));
   const png = editor.toPng();

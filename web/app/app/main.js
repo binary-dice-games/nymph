@@ -396,6 +396,7 @@ function showDocument() {
   // The mobile page saves nothing (nothing is ever modified there): its
   // downloads are in the Share menu.
   $('btn-save').parentElement.hidden = !device.directEditing;
+  setZoom(1); // each chart opens at its own size
   app.activity?.clear();
   app.agents?.documentChanged();
   app.webmcp?.update(true);
@@ -434,6 +435,38 @@ function originText(doc) {
     link: 'From a shared link',
     new: 'A new chart',
   }[o.kind];
+}
+
+// ── Zoom ──────────────────────────────────────────────────────────────────────
+
+/** The zoom steps: how many times its fitted size the chart is shown. */
+const ZOOM_STEPS = [0.25, 0.33, 0.5, 0.67, 0.75, 0.9, 1, 1.1, 1.25, 1.5, 1.75, 2, 2.5, 3, 4];
+
+/**
+ * Shows the chart `zoom` times its fitted size in View and Edit: drawn
+ * again at that size, so it stays sharp; the image size and the file do
+ * not change.
+ */
+function setZoom(zoom) {
+  app.zoom = Math.min(ZOOM_STEPS.at(-1), Math.max(ZOOM_STEPS[0], zoom));
+  applyZoom();
+}
+
+/** The next zoom step in `direction` (1 in, -1 out) from the current zoom. */
+function zoomStep(direction) {
+  const z = app.zoom ?? 1;
+  const next = direction > 0 ? ZOOM_STEPS.find((s) => s > z + 1e-6) : ZOOM_STEPS.findLast((s) => s < z - 1e-6);
+  return next ?? z;
+}
+
+/** Gives the open module the zoom and shows it on the controls. */
+function applyZoom() {
+  const z = app.zoom ?? 1;
+  app.viewer?.setDisplayScale?.(z);
+  app.editor?.setDisplayScale?.(z);
+  $('zoom-reset').textContent = `${Math.round(z * 100)}%`;
+  $('zoom-out').disabled = z <= ZOOM_STEPS[0];
+  $('zoom-in').disabled = z >= ZOOM_STEPS.at(-1);
 }
 
 /** Shows the document in `mode`, switching modules as needed (section 4). */
@@ -487,6 +520,7 @@ async function showViewer(source) {
     return;
   }
   app.viewer = viewer;
+  applyZoom();
   try {
     await viewer.setSource(source);
     if ($('banner').classList.contains('error')) {
@@ -549,6 +583,7 @@ async function showEditor(source) {
   // createEditor measured a detached box: give it the stage's size now.
   editor.resize();
   app.editor = editor;
+  applyZoom();
   app.mode = 'edit';
   const doc = app.doc;
   doc.source = editor.source();
@@ -1065,6 +1100,19 @@ function defineCommands() {
     },
   });
   commands.define({
+    name: 'app_zoom',
+    agent: false, // the user's view of the page, not the chart
+    title: 'Zoom',
+    description: "Shows the chart bigger or smaller on the page, in View and Edit; the image size and the file do not change.",
+    scope: 'document',
+    inputSchema: schema({ step: { type: 'string', enum: ['in', 'out', 'reset'] } }, ['step']),
+    available: () => true,
+    run: ({ step }) => {
+      setZoom(step === 'reset' ? 1 : zoomStep(step === 'in' ? 1 : -1));
+      return { zoom: app.zoom };
+    },
+  });
+  commands.define({
     name: 'app_save',
     title: 'Save',
     description: 'Saves the chart back to where it came from (the file, Google Drive), or downloads it.',
@@ -1336,6 +1384,9 @@ function wireControls() {
   $('btn-drive').hidden = !app.drive.available();
   $('mode-view').addEventListener('click', () => act('app_set_mode', { mode: 'view' }));
   $('mode-edit').addEventListener('click', () => act('app_set_mode', { mode: 'edit' }));
+  $('zoom-in').addEventListener('click', () => act('app_zoom', { step: 'in' }));
+  $('zoom-out').addEventListener('click', () => act('app_zoom', { step: 'out' }));
+  $('zoom-reset').addEventListener('click', () => act('app_zoom', { step: 'reset' }));
   $('btn-save').addEventListener('click', () => act('app_save'));
   $('btn-more').innerHTML = icons.more;
   $('btn-save-menu').innerHTML = icons.caret;
@@ -1491,6 +1542,8 @@ function wireKeys() {
           act('app_set_mode', { mode: 'edit' });
         } else if (e.key === '?') {
           act('app_shortcuts');
+        } else if ((e.key === '+' || e.key === '=' || e.key === '-' || e.key === '0') && app.doc) {
+          act('app_zoom', { step: { '+': 'in', '=': 'in', '-': 'out', 0: 'reset' }[e.key] });
         }
       }
       if (e.key === 'Escape') {
@@ -1613,6 +1666,7 @@ function shortcuts() {
     ['Ctrl+F / Ctrl+H', 'Find / replace in the source'],
     ['Ctrl+Shift+A', 'Show or hide the agents working on the chart'],
     ['Drag, wheel, double-click', 'Pan, zoom, fit the chart'],
+    ['+ / - / 0', 'Show the chart bigger / smaller / at 100% (in View)'],
     ['?', 'This list'],
   ];
   return dialog('Keyboard shortcuts', (body, close) => {

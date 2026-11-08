@@ -54,6 +54,12 @@ like `$1,200` or `45 %` cleaned; semicolon files with decimal commas read).
 **View** is the [web viewer](viewer.md): drag to pan, wheel or pinch to
 zoom, hover for values, double-click to fit.
 
+**−**, **100%** and **+** next to View and Edit (or `-`, `0` and `+` in
+View) show the chart smaller or bigger on the page, from 25% to 400%. The
+chart is drawn again at that size, so it stays sharp; the image size and the
+file do not change. A chart bigger than the page scrolls (in Edit: the wheel
+outside plots and diagrams).
+
 **Edit** (or the `E` key) loads the editor, the same as
 [`nymph view --edit`](viewer.md#editing-in-the-window): click a text or an
 element to select it, change it in the panel or the floating toolbar,

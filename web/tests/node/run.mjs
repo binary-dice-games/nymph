@@ -227,6 +227,23 @@ test('hovering a point reports it', async () => {
   v.destroy();
 });
 
+test('setDisplayScale draws the chart bigger without changing its layout or source', async () => {
+  const v = await viewer('image: {width: 400, height: 300}\nroot: {type: Label, text: big}\n');
+  v.resize(400, 300, 1);
+  const clock = { t: 0 };
+  settle(v, clock);
+  const yaml = v.toYaml();
+  v.setDisplayScale(2);
+  assertEq(v.displayScale(), 2, 'displayScale');
+  settle(v, clock);
+  const g = v.state().geometry;
+  assertEq(g.layoutWidth, 400, 'layout width');
+  assertEq(g.cssScale, 2, 'CSS scale');
+  assertEq(g.pixelWidth, 800, 'drawn at the new size');
+  assertEq(v.toYaml(), yaml, 'the source is unchanged');
+  v.destroy();
+});
+
 test('setData, setPng and toPng', async () => {
   const v = await viewer('root: {type: Plot, children: [{type: PlotLine, label: a, ys: $v}]}\ndata: {v: [1, 2]}\n');
   await v.setData({ v: [3, 4, 5] });

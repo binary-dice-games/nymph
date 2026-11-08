@@ -548,6 +548,7 @@ class NymphViewer {
   setPng(bytes: Uint8Array): Promise<void>;
   setData(tables: object): Promise<void>;
   resetView(): void;
+  setDisplayScale(scale: number): void; // shown `scale` times the fitted size, layout unchanged
   on(event: "hover" | "click" | "view" | "error", cb: (detail) => void): () => void;
   setTheme(theme: string): Promise<void>; // a chart theme id, "" = the source's; fetches its fonts
   themes(): ThemeInfo[];

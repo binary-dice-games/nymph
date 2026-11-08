@@ -866,6 +866,9 @@ export class NymphViewer {
     if (this.themeOverride) {
       this.setTheme(this.themeOverride).catch(() => {});
     }
+    if (this.displayScaleSet) {
+      this.core.m._nymph_viewer_set_display_scale(this.handle, this.displayScaleSet);
+    }
     this.boxKey = undefined; // the new handle has no size yet
     this.fitToContainer();
     if (source) {
@@ -1195,6 +1198,25 @@ export class NymphViewer {
     this.checkAlive();
     this.core.m._nymph_viewer_resize(this.handle, width, height, pixelRatio);
     this.schedule();
+  }
+
+  /**
+   * Shows the chart `scale` times its fitted size (1, the default, is the
+   * size `fit` gives; clamped to 0.1 to 10). The chart is drawn again at
+   * that size, so it stays sharp; its layout, its image size and toYaml()
+   * do not change. Wider than the container, the canvas overflows it.
+   * @param {number} scale
+   */
+  setDisplayScale(scale) {
+    this.checkAlive();
+    this.displayScaleSet = scale;
+    this.core.m._nymph_viewer_set_display_scale(this.handle, scale);
+    this.schedule();
+  }
+
+  /** The scale setDisplayScale() set (1 before any). */
+  displayScale() {
+    return this.displayScaleSet ?? 1;
   }
 
   /**
