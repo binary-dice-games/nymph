@@ -438,6 +438,19 @@ inspector_events editor_panel::frame(double now_seconds, const std::vector<edit_
   }
   ImGui::NewFrame();
   const workspace_layout regions = layout();
+  {
+    // The figure's scroll bars, under the panel's windows (the toolbar).
+    ImDrawList* bars = ImGui::GetBackgroundDrawList();
+    const bool dark = appearance_.dark;
+    const ImU32 track = dark ? IM_COL32(255, 255, 255, 24) : IM_COL32(0, 0, 0, 18);
+    const ImU32 thumb = dark ? IM_COL32(255, 255, 255, 110) : IM_COL32(0, 0, 0, 90);
+    for (const layout_box& b : bar_tracks_) {
+      bars->AddRectFilled(ImVec2(b.x, b.y), ImVec2(b.x + b.width, b.y + b.height), track);
+    }
+    for (const layout_box& b : bar_thumbs_) {
+      bars->AddRectFilled(ImVec2(b.x + 2.0f, b.y + 2.0f), ImVec2(b.x + b.width - 2.0f, b.y + b.height - 2.0f), thumb, 3.0f);
+    }
+  }
   constexpr ImGuiWindowFlags kFixed = ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize |
       ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoSavedSettings |
       ImGuiWindowFlags_NoBringToFrontOnFocus;

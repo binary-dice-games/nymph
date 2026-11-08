@@ -57,8 +57,9 @@ zoom, hover for values, double-click to fit.
 **−**, **100%** and **+** next to View and Edit (or `-`, `0` and `+` in
 View) show the chart smaller or bigger on the page, from 25% to 400%. The
 chart is drawn again at that size, so it stays sharp; the image size and the
-file do not change. A chart bigger than the page scrolls (in Edit: the wheel
-outside plots and diagrams).
+file do not change. A chart bigger than its area has scroll bars; drag it
+(away from its plots and diagrams, which pan themselves) or turn the wheel
+there to move around.
 
 **Edit** (or the `E` key) loads the editor, the same as
 [`nymph view --edit`](viewer.md#editing-in-the-window): click a text or an

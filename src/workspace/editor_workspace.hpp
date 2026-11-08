@@ -292,8 +292,24 @@ class editor_workspace {
   ///        moved up and left by the scroll when larger (a display scale).
   ImVec2 figure_offset() const;
 
+  /// @brief A scroll bar of a layout larger than its figure box: the track
+  ///        along the box's bottom or right edge and the thumb in it (CSS
+  ///        px in the window).
+  struct scroll_bar {
+    bool vertical = false;
+    layout_box track;
+    layout_box thumb;
+  };
+
+  /// @brief The scroll bars shown now: one per direction the layout is
+  ///        larger than its box; none while the figure is hidden.
+  std::vector<scroll_bar> scroll_bars() const;
+
  private:
   bool divider(pointer_event::kind type, float x, int button);
+  bool scroll_bar_input(const pointer_event& e);
+  bool pan_input(const pointer_event& e);
+  void set_scroll(ImVec2 scroll);
   void figure_right_click(pointer_event::kind type, float x, float y, int button, const layout_box& figure);
   void set_cursor(cursor_shape shape);
   void relayout();
@@ -325,6 +341,17 @@ class editor_workspace {
   bool panel_drag_ = false; ///< A button went down over the panel and is still held.
   bool figure_drag_ = false; ///< A button went down over the figure and is still held.
   ImVec2 scroll_{0.0f, 0.0f}; ///< CSS px of a layout larger than its box scrolled out at the top-left.
+  /// A scroll bar's thumb being dragged: whether vertical, and where in the
+  /// thumb it was grabbed (CSS px from its start).
+  std::optional<std::pair<bool, float>> bar_drag_;
+  /// A press on the figure that may become a pan: where (window CSS px),
+  /// the scroll then, and whether it moved far enough to be one.
+  struct pan_press {
+    pointer_event down;
+    ImVec2 scroll;
+    bool panning = false;
+  };
+  std::optional<pan_press> pan_;
   enum class drag { none, strip } divider_drag_ = drag::none; ///< The divider being dragged.
   bool pointer_in_panel_ = false;
   bool advanced_seen_ = false; ///< The panel's mode at the last follow_mode().

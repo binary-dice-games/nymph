@@ -521,6 +521,7 @@ async function showViewer(source) {
   }
   app.viewer = viewer;
   applyZoom();
+  dragToScroll(box, viewer);
   try {
     await viewer.setSource(source);
     if ($('banner').classList.contains('error')) {
@@ -534,6 +535,40 @@ async function showViewer(source) {
       app.doc.source = viewer.toYaml();
       updateTitle();
     }
+  });
+}
+
+/**
+ * A drag on the chart away from its plots and diagrams (which pan
+ * themselves) scrolls a zoomed chart bigger than the stage.
+ */
+function dragToScroll(box, viewer) {
+  const stage = $('stage');
+  box.addEventListener('pointerdown', (e) => {
+    const canvas = box.querySelector('canvas');
+    const overflows = stage.scrollWidth > stage.clientWidth || stage.scrollHeight > stage.clientHeight;
+    if (e.button !== 0 || e.pointerType === 'touch' || !canvas || !overflows) {
+      return;
+    }
+    const c = canvas.getBoundingClientRect();
+    if (viewer.takesWheel(e.clientX - c.left, e.clientY - c.top)) {
+      return;
+    }
+    const start = { x: e.clientX, y: e.clientY, left: stage.scrollLeft, top: stage.scrollTop };
+    const move = (m) => {
+      stage.scrollLeft = start.left - (m.clientX - start.x);
+      stage.scrollTop = start.top - (m.clientY - start.y);
+    };
+    const end = () => {
+      window.removeEventListener('pointermove', move);
+      window.removeEventListener('pointerup', end);
+      window.removeEventListener('pointercancel', end);
+      stage.classList.remove('dragging');
+    };
+    stage.classList.add('dragging');
+    window.addEventListener('pointermove', move);
+    window.addEventListener('pointerup', end);
+    window.addEventListener('pointercancel', end);
   });
 }
 

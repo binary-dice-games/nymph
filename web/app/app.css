@@ -603,6 +603,11 @@ main {
   justify-content: safe center;
 }
 
+.stage.viewing.dragging,
+.stage.viewing.dragging canvas {
+  cursor: grabbing;
+}
+
 .stage.editing {
   overflow: hidden;
   padding: 0;

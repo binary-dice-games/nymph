@@ -1220,6 +1220,15 @@ export class NymphViewer {
   }
 
   /**
+   * Whether the chart pans or zooms at (`x`, `y`), CSS pixels from its
+   * top-left corner (a plot or diagram is there); elsewhere a page may
+   * scroll on a wheel or a drag.
+   */
+  takesWheel(x, y) {
+    return this.handle !== 0 && this.core.m._nymph_viewer_takes_wheel(this.handle, x, y) === 1;
+  }
+
+  /**
    * Feeds a pointer event, in CSS pixels from the chart's top-left corner.
    * @param {'move'|'down'|'up'|'wheel'|'leave'} type
    * @param {{x?: number, y?: number, button?: number, wheelX?: number, wheelY?: number, touch?: boolean}} [e]
