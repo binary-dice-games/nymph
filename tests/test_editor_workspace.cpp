@@ -90,6 +90,25 @@ TEST_F(workspace_fixture, ASourceThatDoesNotBindIsRefusedForEditing) {
   EXPECT_EQ(ws2.panel(), nullptr);
 }
 
+TEST_F(workspace_fixture, PanelTextKeepsItsCssSizeOnHighDensityDisplays) {
+  // The font size each active panel window was drawn with, CSS pixels.
+  const auto font_sizes = [&] {
+    std::vector<float> sizes;
+    for (const ImGuiWindow* w : ws->panel()->imgui_context()->Windows) {
+      if (w->Active) {
+        sizes.push_back(w->FontRefSize);
+      }
+    }
+    return sizes;
+  };
+  const std::vector<float> css = font_sizes();
+  ASSERT_FALSE(css.empty());
+  ws->resize(900.0f, 400.0f, 2.0f);
+  run_frames();
+  EXPECT_EQ(font_sizes(), css);
+  EXPECT_FLOAT_EQ(ws->panel()->imgui_context()->IO.DisplayFramebufferScale.x, 2.0f);
+}
+
 TEST_F(workspace_fixture, NumberFieldsTakeTheKeyboardOneAfterAnotherAndEnterIsReleased) {
   ws->resize(900.0f, 1100.0f, 1.5f);
   ws->panel()->model().select(edit_target_id{"image", ""});

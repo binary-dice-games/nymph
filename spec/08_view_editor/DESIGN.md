@@ -426,8 +426,9 @@ panel.
   opened at run time as for `nymph view`. System clipboard: Win32 first;
   X11 selection ownership is later, until then copy/paste works inside the
   panel only and the plan says so.
-- High DPI: the panel's ImGui style and strip width scale with the window's
-  scale.
+- High DPI: the panel works in CSS pixels; the window's scale is only the
+  framebuffer scale, which maps them to device pixels and sets the fonts'
+  rasterizer density (`FontScaleDpi` stays 1, or text would scale twice).
 - A new diagram field must not change existing output: unset per-item style
   draws exactly as before (existing diagram tests and PNGs unchanged).
 - Code style: `src/edit/` follows nymph conventions (`snake_case`, `bdg::nymph`);

@@ -404,7 +404,10 @@ inspector_events editor_panel::frame(double now_seconds, const std::vector<edit_
   const double step = last_time_ ? now_seconds - *last_time_ : 1.0 / 60.0;
   io.DeltaTime = static_cast<float>(std::clamp(step, 1e-4, 0.25));
   last_time_ = now_seconds;
-  ImGui::GetStyle().FontScaleDpi = scale_;
+  // Coordinates are CSS pixels: the framebuffer scale alone maps them to
+  // device pixels and sets the fonts' rasterizer density, so text is sharp
+  // at its CSS size. A FontScaleDpi of scale_ would scale it a second time.
+  ImGui::GetStyle().FontScaleDpi = 1.0f;
 
   if (ui_font_ == nullptr) {
     // The panel's text in the figures' sans font (Fira Sans), once its

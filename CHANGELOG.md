@@ -66,6 +66,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `nymph view --edit`: choosing a colour for a field that was automatic opens the colour picker at once.
 
 ### Fixed
+- `nymph view --edit` and the web app's editor: the editor's text and widgets are no longer drawn twice too large on high-density displays (Retina, 4K).
 - Web app: once the app had been visited (it works offline), the demo page opened the app instead of itself.
 - Web app: the import wizard's preview no longer keeps the previous chart's zoom and pan after switching chart type (pie and horizontal bars were drawn squashed and stayed so).
 - Web app: **PNG with drawings** includes drawings made outside the chart image, instead of cutting them off.
