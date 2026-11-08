@@ -26,6 +26,9 @@ struct layout_box {
 
 /// @brief The editor strip's width when nothing else is asked for.
 inline constexpr float kDefaultStripWidth = 320.0f;
+/// @brief The strip's width at least while it holds the advanced mode's
+///        source editor (dragging the divider still narrows it).
+inline constexpr float kAdvancedStripWidth = 480.0f;
 /// @brief The narrowest the strip can be dragged.
 inline constexpr float kMinStripWidth = 240.0f;
 /// @brief The narrowest the figure can become by dragging the divider.

@@ -25,7 +25,8 @@ shows the same charts live in a web page
 markdown viewers and chatbots: `<nymph-viewer src="chart.yaml"></nymph-viewer>`;
 `nymph view chart.yaml` opens it in a window; `--edit` adds a panel and a
 floating toolbar to click-select texts and elements and edit them, add and
-remove elements, edit the data tables and the YAML, and let an AI agent work on the open chart through
+remove elements, edit the data tables and the YAML, write the YAML by hand in
+an advanced mode, and let an AI agent work on the open chart through
 `nymph mcp`.
 The [Chrome extension](docs/extension.md) does it on any page you read:
 nymph PNGs on GitHub or any site become live charts of the same size.

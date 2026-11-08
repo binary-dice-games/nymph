@@ -131,6 +131,7 @@ std::string editor_workspace::show_panel(bool on) {
     }
     view_.set_edit_mode(true);
     view_.set_show_limits(true);
+    advanced_seen_ = false;
   } else {
     panel_.reset();
     view_.set_edit_mode(false);
@@ -165,6 +166,34 @@ void editor_workspace::relayout() {
   } else {
     view_.resize(view_size{css_w_, css_h_, scale_});
   }
+}
+
+std::string editor_workspace::set_advanced(bool on, bool discard) {
+  if (panel_ == nullptr) {
+    return "the editor panel is hidden";
+  }
+  if (on == panel_->advanced()) {
+    return {};
+  }
+  flush_pending();
+  const std::string refused = panel_->set_advanced(on, discard);
+  follow_mode();
+  return refused;
+}
+
+void editor_workspace::follow_mode() {
+  if (panel_ == nullptr || panel_->advanced() == advanced_seen_) {
+    return;
+  }
+  advanced_seen_ = panel_->advanced();
+  // In the advanced mode the figure is a plain view: no edit clicks, no
+  // outlines of a selection.
+  view_.set_edit_mode(!advanced_seen_);
+  view_.set_selection(panel_->model().selection());
+  right_down_.reset();
+  strip_wanted_ = panel_->wanted_strip_width();
+  last_ = nullptr;
+  relayout();
 }
 
 float editor_workspace::strip_width() const {
@@ -213,7 +242,9 @@ void editor_workspace::pointer(const pointer_event& in) {
     e.x -= off.x;
     e.y -= off.y;
     view_.input(e);
-    figure_right_click(e.type, e.x, e.y, e.button, figure);
+    if (!panel_->advanced()) { // the advanced mode has no element menu
+      figure_right_click(e.type, e.x, e.y, e.button, figure);
+    }
   }
   if (e.type == pointer_event::kind::up) {
     panel_drag_ = false;
@@ -292,8 +323,23 @@ void editor_workspace::set_cursor(cursor_shape shape) {
 
 key_outcome editor_workspace::key(window_key key, key_mods mods, bool down, bool repeat) {
   const key_event figure_key{imgui_key(key), down, mods.ctrl, mods.shift, mods.alt, false};
-  // Shortcuts that hold wherever the keyboard is: saving.
+  // Shortcuts that hold wherever the keyboard is: saving, and the
+  // advanced mode's toggle.
   if (panel_ != nullptr && mods.ctrl && !mods.alt) {
+    if (key == window_key::u && !panel_->modal_open()) {
+      if (down && !repeat) {
+        if (panel_->advanced()) {
+          flush_pending();
+          if (!panel_->set_advanced(false).empty()) {
+            panel_->ask_basic(); // the text does not load: the panel asks
+          }
+        } else {
+          set_advanced(true);
+        }
+        follow_mode();
+      }
+      return key_outcome::consumed;
+    }
     if (key == window_key::s && !panel_->modal_open()) {
       if (down && !repeat) {
         flush_pending();
@@ -330,6 +376,11 @@ key_outcome editor_workspace::key(window_key key, key_mods mods, bool down, bool
   }
   if (repeat) {
     return key_outcome::consumed;
+  }
+  if (panel_->advanced()) {
+    // The model's undo, the tree's shortcuts: basic edits, off here (the
+    // text editor has its own undo while it has the keyboard).
+    return mods.ctrl ? key_outcome::consumed : key_outcome::unhandled;
   }
   const inspector_events tree = panel_->shortcut(key, mods);
   if (tree.source || tree.select) {
@@ -383,7 +434,8 @@ void editor_workspace::frame(double now_seconds) {
   if (panel_ == nullptr) {
     return;
   }
-  if (const std::optional<edit_target> clicked = view_.take_edit_click()) {
+  follow_mode();
+  if (const std::optional<edit_target> clicked = view_.take_edit_click(); clicked && !panel_->advanced()) {
     panel_->model().select(edit_target_id{clicked->element, clicked->field});
     view_.set_selection(panel_->model().selection());
     panel_->refresh();
@@ -400,6 +452,7 @@ void editor_workspace::frame(double now_seconds) {
   panel_->set_anchor(selection_box());
   if (panel_->wants_frame()) {
     const inspector_events events = panel_->frame(now_seconds, view_.element_list(), host_.status_line(status_));
+    follow_mode(); // the mode's toggle in the tab bar
     apply(events);
     take_file_requests();
     const editor_panel::decision decision = panel_ != nullptr ? panel_->take_decision() : editor_panel::decision::none;
@@ -520,6 +573,7 @@ void editor_workspace::apply(const inspector_events& events) {
     host_.changed(r);
   }
   if (events.save) {
+    flush_pending();
     host_.request_save();
   }
   // Frames only when something happened: every panel frame ends here.
@@ -545,11 +599,20 @@ void editor_workspace::flush_pending() {
   if (panel_ != nullptr && panel_->panel().pending()) {
     apply(panel_->panel().flush(panel_->model()));
   }
+  if (panel_ != nullptr && panel_->advanced()) {
+    const inspector_events typed = panel_->flush_source();
+    if (typed.source) {
+      apply(typed);
+    }
+  }
 }
 
 std::string editor_workspace::import_csv(const std::string& table, std::string_view csv) {
   if (panel_ == nullptr) {
     return "the editor panel is hidden";
+  }
+  if (panel_->advanced()) {
+    return "the editor is in the advanced mode: edit the data in the source";
   }
   std::string message;
   try {
@@ -569,14 +632,14 @@ std::string editor_workspace::import_csv(const std::string& table, std::string_v
 }
 
 void editor_workspace::undo() {
-  if (panel_ != nullptr) {
+  if (panel_ != nullptr && !panel_->advanced()) {
     flush_pending();
     apply(events_of(panel_->model().undo()));
   }
 }
 
 void editor_workspace::redo() {
-  if (panel_ != nullptr) {
+  if (panel_ != nullptr && !panel_->advanced()) {
     flush_pending();
     apply(events_of(panel_->model().redo()));
   }
@@ -595,7 +658,7 @@ void editor_workspace::mark_saved() {
 }
 
 bool editor_workspace::modified() const {
-  return panel_ != nullptr ? panel_->model().modified() : std::string(view_.source()) != saved_source_;
+  return panel_ != nullptr ? panel_->modified() : std::string(view_.source()) != saved_source_;
 }
 
 std::optional<layout_box> editor_workspace::selection_box() const {

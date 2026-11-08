@@ -591,7 +591,10 @@ the `Ctrl+U` toggle, `showSource()` / `paneText()` and the `sourcePane` /
 parsing, corrupting the text and moving the cursor. A source that does not
 bind is refused when opened for editing; an agent or the user changes the
 source through the panel, the tables or the tools. The rest of this section
-is kept as history and is no longer true.
+is kept as history and is no longer true. The YAML can be written by hand
+again in the editor's advanced mode, which never syncs the text with the
+model while the user types ([14_editor_workspace](../14_editor_workspace/DESIGN.md)
+section 13).
 
 The YAML text beside the figure, in both hosts. A `TextEditor` from
 ImGuiColorTextEdit drawn in the panel's ImGui context (which already covers

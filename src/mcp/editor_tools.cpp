@@ -591,6 +591,15 @@ class attribution {
   std::string previous_;
 };
 
+/// Refuses a tool that is not read-only while the host takes no changes.
+void refuse_if_locked(const editor_host& host, bool read_only) {
+  if (!read_only) {
+    if (const std::string why = host.changes_refused(); !why.empty()) {
+      throw tool_error(why);
+    }
+  }
+}
+
 // ── Definitions ──────────────────────────────────────────────────────────────
 
 json prop(const char* type, const char* description) {
@@ -761,8 +770,9 @@ std::vector<tool> make_editor_tools(editor_runner run) {
           {"description", d.description},
           {"inputSchema", d.input},
           {"annotations", annotations(d.title, d.read_only)}},
-         [run, handler, title](const json& args) {
-           return run([handler, args, title](editor_host& host) {
+         [run, handler, title, read_only = d.read_only](const json& args) {
+           return run([handler, args, title, read_only](editor_host& host) {
+             refuse_if_locked(host, read_only);
              const attribution scope(host, title, "agent:mcp");
              return handler(host, args);
            });
@@ -782,6 +792,7 @@ json call_editor_tool(editor_host& host, const std::string& name, const json& ar
     if (!args.is_object()) {
       throw tool_error("the arguments must be an object");
     }
+    refuse_if_locked(host, it->read_only);
     const attribution scope(host, it->title, origin);
     return it->handler(host, args);
   } catch (const tool_error& e) {
