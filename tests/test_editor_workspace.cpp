@@ -111,6 +111,10 @@ TEST_F(workspace_fixture, PanelTextKeepsItsCssSizeOnHighDensityDisplays) {
 
 TEST_F(workspace_fixture, NumberFieldsTakeTheKeyboardOneAfterAnotherAndEnterIsReleased) {
   ws->resize(900.0f, 1100.0f, 1.5f);
+  // Wide enough for the toolbar's two rows at this scale: the scan below
+  // expects the "All fields" header first.
+  ws->panel()->set_strip_width(480.0f);
+  ws->resize(900.0f, 1100.0f, 1.5f);
   ws->panel()->model().select(edit_target_id{"image", ""});
   ws->panel()->refresh();
   run_frames(6);

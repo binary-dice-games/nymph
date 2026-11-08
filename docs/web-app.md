@@ -58,7 +58,7 @@ zoom, hover for values, double-click to fit.
 [`nymph view --edit`](viewer.md#editing-in-the-window): click a text or an
 element to select it, change it in the panel or the floating toolbar,
 right-click to add, move or delete elements, and edit the data tables in
-their tabs; **Advanced** (`Ctrl+U`) swaps them for the YAML source in a code
+their tabs; **Source Editor** (`Ctrl+U`) swaps them for the YAML source in a code
 editor ([advanced mode](viewer.md#editing-in-the-window)). `Ctrl+Z` / `Ctrl+Y` undo and redo; going back to View keeps the chart and its zoom but
 not the undo history.
 

@@ -800,6 +800,9 @@ inspector_events inspector::draw(editor_model& model, const std::vector<edit_ele
     info_open_ = !info_open_;
   }
   ImGui::SetItemTooltip("Edit the description (alt text) and the source note of the figure.");
+  ImGui::SameLine();
+  events.source_editor = ImGui::Button("Source Editor");
+  ImGui::SetItemTooltip("Write the YAML source by hand instead of using the elements, fields and tables (Ctrl+U).");
   ImGui::BeginDisabled(!model.modified());
   // Save at the row's right end when it fits, else on its own line.
   {

@@ -239,15 +239,15 @@ for the default width).
   series at it. To plot a new column, add it in the table's tab, add the
   series (right-click the plot, **Add child**), then choose the column for
   its `ys` (and `xs`).
-- **Advanced mode: write the YAML.** **Advanced** at the right end of the
-  tab bar (or `Ctrl+U`) replaces the elements, fields and data tabs with a
+- **Advanced mode: write the YAML.** **Source Editor** in the panel's
+  toolbar (or `Ctrl+U`) replaces the elements, fields and data tabs with a
   code editor holding the whole source, with line numbers, highlighting
   and its own undo. A short pause after you stop typing, the
   figure shows the text if it loads; if it does not, the log under the
   editor says why (and the line is marked) while the figure keeps the last
   source that loaded. Clicks, menus and the floating toolbar on the figure,
   the tree shortcuts and agents' changes are off in this mode: what you
-  type is the chart. **Basic editor** (or **Advanced** again, or `Ctrl+U`)
+  type is the chart. **Basic editor** in the same place (or `Ctrl+U`)
   goes back; with a text that does not load it asks first, and **Discard
   text** keeps the last source that loaded. **Save** saves the last source
   that loaded, and the whole visit is one undo step afterwards.

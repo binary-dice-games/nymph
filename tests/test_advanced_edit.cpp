@@ -6,6 +6,7 @@
 ///        loads becomes the figure, one that does not is logged and leaves
 ///        the last figure; basic edits and agents' changes are off.
 #include <gtest/gtest.h>
+#include <imgui_internal.h>
 #include <string>
 #include <vector>
 #include "mcp/editor_tools.hpp"
@@ -284,6 +285,37 @@ TEST_F(advanced_fixture, LeavingWithATextThatDoesNotLoadAsksFirst) {
   EXPECT_FALSE(ws->advanced());
   EXPECT_EQ(ws->panel()->model().source(), retitled("Good"));
   EXPECT_EQ(std::string(ws->view().source()), retitled("Good"));
+}
+
+TEST_F(advanced_fixture, TheSourceEditorButtonInThePanelTogglesTheMode) {
+  ASSERT_EQ(ws->set_advanced(false), "");
+  run(3);
+  // The panel's "Source Editor" button, found by hovering the toolbar.
+  ImGuiContext& g = *ws->panel()->imgui_context();
+  ImGuiContext* previous = ImGui::GetCurrentContext();
+  ImGui::SetCurrentContext(&g);
+  ImGuiWindow* strip = ImGui::FindWindowByName("##nymph_editor");
+  const ImGuiID button = strip != nullptr ? strip->GetID("Source Editor") : 0;
+  ImGui::SetCurrentContext(previous);
+  ASSERT_NE(button, 0u);
+  const float x0 = ws->panel()->strip_x();
+  bool found = false;
+  for (float y = 4.0f; y < 120.0f && !found; y += 4.0f) {
+    for (float x = x0 + 4.0f; x < ws->css_width() && !found; x += 6.0f) {
+      ws->pointer({pointer_event::kind::move, x, y, 0});
+      run(1);
+      if (g.HoveredId == button) {
+        found = true;
+        ws->pointer({pointer_event::kind::down, x, y, 0});
+        run(1);
+        ws->pointer({pointer_event::kind::up, x, y, 0});
+        run(3);
+      }
+    }
+  }
+  ASSERT_TRUE(found);
+  EXPECT_TRUE(ws->advanced());
+  EXPECT_EQ(text(), kSource);
 }
 
 TEST_F(advanced_fixture, CtrlUTogglesTheMode) {
