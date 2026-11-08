@@ -11,7 +11,6 @@ import { Activity } from './agents/activity.js';
 import { Bridge } from './agents/bridge.js';
 import { AgentsPanel } from './agents/panel.js';
 import { WebMcp } from './agents/webmcp.js';
-import { Collab } from './collab/collab.js';
 import { Commands } from './commands.js';
 import { device, editAvailability } from './device.js';
 import { Doc, baseName, withoutView } from './document.js';
@@ -83,7 +82,6 @@ async function init() {
   commands.hooks.snapshot = () =>
     app.doc ? { doc: app.doc.id, source: app.editor ? app.editor.source() : app.doc.source, version: app.editor?.version() ?? null, mode: app.mode } : null;
   setUpAgents();
-  setUpCollab();
   wireControls();
   wireDropAndPaste();
   wireKeys();
@@ -146,42 +144,6 @@ function setUpAgents() {
   }
 }
 
-/**
- * Live collaboration (spec/18_collaboration): the owner shares the open
- * chart, guests see it live, everyone draws on a whiteboard over it.
- */
-function setUpCollab() {
-  app.collab = new Collab({
-    app,
-    commands,
-    config: app.config.collab ?? {},
-    base: appBase,
-    stage: $('stage'),
-    dock: $('collab-dock'),
-    button: $('btn-collab'),
-    act,
-    ui: { toast, banner, ask, dialog, dialogButtons, el, download, busy },
-    module: () => app.editor ?? app.viewer,
-    currentYaml: () => (app.editor ? app.editor.toYaml() : app.viewer ? app.viewer.toYaml() : app.doc.source),
-    ownYaml: () => app.viewer?.toYaml() ?? null,
-    openGuest: (source, name) => openSource(source, name, { kind: 'collab' }, { mode: 'view', collab: true }),
-    applyGuest: async (source) => {
-      if (!app.viewer) {
-        await showViewer(source);
-      } else {
-        await app.viewer.setSource(source);
-      }
-      app.doc.source = source;
-      app.doc.savedSource = source;
-      updateTitle();
-    },
-    updateTitle: () => updateTitle(),
-    // The owner's editor shows the chart's own layout while sharing
-    // (spec/18_collaboration/DESIGN.md section 6.4).
-    sessionChanged: () => app.editor?.setFit('natural'),
-  });
-}
-
 async function fetchJson(path, fallback) {
   try {
     const r = await fetch(path, { cache: 'no-cache' });
@@ -235,14 +197,6 @@ async function route() {
     showStart();
     toast(e.message ?? String(e), 6000);
   }
-  const invite = hash.get('collab') ?? (!app.doc && !location.search ? app.collab.rejoinToken() : null);
-  if (invite) {
-    // An invite link (spec/18_collaboration): its token leaves the address
-    // bar at once; the tab keeps it to rejoin on reload.
-    hash.delete('collab');
-    history.replaceState(null, '', `${location.pathname}${location.search}${hash.toString() ? `#${hash}` : ''}`);
-    commands.run('collab_join', { token: invite }).catch((e) => toast(e.message ?? String(e), 8000));
-  }
   if (hash.get('pair')) {
     // A pairing link from an agent (spec/17_agent_connectors section 7.2):
     // used once, so it leaves the address before anything else.
@@ -274,7 +228,6 @@ function updateAddress() {
   } else if (doc?.origin.kind === 'link' && doc.origin.keepUrl) {
     return;
   }
-  // A live chart's address is the app's: the invite token never stays in it.
   const params = new URLSearchParams(location.search);
   if (params.get('device')) {
     url += `${url.includes('?') ? '&' : '?'}device=${params.get('device')}`;
@@ -284,16 +237,9 @@ function updateAddress() {
 
 // ── Opening ───────────────────────────────────────────────────────────────────
 
-/**
- * Asks to save or discard unsaved changes, and to end a live session; false
- * to stay. `switching`: another chart is opening, so a host keeps the session
- * (see Collab.documentSwitched); closing the chart still ends it.
- */
-async function confirmLeave({ collab = false, switching = false } = {}) {
-  if (!collab && app.doc && !(switching && app.collab.hosting) && !(await app.collab.stop({ ask: true }))) {
-    return false;
-  }
-  if (!app.doc?.modified || app.doc.origin.kind === 'collab') {
+/** Asks to save or discard unsaved changes; false to stay. */
+async function confirmLeave() {
+  if (!app.doc?.modified) {
     return true;
   }
   const choice = await ask('Unsaved changes', `${app.doc.name} has changes that are not saved.`, [
@@ -334,7 +280,7 @@ async function openBytes(bytes, name, origin, opts = {}) {
 
 /** Opens a source as the document. */
 async function openSource(source, name, origin, opts = {}) {
-  if (!(await confirmLeave({ collab: !!opts.collab, switching: true }))) {
+  if (!(await confirmLeave())) {
     return false;
   }
   const token = ++app.opening;
@@ -349,7 +295,7 @@ async function openSource(source, name, origin, opts = {}) {
   app.doc = doc;
   showDocument();
   // Unsaved changes from an earlier visit (a closed tab, a crash).
-  const draft = origin.kind === 'collab' ? null : await store.draft(doc.id);
+  const draft = await store.draft(doc.id);
   if (draft && draft.source !== doc.source && draft.base === doc.savedSource && device.directEditing) {
     banner({
       kind: 'info',
@@ -372,14 +318,7 @@ async function openSource(source, name, origin, opts = {}) {
   const wanted = opts.mode === 'edit' && editAvailability().ok ? 'edit' : 'view';
   await showMode(wanted, { force: true });
   updateAddress();
-  if (origin.kind !== 'collab') {
-    remember(doc);
-    if (app.collab.hosting) {
-      app.collab.documentSwitched(doc); // the session follows the host to the new chart
-    } else {
-      app.collab.documentOpened(doc); // resumes this tab's live session after a reload
-    }
-  }
+  remember(doc);
   return true;
 }
 
@@ -423,7 +362,6 @@ async function openDrive(fileId, mode) {
 
 async function closeDocument() {
   commands.documentClosed();
-  app.collab?.documentClosed();
   destroyEditor();
   app.viewer?.destroy();
   app.viewer = null;
@@ -452,14 +390,12 @@ function showDocument() {
   $('doc-title').hidden = false;
   $('doc-actions').hidden = false;
   const edit = editAvailability();
-  // A live chart is the owner's: a guest views it (spec/18_collaboration).
-  const guest = app.doc?.origin.kind === 'collab';
-  $('mode-edit').parentElement.hidden = !device.directEditing || guest;
+  $('mode-edit').parentElement.hidden = !device.directEditing;
   $('mode-edit').disabled = !edit.ok;
   $('mode-edit').title = edit.ok ? 'Edit the chart (E). Undo history is not kept when you go back to View.' : edit.why;
   // The mobile page saves nothing (nothing is ever modified there): its
   // downloads are in the Share menu.
-  $('btn-save').parentElement.hidden = !device.directEditing || guest;
+  $('btn-save').parentElement.hidden = !device.directEditing;
   app.activity?.clear();
   app.agents?.documentChanged();
   app.webmcp?.update(true);
@@ -477,7 +413,7 @@ function updateTitle() {
     input.value = doc.name;
   }
   $('doc-dot').hidden = !doc.modified;
-  $('doc-origin').innerHTML = icons[{ local: 'file', url: 'link', drive: 'drive', example: 'example', template: 'template', import: 'template', paste: 'paste', link: 'share', collab: 'live' }[doc.origin.kind] ?? 'file'];
+  $('doc-origin').innerHTML = icons[{ local: 'file', url: 'link', drive: 'drive', example: 'example', template: 'template', import: 'template', paste: 'paste', link: 'share' }[doc.origin.kind] ?? 'file'];
   $('doc-origin').title = originText(doc);
   document.title = `${doc.modified ? '• ' : ''}${doc.name} — nymph`;
   $('mode-view').setAttribute('aria-pressed', String(app.mode === 'view'));
@@ -497,7 +433,6 @@ function originText(doc) {
     paste: 'Pasted',
     link: 'From a shared link',
     new: 'A new chart',
-    collab: 'A live chart: it changes as its owner edits it',
   }[o.kind];
 }
 
@@ -509,10 +444,6 @@ async function showMode(mode, { force = false } = {}) {
   }
   if (mode === 'edit' && !editAvailability().ok) {
     toast(editAvailability().why);
-    mode = 'view';
-  }
-  if (mode === 'edit' && doc.origin.kind === 'collab') {
-    toast('This live chart is its owner\'s: it changes as they edit it.');
     mode = 'view';
   }
   if (!force && mode === app.mode && (mode === 'view' ? app.viewer : app.editor)) {
@@ -531,8 +462,6 @@ async function showMode(mode, { force = false } = {}) {
     const source = app.viewer?.toYaml?.() ?? doc.source;
     await showEditor(source);
   }
-  app.collab.stageChanged();
-  app.collab.documentChanged();
   updateTitle();
 }
 
@@ -570,10 +499,8 @@ async function showViewer(source) {
     if (app.doc && app.mode === 'view') {
       app.doc.source = viewer.toYaml();
       updateTitle();
-      app.collab.documentChanged();
     }
   });
-  app.collab.stageChanged();
 }
 
 /** The banner of a source that does not load. */
@@ -603,8 +530,8 @@ async function showEditor(source) {
         fileName: app.doc.name,
         theme: app.chartTheme,
         appearance: pageAppearance(),
-        // The chart's own size, as View and the guests of a live session see
-        // it: the image's limits are then the figure's edges.
+        // The chart's own size, as View shows it: the image's limits are then
+        // the figure's edges.
         fit: 'natural',
         wasmUrl: wasmUrl('editor/nymph-editor-core.wasm'),
         fontBaseUrl: new URL('fonts/', appBase()).href,
@@ -635,7 +562,6 @@ async function showEditor(source) {
     }
     updateTitle();
     scheduleDraft();
-    app.collab.documentChanged();
   });
   editor.on('save', () => commands.run('app_save').catch((e) => toast(e.message)));
   editor.on('csv-export', (d) => download(d.csv, d.fileName, 'text/csv'));
@@ -876,9 +802,6 @@ function defineCommands() {
     effect: 'edit',
     inputSchema: schema({ source: str('The new YAML source.'), label: str('What the change does, for the undo history.') }, ['source']),
     run: async ({ source, label }, { origin }) => {
-      if (app.doc.origin.kind === 'collab') {
-        throw new Error('this live chart is its owner\'s: it changes only when they edit it');
-      }
       if (app.editor) {
         await app.editor.setSource(source, { asChange: true, label: label ?? 'Edit source', origin });
         app.doc.source = app.editor.source();
@@ -889,7 +812,6 @@ function defineCommands() {
       }
       updateTitle();
       scheduleDraft();
-      app.collab.documentChanged();
       return { ok: true };
     },
   });
@@ -1137,9 +1059,6 @@ function defineCommands() {
     run: async ({ mode }) => {
       if (mode === 'edit' && !editOk()) {
         throw new Error(editAvailability().why);
-      }
-      if (mode === 'edit' && app.doc.origin.kind === 'collab') {
-        throw new Error('this live chart is its owner\'s: it changes only when they edit it');
       }
       await showMode(mode);
       return { mode: app.mode };
@@ -1431,17 +1350,14 @@ function wireControls() {
       edit && '-',
       { label: 'Download YAML', icon: 'download', run: () => act('app_download', { kind: 'yaml' }) },
       { label: 'Download PNG', icon: 'image', note: 'carries the YAML', run: () => act('app_download', { kind: 'png' }) },
-      app.collab.wb && { label: 'Download PNG with drawings', icon: 'image', run: () => act('collab_download_png') },
     ].filter(Boolean));
   });
   $('btn-share').addEventListener('click', (e) =>
     showMenu(e.currentTarget, [
       { label: 'Copy link', icon: 'link', run: () => act('app_copy_link') },
       { label: 'Copy embed code', icon: 'code', run: () => act('app_copy_embed') },
-      app.collab.wb ? null : { label: 'Share live…', icon: 'live', hidden: $('btn-collab').hidden || app.doc?.origin.kind === 'collab', run: () => act('collab_start') },
       '-',
       { label: 'Download PNG', icon: 'image', run: () => act('app_download', { kind: 'png' }) },
-      app.collab.wb && { label: 'Download PNG with drawings', icon: 'image', run: () => act('collab_download_png') },
       { label: 'Download YAML', icon: 'download', run: () => act('app_download', { kind: 'yaml' }) },
     ]),
   );
@@ -1556,17 +1472,13 @@ function wireKeys() {
     'keydown',
     (e) => {
       const ctrl = e.ctrlKey || e.metaKey;
-      // The real target, inside a shadow root too (the whiteboard's note box).
+      // The real target, inside a shadow root too.
       const target = e.composedPath?.()[0] ?? e.target;
       const typing = target.closest?.('input, textarea:not(.nymph-editor-keys), [contenteditable]');
       if (ctrl && e.shiftKey && (e.key === 'a' || e.key === 'A') && app.doc && !$('btn-agents').hidden) {
         e.preventDefault();
         e.stopPropagation();
         app.agents.toggle();
-      } else if (ctrl && e.shiftKey && (e.key === 'l' || e.key === 'L') && app.doc && !$('btn-collab').hidden) {
-        e.preventDefault();
-        e.stopPropagation();
-        act(app.collab.session ? 'collab_panel' : 'collab_start');
       } else if (ctrl && (e.key === 'o' || e.key === 'O')) {
         e.preventDefault();
         e.stopPropagation();
@@ -1700,8 +1612,6 @@ function shortcuts() {
     ['Alt+↑ / Alt+↓', 'Move the selected element'],
     ['Ctrl+F / Ctrl+H', 'Find / replace in the source'],
     ['Ctrl+Shift+A', 'Show or hide the agents working on the chart'],
-    ['Ctrl+Shift+L', 'Share the chart live, or show the people in the live session'],
-    ['Esc (drawing)', 'Back to the pointer, to use the chart under the drawings'],
     ['Drag, wheel, double-click', 'Pan, zoom, fit the chart'],
     ['?', 'This list'],
   ];

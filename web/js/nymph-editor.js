@@ -385,8 +385,7 @@ export class NymphEditor {
   /**
    * How the figure fits its area: `fill` (the default: laid out at the
    * area's size) or `natural` (at the chart's own size, never scaled; the
-   * area may clip it), as a live session needs
-   * (spec/18_collaboration/DESIGN.md section 6.4).
+   * area may clip it), the same layout as the viewer's.
    */
   setFit(fit) {
     if (fit !== 'fill' && fit !== 'natural') {
@@ -401,8 +400,8 @@ export class NymphEditor {
    * area}`, CSS pixels from the container's top-left corner, `scale` CSS
    * pixels per layout pixel, `area` the part of the editor it is shown in
    * ({left, top, width, height}, which may clip it); null while a data tab
-   * hides it (spec/18_collaboration/DESIGN.md section
-   * 5.3). The `figure` event fires when it changes.
+   * hides it. For overlays drawn over the chart. The `figure` event fires
+   * when it changes.
    */
   figureBox() {
     const f = this.state().figure;

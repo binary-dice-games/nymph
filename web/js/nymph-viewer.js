@@ -777,9 +777,8 @@ export class NymphViewer {
   /**
    * Where the figure's layout is drawn: `{left, top, width, height, scale}`,
    * CSS pixels from the container's top-left corner, `scale` CSS pixels per
-   * layout pixel; null before the first frame or with no figure
-   * (spec/18_collaboration/DESIGN.md section 5.3). The `figure` event
-   * fires when it changes.
+   * layout pixel; null before the first frame or with no figure. For
+   * overlays drawn over the chart. The `figure` event fires when it changes.
    */
   figureBox() {
     const g = this.geometry;
