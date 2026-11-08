@@ -151,6 +151,26 @@ class editor_panel {
       refresh();
     }
   }
+  /// @brief The figure's scroll bars (CSS pixels in the window), drawn over
+  ///        it; empty when the layout fits its box.
+  void set_scroll_bars(std::vector<layout_box> tracks, std::vector<layout_box> thumbs) {
+    const auto same = [](const std::vector<layout_box>& a, const std::vector<layout_box>& b) {
+      if (a.size() != b.size()) {
+        return false;
+      }
+      for (size_t i = 0; i < a.size(); ++i) {
+        if (a[i].x != b[i].x || a[i].y != b[i].y || a[i].width != b[i].width || a[i].height != b[i].height) {
+          return false;
+        }
+      }
+      return true;
+    };
+    if (!same(tracks, bar_tracks_) || !same(thumbs, bar_thumbs_)) {
+      bar_tracks_ = std::move(tracks);
+      bar_thumbs_ = std::move(thumbs);
+      refresh();
+    }
+  }
   /// @brief Whether the floating toolbar covers (`x`, `y`), CSS pixels in
   ///        the window: the pointer there goes to the panel.
   bool over_toolbar(float x, float y) const {
@@ -293,6 +313,8 @@ class editor_panel {
   inspector inspector_;
   edit_toolbar toolbar_;
   std::optional<layout_box> anchor_; ///< The selection in the figure, for the toolbar.
+  std::vector<layout_box> bar_tracks_; ///< set_scroll_bars()
+  std::vector<layout_box> bar_thumbs_;
 
   ImGuiContext* context_ = nullptr;
   ImFont* ui_font_ = nullptr; ///< FiraSans, once its bytes are there.

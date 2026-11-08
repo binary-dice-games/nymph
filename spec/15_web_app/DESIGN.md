@@ -527,6 +527,7 @@ class NymphEditor {
   toPng(): Uint8Array;                // render_png(toYaml())
   modified(): boolean;  markSaved(): void;  version(): number;
   undo(): void;  redo(): void;  resetView(): void;
+  setDisplayScale(scale: number): void; // the header's zoom: shown bigger, layout unchanged
   setTheme(theme: string): void;  showPanel(on: boolean): void;  focus(): void;
   showSource(on: boolean, line?: number): void;  repairing(): boolean;
   tool(name: string, args?: object, opts?: { origin?: string }): object;

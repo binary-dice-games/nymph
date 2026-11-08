@@ -413,6 +413,15 @@ EMSCRIPTEN_KEEPALIVE int nymph_viewer_resize(int handle, float width, float heig
   });
 }
 
+/// @brief live_view::set_display_scale(): the figure `scale` times its
+///        fitted size on screen, the layout unchanged.
+EMSCRIPTEN_KEEPALIVE int nymph_viewer_set_display_scale(int handle, float scale) {
+  return guarded([&] {
+    get(handle).view.set_display_scale(scale);
+    return kOk;
+  });
+}
+
 /// @brief One pointer event; `type` 0 move, 1 down, 2 up, 3 wheel, 4 leave.
 EMSCRIPTEN_KEEPALIVE int
 nymph_viewer_pointer(int handle, int type, float x, float y, int button, float wheel_x, float wheel_y, int touch) {
