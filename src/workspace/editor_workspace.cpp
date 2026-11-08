@@ -11,6 +11,7 @@
 #include "core/error.hpp"
 #include "edit/data_edit.hpp"
 #include "edit/image_fields.hpp"
+#include "fonts/embedded_fonts.hpp"
 #include "nymph.hpp"
 #include "png/png_meta.hpp"
 
@@ -190,6 +191,11 @@ void editor_workspace::follow_mode() {
   // outlines of a selection.
   view_.set_edit_mode(!advanced_seen_);
   view_.set_selection(panel_->model().selection());
+  if (advanced_seen_ && font_data(editor_panel::kSourceFont).empty()) {
+    // The source editor lays glyphs on a fixed grid: in the panel's
+    // proportional font, letters overlap and gaps open inside words.
+    host_.need_fonts({editor_panel::kSourceFont});
+  }
   right_down_.reset();
   strip_wanted_ = panel_->wanted_strip_width();
   last_ = nullptr;

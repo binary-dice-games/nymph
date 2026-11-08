@@ -130,7 +130,7 @@ void editor_panel::set_theme(const std::string& name) {
 
 void editor_panel::check_fonts() {
   if ((ui_font_ == nullptr && !font_data("FiraSans-Regular.ttf").empty()) ||
-      (advanced_ && mono_ == nullptr && !font_data("FiraMono-Regular.ttf").empty())) {
+      (advanced_ && mono_ == nullptr && !font_data(kSourceFont).empty())) {
     refresh();
   }
 }
@@ -424,7 +424,7 @@ inspector_events editor_panel::frame(double now_seconds, const std::vector<edit_
   if (mono_ == nullptr && advanced_) {
     // The source editor's monospace font, once its bytes are there
     // (embedded natively; fetched on demand by the web page).
-    const std::span<const uint8_t> mono = font_data("FiraMono-Regular.ttf");
+    const std::span<const uint8_t> mono = font_data(kSourceFont);
     if (!mono.empty()) {
       ImFontConfig config;
       config.FontDataOwnedByAtlas = false;
