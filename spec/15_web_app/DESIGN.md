@@ -133,6 +133,8 @@ https://binary-dice-games.github.io/nymph/
 
 **Start screen** (no document open):
 
+- nymph's logo (`resources/Nymph.png`, made into `web/app/logo.png` and a
+  dark-theme `logo-dark.png` by `web/tools/make_logo.py`) above the drop zone's heading.
 - A drop zone with the main actions: **Open file**, **From URL**,
   **Google Drive** (when configured), **New chart**. Pasting anywhere opens
   the pasted YAML or PNG.

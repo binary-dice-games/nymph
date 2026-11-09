@@ -425,6 +425,39 @@ main {
   padding: 44px 24px 36px;
 }
 
+/* The logo: the dark variant lightens the tagline (web/tools/make_logo.py). */
+.logo {
+  margin: 0 auto 28px;
+  max-width: 420px;
+}
+
+.logo img {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+.logo .logo-dark {
+  display: none;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .logo .logo-light {
+    display: none;
+  }
+  :root:not([data-theme="light"]) .logo .logo-dark {
+    display: block;
+  }
+}
+
+:root[data-theme="dark"] .logo .logo-light {
+  display: none;
+}
+
+:root[data-theme="dark"] .logo .logo-dark {
+  display: block;
+}
+
 .drop h1 {
   font-size: 28px;
   margin: 0 0 8px;
@@ -1064,6 +1097,9 @@ dialog.dlg::backdrop {
   }
   .drop h1 {
     font-size: 22px;
+  }
+  .logo {
+    margin-bottom: 18px;
   }
   .stage.viewing {
     padding: 8px;
