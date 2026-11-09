@@ -90,7 +90,30 @@ TEST_F(workspace_fixture, ASourceThatDoesNotBindIsRefusedForEditing) {
   EXPECT_EQ(ws2.panel(), nullptr);
 }
 
+TEST_F(workspace_fixture, PanelTextKeepsItsCssSizeOnHighDensityDisplays) {
+  // The font size each active panel window was drawn with, CSS pixels.
+  const auto font_sizes = [&] {
+    std::vector<float> sizes;
+    for (const ImGuiWindow* w : ws->panel()->imgui_context()->Windows) {
+      if (w->Active) {
+        sizes.push_back(w->FontRefSize);
+      }
+    }
+    return sizes;
+  };
+  const std::vector<float> css = font_sizes();
+  ASSERT_FALSE(css.empty());
+  ws->resize(900.0f, 400.0f, 2.0f);
+  run_frames();
+  EXPECT_EQ(font_sizes(), css);
+  EXPECT_FLOAT_EQ(ws->panel()->imgui_context()->IO.DisplayFramebufferScale.x, 2.0f);
+}
+
 TEST_F(workspace_fixture, NumberFieldsTakeTheKeyboardOneAfterAnotherAndEnterIsReleased) {
+  ws->resize(900.0f, 1100.0f, 1.5f);
+  // Wide enough for the toolbar's two rows at this scale: the scan below
+  // expects the "All fields" header first.
+  ws->panel()->set_strip_width(480.0f);
   ws->resize(900.0f, 1100.0f, 1.5f);
   ws->panel()->model().select(edit_target_id{"image", ""});
   ws->panel()->refresh();
@@ -187,6 +210,84 @@ TEST_F(workspace_fixture, ANaturalLayoutIsCentredInTheFigureAreaAndStillClickabl
   click(off.x + title->x + title->width / 2, box.y + off.y + title->y + title->height / 2);
   ASSERT_TRUE(ws->panel()->model().selection());
   EXPECT_EQ(ws->panel()->model().selection()->element, "root");
+}
+
+TEST_F(workspace_fixture, AScaledFigureLargerThanItsAreaScrollsWithTheWheelAndStaysClickable) {
+  ws->view().set_source("image: {width: 400, height: 300}\nroot: {type: Label, text: hi}\n");
+  ws->view().set_fit(view_fit::natural);
+  ws->view().set_display_scale(4.0f);
+  run_frames();
+  const layout_box box = ws->panel()->figure_box();
+  ASSERT_LT(box.width, 1600.0f);
+  ASSERT_LT(box.height, 1200.0f);
+  EXPECT_FLOAT_EQ(ws->figure_offset().x, 0.0f); // from the top-left corner
+  EXPECT_FLOAT_EQ(ws->figure_offset().y, 0.0f);
+  const float x = box.width / 2;
+  const float y = box.y + box.height / 2;
+  ws->pointer({pointer_event::kind::move, x, y, 0});
+  ws->pointer({pointer_event::kind::wheel, x, y, 0, 0.0f, -2.0f}); // towards the user: down
+  EXPECT_LT(ws->figure_offset().y, 0.0f);
+  EXPECT_TRUE(ws->view().wants_frame());
+  for (int i = 0; i < 100; ++i) {
+    ws->pointer({pointer_event::kind::wheel, x, y, 0, -1.0f, -1.0f});
+  }
+  // Not past the layout's bottom-right edges.
+  EXPECT_FLOAT_EQ(ws->figure_offset().x, -std::floor(1600.0f - box.width));
+  EXPECT_FLOAT_EQ(ws->figure_offset().y, -std::floor(1200.0f - box.height));
+  ws->pointer({pointer_event::kind::wheel, x, y, 0, 1000.0f, 1000.0f});
+  EXPECT_FLOAT_EQ(ws->figure_offset().x, 0.0f);
+  EXPECT_FLOAT_EQ(ws->figure_offset().y, 0.0f);
+  // Scrolled a little, a click lands on the label (scaled 4 times).
+  ws->pointer({pointer_event::kind::wheel, x, y, 0, -0.25f, -0.25f}); // 15 CSS px
+  run_frames();
+  const std::optional<edit_target> label = ws->view().target_for("root", "text");
+  ASSERT_TRUE(label);
+  const ImVec2 off = ws->figure_offset();
+  EXPECT_FLOAT_EQ(off.x, -15.0f);
+  click(off.x + label->x + label->width / 2, box.y + off.y + label->y + label->height / 2);
+  ASSERT_TRUE(ws->panel()->model().selection());
+  EXPECT_EQ(ws->panel()->model().selection()->element, "root");
+}
+
+TEST_F(workspace_fixture, AScaledFigureShowsScrollBarsAndPansByDragging) {
+  ws->view().set_source("image: {width: 400, height: 300}\nroot: {type: Label, text: hi}\n");
+  ws->view().set_fit(view_fit::natural);
+  run_frames();
+  EXPECT_TRUE(ws->scroll_bars().empty()); // it fits
+  ws->view().set_display_scale(4.0f);
+  run_frames();
+  const layout_box box = ws->panel()->figure_box();
+  const std::vector<editor_workspace::scroll_bar> bars = ws->scroll_bars();
+  ASSERT_EQ(bars.size(), 2u);
+  EXPECT_FALSE(bars[0].vertical);
+  EXPECT_TRUE(bars[1].vertical);
+  EXPECT_FLOAT_EQ(bars[0].thumb.x, box.x); // at the start
+  EXPECT_LT(bars[0].thumb.width, bars[0].track.width);
+  // A drag on the figure, away from plots, moves the layout with it.
+  const float x = box.x + box.width / 2;
+  const float y = box.y + box.height / 2;
+  ws->pointer({pointer_event::kind::move, x, y, 0});
+  ws->pointer({pointer_event::kind::down, x, y, 0});
+  ws->pointer({pointer_event::kind::move, x - 100.0f, y - 50.0f, 0});
+  ws->pointer({pointer_event::kind::up, x - 100.0f, y - 50.0f, 0});
+  run_frames();
+  EXPECT_FLOAT_EQ(ws->figure_offset().x, -100.0f);
+  EXPECT_FLOAT_EQ(ws->figure_offset().y, -50.0f);
+  EXPECT_FALSE(ws->panel()->model().selection()) << "a drag is not a click";
+  EXPECT_GT(ws->scroll_bars()[0].thumb.x, box.x); // the thumb followed
+  // Dragging the horizontal thumb to the track's end shows the right edge.
+  const layout_box thumb = ws->scroll_bars()[0].thumb;
+  const float ty = thumb.y + thumb.height / 2;
+  ws->pointer({pointer_event::kind::down, thumb.x + 2.0f, ty, 0});
+  ws->pointer({pointer_event::kind::move, thumb.x + 2.0f + box.width, ty, 0});
+  ws->pointer({pointer_event::kind::up, thumb.x + 2.0f + box.width, ty, 0});
+  EXPECT_FLOAT_EQ(ws->figure_offset().x, -std::floor(1600.0f - box.width));
+  EXPECT_FLOAT_EQ(ws->figure_offset().y, -50.0f); // the other direction stays
+  // A press on the vertical track below its thumb moves a page down.
+  const editor_workspace::scroll_bar v = ws->scroll_bars()[1];
+  ws->pointer({pointer_event::kind::down, v.track.x + 5.0f, v.track.y + v.track.height - 2.0f, 0});
+  ws->pointer({pointer_event::kind::up, v.track.x + 5.0f, v.track.y + v.track.height - 2.0f, 0});
+  EXPECT_LT(ws->figure_offset().y, -50.0f - box.height * 0.5f);
 }
 
 TEST_F(workspace_fixture, ThePointerOverTheStripGoesToThePanelNotTheFigure) {

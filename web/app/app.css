@@ -314,6 +314,19 @@ a {
   cursor: not-allowed;
 }
 
+/* Zoom: the chart's size on the page, not its image size. */
+.segmented.zoom button {
+  padding: 0 10px;
+  color: var(--text);
+}
+
+.segmented.zoom #zoom-reset {
+  min-width: 54px;
+  padding: 0 6px;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
 .link {
   border: 0;
   background: none;
@@ -586,7 +599,13 @@ main {
   width: 100%;
   max-width: 100%;
   display: flex;
-  justify-content: center;
+  /* A zoomed chart wider than the stage scrolls from its left edge. */
+  justify-content: safe center;
+}
+
+.stage.viewing.dragging,
+.stage.viewing.dragging canvas {
+  cursor: grabbing;
 }
 
 .stage.editing {
@@ -615,27 +634,11 @@ main {
   padding: 12px 16px 24px;
 }
 
-/* ── Live session (spec/18_collaboration) ──────────────────────────────────── */
-
-.btn.live {
-  color: var(--accent);
-  font-weight: 600;
-}
-
-.btn.live::before {
-  content: "";
-  width: 8px;
-  height: 8px;
-  margin-right: 6px;
-  border-radius: 50%;
-  background: var(--accent);
-  display: inline-block;
-}
+/* ── Agents panel forms (spec/17_agent_connectors) ──────────────────────── */
 
 .agents-section input[type="text"],
 .agents-section input[type="password"],
-.agents-section textarea,
-.collab-codes textarea {
+.agents-section textarea {
   width: 100%;
   box-sizing: border-box;
   font: inherit;
@@ -647,36 +650,15 @@ main {
   color: var(--text);
 }
 
-.collab-codes textarea {
-  font-family: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
-  font-size: 11px;
-  word-break: break-all;
-  resize: vertical;
-}
-
-.agents-section summary,
-.collab-codes summary {
+.agents-section summary {
   cursor: pointer;
   font-size: 13px;
   color: var(--muted);
   font-weight: 600;
 }
 
-details.agents-section[open] > *:not(summary),
-.collab-codes-body > * {
+details.agents-section[open] > *:not(summary) {
   margin-top: 8px;
-}
-
-.collab-codes-body {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-}
-
-.row-buttons {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
 }
 
 .agents-section label.check {
@@ -684,33 +666,6 @@ details.agents-section[open] > *:not(summary),
   align-items: center;
   gap: 6px;
   font-size: 13px;
-}
-
-.collab-colors {
-  display: flex;
-  gap: 6px;
-}
-
-.collab-colors button {
-  width: 22px;
-  height: 22px;
-  border-radius: 50%;
-  border: 2px solid var(--surface);
-  box-shadow: 0 0 0 1px var(--border);
-  cursor: pointer;
-  padding: 0;
-}
-
-.collab-colors button[aria-checked="true"] {
-  box-shadow: 0 0 0 2px var(--text);
-}
-
-.collab-stage {
-  font-weight: 600;
-}
-
-.collab-problem {
-  color: var(--danger, #e5484d);
 }
 
 /* ── Agents panel (spec/17_agent_connectors) ─────────────────────────────── */
@@ -1223,15 +1178,6 @@ dialog.dlg:has(.theme-grid) {
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
   overflow: hidden;
-}
-
-/* The whiteboard over the chart takes the app's look (spec/18_collaboration). */
-collab-whiteboard {
-  --wb-bg: var(--surface);
-  --wb-fg: var(--text);
-  --wb-border: var(--border);
-  --wb-accent: var(--accent);
-  --wb-hover: var(--surface-2);
 }
 
 /* ── Import wizard ────────────────────────────────────────────────────────── */

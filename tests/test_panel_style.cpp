@@ -50,6 +50,13 @@ TEST(PanelStyle, StyleUsesTheAccentAndFlatSizes) {
   ImGui::DestroyContext(context);
 }
 
+TEST(PanelStyle, SourcePaletteFollowsTheLook) {
+  const TextEditor::Palette light = source_palette(panel_appearance{});
+  const TextEditor::Palette dark = source_palette(panel_appearance{.dark = true});
+  EXPECT_NE(light.get(TextEditor::Color::background), dark.get(TextEditor::Color::background));
+  EXPECT_EQ(dark.get(TextEditor::Color::knownIdentifier), u32(palette_of(panel_appearance{.dark = true}).accent));
+}
+
 TEST(PanelStyle, PanelFollowsTheFigureThemeUntilPinned) {
   editor_panel panel(kSource, "t.yaml", "");
   EXPECT_FALSE(panel.appearance().dark);
@@ -64,6 +71,32 @@ TEST(PanelStyle, PanelFollowsTheFigureThemeUntilPinned) {
   EXPECT_TRUE(panel.appearance().dark); // pinned: the figure's theme no longer decides
   EXPECT_EQ(
       u32(panel_color(panel, ImGuiCol_CheckMark)), u32(ImVec4(0x44 / 255.0f, 0x55 / 255.0f, 0x66 / 255.0f, 1.0f)));
+}
+
+TEST(PanelStyle, TextInFiraSansAdvancedSourceInFiraMono) {
+  editor_panel panel(kSource, "t.yaml", "");
+  panel.resize(900, 500, 1.0f);
+  ASSERT_EQ(panel.set_advanced(true), "");
+  double now = 0.0;
+  for (int i = 0; i < 4; ++i) {
+    panel.frame(now += 0.02, {}, "");
+  }
+  ImGuiContext* previous = ImGui::GetCurrentContext();
+  ImGui::SetCurrentContext(panel.imgui_context());
+  const ImFontAtlas* atlas = ImGui::GetIO().Fonts;
+  ASSERT_GE(atlas->Fonts.Size, 2);
+  int sans = 0;
+  int mono = 0;
+  for (ImFont* f : atlas->Fonts) {
+    ImFontBaked* b = f->GetFontBaked(14.0f);
+    const float i = b->FindGlyph('i')->AdvanceX;
+    const float m = b->FindGlyph('m')->AdvanceX;
+    (i == m ? mono : sans) += 1;
+  }
+  EXPECT_EQ(ImGui::GetIO().FontDefault, atlas->Fonts[0]);
+  ImGui::SetCurrentContext(previous);
+  EXPECT_EQ(sans, 1);
+  EXPECT_EQ(mono, 1);
 }
 
 } // namespace

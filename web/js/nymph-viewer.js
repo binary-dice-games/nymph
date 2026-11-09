@@ -777,9 +777,8 @@ export class NymphViewer {
   /**
    * Where the figure's layout is drawn: `{left, top, width, height, scale}`,
    * CSS pixels from the container's top-left corner, `scale` CSS pixels per
-   * layout pixel; null before the first frame or with no figure
-   * (spec/18_collaboration/DESIGN.md section 5.3). The `figure` event
-   * fires when it changes.
+   * layout pixel; null before the first frame or with no figure. For
+   * overlays drawn over the chart. The `figure` event fires when it changes.
    */
   figureBox() {
     const g = this.geometry;
@@ -866,6 +865,9 @@ export class NymphViewer {
     this.webgl = false;
     if (this.themeOverride) {
       this.setTheme(this.themeOverride).catch(() => {});
+    }
+    if (this.displayScaleSet) {
+      this.core.m._nymph_viewer_set_display_scale(this.handle, this.displayScaleSet);
     }
     this.boxKey = undefined; // the new handle has no size yet
     this.fitToContainer();
@@ -1196,6 +1198,34 @@ export class NymphViewer {
     this.checkAlive();
     this.core.m._nymph_viewer_resize(this.handle, width, height, pixelRatio);
     this.schedule();
+  }
+
+  /**
+   * Shows the chart `scale` times its fitted size (1, the default, is the
+   * size `fit` gives; clamped to 0.1 to 10). The chart is drawn again at
+   * that size, so it stays sharp; its layout, its image size and toYaml()
+   * do not change. Wider than the container, the canvas overflows it.
+   * @param {number} scale
+   */
+  setDisplayScale(scale) {
+    this.checkAlive();
+    this.displayScaleSet = scale;
+    this.core.m._nymph_viewer_set_display_scale(this.handle, scale);
+    this.schedule();
+  }
+
+  /** The scale setDisplayScale() set (1 before any). */
+  displayScale() {
+    return this.displayScaleSet ?? 1;
+  }
+
+  /**
+   * Whether the chart pans or zooms at (`x`, `y`), CSS pixels from its
+   * top-left corner (a plot or diagram is there); elsewhere a page may
+   * scroll on a wheel or a drag.
+   */
+  takesWheel(x, y) {
+    return this.handle !== 0 && this.core.m._nymph_viewer_takes_wheel(this.handle, x, y) === 1;
   }
 
   /**

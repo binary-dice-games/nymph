@@ -484,3 +484,57 @@ figure read-back were checked on Linux.
 - `resources/subscribe` on an `editor://state` resource so an agent hears
   selection changes.
 - Drag-and-drop in the tree; a chart and table split view; formulas.
+
+## 13. Advanced edit mode
+
+A second way to edit, for users who would rather write the YAML: the
+strip shows a code editor with the whole source instead of the elements,
+the fields and the log of the basic editor. It replaces the source pane
+of [15_web_app](../15_web_app/DESIGN.md) section 5.4, which was removed
+because it kept the text and the model in step both ways while the user
+typed, and the two raced (corrupted text, a jumping cursor).
+
+**Modes, not sync.** The editor is in exactly one mode. In the basic mode
+the panel, the floating toolbar, the menus, the tables and agents change
+the model; in the advanced mode only the user's text does, and nothing
+writes into the text but entering the mode. So there is no model-to-text
+direction to race with.
+
+- **Entering** (the **Source Editor** button in the panel's toolbar, an
+  `inspector_events::source_editor` the panel acts on at the frame's end,
+  or `Ctrl+U`; `editor_workspace::set_advanced(true)`): a text typed in a
+  field is committed first, the model's source is loaded into
+  `source_editor` (ImGuiColorTextEdit's `TextEditor`, FiraMono, the
+  `yaml_language()` highlighting, `source_palette()` colours), the
+  selection is cleared, the data tabs and the floating toolbar go, and the
+  figure leaves edit mode (no click selection, no outlines, no right-click
+  menu). The strip widens to at least `kAdvancedStripWidth` (480 px);
+  leaving puts back the width it had.
+- **Typing.** `source_editor::draw()` hands the text back 300 ms after its
+  last change (`kParseDelay`), and `editor_panel` gives it to
+  `editor_model::set_source()`. Accepted: the figure redraws it. Refused:
+  the loader's message and its line go to the log under the editor (and a
+  marker and squiggle on that line); the figure, and the model, keep the
+  last source that loaded. Either way only marks change in the editor.
+  Save and leaving flush a text still waiting for its pause.
+- **Undo.** The text editor's own (`Ctrl+Z` / `Ctrl+Y` while it has the
+  keyboard, and the strip's buttons). The model's undo and the tree
+  shortcuts are off. The whole visit is one model undo step, "Edit
+  source" (a `begin_group` / `end_group` around it), so `Ctrl+Z` in the
+  basic editor afterwards undoes it at once.
+- **Leaving** (**Basic editor**, where **Source Editor** was, or `Ctrl+U`).
+  A text that loads is already the model's: the basic editor shows it. A
+  text that does not load opens a dialog: **Discard text** goes back with
+  the last source that loaded, **Keep editing** stays.
+- **Saving** writes the figure's source, as in the basic mode: with a text
+  that does not load, that is the last source that loaded, and the save
+  and close dialogs say so.
+- **Agents.** `mcp::editor_host::changes_refused()` names the mode, and
+  every tool that is not read-only is refused with it; the read-only tools
+  still run (`editor_source` returns the last source that loaded,
+  `editor_state`'s error is the log's).
+
+Code: `src/workspace/source_editor.*`, `src/workspace/yaml_language.*`,
+`editor_panel` (`set_advanced()`, `draw_advanced()`, `try_source()`),
+`editor_workspace` (`set_advanced()`, `follow_mode()`, key and pointer
+routing). Tests: `tests/test_advanced_edit.cpp`.

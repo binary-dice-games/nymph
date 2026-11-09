@@ -36,10 +36,8 @@ enum class view_fit {
   width, ///< Lay out at the box width; height scaled to keep the aspect ratio.
   fill, ///< Lay out at the box size.
   scale, ///< Lay out at the source size; scale with CSS to the box width, up or down.
-  /// Lay out at the source size and never scale (the box may clip it): what
-  /// the web editor shows in a live session, so the owner's figure has the
-  /// same layout as the guests' viewers (spec/18_collaboration/DESIGN.md
-  /// section 6.4).
+  /// Lay out at the source size and never scale (the box may clip it): the
+  /// web editor's figure then has the same layout as the viewer's.
   natural,
 };
 
@@ -59,7 +57,7 @@ struct view_options {
 struct view_geometry {
   float layout_width = 0.0f; ///< Logical pixels the layout runs at (ImGui's DisplaySize).
   float layout_height = 0.0f;
-  float css_scale = 1.0f; ///< CSS pixels per logical pixel (below 1 when shrunk; above 1 only with view_fit::scale).
+  float css_scale = 1.0f; ///< CSS pixels per logical pixel (below 1 when shrunk; above 1 with view_fit::scale or a display scale).
   float framebuffer_scale = 1.0f; ///< Device pixels per logical pixel.
   int pixel_width = 0; ///< Size of the drawn image in device pixels.
   int pixel_height = 0;
@@ -240,6 +238,17 @@ class live_view {
   /// @brief Changes how the figure fits the box (view_options::fit); the
   ///        next frames lay it out again. The view state is kept.
   void set_fit(view_fit fit);
+
+  /// @brief Draws the figure `scale` times its fitted size on screen (CSS
+  ///        and device pixels both grow, so it stays sharp); the layout, the
+  ///        image size and the saved source do not change. 1 (the default)
+  ///        is the fit's size; clamped to [0.1, 10]. Other than 1, the fits
+  ///        `width` and `fill` lay the figure out at the source size, as
+  ///        `source` does. The view state is kept.
+  void set_display_scale(float scale);
+
+  /// @brief The scale set_display_scale() set.
+  float display_scale() const;
 
   /// @brief Feeds one pointer event to the figure (pan, zoom, hover); the
   ///        next frames apply it.

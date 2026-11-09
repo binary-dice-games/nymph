@@ -186,6 +186,7 @@ fonts_needed::fonts_needed(std::vector<std::string> fonts)
 struct live_view::impl {
   view_options options;
   view_size size;
+  float display_scale = 1.0f; ///< set_display_scale()
   std::string theme_override;
   unsigned outline_rgb = 0x288cff; ///< set_outline_color()
 
@@ -355,7 +356,7 @@ struct live_view::impl {
   }
 
   /// The geometry at the source size, shrunk with CSS to the box width
-  /// (view_fit::scale: also grown to it).
+  /// (view_fit::scale: also grown to it), times the display scale.
   view_geometry source_geometry() const {
     view_geometry g;
     g.layout_width = static_cast<float>(fig->image.width);
@@ -364,6 +365,7 @@ struct live_view::impl {
       const float to_box = size.width / g.layout_width;
       g.css_scale = options.fit == view_fit::scale ? to_box : std::min(1.0f, to_box);
     }
+    g.css_scale *= display_scale;
     return g;
   }
 
@@ -375,7 +377,8 @@ struct live_view::impl {
     }
     view_geometry g = source_geometry();
     bool fallback = overflowed;
-    if (!overflowed && (options.fit == view_fit::width || options.fit == view_fit::fill) && size.width > 0.0f) {
+    if (!overflowed && display_scale == 1.0f && (options.fit == view_fit::width || options.fit == view_fit::fill) &&
+        size.width > 0.0f) {
       view_geometry fit;
       fit.layout_width = std::round(size.width);
       if (options.fit == view_fit::width) {
@@ -1015,6 +1018,21 @@ void live_view::set_fit(view_fit fit) {
   m.overflowed = false;
   m.update_geometry();
   m.pending_frames = kFigureFrames;
+}
+
+void live_view::set_display_scale(float scale) {
+  impl& m = *impl_;
+  scale = std::isfinite(scale) ? std::clamp(scale, 0.1f, 10.0f) : 1.0f;
+  if (m.display_scale == scale) {
+    return;
+  }
+  m.display_scale = scale;
+  m.update_geometry();
+  m.pending_frames = kFigureFrames;
+}
+
+float live_view::display_scale() const {
+  return impl_->display_scale;
 }
 
 void live_view::input(const pointer_event& e) {

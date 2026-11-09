@@ -585,8 +585,8 @@ EMSCRIPTEN_KEEPALIVE const char* nymph_editor_state() {
            {"viewWantsFrame", e.ws->view().wants_frame()},
            {"panelWantsFrame", e.ws->panel() != nullptr && e.ws->panel()->wants_frame()},
            {"wantsKeyboard", e.ws->wants_keyboard()}};
-    // Where the figure's layout is drawn, for overlays
-    // (spec/18_collaboration/DESIGN.md section 5.3): null while a data tab hides it.
+    // Where the figure's layout is drawn, for overlays: null while a data tab
+    // hides it.
     j["figure"] = json();
     {
       const view_geometry g = e.ws->view().geometry();
@@ -623,11 +623,20 @@ EMSCRIPTEN_KEEPALIVE const char* nymph_editor_state() {
 }
 
 /// @brief How the figure fits its box: 0 fills it (the default), 1 lays it
-///        out at the chart's own size, never scaled (a live session,
-///        spec/18_collaboration/DESIGN.md section 6.4).
+///        out at the chart's own size, never scaled.
 EMSCRIPTEN_KEEPALIVE int nymph_editor_set_fit(int natural) {
   return guarded([&] {
     get().ws->view().set_fit(natural != 0 ? view_fit::natural : view_fit::fill);
+    return kOk;
+  });
+}
+
+/// @brief live_view::set_display_scale(): the figure `scale` times its
+///        fitted size on screen, the layout unchanged; a figure larger than
+///        its area scrolls with the wheel.
+EMSCRIPTEN_KEEPALIVE int nymph_editor_set_display_scale(float scale) {
+  return guarded([&] {
+    get().ws->view().set_display_scale(scale);
     return kOk;
   });
 }

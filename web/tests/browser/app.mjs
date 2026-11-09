@@ -312,6 +312,32 @@ test('View to Edit keeps the zoom and is not modified; an edit marks the title',
   await done(page);
 });
 
+test('the zoom buttons show the chart bigger in View and Edit, sharp, and leave the file alone', async () => {
+  const page = await openApp();
+  await call(page, 'app_open_example', { name: 'line' });
+  await shown(page);
+  const canvas = page.locator('.viewer-box canvas');
+  const before = await canvas.boundingBox();
+  const pixels = await canvas.evaluate((c) => c.width);
+  await page.click('#zoom-in');
+  await page.click('#zoom-in');
+  await page.waitForTimeout(300);
+  const label = await page.textContent('#zoom-reset');
+  assert(label === '125%', `label ${label}`);
+  const after = await canvas.boundingBox();
+  assert(Math.abs(after.width - before.width * 1.25) < 2, `${before.width} -> ${after.width}`);
+  assert((await canvas.evaluate((c) => c.width)) > pixels, 'drawn at more pixels');
+  assert(!(await state(page)).modified, 'not modified');
+  await call(page, 'app_set_mode', { mode: 'edit' });
+  await shown(page);
+  assert((await page.evaluate(() => window.nymphApp.app.editor.displayScale())) === 1.25, 'Edit keeps the zoom');
+  await page.click('#zoom-reset');
+  await page.waitForTimeout(200);
+  assert((await page.evaluate(() => window.nymphApp.app.editor.displayScale())) === 1, 'back to 100%');
+  assert(!(await state(page)).modified, 'still not modified');
+  await done(page);
+});
+
 test('Download YAML carries the edit; a PNG input downloads a PNG with the source', async () => {
   const page = await openApp();
   await call(page, 'app_open_example', { name: 'line', mode: 'edit' });

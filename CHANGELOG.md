@@ -9,13 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Web app: zoom buttons (**−**, **100%**, **+**; `-`, `0`, `+` in View) show the chart from 25% to 400% of its size on the page, in View and Edit, redrawn sharp; the image size and the file do not change. The viewer and editor modules gain `setDisplayScale(scale)`; the viewer gains `takesWheel(x, y)`.
+- `nymph view --edit` and the web app's editor: an advanced edit mode (**Source Editor** in the panel, `Ctrl+U`) that replaces the elements, fields and data tabs with a code editor for the YAML source; the figure shows the last text that loaded and the log shows why the current one does not. Basic edits, the figure's menus and agents' changes are off while it is on.
 - Web app: a tutorial page (`tutorial.html`, linked from the start page, the **⋯** menu and About) on opening, viewing, editing, styling, saving and sharing charts, with screenshots and animations.
 - Web app: the **New chart** dialog shows a small picture of each template's chart type, like the import wizard's chart cards.
 - Web app: **Import CSV or mermaid…** on the start page (or drop a `.csv` / `.mmd` file) opens a wizard with a live preview: for a CSV, pick the chart (line, area, bars, stacked or horizontal bars, scatter, pie, histogram), map columns to the axis and series, then set the title, subtitle, footnote, fonts, colour theme, heading style, size, legend and summary cards; a mermaid diagram gets the same heading, fonts and theme. The new chart is laid out like a report: a title text box, a rule and a footnote.
 
-- Web app: **Collaborate** (`Ctrl+Shift+L`) shares the open chart live with the people who have its invite link, browser to browser over WebRTC with no server: they see every change as the owner makes it, follow the owner's view or pan their own, and everyone draws on a whiteboard over the chart (cursors, ink, text notes, stickers) that is never saved in the file. The owner can lock the session, remove people, make a new link and let only themselves draw; join codes and a TURN setting help strict networks.
-- Web app: **Download PNG with drawings**, a picture of the chart with the whiteboard over it that still opens in nymph as the chart.
-- `collab/collab-session.js` and `collab/collab-whiteboard.js`: the session (rooms, WebTorrent-tracker or manual signaling, encrypted, a host relaying for guests) and the whiteboard as standalone modules for other pages.
 - Web viewer and editor modules: `figureBox()` and the `figure` event, where the figure is drawn, for overlays; the editor's `setFit('natural')` shows the chart at its own size.
 
 - Web viewer and web app: a reset-view button in the chart's bottom-right corner, shown once the user pans or zooms (`resetButton: false` / `reset-button="false"` hides it).
@@ -66,6 +65,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 - Windows: closing `nymph view --edit` while an agent was connected through `nymph mcp` but idle could hang instead of closing.
+- `nymph view --edit` and the web app: a chart bigger than its area shows scroll bars and moves by dragging it (away from plots and diagrams, or with the middle button) or with the wheel; before, its hidden parts could not be reached.
+- `nymph view --edit` and the web app's editor: the editor's text and widgets are no longer drawn twice too large on high-density displays (Retina, 4K).
+- Web app: the advanced mode's source editor is drawn in its monospace font; letters no longer overlap or leave gaps inside words.
 - Web app: once the app had been visited (it works offline), the demo page opened the app instead of itself.
 - Web app: the import wizard's preview no longer keeps the previous chart's zoom and pan after switching chart type (pie and horizontal bars were drawn squashed and stayed so).
 - Web app: **PNG with drawings** includes drawings made outside the chart image, instead of cutting them off.
@@ -103,6 +105,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Removed
 
+- Web app: live collaboration (**Collaborate**, the whiteboard, **Download PNG with drawings**) and the `collab/` packages; they moved to the standalone tool [inksplat](https://github.com/binary-dice-games/inksplat).
 - Web app: the "Start from a template" section of the start page (**New chart** still offers the templates).
 
 ## [0.1.0] - 2026-10-21

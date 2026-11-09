@@ -85,9 +85,11 @@ setInterval(() => viewer.setData({ revenue: latestValues() }), 250);
 | `setData(tables)` | Replaces the source's `data` (an object, or YAML / JSON text); the view is kept. |
 | `setPng(bytes)` | Shows the source a nymph PNG carries; resolves `false` for a PNG without one (shown as a plain image). |
 | `setTheme(theme)`, `resetView()`, `resize(w, h, ratio)` | [Chart theme](themes.md) override (`''` for the source's; returns a promise, as the theme may fetch a font), back to the source's view, box size (the element and `createViewer` follow their container themselves). |
+| `setDisplayScale(scale)`, `displayScale()` | Shows the chart `scale` times its fitted size (1 by default, 0.1 to 10), drawn again at that size so it stays sharp; the layout, image size and `toYaml()` do not change. A canvas wider than its container overflows it. |
+| `takesWheel(x, y)` | Whether a plot or diagram pans or zooms at that point (CSS pixels from the chart's corner); elsewhere a page may scroll on a wheel or drag. |
 | `themes()` | The chart themes: `[{id, name, description, base, dark, background, text_color, palette}]`, for a picker. |
 | `on(event, callback)` | `hover` (pick or `null`), `click` (pick), `view` (every plot, Gantt chart, 3D plot and diagram after a pan, zoom, rotation or legend click settles: ranges, rotation, zoom, hidden series), `figure` (`figureBox()` changed), `error` (an update failed). Returns a function that removes the listener. |
-| `figureBox()` | Where the figure's layout is drawn: `{left, top, width, height, scale}`, CSS pixels from the container's top-left corner, `scale` CSS pixels per layout pixel; `null` before the first frame. For overlays such as the [whiteboard](collaboration.md#embedding-the-packages). |
+| `figureBox()` | Where the figure's layout is drawn: `{left, top, width, height, scale}`, CSS pixels from the container's top-left corner, `scale` CSS pixels per layout pixel; `null` before the first frame. For overlays drawn over the chart. |
 | `rendered()` | Resolves when every update so far is on screen. |
 | `info()`, `state()`, `source()` | Rasterizer, description and size; geometry, hovered pick and plot views; the source on screen. |
 | `toYaml()` | The chart's YAML as it is on screen: the source with the current data and the user's zoom, pan, rotation and hidden series saved in its [`view` key](format.md#view). The source as written when the user changed nothing. |
@@ -172,7 +174,8 @@ editor.on('save', () => save(editor.toYaml()));
 | `beginGroup(label, origin)`, `endGroup()` | Several changes as one undo step. |
 | `importCsv(table, csv)`, `targetRect(path, field)`, `focus()`, `destroy()` | |
 | `figureBox()` | As the viewer's (under the tab bar, left of the panel), plus `area`, the part of the editor the figure is shown in; `null` while a data tab or a source that does not load hides the figure. |
-| `setFit('fill' \| 'natural')`, option `fit` | `fill` (default) lays the figure out at the size of its area; `natural` at the chart's own size, never scaled (the area clips it), as in a live session. |
+| `setDisplayScale(scale)`, `displayScale()` | As the viewer's. A figure larger than its area (zoomed, or at its own size) has scroll bars, and a drag or the wheel away from plots and diagrams (or a middle-button drag anywhere) moves it. |
+| `setFit('fill' \| 'natural')`, option `fit` | `fill` (default) lays the figure out at the size of its area; `natural` at the chart's own size, never scaled (the area clips it), as in View. |
 | `change` {label, origin, version, modified}, `selection`, `save`, `csv-import` {table}, `csv-export` {table, fileName, csv}, `figure`, `error` | Events: the page saves, picks and writes files; the module does no I/O. |
 
 ### Editing in the window
@@ -193,6 +196,10 @@ for the default width).
   diagram); the **Elements** list reaches everything else (a series, a plot
   without a title yet, `legend_location`). Dragging still pans and the wheel
   still zooms.
+- **Scroll.** A figure bigger than its area (a large `image` size, or
+  zoomed in the web app) shows scroll bars; drag it away from plots and
+  diagrams (or with the middle button anywhere), turn the wheel there, or
+  drag a bar to see the rest.
 - **Toolbar.** A floating toolbar sits over the figure next to the
   selection, with the fields changed most often, each shown when the element
   has it: **shape** (a grid of shape pictures, in tabs by category for the
@@ -239,6 +246,18 @@ for the default width).
   series at it. To plot a new column, add it in the table's tab, add the
   series (right-click the plot, **Add child**), then choose the column for
   its `ys` (and `xs`).
+- **Advanced mode: write the YAML.** **Source Editor** in the panel's
+  toolbar (or `Ctrl+U`) replaces the elements, fields and data tabs with a
+  code editor holding the whole source, with line numbers, highlighting
+  and its own undo. A short pause after you stop typing, the
+  figure shows the text if it loads; if it does not, the log under the
+  editor says why (and the line is marked) while the figure keeps the last
+  source that loaded. Clicks, menus and the floating toolbar on the figure,
+  the tree shortcuts and agents' changes are off in this mode: what you
+  type is the chart. **Basic editor** in the same place (or `Ctrl+U`)
+  goes back; with a text that does not load it asks first, and **Discard
+  text** keeps the last source that loaded. **Save** saves the last source
+  that loaded, and the whole visit is one undo step afterwards.
 - **Adding and removing elements.** Right-click an element, in the figure
   or in the **Elements** list, for its menu: **Add child**, **Insert
   before** / **after** (only the types that can go there: `FlowNode`,

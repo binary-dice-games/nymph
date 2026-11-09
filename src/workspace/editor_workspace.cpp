@@ -11,6 +11,7 @@
 #include "core/error.hpp"
 #include "edit/data_edit.hpp"
 #include "edit/image_fields.hpp"
+#include "fonts/embedded_fonts.hpp"
 #include "nymph.hpp"
 #include "png/png_meta.hpp"
 
@@ -19,6 +20,10 @@ namespace bdg::nymph {
 namespace {
 
 constexpr float kFigureTopGap = 24.0f; // CSS px above a centred layout, as the app's viewer stage
+constexpr float kWheelStep = 60.0f; // CSS px a wheel notch scrolls a layout larger than its box
+constexpr float kBarThickness = 10.0f; // CSS px of a scroll bar across
+constexpr float kMinThumb = 24.0f; // CSS px of the shortest scroll bar thumb
+constexpr float kPanSlop = 4.0f; // CSS px a press moves before it pans the layout
 constexpr unsigned kColorBufferBit = 0x00004000;
 constexpr unsigned kRgba = 0x1908; // GL_RGBA
 constexpr unsigned kUnsignedByte = 0x1401; // GL_UNSIGNED_BYTE
@@ -131,6 +136,7 @@ std::string editor_workspace::show_panel(bool on) {
     }
     view_.set_edit_mode(true);
     view_.set_show_limits(true);
+    advanced_seen_ = false;
   } else {
     panel_.reset();
     view_.set_edit_mode(false);
@@ -167,6 +173,39 @@ void editor_workspace::relayout() {
   }
 }
 
+std::string editor_workspace::set_advanced(bool on, bool discard) {
+  if (panel_ == nullptr) {
+    return "the editor panel is hidden";
+  }
+  if (on == panel_->advanced()) {
+    return {};
+  }
+  flush_pending();
+  const std::string refused = panel_->set_advanced(on, discard);
+  follow_mode();
+  return refused;
+}
+
+void editor_workspace::follow_mode() {
+  if (panel_ == nullptr || panel_->advanced() == advanced_seen_) {
+    return;
+  }
+  advanced_seen_ = panel_->advanced();
+  // In the advanced mode the figure is a plain view: no edit clicks, no
+  // outlines of a selection.
+  view_.set_edit_mode(!advanced_seen_);
+  view_.set_selection(panel_->model().selection());
+  if (advanced_seen_ && font_data(editor_panel::kSourceFont).empty()) {
+    // The source editor lays glyphs on a fixed grid: in the panel's
+    // proportional font, letters overlap and gaps open inside words.
+    host_.need_fonts({editor_panel::kSourceFont});
+  }
+  right_down_.reset();
+  strip_wanted_ = panel_->wanted_strip_width();
+  last_ = nullptr;
+  relayout();
+}
+
 float editor_workspace::strip_width() const {
   return panel_ != nullptr ? panel_->strip_width() : 0.0f;
 }
@@ -184,6 +223,11 @@ void editor_workspace::pointer(const pointer_event& in) {
     return;
   }
   if (divider(e.type, e.x, e.button)) {
+    return;
+  }
+  // A scroll bar, and a pan that began in the figure, keep the pointer
+  // wherever it goes.
+  if (scroll_bar_input(e) || (pan_ && pan_input(e))) {
     return;
   }
   // The panel (strip, tab bar, a data table) takes the pointer everywhere
@@ -209,16 +253,182 @@ void editor_workspace::pointer(const pointer_event& in) {
       panel_->pointer(pointer_event::kind::leave, 0.0f, 0.0f, 0, 0.0f, 0.0f);
     }
     pointer_in_panel_ = false;
+    if (pan_input(in)) {
+      return;
+    }
     const ImVec2 off = figure_offset();
+    if (e.type == pointer_event::kind::wheel && !view_.takes_wheel(e.x - off.x, e.y - off.y)) {
+      // A layout larger than its box (a display scale) scrolls where no
+      // plot or diagram takes the wheel; figure_offset() keeps it within
+      // its edges.
+      set_scroll(ImVec2(-std::min(off.x, 0.0f) - e.wheel_x * kWheelStep, -std::min(off.y, 0.0f) - e.wheel_y * kWheelStep));
+      // The pointer is over another point of the layout now.
+      const ImVec2 moved = figure_offset();
+      view_.input({pointer_event::kind::move, e.x - moved.x, e.y - moved.y, 0});
+      return;
+    }
     e.x -= off.x;
     e.y -= off.y;
     view_.input(e);
-    figure_right_click(e.type, e.x, e.y, e.button, figure);
+    if (!panel_->advanced()) { // the advanced mode has no element menu
+      figure_right_click(e.type, e.x, e.y, e.button, figure);
+    }
   }
   if (e.type == pointer_event::kind::up) {
     panel_drag_ = false;
     figure_drag_ = false;
   }
+}
+
+// ── Scrolling ────────────────────────────────────────────────────────────────
+
+void editor_workspace::set_scroll(ImVec2 scroll) {
+  scroll_ = scroll;
+  if (panel_ != nullptr) {
+    panel_->refresh(); // the figure moves and the bars with it
+  }
+}
+
+std::vector<editor_workspace::scroll_bar> editor_workspace::scroll_bars() const {
+  std::vector<scroll_bar> bars;
+  if (panel_ == nullptr || panel_->figure_box().empty()) {
+    return bars;
+  }
+  const layout_box box = panel_->figure_box();
+  const view_geometry g = view_.geometry();
+  const float s = g.css_scale > 0.0f ? g.css_scale : 1.0f;
+  const ImVec2 content(g.layout_width * s, g.layout_height * s);
+  const bool across = content.x - box.width >= 1.0f;
+  const bool down = content.y - box.height >= 1.0f;
+  const ImVec2 off = figure_offset();
+  // One bar along `length` CSS px from `start`, showing `visible` of
+  // `total` scrolled by `scrolled`.
+  const auto thumb = [](float start, float length, float visible, float total, float scrolled) {
+    const float size = std::clamp(length * visible / total, std::min(kMinThumb, length), length);
+    const float range = total - visible;
+    const float at = range > 0.0f ? (length - size) * std::clamp(scrolled / range, 0.0f, 1.0f) : 0.0f;
+    return std::pair<float, float>(start + at, size);
+  };
+  if (across) {
+    scroll_bar b;
+    b.track = {box.x, box.y + box.height - kBarThickness, box.width - (down ? kBarThickness : 0.0f), kBarThickness};
+    const auto [at, size] = thumb(b.track.x, b.track.width, box.width, content.x, -off.x);
+    b.thumb = {at, b.track.y, size, kBarThickness};
+    bars.push_back(b);
+  }
+  if (down) {
+    scroll_bar b;
+    b.vertical = true;
+    b.track = {box.x + box.width - kBarThickness, box.y, kBarThickness, box.height - (across ? kBarThickness : 0.0f)};
+    const auto [at, size] = thumb(b.track.y, b.track.height, box.height, content.y, -off.y);
+    b.thumb = {b.track.x, at, kBarThickness, size};
+    bars.push_back(b);
+  }
+  return bars;
+}
+
+bool editor_workspace::scroll_bar_input(const pointer_event& e) {
+  if (bar_drag_) {
+    const auto [vertical, grab] = *bar_drag_;
+    if (e.type == pointer_event::kind::up) {
+      bar_drag_.reset();
+    } else if (e.type == pointer_event::kind::move) {
+      for (const scroll_bar& b : scroll_bars()) {
+        if (b.vertical != vertical) {
+          continue;
+        }
+        const layout_box box = panel_->figure_box();
+        const view_geometry g = view_.geometry();
+        const float s = g.css_scale > 0.0f ? g.css_scale : 1.0f;
+        const float track_start = vertical ? b.track.y : b.track.x;
+        const float track_length = vertical ? b.track.height : b.track.width;
+        const float thumb_length = vertical ? b.thumb.height : b.thumb.width;
+        const float range = (vertical ? g.layout_height * s - box.height : g.layout_width * s - box.width);
+        const float room = track_length - thumb_length;
+        const float at = ((vertical ? e.y : e.x) - grab - track_start) / (room > 0.0f ? room : 1.0f);
+        ImVec2 scroll(-std::min(figure_offset().x, 0.0f), -std::min(figure_offset().y, 0.0f));
+        (vertical ? scroll.y : scroll.x) = std::clamp(at, 0.0f, 1.0f) * range;
+        set_scroll(scroll);
+      }
+    }
+    return true;
+  }
+  if (e.type != pointer_event::kind::down || e.button != 0 || panel_->popup_open() || panel_->modal_open()) {
+    return false;
+  }
+  for (const scroll_bar& b : scroll_bars()) {
+    if (!b.track.contains(e.x, e.y)) {
+      continue;
+    }
+    view_.input({pointer_event::kind::leave, 0.0f, 0.0f, 0});
+    if (b.thumb.contains(e.x, e.y)) {
+      bar_drag_ = std::make_pair(b.vertical, b.vertical ? e.y - b.thumb.y : e.x - b.thumb.x);
+    } else {
+      // A press beside the thumb moves a page towards it.
+      const layout_box box = panel_->figure_box();
+      const ImVec2 off = figure_offset();
+      ImVec2 scroll(-std::min(off.x, 0.0f), -std::min(off.y, 0.0f));
+      if (b.vertical) {
+        scroll.y += (e.y < b.thumb.y ? -1.0f : 1.0f) * box.height * 0.9f;
+      } else {
+        scroll.x += (e.x < b.thumb.x ? -1.0f : 1.0f) * box.width * 0.9f;
+      }
+      set_scroll(scroll);
+    }
+    return true;
+  }
+  return false;
+}
+
+bool editor_workspace::pan_input(const pointer_event& e) {
+  const layout_box figure = panel_->figure_box();
+  const ImVec2 off = figure_offset();
+  // Window CSS px to the view's.
+  const auto in_view = [&](pointer_event p) {
+    p.x -= figure.x + off.x;
+    p.y -= figure.y + off.y;
+    return p;
+  };
+  if (!pan_) {
+    // A press of the middle button, or of the left one away from plots
+    // and diagrams, may drag a layout larger than its box.
+    if (e.type != pointer_event::kind::down || scroll_bars().empty()) {
+      return false;
+    }
+    const pointer_event at = in_view(e);
+    if (e.button != 2 && !(e.button == 0 && !view_.takes_wheel(at.x, at.y))) {
+      return false;
+    }
+    pan_ = pan_press{e, ImVec2(-std::min(off.x, 0.0f), -std::min(off.y, 0.0f))};
+    return true;
+  }
+  if (e.type == pointer_event::kind::move) {
+    const float dx = e.x - pan_->down.x;
+    const float dy = e.y - pan_->down.y;
+    if (!pan_->panning && dx * dx + dy * dy > kPanSlop * kPanSlop) {
+      pan_->panning = true;
+      view_.input({pointer_event::kind::leave, 0.0f, 0.0f, 0});
+    }
+    if (pan_->panning) {
+      set_scroll(ImVec2(pan_->scroll.x - dx, pan_->scroll.y - dy));
+    }
+    return true;
+  }
+  if (e.type == pointer_event::kind::up) {
+    const pan_press press = *pan_;
+    pan_.reset();
+    figure_drag_ = false;
+    if (!press.panning) {
+      // It did not move: the click the view did not see yet.
+      view_.input(in_view(press.down));
+      pointer_event up = in_view(e);
+      up.type = pointer_event::kind::up;
+      up.button = press.down.button;
+      view_.input(up);
+    }
+    return true;
+  }
+  return false;
 }
 
 bool editor_workspace::divider(pointer_event::kind type, float x, int button) {
@@ -292,8 +502,23 @@ void editor_workspace::set_cursor(cursor_shape shape) {
 
 key_outcome editor_workspace::key(window_key key, key_mods mods, bool down, bool repeat) {
   const key_event figure_key{imgui_key(key), down, mods.ctrl, mods.shift, mods.alt, false};
-  // Shortcuts that hold wherever the keyboard is: saving.
+  // Shortcuts that hold wherever the keyboard is: saving, and the
+  // advanced mode's toggle.
   if (panel_ != nullptr && mods.ctrl && !mods.alt) {
+    if (key == window_key::u && !panel_->modal_open()) {
+      if (down && !repeat) {
+        if (panel_->advanced()) {
+          flush_pending();
+          if (!panel_->set_advanced(false).empty()) {
+            panel_->ask_basic(); // the text does not load: the panel asks
+          }
+        } else {
+          set_advanced(true);
+        }
+        follow_mode();
+      }
+      return key_outcome::consumed;
+    }
     if (key == window_key::s && !panel_->modal_open()) {
       if (down && !repeat) {
         flush_pending();
@@ -330,6 +555,11 @@ key_outcome editor_workspace::key(window_key key, key_mods mods, bool down, bool
   }
   if (repeat) {
     return key_outcome::consumed;
+  }
+  if (panel_->advanced()) {
+    // The model's undo, the tree's shortcuts: basic edits, off here (the
+    // text editor has its own undo while it has the keyboard).
+    return mods.ctrl ? key_outcome::consumed : key_outcome::unhandled;
   }
   const inspector_events tree = panel_->shortcut(key, mods);
   if (tree.source || tree.select) {
@@ -383,7 +613,8 @@ void editor_workspace::frame(double now_seconds) {
   if (panel_ == nullptr) {
     return;
   }
-  if (const std::optional<edit_target> clicked = view_.take_edit_click()) {
+  follow_mode();
+  if (const std::optional<edit_target> clicked = view_.take_edit_click(); clicked && !panel_->advanced()) {
     panel_->model().select(edit_target_id{clicked->element, clicked->field});
     view_.set_selection(panel_->model().selection());
     panel_->refresh();
@@ -398,8 +629,18 @@ void editor_workspace::frame(double now_seconds) {
     view_.set_outline_color(a.dark ? a.accent_dark : a.accent);
   }
   panel_->set_anchor(selection_box());
+  {
+    std::vector<layout_box> thumbs;
+    std::vector<layout_box> tracks;
+    for (const scroll_bar& b : scroll_bars()) {
+      tracks.push_back(b.track);
+      thumbs.push_back(b.thumb);
+    }
+    panel_->set_scroll_bars(std::move(tracks), std::move(thumbs));
+  }
   if (panel_->wants_frame()) {
     const inspector_events events = panel_->frame(now_seconds, view_.element_list(), host_.status_line(status_));
+    follow_mode(); // the mode's toggle in the tab bar
     apply(events);
     take_file_requests();
     const editor_panel::decision decision = panel_ != nullptr ? panel_->take_decision() : editor_panel::decision::none;
@@ -438,11 +679,11 @@ void editor_workspace::draw_figure(int pixel_width, int pixel_height) {
   // counts from the bottom), which is the left side under the tab bar. A
   // data tab hides it.
   if (last_ != nullptr && (panel_ == nullptr || !panel_->figure_box().empty())) {
-    // A layout of another size than the box (view_fit::natural in a live
-    // session, spec/18_collaboration/DESIGN.md section 6.4, or a fit that
-    // fell back to the source size) is drawn from the box's top-left corner,
-    // where pointer input and the panel's outlines expect it: the draw data
-    // is given the box's size, the rest of the box shows the background.
+    // A layout of another size than the box (view_fit::natural, or a fit
+    // that fell back to the source size) is drawn from the box's top-left
+    // corner, where pointer input and the panel's outlines expect it: the
+    // draw data is given the box's size, the rest of the box shows the
+    // background.
     const layout_box box = panel_ != nullptr ? panel_->figure_box() : layout_box{0.0f, 0.0f, css_w_, css_h_};
     const view_geometry g = view_.geometry();
     const float s = g.css_scale > 0.0f ? g.css_scale : 1.0f;
@@ -520,6 +761,7 @@ void editor_workspace::apply(const inspector_events& events) {
     host_.changed(r);
   }
   if (events.save) {
+    flush_pending();
     host_.request_save();
   }
   // Frames only when something happened: every panel frame ends here.
@@ -545,11 +787,20 @@ void editor_workspace::flush_pending() {
   if (panel_ != nullptr && panel_->panel().pending()) {
     apply(panel_->panel().flush(panel_->model()));
   }
+  if (panel_ != nullptr && panel_->advanced()) {
+    const inspector_events typed = panel_->flush_source();
+    if (typed.source) {
+      apply(typed);
+    }
+  }
 }
 
 std::string editor_workspace::import_csv(const std::string& table, std::string_view csv) {
   if (panel_ == nullptr) {
     return "the editor panel is hidden";
+  }
+  if (panel_->advanced()) {
+    return "the editor is in the advanced mode: edit the data in the source";
   }
   std::string message;
   try {
@@ -569,14 +820,14 @@ std::string editor_workspace::import_csv(const std::string& table, std::string_v
 }
 
 void editor_workspace::undo() {
-  if (panel_ != nullptr) {
+  if (panel_ != nullptr && !panel_->advanced()) {
     flush_pending();
     apply(events_of(panel_->model().undo()));
   }
 }
 
 void editor_workspace::redo() {
-  if (panel_ != nullptr) {
+  if (panel_ != nullptr && !panel_->advanced()) {
     flush_pending();
     apply(events_of(panel_->model().redo()));
   }
@@ -595,7 +846,7 @@ void editor_workspace::mark_saved() {
 }
 
 bool editor_workspace::modified() const {
-  return panel_ != nullptr ? panel_->model().modified() : std::string(view_.source()) != saved_source_;
+  return panel_ != nullptr ? panel_->modified() : std::string(view_.source()) != saved_source_;
 }
 
 std::optional<layout_box> editor_workspace::selection_box() const {
@@ -629,8 +880,11 @@ ImVec2 editor_workspace::figure_offset() const {
   const float s = g.css_scale > 0.0f ? g.css_scale : 1.0f;
   const float spare_x = box.width - g.layout_width * s;
   const float spare_y = box.height - g.layout_height * s;
+  // A larger layout scrolls, within its edges.
+  const auto scrolled = [](float spare, float scroll) { return -std::floor(std::clamp(scroll, 0.0f, -spare)); };
   return ImVec2(
-      spare_x >= 1.0f ? std::floor(spare_x * 0.5f) : 0.0f, spare_y >= 1.0f ? std::min(kFigureTopGap, std::floor(spare_y * 0.5f)) : 0.0f);
+      spare_x >= 1.0f ? std::floor(spare_x * 0.5f) : (spare_x < 0.0f ? scrolled(spare_x, scroll_.x) : 0.0f),
+      spare_y >= 1.0f ? std::min(kFigureTopGap, std::floor(spare_y * 0.5f)) : (spare_y < 0.0f ? scrolled(spare_y, scroll_.y) : 0.0f));
 }
 
 std::vector<uint8_t> editor_workspace::capture_figure(int max_width, int& width, int& height, double now_seconds) {

@@ -189,8 +189,9 @@ export class NymphEditor {
     if (this.options.fit) {
       this.setFit(this.options.fit);
     }
-    // The panel's text and source fonts; ImGui's built-in font shows until
-    // they are here.
+    // The panel's text font; ImGui's built-in font shows until it is here.
+    // The source editor's font is asked for (a "fonts" event) on entering
+    // the advanced mode.
     this.core.ensureFonts(['FiraSans-Regular.ttf']).then(() => this.schedule(), () => {});
     if (!this.headless) {
       this.attachInput();
@@ -385,8 +386,7 @@ export class NymphEditor {
   /**
    * How the figure fits its area: `fill` (the default: laid out at the
    * area's size) or `natural` (at the chart's own size, never scaled; the
-   * area may clip it), as a live session needs
-   * (spec/18_collaboration/DESIGN.md section 6.4).
+   * area may clip it), the same layout as the viewer's.
    */
   setFit(fit) {
     if (fit !== 'fill' && fit !== 'natural') {
@@ -397,12 +397,30 @@ export class NymphEditor {
   }
 
   /**
+   * Shows the figure `scale` times its fitted size (1, the default; clamped
+   * to 0.1 to 10), drawn again at that size so it stays sharp; the layout,
+   * the image size and the source do not change. A figure larger than its
+   * area scrolls with the wheel where no plot or diagram takes it.
+   * @param {number} scale
+   */
+  setDisplayScale(scale) {
+    this.displayScaleSet = scale;
+    this.core.check(this.m._nymph_editor_set_display_scale(scale));
+    this.schedule();
+  }
+
+  /** The scale setDisplayScale() set (1 before any). */
+  displayScale() {
+    return this.displayScaleSet ?? 1;
+  }
+
+  /**
    * Where the figure's layout is drawn: `{left, top, width, height, scale,
    * area}`, CSS pixels from the container's top-left corner, `scale` CSS
    * pixels per layout pixel, `area` the part of the editor it is shown in
    * ({left, top, width, height}, which may clip it); null while a data tab
-   * hides it (spec/18_collaboration/DESIGN.md section
-   * 5.3). The `figure` event fires when it changes.
+   * hides it. For overlays drawn over the chart. The `figure` event fires
+   * when it changes.
    */
   figureBox() {
     const f = this.state().figure;
