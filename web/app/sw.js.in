@@ -12,6 +12,8 @@ const SHELL = [
   'index.html',
   'app.css',
   'icon.png',
+  'logo.png',
+  'logo-dark.png',
   'manifest.webmanifest',
   'version.json',
   'config.json',

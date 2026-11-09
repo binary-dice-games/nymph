@@ -132,6 +132,22 @@ test('the start screen lists examples and offers Import', async () => {
   await done(page);
 });
 
+test('the start screen shows the logo for the theme', async () => {
+  const page = await openApp();
+  const shown = async () => {
+    const img = page.locator('#start .logo img:visible');
+    assert((await img.count()) === 1, 'one logo shown');
+    await page.waitForFunction(() => [...document.querySelectorAll('#start .logo img')].every((i) => i.complete));
+    assert((await img.evaluate((i) => i.naturalWidth)) > 0, 'logo loaded');
+    return img.getAttribute('src');
+  };
+  await page.evaluate(() => (document.documentElement.dataset.theme = 'light'));
+  assert((await shown()) === 'logo.png', 'light logo');
+  await page.evaluate(() => (document.documentElement.dataset.theme = 'dark'));
+  assert((await shown()) === 'logo-dark.png', 'dark logo');
+  await done(page);
+});
+
 test('importing a CSV walks the wizard and opens the chart', async () => {
   const page = await openApp({ init: () => delete window.showOpenFilePicker });
   const chooser = page.waitForEvent('filechooser');
