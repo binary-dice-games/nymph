@@ -89,9 +89,11 @@ New and changed files:
 
 ## 2. Design Goals
 
-1. **One trigger.** Pushing a tag `v<version>` is the only manual act of
-   a release, after a commit that sets the version and the changelog.
-   Everything after it is the workflow's.
+1. **One trigger, one check.** Pushing a tag `v<version>`, after a
+   commit that sets the version and the changelog, builds everything
+   into a draft release; publishing that draft, once a maintainer has
+   checked it, is the only other manual act. Everything else is the
+   workflows'.
 2. **Nothing half published.** A user never sees a release with missing
    files, a plugin pinned to a file that does not exist, a formula whose
    tarball is missing, or an extension newer than the release. Every
@@ -420,24 +422,30 @@ check ──── tag = project VERSION, CHANGELOG has [0.2.0], prerelease?
   │
   ▼
 release ───────────── universal macOS .mcpb, one SHA256SUMS, draft release
-  │                   with notes, all files uploaded, then published
+  │                   with notes, all files uploaded; it stays a draft
   │
-  ▼ (not for prereleases; each job independent)
-  ├─► plugin ──────── pull request pinning the release, auto-merge
-  ├─► homebrew ────── formula built and tested, pushed to the tap
-  ├─► winget ──────── manifests, pull request on microsoft/winget-pkgs
-  └─► chrome ──────── upload and publish to the Web Store
-  │
-  ▼
-verify ────────────── on linux, macOS, windows, from the release files:
+  ├─► homebrew-test ─ formula built and tested from the files (not for
+  │                   prereleases)
+  └─► verify ──────── on linux, macOS, windows, from the release files:
                       install.sh (and install.ps1) install, a new console
                       finds nymph, the plugin launcher pinned to the new
                       SHA256SUMS downloads, checks and runs it
+
+maintainer checks the draft and publishes it
+  │
+  ▼ channels.yml (on "released": not for prereleases)
+check ─────────────── download the published files, sha256sum -c SHA256SUMS
+  │ (each job independent)
+  ├─► plugin ──────── pull request pinning the release, auto-merge
+  ├─► homebrew ────── formula pushed to the tap
+  ├─► winget ──────── manifests, pull request on microsoft/winget-pkgs
+  └─► chrome ──────── upload and publish to the Web Store
 ```
 
 A failed channel job does not undo the release or the other channels;
 it is re-run by itself (GitHub's "Re-run failed jobs") once fixed, and
-each channel job is idempotent: the plugin job finds its pull request
+each channel job is idempotent (running `channels.yml` by hand with the
+tag re-runs them all): the plugin job finds its pull request
 already open or merged, the tap job finds the formula already at that
 version, the store job finds the version already uploaded.
 
@@ -449,6 +457,7 @@ For maintainers (docs/releasing.md):
    `## [Unreleased]` in `CHANGELOG.md` to `## [X.Y.Z] - <date>` with a
    new empty `## [Unreleased]` above it. CI green.
 2. `git tag vX.Y.Z <that commit>` and push the tag.
+3. When the run is green, check the draft release and publish it.
 
 For users:
 
@@ -481,8 +490,10 @@ secret is missing is skipped with a warning, as wish's APT publish is):
 - A published release's files are never uploaded again: the release job
   uploads only to its own draft and refuses a tag whose release is
   already published. Re-running is safe until publication.
+- `release.yml` never publishes a release: a maintainer does.
 - No channel job runs before the release is published, and none runs for
-  a prerelease or a dry run.
+  a prerelease or a dry run. The channels read the published files and
+  check them against the published `SHA256SUMS`.
 - The plugin never names a version whose files are not all published
   (it pins from the published `SHA256SUMS`).
 - The formula's tarball and App page are the release's files, pinned by
@@ -508,7 +519,12 @@ secret is missing is skipped with a warning, as wish's APT publish is):
    moves; a tag names one commit, and the GitHub release is tied to it.
    Starting from a published GitHub release (as wish does) publishes
    the release before its files exist (goal 2). The workflow creates the
-   release itself, as a draft, and publishes it when complete.
+   release itself, as a draft with every file, and leaves it a draft.
+   A maintainer publishes it after checking it (as inksplat does), so a
+   bad build never reaches users; publishing fires `release: released`,
+   which starts the channels in their own workflow, `channels.yml`. They
+   download the published files rather than reuse `release.yml`'s
+   artifacts, so they pin exactly what users get.
 2. **The formula builds from source; no binary formula.** A formula
    that downloads the release executables would install faster, but
    Homebrew's own rules prefer source, the source formula tests the

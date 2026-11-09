@@ -32,7 +32,7 @@ nymph PNGs on GitHub or any site become live charts of the same size.
 It started as wish's `nymph` module and is now standalone, with no wish or
 bison dependency (and no compatibility with wish's format). **Status:**
 verified on Linux. CI builds and tests Linux, macOS and Windows (MSVC,
-MSYS2) on every pull request and a tag push publishes a release
+MSYS2) on every pull request and a tag push builds a draft release
 ([docs/releasing.md](docs/releasing.md)); macOS and Windows have not yet
 passed there ([spec/07_release_pipeline](spec/07_release_pipeline/PLAN.md)).
 

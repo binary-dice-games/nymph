@@ -210,7 +210,7 @@ Chromium package is checked in Edge.
   nothing but a real error; treats "version exists" as success), and
   `tests/edge_publish_test.mjs` against a stub server, registered in
   `tests/CMakeLists.txt` like `chrome_publish_test.mjs`.
-- `release.yml`: an `edge` job after the release is published (skips
+- `channels.yml`: an `edge` job after the release is published (skips
   with a warning when `EDGE_*` variables or secrets are unset).
 - `driver-chromium.mjs` takes `NYMPH_EXT_BROWSER_CHANNEL=msedge`; a CTest
   `nymph_extension_edge` (skip 77 when Edge is missing or refuses the
@@ -240,7 +240,7 @@ addons.mozilla.org for review.
 - A check that `nymph-<v>-src.tar.gz` builds `NYMPH_WEB` offline with
   Emscripten and yields a byte-identical `.wasm` (or documents the
   difference reviewers need); fix in the tarball recipe if it does not.
-- `release.yml`: a `firefox` job (skips with a warning when `AMO_*` are
+- `channels.yml`: a `firefox` job (skips with a warning when `AMO_*` are
   unset).
 - `docs/releasing.md`: the AMO listing, the add-on id, the keys;
   `docs/extension.md`: the store link.
@@ -292,7 +292,7 @@ owner chooses.
   `xcodebuild archive` and export; for the App Store the upload with the
   App Store Connect API key; Release DESIGN section 4.8's signing notes
   reused.
-- `release.yml`: a `safari` job, skipping with a warning when the secrets
+- `channels.yml`: a `safari` job, skipping with a warning when the secrets
   are unset.
 - `docs/extension.md`, `docs/releasing.md`, README table updated.
 - CHANGELOG: Added "Safari" when the first signed build ships.
