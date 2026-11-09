@@ -1,8 +1,10 @@
 # nymph — Releasing
 
-A release is one tag push. GitHub Actions (`.github/workflows/release.yml`)
-builds and tests nymph on every platform, publishes the GitHub release and
-updates every channel users install from. Design:
+A release is a tag push, then one click. GitHub Actions
+(`.github/workflows/release.yml`) builds and tests nymph on every platform
+and leaves the files in a draft GitHub release; you check it and publish
+it, and `.github/workflows/channels.yml` then updates every channel users
+install from. Design:
 [spec/07_release_pipeline](../spec/07_release_pipeline/DESIGN.md).
 
 ## Make a release
@@ -18,12 +20,18 @@ updates every channel users install from. Design:
    git push origin vX.Y.Z
    ```
 
-That is all. The workflow fails at once, before building anything, if
-the tag is not `v` plus the `CMakeLists.txt` version or the changelog has
-no section for it.
+3. When the `release` run is green, open the draft release it made (the
+   run's summary links it, or the repository's Releases page), check its
+   notes and files, and click **Publish release**. That starts the
+   `channels` workflow. Until then nothing is public and no channel has
+   changed; to drop a bad draft, delete it and its tag.
 
-- **Prerelease:** a tag `vX.Y.Z-<suffix>` (`v0.2.0-rc.1`) makes a GitHub
-  prerelease with every file, and updates no channel. Its files carry the
+The workflow fails at once, before building anything, if the tag is not
+`v` plus the `CMakeLists.txt` version or the changelog has no section for
+it.
+
+- **Prerelease:** a tag `vX.Y.Z-<suffix>` (`v0.2.0-rc.1`) makes a draft
+  GitHub prerelease with every file; publishing it updates no channel. Its files carry the
   plain `X.Y.Z` in their names.
 - **Dry run:** run the `release` workflow by hand (Actions, "Run
   workflow"): everything is built and tested, the files are left as the
@@ -38,20 +46,29 @@ no section for it.
 | `native` | Release builds with their tests: Linux x86-64 and arm64, Windows x86-64 (MSVC), macOS arm64 and x86-64 |
 | `source` | The source tarball, built, tested and installed with no network (Linux) and on macOS |
 | `macos-universal` | One executable for both Macs, in `nymph-X.Y.Z-macos-universal.mcpb` |
-| `release` | Gathers the files, writes `SHA256SUMS`, creates the release as a draft, uploads, publishes |
+| `release` | Gathers the files, writes `SHA256SUMS`, creates the draft release and uploads them; it stays a draft |
+| `homebrew-test` | Builds and tests the formula from the files on macOS and Linux |
+| `verify` | On Linux, macOS and Windows: the install scripts, a new console, the plugin launcher |
+
+After you publish the release, `channels.yml`:
+
+| Job | Does |
+|---|---|
+| `check` | Downloads the published files and checks them against `SHA256SUMS` |
 | `plugin` | Opens a pull request pinning the release in the Claude Code and Cursor plugins, set to merge when CI passes |
-| `homebrew-test`, `homebrew` | Builds and tests the formula on macOS and Linux, then pushes it to the tap |
+| `homebrew` | Pushes the formula to the tap |
 | `winget` | Opens a pull request on `microsoft/winget-pkgs` with the release's manifests |
 | `chrome` | Uploads the extension to the Chrome Web Store and submits it for review |
-| `verify` | On Linux, macOS and Windows: the install scripts, a new console, the plugin launcher |
 
 The channel jobs run only after the release is published, and not for
 prereleases. Each one is independent and can be re-run alone ("Re-run
-failed jobs") once its problem is fixed; re-running does nothing a second
+failed jobs") once its problem is fixed, or all of them by running the
+`channels` workflow by hand with the tag; re-running does nothing a second
 time (an open pin pull request, a tap already at the version, a version
 the store already has). A published release's files are never replaced:
 the plugin and the formula pin their SHA-256, so re-running the `release`
-job of a published tag fails. To fix a bad release, publish the next
+job of a published tag fails; re-running it for a draft replaces the
+draft's files. To fix a bad release, publish the next
 version.
 
 The release files:
@@ -122,4 +139,4 @@ release itself needs none.
 
 The workflows are tested by CI, but the store and tap steps only run on a
 real release. Push a prerelease tag first (`vX.Y.Z-rc.1`) to see every
-build and the release files, then the release tag.
+build and the release files in its draft, then the release tag.

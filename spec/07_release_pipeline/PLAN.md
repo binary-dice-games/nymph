@@ -431,9 +431,9 @@ executable to `microsoft/winget-pkgs` as `BinaryDiceGames.Nymph`.
 
 ## Completion Criteria
 
-- One tag push publishes a release with every file of DESIGN section 3
-  and updates the plugin, the Homebrew tap and the Chrome Web Store,
-  with no other manual action (beyond store review).
+- One tag push makes a draft release with every file of DESIGN section 3;
+  publishing it updates the plugin, the Homebrew tap and the Chrome Web
+  Store, with no other manual action (beyond store review).
 - CI builds and tests Linux (x86-64, arm64), macOS (arm64, x86-64),
   Windows (MSVC, MSYS2), the web build and the source tarball on every
   pull request, all green.

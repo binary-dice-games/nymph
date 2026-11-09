@@ -217,7 +217,7 @@ The three folders differ only in `manifest.json`; a Node test asserts it.
   offline) and the review notes point to `docs/building.md`. *Check* in
   PLAN step 8 that the tarball builds the web viewer with Emscripten; if
   it does not, that is fixed there.
-- Releases: `release.yml` gains `edge` and `firefox` jobs after the
+- Releases: `channels.yml` gains `edge` and `firefox` jobs after the
   release is published, each skipping with a warning when its
   credentials are not set, as the `chrome` job does. Safari has no job
   until PLAN step 10.
