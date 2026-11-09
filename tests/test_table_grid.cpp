@@ -56,8 +56,11 @@ TEST(table_grid, ImportsAndExportsCsvFiles) {
   EXPECT_EQ(m.tables()[0].cells.rows.size(), 3u);
   EXPECT_FALSE(g.import_file(m, "", dir / "missing.csv").ok);
   EXPECT_EQ(g.export_file(m, "", dir / "out.csv"), "");
-  std::ifstream in(dir / "out.csv");
-  EXPECT_EQ(std::string(std::istreambuf_iterator<char>(in), {}), "x, y\n1, 10\n2, 20\n3, 30\n");
+  {
+    // Closed before the cleanup: Windows cannot delete a file that is open.
+    std::ifstream in(dir / "out.csv", std::ios::binary);
+    EXPECT_EQ(std::string(std::istreambuf_iterator<char>(in), {}), "x, y\n1, 10\n2, 20\n3, 30\n");
+  }
   EXPECT_NE(g.export_file(m, "nope", dir / "x.csv"), "");
   std::filesystem::remove_all(dir);
 }
