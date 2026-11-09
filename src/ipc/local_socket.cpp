@@ -125,22 +125,26 @@ local_stream::~local_stream() {
 }
 
 local_stream::local_stream(local_stream&& other) noexcept
-    : handle_(std::exchange(other.handle_, kInvalid)), buffer_(std::move(other.buffer_)) {}
+    : handle_(std::exchange(other.handle_, kInvalid)),
+      aborted_(std::exchange(other.aborted_, false)),
+      buffer_(std::move(other.buffer_)) {}
 
 local_stream& local_stream::operator=(local_stream&& other) noexcept {
   if (this != &other) {
     close();
     handle_ = std::exchange(other.handle_, kInvalid);
+    aborted_ = std::exchange(other.aborted_, false);
     buffer_ = std::move(other.buffer_);
   }
   return *this;
 }
 
 void local_stream::close() {
-  if (handle_ != kInvalid) {
+  if (handle_ != kInvalid && !aborted_) {
     close_native(as_native(handle_));
-    handle_ = kInvalid;
   }
+  handle_ = kInvalid;
+  aborted_ = false;
 }
 
 local_stream local_stream::connect(const std::filesystem::path& path) {
@@ -219,6 +223,15 @@ void local_stream::shutdown() {
 void local_stream::shutdown_reads() {
   if (handle_ != kInvalid) {
     ::shutdown(as_native(handle_), kShutRead);
+  }
+}
+
+void local_stream::abort() {
+  // handle_ itself stays as it is: the reading thread may be using it.
+  if (handle_ != kInvalid && !aborted_) {
+    ::shutdown(as_native(handle_), kShutBoth);
+    close_native(as_native(handle_)); // on Windows only this ends a blocked recv()
+    aborted_ = true;
   }
 }
 

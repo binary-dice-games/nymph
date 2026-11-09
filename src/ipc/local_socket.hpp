@@ -27,7 +27,7 @@ class ipc_error : public std::runtime_error {
 inline constexpr size_t kMaxSocketPath = 100;
 
 /// @brief One connection. Reads and writes may run on different threads;
-///        close() from any thread ends a read blocked on another.
+///        abort() from any thread ends a read blocked on another.
 class local_stream {
  public:
   local_stream() = default;
@@ -57,9 +57,16 @@ class local_stream {
   /// @brief Ends both directions: a read blocked on another thread returns.
   void shutdown();
 
-  /// @brief Ends reading only: a read blocked on another thread returns, and
-  ///        a reply being written still goes out.
+  /// @brief Ends reading only: a reply being written still goes out. On Linux
+  ///        and macOS a read blocked on another thread returns; on Windows it
+  ///        does not (see abort()).
   void shutdown_reads();
+
+  /// @brief Closes the socket now, from any thread: a read blocked on another
+  ///        thread returns false on every system. Nothing can be read or
+  ///        written afterwards; call it when the other thread will only
+  ///        return from its read (its handle may be reused by a new socket).
+  void abort();
 
   bool valid() const {
     return handle_ != kInvalid;
@@ -71,6 +78,7 @@ class local_stream {
   void close();
 
   intptr_t handle_ = kInvalid;
+  bool aborted_ = false; ///< abort() closed handle_: the destructor must not.
   std::string buffer_; ///< Bytes read past the last line.
 };
 

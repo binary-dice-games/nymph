@@ -307,14 +307,31 @@ TEST(editor_server, ClosingTheServerFailsAPendingCall) {
   client c(f.server->socket());
   c.initialize();
   std::future<json> pending = std::async(std::launch::async, [&] { return c.call("editor_state"); });
-  // Nobody runs the job; the editor closes instead.
-  while (pending.wait_for(std::chrono::milliseconds(10)) != std::future_status::ready && f.server->connections() == 0) {
+  // The job reaches the UI thread's queue (it wakes the loop); nobody runs it:
+  // the editor closes instead.
+  {
+    std::unique_lock<std::mutex> lock(f.mtx);
+    ASSERT_TRUE(f.woken.wait_for(lock, std::chrono::seconds(20), [&] { return f.wake; })) << "the call never reached the editor";
   }
   std::thread closer([&] { f.server.reset(); });
   const json r = pending.get();
   closer.join();
   EXPECT_TRUE(r.value("isError", false));
   EXPECT_NE(r["content"][0]["text"].get<std::string>().find("the editor was closed"), std::string::npos) << r.dump();
+}
+
+TEST(editor_server, ClosingTheServerEndsAQuietConnection) {
+  fixture f;
+  client c(f.server->socket());
+  c.initialize();
+  // The connection waits for the client's next line, which never comes. On
+  // Windows shutting its reads down does not end that wait: closing must
+  // not hang on it.
+  const auto start = std::chrono::steady_clock::now();
+  f.server.reset();
+  EXPECT_LT(std::chrono::steady_clock::now() - start, std::chrono::seconds(10));
+  std::string line;
+  EXPECT_FALSE(c.s.read_line(line)); // the client sees the end
 }
 
 // ── nymph mcp's bridge (plan step 10) ────────────────────────────────────────

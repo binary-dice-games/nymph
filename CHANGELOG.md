@@ -64,6 +64,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `nymph view --edit`: choosing a colour for a field that was automatic opens the colour picker at once.
 
 ### Fixed
+- Windows: closing `nymph view --edit` while an agent was connected through `nymph mcp` but idle could hang instead of closing.
 - `nymph view --edit` and the web app: a chart bigger than its area shows scroll bars and moves by dragging it (away from plots and diagrams, or with the middle button) or with the wheel; before, its hidden parts could not be reached.
 - `nymph view --edit` and the web app's editor: the editor's text and widgets are no longer drawn twice too large on high-density displays (Retina, 4K).
 - Web app: the advanced mode's source editor is drawn in its monospace font; letters no longer overlap or leave gaps inside words.
