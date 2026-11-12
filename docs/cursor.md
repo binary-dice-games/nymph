@@ -52,6 +52,10 @@ Install nymph as the README says (`install.ps1` on Windows puts
 { "mcpServers": { "nymph": { "type": "stdio", "command": "nymph", "args": ["mcp"] } } }
 ```
 
+Without installing nymph, with Node.js: `"command": "npx", "args": ["-y",
+"@binary-dice-games/nymph", "mcp"]` ([agents.md](agents.md)); on Windows
+too, with no `sh`.
+
 For an executable at a path you choose, use `"command": "${env:NYMPH_BIN}"`
 or the full path. Cursor documents this one-click link format; not yet tried here:
 `cursor://anysphere.cursor-deeplink/mcp/install?name=nymph&config=eyJjb21tYW5kIjoibnltcGgiLCJhcmdzIjpbIm1jcCJdfQ%3D%3D`.

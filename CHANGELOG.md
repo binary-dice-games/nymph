@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- npm package `@binary-dice-games/nymph`: `npx -y @binary-dice-games/nymph mcp` starts the MCP server in any local agent (Codex CLI, Gemini CLI, VS Code, Windsurf, ...) on Linux, macOS and Windows, downloading and checking the release executable on first run; `npm install -g` puts `nymph` on `PATH`. Setup per agent in `docs/agents.md`.
+- The MCP server is listed in the MCP Registry as `io.github.binary-dice-games/nymph`.
+
 ## [0.2.0] - 2026-11-09
 
 ### Added

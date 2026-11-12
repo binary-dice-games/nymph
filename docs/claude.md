@@ -12,7 +12,7 @@ zoom, hover for values, and Claude follows the view you leave. Design:
 | Claude Code | `/plugin install nymph --marketplace binary-dice-games/nymph` | The nymph tools, the `nymph` command and the nymph skill. In the terminal, charts are files in your project; in the desktop app's Code tab they are also live in the conversation. |
 | Claude Desktop (macOS, Windows) | Double-click `nymph-<version>-macos-universal.mcpb` or `nymph-<version>-windows-x86_64.mcpb` | The nymph tools. Charts are live in the **Code tab**; a plain chat that Desktop routes through its device bridge (tool names `mcp__remote-devices__nymph__...`) returns the PNG only. |
 | claude.ai (web, mobile) | Upload `nymph-skill-<version>.zip` as a skill | Claude runs nymph in its code sandbox and gives you the PNG. No live chart. |
-| Any MCP client | Run `nymph mcp` (below) | The tools; live charts where the client shows MCP Apps. |
+| Any MCP client | `npx -y @binary-dice-games/nymph mcp` ([agents.md](agents.md)), or `nymph mcp` (below) | The tools; live charts where the client shows MCP Apps. |
 
 The files come from a GitHub release of nymph, or from a release build
 ([building.md](building.md#release-executables)).
@@ -67,6 +67,7 @@ Claude Code, without the plugin:
 
 ```sh
 claude mcp add nymph -- /path/to/nymph mcp
+claude mcp add nymph -- npx -y @binary-dice-games/nymph mcp   # nothing installed: Node.js only
 ```
 
 Or in a client's JSON configuration (Claude Desktop's
@@ -130,6 +131,7 @@ reach your computer.
 
 Cursor has its own plugin and `mcp.json` entry: [cursor.md](cursor.md).
 Gemini CLI uses the same `nymph mcp`: [gemini-cli.md](gemini-cli.md).
+Any other agent: [agents.md](agents.md).
 
 ## Limits
 
