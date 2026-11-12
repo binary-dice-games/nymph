@@ -253,6 +253,35 @@ sheet.
   connector's writes until its next `document_begin_change` or a new
   call after the user dismisses the notice.
 
+### 5.1 The setup guide (`agents/setup.js`)
+
+A user whose agent does not run nymph yet cannot get a pairing code, so
+**Connect an agent…** also teaches the setup, in the manner of inksplat's
+support landing page (one obvious step for the visitor's system, the rest
+folded away):
+
+- The pairing code field comes first, with a warning to connect only an
+  agent the user runs (it can see and change the chart).
+- **First time? Set up your agent** (a `details`, open until an agent has
+  connected once through the bridge): (1) the agent, picked from buttons,
+  and the system, detected from the user agent and changeable; (2) the one
+  step for that pair, as text with **Copy**, and a button where the agent
+  has a one-click install (**Add to Cursor**, the release page for Claude
+  Desktop's `.mcpb`); (3) "Connect to the nymph web app", to copy and ask;
+  (4) type the code above or open the link. A link to `docs/agents.md`
+  covers the rest.
+- The steps come from `setup.js`, which has no DOM code (Node tests):
+  Claude Code gets the plugin command, Claude Desktop the extension, the
+  others the npm launcher (`npx -y @binary-dice-games/nymph mcp`,
+  release DESIGN section 4.11) in their own command or configuration
+  format; on Windows through `cmd /c`, since clients start servers without
+  a shell. Node.js is named where the step needs it.
+- The last agent and system picked, and whether one connected, are kept
+  in `localStorage` (`nymph.agents.setup`); without storage the guide
+  starts from the detected system.
+- No request leaves the site: the guide is text and links; nothing is
+  fetched to build it.
+
 ## 6. Capabilities and Configuration
 
 - `device.assistant` becomes `device.agents = {webmcp, bridge}`: the

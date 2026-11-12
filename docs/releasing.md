@@ -48,7 +48,7 @@ it.
 | `macos-universal` | One executable for both Macs, in `nymph-X.Y.Z-macos-universal.mcpb` |
 | `release` | Gathers the files, writes `SHA256SUMS`, creates the draft release and uploads them; it stays a draft |
 | `homebrew-test` | Builds and tests the formula from the files on macOS and Linux |
-| `verify` | On Linux, macOS and Windows: the install scripts, a new console, the plugin launcher |
+| `verify` | On Linux, macOS and Windows: the install scripts, a new console, the plugin and npm launchers |
 
 After you publish the release, `channels.yml`:
 
@@ -59,13 +59,15 @@ After you publish the release, `channels.yml`:
 | `homebrew` | Pushes the formula to the tap |
 | `winget` | Opens a pull request on `microsoft/winget-pkgs` with the release's manifests |
 | `chrome` | Uploads the extension to the Chrome Web Store and submits it for review |
+| `npm` | Publishes `@binary-dice-games/nymph` (the launcher pinned to the release's executables) to npm |
+| `mcp-registry` | Publishes `io.github.binary-dice-games/nymph`, pointing at that npm version, to the MCP Registry |
 
 The channel jobs run only after the release is published, and not for
 prereleases. Each one is independent and can be re-run alone ("Re-run
 failed jobs") once its problem is fixed, or all of them by running the
 `channels` workflow by hand with the tag; re-running does nothing a second
 time (an open pin pull request, a tap already at the version, a version
-the store already has). A published release's files are never replaced:
+the store, npm or the MCP Registry already has). A published release's files are never replaced:
 the plugin and the formula pin their SHA-256, so re-running the `release`
 job of a published tag fails; re-running it for a draft replaces the
 draft's files. To fix a bad release, publish the next
@@ -98,11 +100,13 @@ release itself needs none.
 | `WINGET_FORK` | variable (optional) | winget: the fork, `owner/winget-pkgs` (default: `<repository owner>/winget-pkgs`) |
 | `CHROME_EXTENSION_ID`, `CHROME_PUBLISHER_ID` | variables | Chrome Web Store item and publisher |
 | `CHROME_CLIENT_ID`, `CHROME_CLIENT_SECRET`, `CHROME_REFRESH_TOKEN` | secrets | Chrome Web Store API (OAuth) |
+| `NPM_TOKEN` | secret | npm: a granular access token that can publish `@binary-dice-games/nymph` (the first release; optional once trusted publishing is on) |
+| `NPM_TRUSTED_PUBLISHING` | variable | npm: `true` once npm trusts `channels.yml` (no token needed then) |
 | `APPLE_CERTIFICATE_P12` (base64), `APPLE_CERTIFICATE_PASSWORD` | secrets | macOS: Developer ID Application certificate |
 | `APPLE_API_KEY` (the `.p8` text), `APPLE_API_KEY_ID`, `APPLE_API_ISSUER` | secrets | macOS: App Store Connect API key for notarization |
 
-- **Public downloads.** The plugin launcher, the install scripts and
-  Homebrew download release files without a token: the repository (or a
+- **Public downloads.** The plugin and npm launchers, the install scripts
+  and Homebrew download release files without a token: the repository (or a
   public mirror of its releases) must be public for them to work.
 - **Pull request auto-merge.** Turn on "Allow auto-merge" (Settings,
   General) so the plugin pin merges by itself when CI passes; otherwise
@@ -128,6 +132,16 @@ release itself needs none.
   `https://www.googleapis.com/auth/chromewebstore` scope and set the
   settings above. Each release is reviewed before it reaches users; access
   to all sites means an in-depth review.
+- **npm and the MCP Registry.** Create the npm organization
+  `binary-dice-games` and a granular access token with publish rights on
+  its packages; set it as `NPM_TOKEN`. After the first publish, you can
+  add `channels.yml` as the package's trusted publisher on npmjs.com
+  (repository `binary-dice-games/nymph`, workflow `channels.yml`), set
+  `NPM_TRUSTED_PUBLISHING` to `true` and delete the token. The MCP Registry
+  job needs no setting: GitHub's OIDC token proves the
+  `io.github.binary-dice-games` namespace. It runs only once the npm
+  package of the version exists, which the registry checks through the
+  package's `mcpName`.
 - **Apple.** Without the Apple settings, macOS files are signed ad hoc:
   the plugin launcher, the install script and Homebrew run them (files
   downloaded by `curl` or built by Homebrew are not quarantined), but a

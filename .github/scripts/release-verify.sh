@@ -5,7 +5,8 @@
 # install.sh installs this platform's executable from the release files
 # and a new login shell runs it; the Claude Code plugin's launcher, pinned
 # to the release's SHA256SUMS, downloads, checks and runs it
-# (spec/07_release_pipeline/PLAN.md step 10).
+# (spec/07_release_pipeline/PLAN.md step 10), and so does the npm
+# package's launcher (DESIGN.md section 4.11) where Node is installed.
 #
 #   sh release-verify.sh <folder with the release files> <version>
 
@@ -54,4 +55,17 @@ cp "$root/claude/plugin/bin/nymph" "$work/plugin/bin/nymph"
 grep -E "  nymph-$version-[a-z]+-[a-z0-9_]+(\\.exe)?\$" "$files/SHA256SUMS" > "$work/plugin/bin/checksums.txt"
 out=$(HOME="$work/home" NYMPH_CACHE="$work/cache" NYMPH_RELEASE_URL="$url" sh "$work/plugin/bin/nymph" --version | no_cr)
 [ "$out" = "nymph $version" ] || fail "the plugin launcher ran '$out'"
-echo "release verify: install.sh, login shell and plugin launcher work with nymph $version"
+
+# ── The npm package's launcher, pinned to this release ───────────────────────
+if command -v node > /dev/null 2>&1; then
+  sh "$root/.github/scripts/npm-package.sh" "$version" "$files/SHA256SUMS" "$work/npm"
+  npm_cache="$work/npm-cache"
+  case $(uname -s) in
+    MINGW* | MSYS* | CYGWIN*) npm_cache=$(cygpath -w "$npm_cache") ;;
+  esac
+  out=$(NYMPH_CACHE="$npm_cache" NYMPH_RELEASE_URL="$url" node "$work/npm/package/bin/nymph.js" --version | no_cr)
+  [ "$out" = "nymph $version" ] || fail "the npm launcher ran '$out'"
+else
+  echo "release verify: no node here: the npm launcher is not checked"
+fi
+echo "release verify: install.sh, login shell, plugin and npm launchers work with nymph $version"

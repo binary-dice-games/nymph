@@ -18,7 +18,10 @@ Install nymph ([README](../README.md#install)), then add the server to
 }
 ```
 
-Use the executable's full path if it is not on your `PATH`. `/mcp` in
+Use the executable's full path if it is not on your `PATH`. Without
+nymph installed, with Node.js: `gemini mcp add nymph npx -y
+@binary-dice-games/nymph mcp`, or `"command": "npx", "args": ["-y",
+"@binary-dice-games/nymph", "mcp"]` ([agents.md](agents.md)). `/mcp` in
 Gemini CLI lists nymph's tools once it has started.
 
 ## Charts

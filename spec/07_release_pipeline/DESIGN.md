@@ -54,6 +54,10 @@ In scope:
    Web Store and submits it for review.
 7. **Claude Code plugin**: each release pins its executables in
    `claude/plugin/bin/checksums.txt` and bumps the plugin version.
+   **npm and the MCP Registry**: each release publishes the launcher
+   package `@binary-dice-games/nymph`, pinned the same way, and its
+   registry entry, so any local MCP client runs `npx -y
+   @binary-dice-games/nymph mcp` (section 4.11).
 8. **CI** on every pull request for every target, so a release never
    finds a broken platform.
 
@@ -84,6 +88,7 @@ New and changed files:
 | `packaging/homebrew/nymph.rb.in` | The formula template |
 | `packaging/winget/*.yaml.in` | The winget manifest templates (section 4.10) |
 | `packaging/chrome/publish.sh` | Chrome Web Store upload and publish |
+| `packaging/npm/`, `packaging/mcp-registry/server.json.in`, `.github/scripts/npm-package.sh` | The npm launcher package and the MCP Registry entry (section 4.11) |
 | `tests/` | `install_check.cmake`, `install_subproject.cmake`, `install_script.sh` / `.ps1`, `release_linkage.cmake` (was `release_static.cmake`), `source_dist_check.cmake`, `plugin_sync_versions.cmake`, `chrome_publish_test.mjs`, `winget_manifest.sh`, `test_charconv.cpp` |
 | `docs/building.md`, `docs/releasing.md` (new), `docs/extension.md`, `docs/claude.md`, `README.md`, `CLAUDE.md` | macOS, installing, releasing |
 
@@ -404,6 +409,51 @@ Windows PowerShell 5.1 and PowerShell 7.
   executable). The executable is unsigned; winget does not require a
   signature.
 
+### 4.11 npm package and MCP Registry
+
+Every local MCP client (Codex CLI, Gemini CLI, VS Code, Windsurf, ...)
+can start a stdio server, but each needs a path to an executable the user
+installed; the `.mcpb` bundle covers only Claude Desktop. The common
+install path across clients is a package runner, so nymph is also an npm
+package whose one command is the same everywhere:
+`npx -y @binary-dice-games/nymph mcp` (users: `docs/agents.md`).
+
+- **A launcher, not the executables.** `packaging/npm/bin/nymph.js` keeps
+  the rules of the plugin launcher (section 4.5, Claude DESIGN section
+  4.6): `$NYMPH_BIN` first; else the executable for this OS and CPU named
+  in the package's `checksums.txt`, from `$NYMPH_CACHE` (default
+  `~/.cache/nymph`, shared with the plugin), downloaded from the GitHub
+  release when missing, run only when its SHA-256 matches; nothing on
+  standard output but the program's. It is Node, not `sh`, so it runs on
+  Windows without Git for Windows. It downloads on first run, not in
+  `postinstall`: `npx` and `--ignore-scripts` installs skip scripts.
+- **Package contents.** `.github/scripts/npm-package.sh <v> <SHA256SUMS>
+  <out>` writes `package/` (`package.json` from
+  `packaging/npm/package.json.in`, the launcher, `checksums.txt` with the
+  executables' lines only, README, LICENSE) and `server.json` from
+  `packaging/mcp-registry/server.json.in`. The package version is the
+  release version; it pins exactly that release.
+- **MCP Registry.** `server.json` names `io.github.binary-dice-games/nymph`
+  with one `npm` package run with the positional argument `mcp` over
+  stdio; the registry checks ownership through `package.json`'s
+  `mcpName`, and the namespace through GitHub OIDC.
+- **Channels.** `channels.yml` job `npm` publishes with provenance, using
+  `NPM_TOKEN`, or npm trusted publishing once
+  `NPM_TRUSTED_PUBLISHING` is `true`; skipped with a warning without
+  either. Job `mcp-registry` (after `npm`) runs `mcp-publisher` (pinned
+  version, checked with cosign) with `login github-oidc`. Both do nothing
+  for a version already published.
+- **Tests.** `tests/npm_package_test.mjs` (CTest `nymph_npm_package`):
+  the generated files, and the launcher against a stand-in release server
+  (redirect, cache, tampered cache or release, exit code, standard input).
+  `release-verify.sh` runs the launcher on the real release files on
+  Linux, macOS and Windows.
+- Rejected: per-platform packages as `optionalDependencies` (esbuild's
+  scheme: no download at run time, but five packages of the full
+  executable per release, all of which some npm clients fetch); listing
+  the `.mcpb` files in `server.json` (an MCPB entry cannot name a
+  platform, as in section 3).
+
 ## 5. Data Flow
 
 ```
@@ -439,7 +489,9 @@ check ─────────────── download the published files
   ├─► plugin ──────── pull request pinning the release, auto-merge
   ├─► homebrew ────── formula pushed to the tap
   ├─► winget ──────── manifests, pull request on microsoft/winget-pkgs
-  └─► chrome ──────── upload and publish to the Web Store
+  ├─► chrome ──────── upload and publish to the Web Store
+  └─► npm ─────────── launcher package pinned to the release
+        └─► mcp-registry  server.json pointing at that npm version
 ```
 
 A failed channel job does not undo the release or the other channels;

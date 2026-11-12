@@ -1,0 +1,17 @@
+{
+  "name": "@binary-dice-games/nymph",
+  "version": "@NYMPH_VERSION@",
+  "description": "Charts and diagrams as PNG images from short YAML sources, and an MCP server for AI agents: npx -y @binary-dice-games/nymph mcp",
+  "mcpName": "io.github.binary-dice-games/nymph",
+  "license": "MIT",
+  "author": "Binary Dice Games",
+  "homepage": "https://github.com/binary-dice-games/nymph#readme",
+  "repository": { "type": "git", "url": "git+https://github.com/binary-dice-games/nymph.git" },
+  "bugs": "https://github.com/binary-dice-games/nymph/issues",
+  "keywords": ["mcp", "mcp-server", "charts", "plots", "diagrams", "uml", "visualization", "png", "yaml", "mermaid"],
+  "bin": { "nymph": "bin/nymph.js" },
+  "files": ["bin/nymph.js", "checksums.txt", "README.md", "LICENSE"],
+  "engines": { "node": ">=18" },
+  "os": ["linux", "darwin", "win32"],
+  "cpu": ["x64", "arm64"]
+}

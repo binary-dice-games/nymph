@@ -356,3 +356,11 @@ if(NYMPH_NODE_TOOL AND NOT WIN32)
     COMMAND ${NYMPH_NODE_TOOL} ${CMAKE_CURRENT_SOURCE_DIR}/chrome_publish_test.mjs
             ${PROJECT_SOURCE_DIR}/packaging/chrome/publish.sh ${CMAKE_CURRENT_BINARY_DIR}/chrome_publish)
 endif()
+
+# ── npm package and MCP Registry entry (spec/07_release_pipeline section 4.11) ─
+
+if(NYMPH_NODE_TOOL AND NOT WIN32)
+  add_test(NAME nymph_npm_package
+    COMMAND ${NYMPH_NODE_TOOL} ${CMAKE_CURRENT_SOURCE_DIR}/npm_package_test.mjs
+            ${PROJECT_SOURCE_DIR}/.github/scripts/npm-package.sh ${CMAKE_CURRENT_BINARY_DIR}/npm_package)
+endif()

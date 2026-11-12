@@ -420,6 +420,32 @@ test('Ctrl+Shift+A toggles the panel; no request leaves the site', async () => {
   await done(page);
 });
 
+test('Connect an agent: the setup guide for the agent picked, remembered', async () => {
+  const page = await openApp();
+  await openExample(page, 'bars');
+  await page.click('#btn-agents');
+  await page.click('#agents-connect');
+  assert(await page.isVisible('#pair-code'), 'the code field');
+  assert(await page.evaluate(() => document.querySelector('details.agent-setup').open), 'the guide is open the first time');
+  await page.click('.agent-picker [data-agent="cursor"]');
+  eq(await page.getAttribute('.agent-picker [data-agent="cursor"]', 'aria-pressed'), 'true', 'Cursor picked');
+  const config = JSON.parse(await page.textContent('#agent-setup-text'));
+  assert(config.mcpServers.nymph.args.includes('@binary-dice-games/nymph'), JSON.stringify(config));
+  assert((await page.getAttribute('#agent-setup a.btn', 'href')).startsWith('cursor://'), 'Add to Cursor');
+  await page.selectOption('#agent-system', 'windows');
+  eq(JSON.parse(await page.textContent('#agent-setup-text')).mcpServers.nymph.command, 'cmd', 'Windows: cmd /c');
+  eq(await page.textContent('#agent-ask'), 'Connect to the nymph web app', 'what to ask');
+  await page.click('dialog.dlg .row button');
+  await page.click('#agents-connect');
+  eq(await page.getAttribute('.agent-picker [data-agent="cursor"]', 'aria-pressed'), 'true', 'the pick is remembered');
+  eq(await page.inputValue('#agent-system'), 'windows', 'the system is remembered');
+  assert(await page.evaluate(() => document.querySelector('details.agent-setup').open), 'still open: no agent connected yet');
+  await page.click('dialog.dlg .row button');
+  const outside = page.requests.filter((u) => !u.startsWith(site.base) && !u.startsWith('data:') && !u.startsWith('blob:'));
+  eq(outside, [], 'requests outside the site');
+  await done(page);
+});
+
 // ── Step 5: WebMCP ───────────────────────────────────────────────────────────
 
 /** A stand-in for the browser's navigator.modelContext: records registrations. */
