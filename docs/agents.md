@@ -72,8 +72,12 @@ Ask for a chart: the agent calls `render_chart` and gets the PNG back. The
 tools are listed in [claude.md](claude.md#tools); the server's
 instructions and [agent-guide.md](agent-guide.md) (the resource
 `nymph://docs/agent-guide`) teach the format. The agent can also work on
-the chart open in `nymph view --edit` or in the
-[web app](web-app.md#agents).
+the chart open in `nymph view --edit`.
+
+To work on the chart open in the [web app](web-app.md#agents), ask the
+agent to "connect to the nymph web app" and type the code it gives under
+**Agents** > **Connect an agent**. That dialog also shows the setup above
+for the agent you pick.
 
 `npm install -g @binary-dice-games/nymph` puts the `nymph` command on your
 `PATH` the same way, for the command line ([cli.md](cli.md)).

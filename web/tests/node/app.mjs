@@ -17,6 +17,7 @@ const { withoutView, Doc, baseName } = await import(pathToFileURL(join(appDir, '
 const { encodeSource, decodeSource } = await import(pathToFileURL(join(appDir, 'share.js')).href);
 const imp = await import(pathToFileURL(join(appDir, 'import.js')).href);
 const { chartIcon } = await import(pathToFileURL(join(appDir, 'icons.js')).href);
+const setup = await import(pathToFileURL(join(appDir, 'agents', 'setup.js')).href);
 
 const tests = [];
 const test = (name, fn) => tests.push({ name, fn });
@@ -25,6 +26,51 @@ const eq = (a, b, what) => {
     throw new Error(`${what}: expected ${JSON.stringify(b)}, got ${JSON.stringify(a)}`);
   }
 };
+
+// ── Connect an agent: the setup guide (agents/setup.js) ──────────────────────
+
+test('setup guide: the visitor\'s system from the user agent', () => {
+  eq(setup.detectSystem('Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/141'), 'windows', 'Windows');
+  eq(setup.detectSystem('Mozilla/5.0 (Macintosh; Intel Mac OS X 14_5) Safari/605'), 'mac', 'macOS');
+  eq(setup.detectSystem('Mozilla/5.0 (X11; Linux x86_64) Firefox/140'), 'linux', 'Linux');
+  eq(setup.detectSystem('Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) Mobile'), 'other', 'a phone');
+  eq(setup.detectSystem('Mozilla/5.0 (Linux; Android 15) Mobile'), 'other', 'Android');
+});
+
+test('setup guide: every agent has a step, npx through cmd /c on Windows', () => {
+  for (const { id } of setup.AGENTS) {
+    for (const { id: system } of setup.SYSTEMS) {
+      const s = setup.setupFor(id, system);
+      if (!s.intro || !(s.text || s.link)) {
+        throw new Error(`${id} on ${system}: nothing to do`);
+      }
+      if (s.text && s.text.includes('npx')) {
+        eq(s.node, true, `${id} on ${system}: says Node.js is needed`);
+        eq(s.text.includes('cmd'), system === 'windows', `${id} on ${system}: cmd /c only on Windows`);
+        const runs = s.text.startsWith('{')
+          ? JSON.stringify(JSON.parse(s.text)).includes(`"npx","-y","${setup.PACKAGE}","mcp"]`) ||
+            JSON.stringify(JSON.parse(s.text)).includes(`"command":"npx","args":["-y","${setup.PACKAGE}","mcp"]`)
+          : s.text.includes(`npx -y ${setup.PACKAGE} mcp`);
+        eq(runs, true, `${id} on ${system}: runs the package's mcp`);
+      }
+    }
+  }
+  const cursor = JSON.parse(setup.setupFor('cursor', 'mac').text);
+  eq(JSON.stringify(cursor.mcpServers.nymph), JSON.stringify({ command: 'npx', args: ['-y', setup.PACKAGE, 'mcp'] }), 'Cursor mcp.json');
+  const vscode = JSON.parse(setup.setupFor('vscode', 'windows').text);
+  eq(JSON.stringify(vscode.servers.nymph), JSON.stringify({ type: 'stdio', command: 'cmd', args: ['/c', 'npx', '-y', setup.PACKAGE, 'mcp'] }), 'VS Code mcp.json');
+  eq(setup.setupFor('codex', 'linux').text, `codex mcp add nymph -- npx -y ${setup.PACKAGE} mcp`, 'Codex command');
+  eq(setup.setupFor('claude-code', 'windows').node, false, 'Claude Code: the plugin, no Node.js');
+  eq(setup.setupFor('gemini-cli', 'windows').intro.includes('%USERPROFILE%\\.gemini\\settings.json'), true, 'a Windows path');
+  eq(setup.setupFor('gemini-cli', 'other').intro.includes('~/.gemini/settings.json'), true, 'an unknown system reads as Linux');
+});
+
+test('setup guide: the Add to Cursor link carries the configuration', () => {
+  const link = new URL(setup.cursorLink('linux'));
+  eq(link.protocol, 'cursor:', 'scheme');
+  eq(link.searchParams.get('name'), 'nymph', 'name');
+  eq(atob(link.searchParams.get('config')), JSON.stringify(setup.serverCommand('linux')), 'config');
+});
 
 test('GitHub file pages and gists open their raw files', () => {
   eq(rawUrl('https://github.com/o/r/blob/main/charts/a.yaml'), 'https://raw.githubusercontent.com/o/r/main/charts/a.yaml', 'blob');

@@ -126,11 +126,21 @@ offers **Reload** (it never reloads by itself).
 ## Agents
 
 An AI agent you already use can work on the chart open in the app: Claude
-Code, Claude Desktop, Cursor and Gemini CLI through `nymph mcp`, and the
+Code, Claude Desktop, Cursor, VS Code, Gemini CLI, Codex CLI and any other
+local MCP client through `nymph mcp`, and the
 browser's own assistant through WebMCP where the browser has it. The agent
 brings its own model, login and billing: **the app never asks for an API
 key and calls no model.** Your chart goes to the agent you connect, and
 nowhere else.
+
+**Set up the agent.** Once per agent, it needs nymph's tools. Under
+**Agents** > **Connect an agent**, **First time? Set up your agent** shows
+the one step for the agent you pick and your system (detected): the
+command or configuration to copy (`npx -y @binary-dice-games/nymph mcp`
+for most agents; the plugin for Claude Code; the extension for Claude
+Desktop), an **Add to Cursor** button, and what to ask next. The guide
+remembers your pick in this browser. The same steps, in full:
+[agents.md](agents.md).
 
 **Connect an agent.** Ask it to "connect to the nymph web app". It calls
 `nymph mcp`'s `web_app_pair` and gives you a code like `48213-K7QM-2XPD`

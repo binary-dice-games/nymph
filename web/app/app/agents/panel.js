@@ -9,6 +9,7 @@
 import { agentName } from '../commands.js';
 import { icons } from '../icons.js';
 import { dialog, dialogButtons, el, toast } from '../ui.js';
+import { AGENTS, ASK, DOCS_URL, NODE_URL, SYSTEMS, detectSystem, setupFor } from './setup.js';
 
 export class AgentsPanel {
   /**
@@ -67,6 +68,9 @@ export class AgentsPanel {
   /** An agent connected (a bridge pairing, a WebMCP caller). */
   connected(id, info) {
     this.connections.set(id, info);
+    if (id !== 'webmcp') {
+      saveChoice({ ...loadChoice(), connected: true });
+    }
     this.render();
   }
 
@@ -144,7 +148,7 @@ export class AgentsPanel {
           'p',
           { class: 'muted' },
           this.offers.bridge
-            ? 'No agent is connected. Ask Claude Code, Cursor or Gemini CLI to "connect to the nymph web app", then type the code it gives you.'
+            ? 'No agent is connected. Your agent (Claude Code, Cursor, VS Code, Gemini CLI, Codex...) can work on this chart: Connect an agent shows how to set it up.'
             : 'No agent is connected.',
         ),
       );
@@ -225,28 +229,47 @@ export class AgentsPanel {
     );
   }
 
-  /** Connect an agent: the code `web_app_pair` gave the agent. */
+  /**
+   * Connect an agent: the code `web_app_pair` gave the agent, and below it
+   * the setup guide for an agent that does not run nymph yet (section 5.1):
+   * pick the agent (and the system, detected), copy the one command or
+   * configuration it needs, then what to ask it.
+   */
   async connectDialog() {
-    const code = await dialog('Connect an agent', (body, close) => {
-      const input = el('input', {
-        type: 'text',
-        id: 'pair-code',
-        placeholder: '48213-K7QM-2XPD',
-        autocomplete: 'off',
-        spellcheck: 'false',
-        'aria-label': 'Pairing code',
-        autofocus: true,
-      });
-      const buttons = dialogButtons(close, [{ label: 'Cancel', value: undefined }]);
-      buttons.append(el('button', { type: 'submit', class: 'btn primary' }, 'Connect'));
-      const form = el('form', {}, input, buttons);
-      form.onsubmit = (e) => (e.preventDefault(), close(input.value.trim()));
-      body.append(
-        el('p', {}, 'Ask your agent to connect to the nymph web app. It runs nymph (Claude Code, Claude Desktop, Cursor, Gemini CLI), and gives you a code like 48213-K7QM-2XPD. Type it here:'),
-        form,
-        el('p', { class: 'muted' }, 'The agent then sees this chart and can change it; every change is listed here, with Undo. Your browser may ask to let this site reach apps on this device: allow it.'),
-      );
-    });
+    const code = await dialog(
+      'Connect an agent',
+      (body, close) => {
+        const input = el('input', {
+          type: 'text',
+          id: 'pair-code',
+          placeholder: '48213-K7QM-2XPD',
+          autocomplete: 'off',
+          spellcheck: 'false',
+          'aria-label': 'Pairing code',
+          autofocus: true,
+        });
+        const form = el(
+          'form',
+          { class: 'pair-row' },
+          input,
+          el('button', { type: 'submit', class: 'btn primary' }, 'Connect'),
+        );
+        form.onsubmit = (e) => (e.preventDefault(), close(input.value.trim()));
+        body.append(
+          el('p', {}, `Your agent gives you a code like 48213-K7QM-2XPD when you ask it to "${ASK.toLowerCase()}". Type it here:`),
+          form,
+          el(
+            'p',
+            { class: 'agent-warning' },
+            'Connect only an agent you run yourself. It can see and change this chart; every change it makes is listed in this panel, with Undo.',
+          ),
+          this.setupGuide(),
+          el('p', { class: 'muted' }, 'Your browser may ask to let this site reach apps on this device: allow it.'),
+          dialogButtons(close, [{ label: 'Close', value: undefined }]),
+        );
+      },
+      { class: 'connect-agent' },
+    );
     if (code) {
       try {
         await this.pair(code);
@@ -255,4 +278,131 @@ export class AgentsPanel {
       }
     }
   }
+
+  /** The "First time?" steps of the Connect an agent dialog. */
+  setupGuide() {
+    const saved = loadChoice();
+    let agent = AGENTS.some((a) => a.id === saved.agent) ? saved.agent : AGENTS[0].id;
+    const detected = detectSystem(navigator.userAgent, navigator.platform);
+    let system = SYSTEMS.some((s) => s.id === saved.system) ? saved.system : detected === 'other' ? 'windows' : detected;
+
+    const agentButtons = el(
+      'div',
+      { class: 'agent-picker', role: 'group', 'aria-label': 'Your agent' },
+      AGENTS.map((a) =>
+        el(
+          'button',
+          { type: 'button', class: 'btn small', dataset: { agent: a.id }, onclick: () => ((agent = a.id), update()) },
+          a.name,
+        ),
+      ),
+    );
+    const systemSelect = el(
+      'select',
+      { id: 'agent-system', 'aria-label': 'Your system' },
+      SYSTEMS.map((s) => el('option', { value: s.id }, s.name)),
+    );
+    systemSelect.addEventListener('change', () => ((system = systemSelect.value), update()));
+    const step = el('div', { class: 'agent-step', id: 'agent-setup', 'aria-live': 'polite' });
+
+    const update = () => {
+      saveChoice({ ...loadChoice(), agent, system });
+      for (const b of agentButtons.children) {
+        b.setAttribute('aria-pressed', String(b.dataset.agent === agent));
+      }
+      systemSelect.value = system;
+      const s = setupFor(agent, system);
+      // Native replaceChildren would write a skipped part (null, false) as text.
+      const parts = [
+        el('p', {}, s.intro),
+        s.link && el('a', { class: 'btn primary', href: s.link.href, target: '_blank', rel: 'noopener' }, s.link.label),
+        s.text && copyBlock(s.text, 'agent-setup-text'),
+        s.node &&
+          el(
+            'p',
+            { class: 'muted' },
+            'Needs Node.js 18 or later (',
+            el('a', { href: NODE_URL, target: '_blank', rel: 'noopener' }, 'nodejs.org'),
+            '). The first start downloads nymph and checks it.',
+          ),
+        s.after && el('p', { class: 'muted' }, s.after),
+      ];
+      step.replaceChildren(...parts.filter(Boolean));
+    };
+    update();
+
+    return el(
+      'details',
+      // Open until an agent has connected once through the bridge.
+      { class: 'agent-setup', open: !saved.connected },
+      el('summary', {}, 'First time? Set up your agent'),
+      el(
+        'ol',
+        { class: 'steps' },
+        el(
+          'li',
+          {},
+          el('span', {}, 'Which agent do you use? '),
+          el('label', { class: 'agent-system' }, 'On ', systemSelect),
+          agentButtons,
+        ),
+        el('li', {}, step),
+        el('li', {}, el('p', {}, 'Ask your agent:'), copyBlock(ASK, 'agent-ask')),
+        el('li', {}, el('p', {}, 'It gives you a code to type above, or a link that opens this chart connected.')),
+      ),
+      el(
+        'p',
+        { class: 'muted' },
+        'More agents and details: ',
+        el('a', { href: DOCS_URL, target: '_blank', rel: 'noopener' }, 'nymph in any local agent'),
+        '.',
+      ),
+    );
+  }
+}
+
+// ── Setup guide helpers ─────────────────────────────────────────────────────
+
+const CHOICE = 'nymph.agents.setup'; // localStorage: the last agent and system picked, and whether one connected
+
+function loadChoice() {
+  try {
+    return JSON.parse(localStorage.getItem(CHOICE) ?? '{}') ?? {};
+  } catch {
+    return {};
+  }
+}
+
+function saveChoice(choice) {
+  try {
+    localStorage.setItem(CHOICE, JSON.stringify(choice));
+  } catch {
+    // no storage: the guide starts from the detected system next time
+  }
+}
+
+/** A block of text to copy, with a Copy button. */
+function copyBlock(text, id) {
+  return el(
+    'div',
+    { class: 'copy-block' },
+    el('pre', { id }, text),
+    el(
+      'button',
+      {
+        type: 'button',
+        class: 'btn small',
+        'aria-label': 'Copy',
+        onclick: async () => {
+          try {
+            await navigator.clipboard.writeText(text);
+            toast('Copied');
+          } catch {
+            toast('Could not copy: select the text and copy it.');
+          }
+        },
+      },
+      'Copy',
+    ),
+  );
 }
